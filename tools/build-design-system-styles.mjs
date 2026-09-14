@@ -12,6 +12,7 @@ import * as esbuild from 'esbuild'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = join(ROOT, 'packages/design-system/src/styles.css')
 
+/** @param {string} output */
 export async function buildDesignSystemStyles(output) {
   await mkdir(dirname(output), { recursive: true })
   await esbuild.build({

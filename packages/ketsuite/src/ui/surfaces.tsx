@@ -3,6 +3,7 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { CardGrid, ContentCard, type ContentCardProps } from '@ketvietlab/design-system'
 
 export const HOOKS = [
   'stack',
@@ -15,14 +16,7 @@ export const HOOKS = [
   'section-actions',
   'section-body',
   'surface',
-  'card-grid',
-  'content-card',
-  'card-head',
-  'card-title',
-  'card-summary',
-  'card-body',
-  'card-meta',
-  'card-actions',
+  // Card grid and content card markup now come from @ketvietlab/design-system, which declares their hooks.
   'metric',
   'metric-icon',
   'metric-label',
@@ -104,32 +98,10 @@ export const cardGrid = <T,>(o: {
   items: readonly T[]
   id: (item: T) => unknown
   card: (item: T) => TemplateResult
-}): TemplateResult => <div data-ui="card-grid">{each(o.items, o.id, (item) => o.card(item))}</div>
+}): TemplateResult => <CardGrid {...o} />
 
 /** A content card. Only its title becomes a link, so nested actions remain valid. */
-export const contentCard = (o: {
-  title: string
-  summary?: string | null
-  body?: JSXChild
-  meta?: JSXChild
-  actions?: JSXChild
-  href?: string | null
-  selected?: boolean
-}): TemplateResult => (
-  <article
-    data-ui="content-card"
-    data-interactive={String(!!o.href)}
-    data-selected={String(o.selected === true)}
-  >
-    <header data-ui="card-head">
-      <h3 data-ui="card-title">{o.href ? <a href={o.href}>{o.title}</a> : o.title}</h3>
-      {!!o.summary && <p data-ui="card-summary">{o.summary}</p>}
-    </header>
-    {o.body !== undefined && <div data-ui="card-body">{o.body}</div>}
-    {o.meta !== undefined && <div data-ui="card-meta">{o.meta}</div>}
-    {o.actions !== undefined && <div data-ui="card-actions">{o.actions}</div>}
-  </article>
-)
+export const contentCard = (o: ContentCardProps): TemplateResult => <ContentCard {...o} />
 
 /**
  * One operational fact, with context rather than colour carrying its meaning.

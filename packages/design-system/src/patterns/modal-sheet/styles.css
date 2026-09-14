@@ -87,7 +87,7 @@
     [data-ui="modal-layer"][data-presentation="dialog"]
     [data-ui="modal-sheet"][data-size="large"] {
     width: min(75rem, 100%);
-    height: min(62.5rem, calc(100dvh - var(--kv-space-12)));
+    height: auto;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {

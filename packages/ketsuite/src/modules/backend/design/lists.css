@@ -700,49 +700,6 @@
     background: var(--admin-success-icon, var(--admin-accent, currentColor));
   }
 
-  [data-ui="kanban"] {
-    display: grid;
-    gap: var(--admin-gap-sm);
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  }
-
-  [data-ui="kanban-card"] {
-    display: flex;
-    flex-direction: column;
-    gap: var(--admin-gap-xs);
-    padding: var(--admin-gap-sm);
-    border: 1px solid var(--admin-divider-subtle);
-    border-radius: var(--admin-radius);
-    background: var(--admin-card);
-  }
-
-  /* The card's picture sits above its title and spans the card, so a grid of
-     cards is scanned by image first and by name second. */
-  [data-ui="kanban-media"] {
-    display: block;
-    margin: calc(var(--admin-gap-sm) * -1) calc(var(--admin-gap-sm) * -1) 0;
-  }
-
-  [data-ui="kanban-title"] {
-    margin: 0;
-    color: var(--admin-ink);
-    font-size: 0.875rem;
-    font-weight: 600;
-  }
-
-  [data-ui="kanban-meta"] {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--admin-gap-xs);
-  }
-
-  [data-ui="kanban-note"] {
-    margin: 0;
-    color: var(--admin-ink-secondary);
-    font-size: 0.75rem;
-  }
-
   [data-ui="main"] {
     min-inline-size: 0;
   }

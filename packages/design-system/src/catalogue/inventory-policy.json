@@ -1,7 +1,28 @@
 {
   "schemaVersion": "ketjs.design-system-inventory-policy.v1",
   "publicModules": {
+    "./data-operations/timeframe-filter/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/bar-chart/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
     "./data-display/data-grid/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/matrix/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "build",

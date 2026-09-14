@@ -1,0 +1,148 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="data-matrix"] {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-head"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-3) var(--kv-space-4);
+    border-bottom: 1px solid var(--kv-panel-border);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-0-5);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-eyebrow"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-bold);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: var(--kv-text-base);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-description"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-summary"] {
+    flex: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-scroll"] {
+    max-width: 100%;
+    overflow: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-scroll"]:focus-visible {
+    outline: 2px solid var(--kv-accent);
+    outline-offset: -2px;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-table"] {
+    width: 100%;
+    min-width: 42rem;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix"][data-width="wide"] [data-ui="data-matrix-table"] {
+    min-width: 54rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-table"] :is(th, td) {
+    padding: var(--kv-space-3);
+    border-right: 1px solid var(--kv-panel-border);
+    border-bottom: 1px solid var(--kv-panel-border);
+    vertical-align: top;
+    text-align: left;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-table"] :is(th, td):last-child {
+    border-right: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-table"] tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-table"] thead th {
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-column"] :is(strong, small),
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-description"] {
+    display: block;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-column"] small,
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-description"] {
+    margin-top: var(--kv-space-0-5);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-weight: 400;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-head"] {
+    width: 28%;
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) tbody [data-ui="data-matrix-row-head"] {
+    position: sticky;
+    z-index: 1;
+    left: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-title"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-leading"] {
+    color: var(--kv-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-status"] {
+    margin-left: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-row-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-2);
+    margin-top: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-matrix-cell"] {
+    min-height: 8rem;
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="data-matrix-head"] {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+}

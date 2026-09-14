@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { timeframeFilter } from '@ketvietlab/ketsuite/ui'
 
-const css = readFileSync('packages/ketsuite/src/modules/backend/design/controls.css', 'utf8')
+const css = readFileSync('packages/design-system/src/data-operations/timeframe-filter/styles.css', 'utf8')
 /** The renderer interleaves hydration markers, so read the text, not the bytes. */
 const textIn = (html: string, hook: string): string =>
   (html.match(new RegExp(`data-ui="${hook}"[^>]*>(?<body>.*?)</`, 'u'))?.groups?.body ?? '').replace(

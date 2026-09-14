@@ -134,6 +134,8 @@
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-header"] {
+    display: grid;
+    min-width: 0;
     padding: var(--kv-space-4) var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
     background: var(--kv-page-chrome-bg);
@@ -143,8 +145,10 @@
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-title-row"] {
     display: grid;
+    min-width: 0;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--kv-space-5);
+    align-items: center;
+    gap: var(--kv-space-4);
   }
 
   :where([data-kv-design-system])

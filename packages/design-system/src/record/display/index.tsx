@@ -45,7 +45,7 @@ export type PersonProps = {
   size?: 'small' | 'default' | 'large'
 }
 export const Person = (props: PersonProps): TemplateResult => (
-  <span data-ui="person">
+  <span data-ui="person" data-pattern="person">
     <Avatar name={props.name} size={props.size} />
     <span data-ui="person-body">
       {props.href ? <a href={props.href}>{props.name}</a> : <strong>{props.name}</strong>}
