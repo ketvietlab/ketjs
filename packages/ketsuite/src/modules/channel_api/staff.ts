@@ -128,11 +128,8 @@ const identityOf = async (
 export const staffIdentity = (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> =>
   identityOf(ctx, url, req, 'cookie')
 
-export const staffGatewayIdentity = (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-): Promise<StaffIdentity | null> => identityOf(ctx, url, req, 'gateway')
+export const staffGatewayIdentity = (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> =>
+  identityOf(ctx, url, req, 'gateway')
 
 registerChannelIdentityPresentation('staff', {
   owner: 'ketjs.staff-cookie',

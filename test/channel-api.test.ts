@@ -71,11 +71,7 @@ test('channel api: the staff document names both credential presentations', () =
     staffGateway: { type: 'apiKey', in: 'header', name: 'x-ket-gateway-assertion' },
   })
   const orders = document.paths['/sales/orders']?.get as Record<string, unknown>
-  assert.deepEqual(orders.security, [
-    { staffBearer: [] },
-    { staffCookie: [] },
-    { staffGateway: [] },
-  ])
+  assert.deepEqual(orders.security, [{ staffBearer: [] }, { staffCookie: [] }, { staffGateway: [] }])
   assert.deepEqual(orders['x-ket-capability'], { key: 'sales.orders', action: 'read' })
   for (const [path, entry] of Object.entries(document.paths))
     for (const [method, operation] of Object.entries(entry as Record<string, { security?: unknown[] }>))
