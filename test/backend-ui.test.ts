@@ -1413,6 +1413,18 @@ test('backend layout: a workspace screen uses one identity band with navigation 
   )
   assert.match(listed, /data-ui="chrome-create"/)
   assert.equal(listed.match(/data-ui="title"/g), null)
+
+  const composed = renderToString(
+    WorkspaceScreen({
+      translator: vi,
+      title: 'Điều chuyển',
+      frame: { menu, chrome: { create: { label: 'Không render', path: '/x' } } },
+      controls: html2`<nav aria-label="Phạm vi">Tự soạn</nav>`,
+      body: surface({ body: 'x' }),
+    }),
+  )
+  assert.match(composed, /data-ui="dashboard-page-controls"[\s\S]*aria-label="Phạm vi"/)
+  assert.doesNotMatch(composed, /data-ui="chrome-create"/)
 })
 
 test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
@@ -1428,6 +1440,31 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
+})
+
+test('app navigation: cluster icons own the Demo 2 metric', () => {
+  const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  const rule = css.match(/\[data-ui="navigation-item-leading"\]\s*\[data-ui="icon"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /width:\s*var\(--kv-text-xl\);/)
+  assert.match(rule, /height:\s*var\(--kv-text-xl\);/)
+  assert.match(rule, /flex:\s*0 0 var\(--kv-text-xl\);/)
+})
+
+test('list chrome: mobile sort can shrink without widening the page', () => {
+  const css = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const mobile =
+    css.match(/@media \(max-width: 47\.9375rem\) \{(?<body>[\s\S]+?)\n {2}\}/)?.groups?.body ?? ''
+  assert.match(mobile, /\[data-ui="list-sort"\] \{[\s\S]*?flex:\s*1 1 8rem;/)
+  assert.match(mobile, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/)
+  assert.match(mobile, /min-width:\s*0;/)
+  assert.match(mobile, /max-width:\s*100%;/)
+})
+
+test('data table: compound cells keep their title and supporting text distinct', () => {
+  const css = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8')
+  assert.match(css, /\[data-ui="cell"\][\s\S]*?:is\(strong, small\) \{[\s\S]*?display:\s*block;/)
+  assert.match(css, /\[data-ui="cell"\][\s\S]*?small \{[\s\S]*?color:\s*var\(--kv-text-muted\);/)
+  assert.match(css, /\[data-ui="row-link"\]:has\(small\) \{[\s\S]*?flex-direction:\s*column;/)
 })
 
 test('design density: controls and fields follow the canonical component dimensions', () => {

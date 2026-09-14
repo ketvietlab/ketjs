@@ -6,9 +6,12 @@ export const HOOKS = [
   'stack',
   'inline',
   'grid',
+  'card-grid',
   'surface',
   'surface-head',
+  'surface-heading',
   'surface-title',
+  'surface-description',
   'surface-actions',
   'disclosure',
   'disclosure-summary',
@@ -21,12 +24,24 @@ export const HOOKS = [
   'section-actions',
   'section-body',
   'content-card',
+  'card-media',
   'card-head',
+  'card-leading',
+  'card-heading',
+  'card-eyebrow',
   'card-title',
   'card-summary',
+  'card-status',
   'card-body',
   'card-meta',
   'card-actions',
+  'kanban',
+  'kanban-card',
+  'kanban-media',
+  'kanban-title',
+  'kanban-meta',
+  'kanban-note',
+  'kanban-actions',
   'metric',
   'metric-icon',
   'metric-label',
@@ -51,7 +66,7 @@ export const Stack = (props: {
   items: readonly JSXChild[]
   gap?: 'compact' | 'default' | 'loose'
 }): TemplateResult => (
-  <div data-ui="stack" data-gap={props.gap ?? 'default'}>
+  <div data-ui="stack" data-pattern="stack" data-gap={props.gap ?? 'default'}>
     <Items items={props.items} />
   </div>
 )
@@ -62,15 +77,44 @@ export const Inline = (props: { items: readonly JSXChild[] }): TemplateResult =>
   </div>
 )
 
-export const Grid = (props: { items: readonly JSXChild[]; columns?: 2 | 3 | 4 }): TemplateResult => (
-  <div data-ui="grid" data-columns={String(props.columns ?? 3)}>
+/**
+ * Fixed columns. `align="stretch"` gives every block in a row the row's height,
+ * so side-by-side dashboard cards end on one line instead of leaving a hole
+ * under the shorter one.
+ */
+export const Grid = (props: {
+  items: readonly JSXChild[]
+  columns?: 2 | 3 | 4
+  align?: 'start' | 'stretch'
+}): TemplateResult => (
+  <div
+    data-ui="grid"
+    data-columns={String(props.columns ?? 3)}
+    data-align={props.align === 'stretch' ? 'stretch' : null}
+  >
     <Items items={props.items} />
+  </div>
+)
+
+export type CardGridProps<T> = {
+  items: readonly T[]
+  id: (item: T) => unknown
+  card: (item: T) => TemplateResult
+  minimum?: 'compact' | 'default' | 'wide'
+}
+
+/** An adaptive card collection; unlike `Grid`, column count follows available width. */
+export const CardGrid = <T,>(props: CardGridProps<T>): TemplateResult => (
+  <div data-ui="card-grid" data-minimum={props.minimum === 'default' ? null : props.minimum}>
+    {each(props.items, props.id, (item) => props.card(item))}
   </div>
 )
 
 export const Surface = (props: {
   body: JSXChild
   title?: string
+  /** One line under the title. A dashboard block keeps its heading, context and content in one card. */
+  description?: string | null
   actions?: JSXChild
   tone?: 'default' | 'subtle' | 'raised'
   padding?: 'none' | 'compact' | 'default'
@@ -83,7 +127,14 @@ export const Surface = (props: {
   >
     {props.title && (
       <header data-ui="surface-head">
-        <h2 data-ui="surface-title">{props.title}</h2>
+        {props.description ? (
+          <div data-ui="surface-heading">
+            <h2 data-ui="surface-title">{props.title}</h2>
+            <p data-ui="surface-description">{props.description}</p>
+          </div>
+        ) : (
+          <h2 data-ui="surface-title">{props.title}</h2>
+        )}
         {props.actions !== undefined && <div data-ui="surface-actions">{props.actions}</div>}
       </header>
     )}
@@ -119,28 +170,84 @@ export const Section = (props: {
   </section>
 )
 
-export const ContentCard = (props: {
+export type ContentCardProps = {
   title: string
+  eyebrow?: string | null
   summary?: string | null
+  leading?: JSXChild
+  media?: JSXChild
+  status?: JSXChild
   body?: JSXChild
   meta?: JSXChild
   actions?: JSXChild
   href?: string | null
   selected?: boolean
-}): TemplateResult => (
+  tone?: 'default' | 'subtle' | 'raised'
+  padding?: 'compact' | 'default'
+}
+
+export const ContentCard = (props: ContentCardProps): TemplateResult => (
   <article
     data-ui="content-card"
     data-interactive={String(!!props.href)}
     data-selected={String(props.selected === true)}
+    data-tone={props.tone ?? 'default'}
+    data-padding={props.padding ?? 'default'}
   >
+    {props.media !== undefined && <div data-ui="card-media">{props.media}</div>}
     <header data-ui="card-head">
-      <h3 data-ui="card-title">{props.href ? <a href={props.href}>{props.title}</a> : props.title}</h3>
-      {!!props.summary && <p data-ui="card-summary">{props.summary}</p>}
+      {props.leading !== undefined && (
+        <span data-ui="card-leading" aria-hidden="true">
+          {props.leading}
+        </span>
+      )}
+      <div data-ui="card-heading">
+        {!!props.eyebrow && <p data-ui="card-eyebrow">{props.eyebrow}</p>}
+        <h3 data-ui="card-title">{props.href ? <a href={props.href}>{props.title}</a> : props.title}</h3>
+        {!!props.summary && <p data-ui="card-summary">{props.summary}</p>}
+      </div>
+      {props.status !== undefined && <div data-ui="card-status">{props.status}</div>}
     </header>
     {props.body !== undefined && <div data-ui="card-body">{props.body}</div>}
     {props.meta !== undefined && <div data-ui="card-meta">{props.meta}</div>}
     {props.actions !== undefined && <div data-ui="card-actions">{props.actions}</div>}
   </article>
+)
+
+export type KanbanCardProps = {
+  id: string
+  title: string
+  href?: string | null
+  media?: JSXChild
+  meta?: JSXChild
+  note?: string | null
+  actions?: JSXChild
+  selected?: boolean
+}
+
+export const KanbanCard = (props: KanbanCardProps): TemplateResult => (
+  <article
+    data-ui="kanban-card"
+    data-key={props.id}
+    data-interactive={String(!!props.href)}
+    data-selected={String(props.selected === true)}
+  >
+    {props.media !== undefined && <div data-ui="kanban-media">{props.media}</div>}
+    <h3 data-ui="kanban-title">{props.href ? <a href={props.href}>{props.title}</a> : props.title}</h3>
+    {props.meta !== undefined && <div data-ui="kanban-meta">{props.meta}</div>}
+    {!!props.note && <p data-ui="kanban-note">{props.note}</p>}
+    {props.actions !== undefined && <div data-ui="kanban-actions">{props.actions}</div>}
+  </article>
+)
+
+export type KanbanGridProps<T> = {
+  rows: readonly T[]
+  id: (row: T) => unknown
+  card: (row: T) => TemplateResult
+}
+
+export const KanbanGrid = <T,>(props: KanbanGridProps<T>): TemplateResult => (
+  <div data-ui="kanban">{each(props.rows, props.id, (row) => props.card(row))}</div>
 )
 
 /**

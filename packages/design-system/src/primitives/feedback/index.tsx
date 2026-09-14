@@ -27,6 +27,7 @@ export const Notice = (props: {
 }): TemplateResult => (
   <aside
     data-ui="notice"
+    data-pattern="notice"
     data-tone={props.tone ?? 'info'}
     role={props.tone === 'danger' ? 'alert' : 'status'}
   >

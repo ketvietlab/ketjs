@@ -7,6 +7,7 @@ import {
   linkButton,
   ListPage,
   listChrome,
+  pageTrailFromFrame,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -111,6 +112,7 @@ export const leaderboardScreen = (
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(title, frame)}
       title={title}
       description={_('crm_backend.leaderboard.subtitle')}
       actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}

@@ -224,7 +224,7 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*189/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*206/u)
     assert.match(String(audit.text), /Planned catalog[\s\S]*0/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
@@ -419,6 +419,20 @@ try {
               horizontalSubmenuRemoved: document.querySelector('[data-demo-submenu]') === null,
               breadcrumbs: document.querySelectorAll('[data-ui="breadcrumbs"]').length,
               currentCrumb: document.querySelector('[data-ui="breadcrumb"] [aria-current="page"]')?.textContent?.trim(),
+              topLevelMetrics: crmTrigger instanceof HTMLElement ? (() => {
+                const styles = getComputedStyle(crmTrigger)
+                const icon = crmTrigger.querySelector('[data-ui="navigation-item-leading"] [data-ui="icon"]')
+                const iconRect = icon instanceof SVGElement ? icon.getBoundingClientRect() : null
+                return {
+                  height: crmTrigger.getBoundingClientRect().height,
+                  fontSize: styles.fontSize,
+                  lineHeight: styles.lineHeight,
+                  gap: styles.gap,
+                  padding: styles.padding,
+                  iconWidth: iconRect?.width ?? null,
+                  iconHeight: iconRect?.height ?? null,
+                }
+              })() : null,
             }
           })()`,
         )
@@ -441,6 +455,15 @@ try {
           submenuAudit.currentCrumb,
           review.key === 'submenu-demo-vi' ? 'Hôm nay' : 'Nguồn khách hàng',
         )
+        assert.deepEqual(submenuAudit.topLevelMetrics, {
+          height: 30,
+          fontSize: '13px',
+          lineHeight: '15.6px',
+          gap: '10px',
+          padding: '4px 8px',
+          iconWidth: 18,
+          iconHeight: 18,
+        })
         if (viewport.key === 'mobile') await delay(300)
       }
       if (review.key === 'application-structure-en') {
@@ -526,6 +549,10 @@ try {
             const keyboardItem = document.activeElement?.textContent?.trim()
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
             const menuEscapeClosed = menu instanceof HTMLDetailsElement && !menu.open
+            trigger?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            const closedMenuOpens = menu instanceof HTMLDetailsElement && menu.open && document.activeElement?.textContent?.trim() === 'Open record'
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
             trigger?.click()
             document.body.click()
             const positioned = document.querySelector('[data-ui="popover-panel"]')
@@ -534,6 +561,7 @@ try {
               menuClosed: menuEscapeClosed,
               menuOutsideClosed: menu instanceof HTMLDetailsElement && !menu.open,
               menuKeyboard: keyboardItem,
+              closedMenuOpens,
               focusRestored: document.activeElement === trigger,
               popoverPositioned: positioned?.getAttribute('data-runtime-positioned'),
               popoverPlacement: positioned?.getAttribute('data-runtime-placement'),
@@ -543,7 +571,8 @@ try {
         assert.equal(interactionAudit.attached, 'attached')
         assert.equal(interactionAudit.menuClosed, true)
         assert.equal(interactionAudit.menuOutsideClosed, true)
-        assert.match(String(interactionAudit.menuKeyboard), /Duplicate/u)
+        assert.match(String(interactionAudit.menuKeyboard), /Watch changes/u)
+        assert.equal(interactionAudit.closedMenuOpens, true)
         assert.equal(interactionAudit.focusRestored, true)
         assert.equal(interactionAudit.popoverPositioned, 'true')
         assert.match(String(interactionAudit.popoverPlacement), /^(?:top|bottom)-(?:start|end)$/u)

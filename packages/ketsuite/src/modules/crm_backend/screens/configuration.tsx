@@ -10,6 +10,7 @@ import {
   linkButton,
   modalForm,
   modalWorkspace,
+  pageTrailFromFrame,
   RecordForm,
   RecordPage,
   Section,
@@ -236,6 +237,7 @@ export const configurationScreen = (
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(_('crm_backend.configuration.title'), frame)}
       title={_('crm_backend.configuration.title')}
       description={_('crm_backend.configuration.subtitle')}
       actions={linkButton({
@@ -334,6 +336,7 @@ export const teamConfigurationScreen = (
     <RecordPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(title, frame)}
       scope="crm-team-configuration"
       title={title}
       description={_('crm_backend.configuration.team.subtitle')}

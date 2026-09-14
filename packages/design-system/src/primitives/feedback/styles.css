@@ -1,5 +1,5 @@
 @layer ket.app {
-  :where([data-kv-design-system]) [data-ui="notice"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: var(--kv-space-3);
@@ -11,22 +11,22 @@
     background: var(--kv-color-info-soft);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice"][data-tone="positive"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="positive"] {
     border-left-color: var(--kv-color-positive);
     background: var(--kv-color-positive-soft);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice"][data-tone="warning"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="warning"] {
     border-left-color: var(--kv-color-warning);
     background: var(--kv-color-warning-soft);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice"][data-tone="danger"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="danger"] {
     border-left-color: var(--kv-color-danger);
     background: var(--kv-color-danger-soft);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice-mark"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] {
     width: 0.65rem;
     height: 0.65rem;
     margin-top: 0.35rem;
@@ -34,22 +34,24 @@
     background: currentcolor;
   }
 
-  :where([data-kv-design-system]) [data-ui="notice-copy"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-copy"] {
     min-width: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="notice-title"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"] {
     margin-bottom: var(--kv-space-1);
+    font-size: var(--kv-text-base);
     font-weight: 800;
+    line-height: var(--kv-leading-normal);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice-message"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-message"] {
     margin-bottom: 0;
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-sm);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice-actions"] {
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
     align-self: center;
   }
 
@@ -106,11 +108,11 @@
   }
 
   @media (max-width: 42rem) {
-    :where([data-kv-design-system]) [data-ui="notice"] {
+    :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
       grid-template-columns: auto minmax(0, 1fr);
     }
 
-    :where([data-kv-design-system]) [data-ui="notice-actions"] {
+    :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
       grid-column: 1 / -1;
     }
   }

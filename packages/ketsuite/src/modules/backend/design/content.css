@@ -1,61 +1,6 @@
 /* Shared cards, navigation, record lists and feedback components. */
 
 @layer ket.app {
-  [data-ui="card-grid"] {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
-    gap: var(--admin-gap);
-  }
-  [data-ui="content-card"] {
-    display: grid;
-    min-inline-size: 0;
-    gap: var(--admin-gap);
-    padding: var(--admin-gap);
-    border: 1px solid var(--admin-divider-subtle);
-    border-radius: var(--admin-radius);
-    background: var(--admin-card);
-    box-shadow: var(--admin-shadow-card);
-  }
-  [data-ui="card-head"] {
-    display: grid;
-    min-inline-size: 0;
-    gap: var(--admin-gap-xs);
-  }
-  [data-ui="content-card"][data-selected="true"] {
-    border-color: var(--admin-accent-line);
-    box-shadow: 0 0 0 2px var(--admin-focus-ring);
-  }
-  [data-ui="card-title"],
-  [data-ui="card-summary"] {
-    margin: 0;
-  }
-  [data-ui="card-title"] {
-    color: var(--admin-ink);
-    font-size: var(--admin-size-base);
-    line-height: 1.35;
-  }
-  [data-ui="card-title"] a {
-    color: inherit;
-    text-decoration: none;
-  }
-  [data-ui="card-summary"],
-  [data-ui="card-meta"] {
-    color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
-  }
-  [data-ui="card-body"] {
-    min-inline-size: 0;
-    color: var(--admin-ink);
-  }
-  [data-ui="card-actions"] {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--admin-gap-sm);
-    padding-block-start: var(--admin-gap);
-    border-block-start: 1px solid var(--admin-line);
-  }
-
   [data-ui="metric"] {
     display: grid;
     min-inline-size: 0;

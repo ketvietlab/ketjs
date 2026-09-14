@@ -19,7 +19,8 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    maxPackedBytes: 150_000,
+    // The public 99-component catalogue now includes its machine-readable inventory and KetAtlas adapter.
+    maxPackedBytes: 200_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.

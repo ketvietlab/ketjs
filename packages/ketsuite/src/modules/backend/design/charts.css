@@ -93,60 +93,7 @@
     white-space: nowrap;
   }
 
-  /* Bars */
-  [data-ui="bar-chart"] {
-    display: grid;
-    gap: var(--admin-gap-sm);
-    min-inline-size: 0;
-  }
-  [data-ui="bar-chart-row"] {
-    display: grid;
-    grid-template-columns: minmax(6rem, 11rem) minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--admin-gap-sm);
-    font-size: var(--admin-size-sm);
-  }
-  [data-ui="bar-chart-label"] {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--admin-ink-secondary);
-  }
-  [data-ui="bar-chart-label"] a {
-    color: inherit;
-    text-decoration: none;
-  }
-  [data-ui="bar-chart-label"] a:hover {
-    color: var(--admin-accent-text);
-    text-decoration: underline;
-  }
-  [data-ui="bar-chart-track"] {
-    display: block;
-    block-size: 0.625rem;
-    border-radius: var(--admin-radius-full);
-    background: var(--admin-chart-track);
-    overflow: hidden;
-  }
-  [data-ui="bar-chart-fill"] {
-    display: block;
-    block-size: 100%;
-    min-inline-size: 2px;
-    border-radius: inherit;
-  }
-  [data-ui="bar-chart-value"] {
-    color: var(--admin-ink);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  [data-ui="bar-chart-scale"] {
-    display: flex;
-    justify-content: space-between;
-    grid-column: 2 / -1;
-    color: var(--admin-ink-muted);
-    font-size: var(--admin-size-xs);
-    font-variant-numeric: tabular-nums;
-  }
+  /* Bars live in the Design System (`data-display/bar-chart`). */
 
   /* Change against a previous period.
 
@@ -186,27 +133,21 @@
 
   /* Series colours. The only place a chart hue is named — the canvas reads the
      same tokens at mount, so this stays the single source. */
-  [data-ui="bar-chart-fill"][data-series="1"],
   [data-ui="chart-legend-item"][data-series="1"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-1);
   }
-  [data-ui="bar-chart-fill"][data-series="2"],
   [data-ui="chart-legend-item"][data-series="2"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-2);
   }
-  [data-ui="bar-chart-fill"][data-series="3"],
   [data-ui="chart-legend-item"][data-series="3"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-3);
   }
-  [data-ui="bar-chart-fill"][data-series="4"],
   [data-ui="chart-legend-item"][data-series="4"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-4);
   }
-  [data-ui="bar-chart-fill"][data-series="5"],
   [data-ui="chart-legend-item"][data-series="5"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-5);
   }
-  [data-ui="bar-chart-fill"][data-series="6"],
   [data-ui="chart-legend-item"][data-series="6"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-6);
   }
@@ -218,12 +159,6 @@
     }
     [data-ui="chart"][data-kind="doughnut"] [data-ui="chart-legend"] {
       inline-size: 100%;
-    }
-    [data-ui="bar-chart-row"] {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-    [data-ui="bar-chart-track"] {
-      grid-column: 1 / -1;
     }
   }
 }

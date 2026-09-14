@@ -18,6 +18,7 @@ import {
   ISLAND_HOST_ATTRIBUTE,
   createIslandManager,
   domHost,
+  each,
   html,
   hydrateIslands,
   renderIsland,
@@ -306,6 +307,33 @@ test('island: a standard div host renders and hydrates beside the legacy host', 
     'standard-counter': factory,
   })
   assert.equal(rootLive.length, 1, 'a standard host can itself be the hydration root')
+})
+
+test('island: client-only keyed content keeps source order on its first mount', () => {
+  const factory = () => {
+    const open = signal(false)
+    return () => html`<div>
+      <button on:click=${() => open.set(true)}>open</button>
+      ${
+        open()
+          ? html`<ol>${each(
+              ['first', 'second', 'third'],
+              (item) => item,
+              // A component fragment owns the item, matching Stack/Inline in the
+              // design system rather than returning the row root directly.
+              (item) => html`${html`<li>${item}</li>`}`,
+            )}</ol>`
+          : ''
+      }
+    </div>`
+  }
+  const container = parseFragment(renderIsland('ordered', factory, {}))
+  hydrateIslands(domHost(document), container as never, { ordered: factory })
+  container.querySelectorAll('button')[0]!.fire('click')
+  assert.deepEqual(
+    container.querySelectorAll('li').map((item) => item.innerHTML.replace(/<!--k\[?-->/g, '')),
+    ['first', 'second', 'third'],
+  )
 })
 
 test('island: unsupported host tags fail instead of becoming markup', () => {

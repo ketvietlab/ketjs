@@ -70,7 +70,7 @@ test('flow project pages: specialized tree keeps hierarchy, identity, counts and
 
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="list-page-title">Internal platform/)
+  assert.match(textContent, /data-ui="list-page-title"[^>]*>Internal platform/)
   assert.match(textContent, /Documents/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/pages\?q=guide&amp;lang=en&amp;create=1"/)
   assert.match(html, /data-ui="doc-tree"/)

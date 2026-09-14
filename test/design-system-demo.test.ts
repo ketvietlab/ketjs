@@ -27,7 +27,11 @@ test('sales demo: public page compositions use one canonical pattern', () => {
     const response = routes['/demo'](new URL(`http://localhost/demo?view=${view}`))
     assert.equal(response.status, 200)
     assert.match(String(response.body), /data-presentation="grouped"/)
-    assert.equal([...String(response.body).matchAll(/data-pattern="/g)].length, 1)
+    assert.equal(
+      [...String(response.body).matchAll(/data-pattern="(list|record|form|workspace|dashboard|board)"/g)]
+        .length,
+      1,
+    )
     assert.match(String(response.body), /type="module" src="\/demo\/client.js"/)
     assert.match(String(response.body), /data-ui="app-navigation"/)
     assert.match(String(response.body), /data-ui="navigation-drawer"/)

@@ -287,6 +287,7 @@ export const DataTable = <Row,>(props: DataTableProps<Row>): TemplateResult => {
   const content = hasRows ? (
     <div
       data-ui="table-scroll"
+      data-pattern="data-table"
       data-framed={props.title ? 'false' : null}
       data-responsive={props.responsive ?? 'scroll'}
       data-gutter={props.gutter === 'compact' ? 'compact' : null}
