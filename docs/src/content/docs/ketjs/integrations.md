@@ -8,6 +8,12 @@ storage, a provider-neutral outbound transport, bounded multipart parsing, and r
 
 ## Storage contract
 
+Private attachment downloads use the request's resolved identity and the
+`storage.getAttachment` permission, including gateway identities without a local
+session cookie. Anonymous callers and identities without that permission cannot
+read private attachments; company scope still applies. Importers must write blobs
+through the same tenant namespace as the application, not directly at the bucket root.
+
 ```ts
 // File: src/modules/integration/index.ts
 type Storage = {
