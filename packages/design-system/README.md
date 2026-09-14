@@ -57,6 +57,10 @@ Only leaf links expose the active state. Top-level branches form one accordion a
 the complete sidebar, and the interaction adapter keeps the open branch from being
 collapsed without choosing another branch. Use `expanded` when a branch should start
 open without an active descendant.
+Top-level navigation rows use the shared dense metrics: a 30px row, 13px label,
+10px content gap and an 18px leading icon. Icon size belongs to `AppNavigation`, so
+application shells and catalogue demos render the same geometry without local icon
+overrides.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 

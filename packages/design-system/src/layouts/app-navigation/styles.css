@@ -204,6 +204,8 @@
     width: var(--kv-space-5);
     place-items: center;
     color: var(--kv-text-muted);
+    font-size: var(--kv-text-xl);
+    line-height: 1;
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-copy"] {
