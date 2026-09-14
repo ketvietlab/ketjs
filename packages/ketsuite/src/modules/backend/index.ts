@@ -17,6 +17,8 @@ import { islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
+const designSystemStyles = new URL(import.meta.resolve('@ketvietlab/design-system/styles.css'))
+
 export default defineModule({
   name: 'backend',
   version: '0.2.0',
@@ -27,7 +29,7 @@ export default defineModule({
   // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
   styles: [
-    'design-system.css',
+    designSystemStyles,
     'tokens.css',
     'foundation.css',
     'lists.css',

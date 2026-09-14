@@ -447,6 +447,11 @@ test('design system: application navigation stays dense enough for operational m
   assert.match(itemRule, /padding: var\(--kv-space-1\) var\(--kv-space-2\)/)
   assert.match(itemRule, /font-size: var\(--kv-text-md\)/)
   assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
+  const leadingRule =
+    navigationCss.match(/\[data-ui="navigation-item-leading"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
+  assert.match(leadingRule, /width: var\(--kv-space-5\)/)
+  assert.match(leadingRule, /font-size: var\(--kv-text-xl\)/)
+  assert.match(leadingRule, /line-height: 1/)
 
   const mobileLayer = navigationCss.match(
     /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
@@ -1609,7 +1614,7 @@ test('design system: inventory is an SSR review surface with URL-owned filters',
   assert.doesNotMatch(inventory, /FormPage<\/code>/)
 })
 
-test('design system: KetSuite consumes the public package through aliases and generated assets', () => {
+test('design system: KetSuite consumes the public package without a copied stylesheet', () => {
   const packageJson = readFileSync('packages/ketsuite/package.json', 'utf8')
   const backend = readFileSync('packages/ketsuite/src/modules/backend/index.ts', 'utf8')
   const aliases = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
@@ -1619,7 +1624,12 @@ test('design system: KetSuite consumes the public package through aliases and ge
   // more thing to remember, and the kind of failure whose repair is mechanical.
   const shipped = JSON.parse(readFileSync('package.json', 'utf8')).version as string
   assert.match(packageJson, new RegExp(`"@ketvietlab/design-system": "${shipped}"`, 'u'))
-  assert.match(backend, /'design-system\.css'/)
+  assert.match(backend, /import\.meta\.resolve\('@ketvietlab\/design-system\/styles\.css'\)/)
+  assert.match(backend, /styles:\s*\[\s*designSystemStyles,/)
+  assert.doesNotMatch(backend, /'design-system\.css'/)
   assert.match(aliases, /--admin-bg: var\(--kv-page-bg\)/)
   assert.match(aliases, /--color-primary: var\(--kv-ref-primary\)/)
+  const publishedStyles = readFileSync('packages/design-system/dist/styles.css', 'utf8')
+  assert.match(publishedStyles, /Generated from @ketvietlab\/design-system\/src\/styles\.css/)
+  assert.doesNotMatch(publishedStyles, /@import\s/)
 })

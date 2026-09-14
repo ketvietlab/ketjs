@@ -419,6 +419,20 @@ try {
               horizontalSubmenuRemoved: document.querySelector('[data-demo-submenu]') === null,
               breadcrumbs: document.querySelectorAll('[data-ui="breadcrumbs"]').length,
               currentCrumb: document.querySelector('[data-ui="breadcrumb"] [aria-current="page"]')?.textContent?.trim(),
+              topLevelMetrics: crmTrigger instanceof HTMLElement ? (() => {
+                const styles = getComputedStyle(crmTrigger)
+                const icon = crmTrigger.querySelector('[data-ui="navigation-item-leading"] [data-ui="icon"]')
+                const iconRect = icon instanceof SVGElement ? icon.getBoundingClientRect() : null
+                return {
+                  height: crmTrigger.getBoundingClientRect().height,
+                  fontSize: styles.fontSize,
+                  lineHeight: styles.lineHeight,
+                  gap: styles.gap,
+                  padding: styles.padding,
+                  iconWidth: iconRect?.width ?? null,
+                  iconHeight: iconRect?.height ?? null,
+                }
+              })() : null,
             }
           })()`,
         )
@@ -441,6 +455,15 @@ try {
           submenuAudit.currentCrumb,
           review.key === 'submenu-demo-vi' ? 'Hôm nay' : 'Nguồn khách hàng',
         )
+        assert.deepEqual(submenuAudit.topLevelMetrics, {
+          height: 30,
+          fontSize: '13px',
+          lineHeight: '15.6px',
+          gap: '10px',
+          padding: '4px 8px',
+          iconWidth: 18,
+          iconHeight: 18,
+        })
         if (viewport.key === 'mobile') await delay(300)
       }
       if (review.key === 'application-structure-en') {
