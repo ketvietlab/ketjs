@@ -8,7 +8,7 @@ export type ListFacet = {
   label: string
   href: string
   active?: boolean
-  count?: number
+  count?: number | string
 }
 
 export type ListSearch = {
@@ -104,6 +104,7 @@ export const HOOKS = [
   'list-actions',
   'bulk-actions',
   'bulk-summary',
+  'bulk-count',
   'bulk-action-list',
   'pager-bar',
   'pager-summary',
@@ -196,10 +197,16 @@ const SortControl = (props: ListSort): TemplateResult => (
 export const BulkActions = (props: BulkActionsProps): TemplateResult => (
   <div
     data-ui="bulk-actions"
+    data-form={props.form ?? null}
     data-has-selection={props.selectedCount && props.selectedCount > 0 ? 'true' : null}
   >
     <div data-ui="bulk-summary">
-      {props.summary ?? `${props.selectedCount ?? 0} selected`}
+      {/* `bulk-count` is the live figure the runtime updates as rows are checked. */}
+      {props.summary ?? (
+        <>
+          <span data-ui="bulk-count">{String(props.selectedCount ?? 0)}</span> selected
+        </>
+      )}
       {props.clearHref && (
         <LinkButton
           href={props.clearHref}
@@ -318,7 +325,7 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
       </div>
     ) : null
   return (
-    <div data-ui="list-chrome">
+    <div data-ui="list-chrome" data-pattern="list-chrome">
       <div data-ui="list-chrome-row" data-row="query">
         {props.search && <SearchControl {...props.search} />}
         {tail}

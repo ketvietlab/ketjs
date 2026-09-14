@@ -1,0 +1,191 @@
+/* BarChart. Every chart hue is a `--kv-chart-N` token; marks carry only a
+   `data-series` slot, so a scheme change re-reads colour instead of baking it. */
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="bar-chart"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-rows"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-row"] {
+    display: grid;
+    grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-3);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-label"] {
+    display: grid;
+    min-width: 0;
+    color: var(--kv-color-ink-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-label"] a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-label"] a:hover {
+    color: var(--kv-color-accent);
+    text-decoration: underline;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-caption"] {
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-xs);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-track"] {
+    display: block;
+    block-size: 0.625rem;
+    overflow: hidden;
+    border-radius: var(--kv-radius-full);
+    background: var(--kv-chart-track);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-fill"] {
+    display: flex;
+    block-size: 100%;
+    min-inline-size: 2px;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-segment"] {
+    display: block;
+    block-size: 100%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-value"] {
+    color: var(--kv-color-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-scale"] {
+    display: flex;
+    justify-content: space-between;
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-legend"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-2) var(--kv-space-4);
+    margin: 0;
+    padding: 0;
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-legend-item"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-legend-swatch"] {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--kv-radius-xs);
+  }
+
+  :where([data-kv-design-system]) [data-ui="bar-chart-empty"] {
+    margin: 0;
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="1"] {
+    --kv-chart-mark: var(--kv-chart-1);
+  }
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="2"] {
+    --kv-chart-mark: var(--kv-chart-2);
+  }
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="3"] {
+    --kv-chart-mark: var(--kv-chart-3);
+  }
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="4"] {
+    --kv-chart-mark: var(--kv-chart-4);
+  }
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="5"] {
+    --kv-chart-mark: var(--kv-chart-5);
+  }
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="bar-chart-fill"],
+      [data-ui="bar-chart-segment"],
+      [data-ui="bar-chart-legend-item"]
+    )[data-series="6"] {
+    --kv-chart-mark: var(--kv-chart-6);
+  }
+
+  :where([data-kv-design-system]) :is([data-ui="bar-chart-fill"][data-series], [data-ui="bar-chart-segment"]),
+  :where([data-kv-design-system]) [data-ui="bar-chart-legend-swatch"] {
+    background: var(--kv-chart-mark, var(--kv-chart-1));
+  }
+
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="bar-chart-row"] {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    /* Label and value share the first line; the track runs full width under them. */
+    :where([data-kv-design-system]) [data-ui="bar-chart-label"] {
+      grid-row: 1;
+      grid-column: 1;
+    }
+
+    :where([data-kv-design-system]) [data-ui="bar-chart-value"] {
+      grid-row: 1;
+      grid-column: 2;
+      align-self: start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="bar-chart-track"] {
+      grid-row: 2;
+      grid-column: 1 / -1;
+    }
+  }
+}

@@ -38,6 +38,21 @@ export const attachDesignSystemInteractions = (root = document) => {
     ;(first instanceof HTMLElement ? first : modal).focus()
   }
 
+  const menus = /** @type {HTMLDetailsElement[]} */ (
+    [...root.querySelectorAll('[data-ui="menu"]')].filter((menu) => menu instanceof HTMLDetailsElement)
+  )
+  /** @param {HTMLDetailsElement} menu */
+  const syncMenu = (menu) => {
+    const trigger = menu.querySelector('[data-ui="menu-trigger"]')
+    if (trigger instanceof HTMLElement) trigger.setAttribute('aria-expanded', String(menu.open))
+  }
+  const menuCleanups = menus.map((menu) => {
+    const onToggle = () => syncMenu(menu)
+    menu.addEventListener('toggle', onToggle)
+    syncMenu(menu)
+    return () => menu.removeEventListener('toggle', onToggle)
+  })
+
   const navigationMedia = window.matchMedia('(max-width: 48rem)')
   const navigationRoot = document.documentElement
   const priorNavigationOpen = navigationRoot.dataset.kvNavigationOpen
@@ -284,13 +299,33 @@ export const attachDesignSystemInteractions = (root = document) => {
         return
       }
     }
+    const activeMenu = document.activeElement?.closest('[data-ui="menu"]')
+    if (activeMenu instanceof HTMLDetailsElement && !activeMenu.open) {
+      const trigger = activeMenu.querySelector('[data-ui="menu-trigger"]')
+      if (document.activeElement === trigger && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        activeMenu.open = true
+        const items = /** @type {HTMLElement[]} */ (
+          [
+            ...activeMenu.querySelectorAll(
+              '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+            ),
+          ].filter((item) => item instanceof HTMLElement && item.getAttribute('aria-disabled') !== 'true')
+        )
+        const item = event.key === 'ArrowUp' ? items.at(-1) : items[0]
+        if (item instanceof HTMLElement) item.focus()
+        event.preventDefault()
+        return
+      }
+    }
     const openMenu = document.activeElement?.closest('[data-ui="menu"][open]')
     if (openMenu instanceof HTMLDetailsElement) {
       const trigger = openMenu.querySelector('[data-ui="menu-trigger"]')
       const items = /** @type {HTMLElement[]} */ (
-        [...openMenu.querySelectorAll('[role="menuitem"]')].filter(
-          (item) => item instanceof HTMLElement && item.getAttribute('aria-disabled') !== 'true',
-        )
+        [
+          ...openMenu.querySelectorAll(
+            '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+          ),
+        ].filter((item) => item instanceof HTMLElement && item.getAttribute('aria-disabled') !== 'true')
       )
       const active = document.activeElement
       const activeIndex = active instanceof HTMLElement ? items.indexOf(active) : -1
@@ -349,12 +384,70 @@ export const attachDesignSystemInteractions = (root = document) => {
       if (first instanceof HTMLElement) first.focus()
     }
   }
+  /**
+   * Table selection. `select-all` toggles the enabled row checkboxes of its own table, a row
+   * change keeps the header checked or indeterminate, and every bulk bar bound to the same form
+   * (`data-form`) shows the live count and enables its actions only while something is selected.
+   *
+   * @param {Element} table
+   */
+  const syncSelection = (table) => {
+    const rows = /** @type {HTMLInputElement[]} */ (
+      [...table.querySelectorAll('[data-ui="row-select"]')].filter(
+        (input) => input instanceof HTMLInputElement && !input.disabled,
+      )
+    )
+    const checked = rows.filter((input) => input.checked)
+    const all = table.querySelector('[data-ui="select-all"]')
+    if (all instanceof HTMLInputElement) {
+      all.checked = rows.length > 0 && checked.length === rows.length
+      all.indeterminate = checked.length > 0 && checked.length < rows.length
+    }
+    for (const input of rows)
+      input.closest('[data-ui="row"]')?.toggleAttribute('data-selected', input.checked)
+    const form = rows[0]?.getAttribute('form')
+    if (!form) return
+    for (const bar of document.querySelectorAll(
+      `[data-ui="bulk-actions"][data-form="${CSS.escape(form)}"]`,
+    )) {
+      if (checked.length) bar.setAttribute('data-has-selection', 'true')
+      else bar.removeAttribute('data-has-selection')
+      for (const count of bar.querySelectorAll('[data-ui="bulk-count"]'))
+        count.textContent = String(checked.length)
+      for (const button of bar.querySelectorAll('[data-ui="bulk-action-list"] button')) {
+        if (button instanceof HTMLButtonElement && button.dataset.kvAlwaysDisabled !== 'true')
+          button.disabled = checked.length === 0
+      }
+    }
+  }
+  /** @param {Event} event */
+  const onSelectionChange = (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) return
+    const hook = target.getAttribute('data-ui')
+    if (hook !== 'select-all' && hook !== 'row-select') return
+    const table = target.closest('[data-ui="table"]')
+    if (!table) return
+    if (hook === 'select-all') {
+      for (const input of table.querySelectorAll('[data-ui="row-select"]')) {
+        if (input instanceof HTMLInputElement && !input.disabled) input.checked = target.checked
+      }
+    }
+    syncSelection(table)
+  }
+  for (const table of root.querySelectorAll('[data-ui="table"]')) {
+    if (table.querySelector('[data-ui="row-select"]')) syncSelection(table)
+  }
+  document.addEventListener('change', onSelectionChange)
+
   /** @param {MouseEvent} event */
   const onDocumentClick = (event) => {
     const target = event.target
     if (!(target instanceof Node)) return
     for (const menu of root.querySelectorAll('[data-ui="menu"][open]')) {
-      if (menu instanceof HTMLDetailsElement && !menu.contains(target)) menu.open = false
+      if (!(menu instanceof HTMLDetailsElement)) continue
+      const item = target instanceof Element ? target.closest('[data-ui="menu-item"]') : null
+      if (!menu.contains(target) || (item && item.getAttribute('aria-disabled') !== 'true')) menu.open = false
     }
   }
   document.addEventListener('keydown', onKeydown)
@@ -363,6 +456,8 @@ export const attachDesignSystemInteractions = (root = document) => {
   return () => {
     document.removeEventListener('keydown', onKeydown)
     document.removeEventListener('click', onDocumentClick)
+    document.removeEventListener('change', onSelectionChange)
+    for (const cleanup of menuCleanups) cleanup()
     navigationMedia.removeEventListener('change', onNavigationMediaChange)
     for (const cleanup of navigationCleanups) cleanup()
     if (priorNavigationOpen === undefined) delete navigationRoot.dataset.kvNavigationOpen

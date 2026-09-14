@@ -10,6 +10,7 @@ import {
   LinkButton,
   ListPage,
   listChrome,
+  pageTrailFromFrame,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame, TableGroup } from '../../../ui/index.ts'
@@ -101,6 +102,7 @@ export const casesListScreen = (
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(_('crm_backend.cases.title'), frame)}
       title={_('crm_backend.cases.title')}
       description={_('crm_backend.cases.subtitle')}
       actions={

@@ -292,6 +292,16 @@
     --kv-table-row-hover: light-dark(#f7f5f5, rgb(255 255 255 / 2.7%));
     --kv-table-row-selected: light-dark(#eef0fb, rgb(89 104 223 / 9%));
     --kv-table-border: var(--kv-panel-border);
+    /* Six categorical chart hues. The first two are the pair most often
+       compared; red sits last because it reads as a warning elsewhere. Dark
+       marks are lifted for contrast rather than darkened. */
+    --kv-chart-1: light-dark(#4759b8, #7b8bf5);
+    --kv-chart-2: light-dark(#1d7a52, #3fc98a);
+    --kv-chart-3: light-dark(#b5761a, #e8ab45);
+    --kv-chart-4: light-dark(#7a4bad, #b389e8);
+    --kv-chart-5: light-dark(#1a7d8c, #45c2d1);
+    --kv-chart-6: light-dark(#a83a3a, #ef7a72);
+    --kv-chart-track: light-dark(#efedee, rgb(255 255 255 / 5.5%));
     --kv-sidebar-border: light-dark(#e9e7e8, rgb(255 255 255 / 7%));
     --kv-right-rail-border: var(--kv-sidebar-border);
   }

@@ -112,6 +112,15 @@ class Part {
     if (this.keyed) for (const instance of this.keyed.values()) instance.dispose(false)
   }
 
+  firstNode(): HostNode {
+    if (this.kind === 'text' && this.node) return this.node
+    if (this.kind === 'result' && this.child) return this.child.firstNode() ?? this.anchor
+    if (this.kind === 'each' && this.keyed && this.keys.length)
+      return this.keyed.get(this.keys[0])?.firstNode() ?? this.anchor
+    if (this.kind === 'markup' && this.markupNodes.length) return this.markupNodes[0] as HostNode
+    return this.anchor
+  }
+
   commit(value: unknown): void {
     if (isResult(value)) {
       this.commitResult(value)
@@ -401,7 +410,10 @@ class Instance {
   }
 
   firstNode(): HostNode | null {
-    return this.roots[0] ?? null
+    const first = this.roots[0]
+    if (!first) return null
+    for (const part of this.parts) if (part instanceof Part && part.anchor === first) return part.firstNode()
+    return first
   }
 
   nextSibling(): HostNode | null {

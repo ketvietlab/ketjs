@@ -1,0 +1,131 @@
+@layer ket.app {
+  /* Every full-page recipe delegates its location and identity band to
+     `pageIdentity`. Keep the visual contract here, rather than allowing list,
+     record and workspace recipes to drift when their bodies evolve. */
+  :where([data-kv-design-system]) [data-kv-page-identity="header"] {
+    display: grid;
+    min-width: 0;
+    gap: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="title-row"] {
+    display: grid;
+    min-width: 0;
+    min-block-size: var(--kv-control-height);
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="description"] {
+    max-width: 48rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="eyebrow"] {
+    margin: 0;
+    color: var(--kv-accent);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-bold);
+    line-height: var(--kv-leading-tight);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) :is([data-kv-page-identity="status"], [data-kv-page-identity="meta"]) {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-kv-page-identity="actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  /* An inline submit form is useful application semantics, but its normal form
+     chrome (a separator and 1rem top padding) is not page-header chrome. Make
+     it transparent only inside the shared action slot. */
+  :where([data-kv-design-system])
+    [data-kv-page-identity="actions"]
+    [data-ui="record-form"][data-layout="inline"][data-has-fields="false"] {
+    display: contents;
+  }
+
+  :where([data-kv-design-system])
+    [data-kv-page-identity="actions"]
+    [data-ui="record-form"][data-layout="inline"][data-has-fields="false"]
+    [data-ui="form-actions"] {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-kv-page-identity="context"] {
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-kv-page-identity="header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-kv-page-identity="title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-kv-page-identity="title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-kv-page-identity="actions"] {
+      justify-content: flex-start;
+    }
+  }
+}

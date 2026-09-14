@@ -208,6 +208,12 @@
     line-height: 1;
   }
 
+  :where([data-kv-design-system]) [data-ui="navigation-item-leading"] [data-ui="icon"] {
+    width: var(--kv-text-xl);
+    height: var(--kv-text-xl);
+    flex: 0 0 var(--kv-text-xl);
+  }
+
   :where([data-kv-design-system]) [data-ui="navigation-item-copy"] {
     display: grid;
     min-width: 0;

@@ -41,6 +41,31 @@ transparent scrolling viewport inside; never wrap it in another `Surface`.
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
+### Collections open records in a modal
+
+A row of a `DataTable` (or `ResourceList`, `DataGrid`) and a `KanbanCard` always open
+their record in a `ModalSheet` on top of the collection. They never navigate to a
+separate record page. The reader keeps the collection's filters, scroll position,
+selection and board column while working on one record, and closing the modal
+returns them exactly where they were.
+
+- `rowHref` and `KanbanCard href` point at the modal trigger for that record, not at
+  a record route. Create actions on the same collection follow the same rule.
+- The modal is a client-side island. It owns open and close, focus trapping and
+  restoration, Escape and backdrop closing, background inertness, tabs inside the
+  record, unsaved-change prompts and completion feedback. Opening, switching tabs
+  and closing do not reload the page or rebuild the collection on the server.
+- Modal state is not a separate page state. A deep link may ask the island to open a
+  record after hydration, but the server always renders the collection with a closed
+  modal host, so the server and first client render stay identical.
+- Size follows content: a short record uses the default size, and only long content
+  such as a multi-tab record uses the large size with an internal scroll region.
+- A child action of the record (reassign, postpone, confirm) opens inside the same
+  island as a nested step, not as another page.
+- `RecordPage` remains for records reached directly rather than from a collection,
+  such as a shared link or a record without a parent list. It is never the target of
+  a collection row or card.
+
 The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
 with `layout="flow"`), and canvas workspace (`WorkspacePage` with
