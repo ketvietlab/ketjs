@@ -70,6 +70,9 @@ can be selected from the website host or explicitly with `X-Channel-Realm` for n
 - Browser clients use an HTTP-only, same-site cookie plus a CSRF token for mutations.
 - Headless customer clients, POS and native staff use short-lived Bearer access tokens backed by their own
   profile sessions. Native staff tokens are opaque deployment credentials, not POS or raw IdP tokens.
+- Tenant deployments may also accept a short-lived, HMAC-verified gateway assertion forwarded only by the
+  trusted tenant gateway. It resolves through the same local user, company scope and live permission checks;
+  it is not a role or company hint supplied by the browser.
 - Refresh grants are stored as digests, can be revoked, and are invalidated after password changes.
 - A customer credential cannot be used against the generic `/_ket/fn` staff transport.
 
@@ -103,10 +106,11 @@ may read, and the framework re-resolves that from live rows on every request. Re
 effect on the next call rather than whenever a credential expires, and a caller cannot name a company they
 were not already granted.
 
-`StaffIdentity.presentation` is `cookie | bearer`. Both presentations enter the same route authorization
-pipeline. Cookie mutations require same-origin and CSRF proof; Bearer mutations do not. The public package
-registers only the framework cookie resolver. A private deployment registers the opaque Bearer resolver and
-owns token persistence, expiry, revocation and live membership resolution.
+`StaffIdentity.presentation` is `cookie | bearer | gateway`. All presentations enter the same route
+authorization pipeline. Cookie mutations require same-origin and CSRF proof; Bearer and gateway mutations do
+not. The public package registers the framework cookie resolver and the verified gateway presentation; a
+private deployment registers the opaque Bearer resolver and owns token persistence, expiry, revocation and
+live membership resolution.
 
 `auth` is spelled `required` and `optional` on a staff route. Those are the profile-neutral names; the
 customer profile's `customer` and `optional-customer` still work and mean the same thing.
@@ -332,9 +336,9 @@ and a storefront that rounds a total in transit is worse than one that never sho
 
 KetSuite's `openApiDocument()` maps one channel profile per document — capabilities, idempotency metadata,
 and the security schemes that profile actually accepts — to OpenAPI 3.1. Customer routes offer Bearer or the
-storefront cookie; staff routes offer only the verified session cookie; POS routes offer only the POS Bearer
-session. Describing that per profile is what keeps a generated client from being built without a credential to
-send. Checked-in artifacts are
+storefront cookie; staff routes offer the verified session cookie, native Bearer session, or trusted gateway
+assertion; POS routes offer only the POS Bearer session. Describing that per profile is what keeps a generated
+client from being built without a credential to send. Checked-in artifacts are
 regenerated from the composed server contract before Starlight development and production builds:
 
 ```sh
