@@ -105,21 +105,31 @@ const meData = {
   required: ['user'],
 }
 
-export const staffIdentity = async (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> => {
-  const sessions = await ctx.sessionsOf(url, req)
-  const record = await sessions?.of(req)
-  if (!record) return null
+const identityOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  presentation: StaffIdentity['presentation'],
+): Promise<StaffIdentity | null> => {
+  const identity = await ctx.requestIdentityOf(url, req)
+  if (!identity?.company || !identity.companies.length) return null
   return {
-    userId: record.userId,
-    companyId: record.company,
-    branchId: record.branch,
-    companies: record.companies,
-    branches: record.branches,
-    securityVersion: record.securityVersion,
-    sessionId: record.id,
-    presentation: 'cookie',
+    userId: identity.userId,
+    companyId: identity.company,
+    branchId: identity.branch ?? null,
+    companies: identity.companies,
+    branches: identity.branches ?? null,
+    securityVersion: identity.securityVersion ?? 0,
+    sessionId: identity.sessionId,
+    presentation,
   }
 }
+
+export const staffIdentity = (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> =>
+  identityOf(ctx, url, req, 'cookie')
+
+export const staffGatewayIdentity = (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> =>
+  identityOf(ctx, url, req, 'gateway')
 
 registerChannelIdentityPresentation('staff', {
   owner: 'ketjs.staff-cookie',
@@ -129,6 +139,13 @@ registerChannelIdentityPresentation('staff', {
       .split(';')
       .some((part) => part.trim().split('=', 1)[0] === SESSION_COOKIE),
   resolve: staffIdentity,
+})
+
+registerChannelIdentityPresentation('staff', {
+  owner: 'ketjs.staff-gateway',
+  presentation: 'gateway',
+  presented: (req) => Boolean(String(req.headers['x-ket-gateway-assertion'] ?? '').trim()),
+  resolve: staffGatewayIdentity,
 })
 
 export const staffRoutes = routesOf(

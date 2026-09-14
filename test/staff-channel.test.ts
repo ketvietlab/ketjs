@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { ClientCompatibilityPolicy, Row } from '@ketvietlab/ketjs'
+import type { ClientCompatibilityPolicy, RequestIdentityResolveContext, Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
@@ -10,10 +10,33 @@ type Envelope<T> = {
   meta: { requestId: string }
 }
 
-const boot = async (t: TestContext, clientCompatibility?: ClientCompatibilityPolicy) => {
-  const deployment = clientCompatibility
-    ? { ...ketsuite, serve: { ...ketsuite.serve!, clientCompatibility } }
-    : ketsuite
+const boot = async (
+  t: TestContext,
+  clientCompatibility?: ClientCompatibilityPolicy,
+  gatewayIdentity = false,
+) => {
+  const deployment = {
+    ...ketsuite,
+    serve: {
+      ...ketsuite.serve!,
+      ...(clientCompatibility ? { clientCompatibility } : {}),
+      ...(gatewayIdentity
+        ? {
+            resolveIdentity: async ({ req }: RequestIdentityResolveContext) =>
+              req.headers['x-ket-gateway-assertion'] === 'verified-by-test-gateway'
+                ? {
+                    userId: 'operator',
+                    companies: ['acme'],
+                    company: 'acme',
+                    branches: ['hq'],
+                    branch: 'hq',
+                    securityVersion: 1,
+                  }
+                : null,
+          }
+        : {}),
+    },
+  }
   const e2e = await createTestDeployment(deployment, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
@@ -26,6 +49,7 @@ const boot = async (t: TestContext, clientCompatibility?: ClientCompatibilityPol
     partnerId: 'acme-party',
     currency: 'VND',
   })
+  await fixture('company.saveBranch', { id: 'hq', companyId: 'acme', code: 'HQ', name: 'Trụ sở' })
   // A second company the operator is deliberately not a member of.
   await fixture('partner.savePartner', { id: 'other-party', kind: 'company', name: 'Khác' })
   await fixture('company.saveCompany', {
@@ -40,9 +64,20 @@ const boot = async (t: TestContext, clientCompatibility?: ClientCompatibilityPol
     password: 'correct horse battery',
     name: 'Người vận hành',
     defaultCompanyId: 'acme',
+    defaultBranchId: 'hq',
     superuser: true,
   })
   await fixture('user.grantCompany', { id: 'operator:acme', userId: 'operator', companyId: 'acme' })
+  await fixture('user.grantBranch', { id: 'operator:hq', userId: 'operator', branchId: 'hq' })
+  await fixture('hr.employee.create', {
+    id: 'emp-1',
+    code: 'E001',
+    name: 'Người vận hành',
+    userId: 'operator',
+    homeBranchId: 'hq',
+    timezone: 'Asia/Ho_Chi_Minh',
+    startDate: '2026-01-01',
+  })
   return e2e
 }
 
@@ -61,6 +96,34 @@ test('staff channel: a route declaring auth refuses a caller with no session', a
   const response = await stranger.request('/api/staff/v1/bootstrap')
   assert.equal(response.status, 401)
   assert.equal(((await response.json()) as Envelope<null>).error?.code, 'channel_api.unauthenticated')
+})
+
+test('staff channel: a trusted gateway identity can bootstrap and mutate without browser CSRF', async (t) => {
+  const e2e = await boot(t, undefined, true)
+  const gateway = e2e.client.anonymous()
+  const headers = { 'x-ket-gateway-assertion': 'verified-by-test-gateway' }
+
+  const bootstrap = await gateway.request('/api/staff/v1/bootstrap', { headers })
+  assert.equal(bootstrap.status, 200)
+  const body = (await bootstrap.json()) as Envelope<{
+    user: { id: string }
+    scope: { companyId: string }
+    csrfToken: string | null
+  }>
+  assert.equal(body.data.user.id, 'operator')
+  assert.equal(body.data.scope.companyId, 'acme')
+  assert.equal(body.data.csrfToken, null)
+
+  const mutation = await gateway.request('/api/staff/v1/attendance/check-in', {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'content-type': 'application/json',
+      'idempotency-key': 'gateway-check-in',
+    },
+    body: '{}',
+  })
+  assert.equal(mutation.status, 201, await mutation.text())
 })
 
 test('staff channel: the company comes from the session, never from the request', async (t) => {
