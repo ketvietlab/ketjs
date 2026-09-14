@@ -71,7 +71,7 @@ test('flow cross-project issue routes: render ListPage, retain list state and lo
   assert.equal(mine.status, 200)
   assert.match(rendered, /data-ui="list-page"/)
   assert.doesNotMatch(rendered, /data-ui="record-workspace"|data-ui="form-page"/)
-  assert.match(textContent, /data-ui="list-page-title">My work/)
+  assert.match(textContent, /data-ui="list-page-title"[^>]*>My work/)
   assert.match(rendered, /name="q"[^>]*value="Finish"/)
   assert.match(rendered, /name="lang" value="en"/)
   assert.match(rendered, /data-active="true"[^>]*href="\/admin\/flow\/mine\?lang=en"/)
@@ -86,7 +86,7 @@ test('flow cross-project issue routes: render ListPage, retain list state and lo
   const allHtml = await all.text()
   const allTextContent = allHtml.replace(/<!--k\[?-->/g, '')
   assert.equal(all.status, 200)
-  assert.match(allTextContent, /data-ui="list-page-title">All issues/)
+  assert.match(allTextContent, /data-ui="list-page-title"[^>]*>All issues/)
   assert.match(allHtml, /data-active="true"[^>]*href="\/admin\/flow\/issues\?lang=en"/)
 
   const unsupported = await app.client.request('/admin/flow/mine?lang=en', { method: 'POST' })

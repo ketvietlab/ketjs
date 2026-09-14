@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildBackendClients } from './build-backend-client.mjs'
-import { buildBackendDesignSystem } from './build-backend-design-system.mjs'
+import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
 
@@ -117,9 +117,6 @@ const sourceFingerprint = () => {
 
 const artifactsExist = () =>
   existsSync(join(BUILD, 'ket.workspace.js')) &&
-  existsSync(
-    join(BUILD, 'packages', 'ketsuite', 'src', 'modules', 'backend', 'design', 'design-system.css'),
-  ) &&
   packageNames.every(
     (name) =>
       existsSync(join(BUILD, 'packages', name, 'src', 'index.js')) &&
@@ -158,7 +155,6 @@ try {
   // itself part of what the fingerprint covers — a fresh checkout and a
   // no-op rebuild both land on a self-consistent state.
   await buildBackendClients()
-  await buildBackendDesignSystem()
   await buildChartClient()
   await buildFlowClient()
   const fingerprint = sourceFingerprint()
@@ -195,6 +191,7 @@ try {
         cpSync(declarations, dist, { recursive: true })
         copyAssets(join(PACKAGES, name, 'src'), [emitted, dist])
       }
+      await buildDesignSystemStyles(join(stageDist, 'design-system', 'styles.css'))
       writeFileSync(join(stageBuild, FINGERPRINT), fingerprint)
 
       // Only a complete staged build may replace the current good artifacts.

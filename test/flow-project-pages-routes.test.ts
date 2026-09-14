@@ -65,7 +65,7 @@ test('flow project pages route: specialized tree and URL-owned create preserve h
   assert.equal(page.status, 200)
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="list-page-title">Internal platform/)
+  assert.match(textContent, /data-ui="list-page-title"[^>]*>Internal platform/)
   assert.match(html, /data-ui="doc-tree"/)
   assert.match(html, /data-ui="doc-branch"/)
   assert.match(html, /href="\/admin\/flow\/pages\/guide\?lang=en"/)

@@ -46,8 +46,13 @@ export type { ListPageProps } from './list-page.tsx'
  * `@ketvietlab/design-system`, and the backend already loads that stylesheet and
  * marks its root with `data-kv-design-system`.
  */
-export { Pipeline } from '@ketvietlab/design-system'
-export type { PipelineStep } from '@ketvietlab/design-system'
+export { DataMatrix, Pipeline } from '@ketvietlab/design-system'
+export type {
+  DataMatrixColumn,
+  DataMatrixProps,
+  DataMatrixRow,
+  PipelineStep,
+} from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatDateTime, formatMoney } from './format.ts'
@@ -107,7 +112,7 @@ export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
 export { datePicker } from './date-picker.tsx'
 export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
-export { breadcrumbs, pageContext, tabs } from './navigation.tsx'
+export { breadcrumbs, pageContext, pageTrailFromFrame, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
 export {

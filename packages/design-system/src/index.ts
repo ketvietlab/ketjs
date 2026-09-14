@@ -13,12 +13,17 @@ export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
 export type { FieldOption, FieldProps } from './primitives/field/index.tsx'
 export { Breadcrumbs, NavItem, NavList, Tabs } from './primitives/navigation/index.tsx'
-export type { BreadcrumbItem, NavItemProps, TabItem } from './primitives/navigation/index.tsx'
+export type {
+  BreadcrumbItem,
+  BreadcrumbsProps,
+  NavItemProps,
+  TabItem,
+} from './primitives/navigation/index.tsx'
 export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'
 
 export { ActionMenu, Menu } from './interactions/menu/index.tsx'
-export type { MenuItem, MenuProps } from './interactions/menu/index.tsx'
+export type { MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './interactions/menu/index.tsx'
 export { Popover } from './interactions/popover/index.tsx'
 export type { PopoverProps } from './interactions/popover/index.tsx'
 export { Tooltip } from './interactions/tooltip/index.tsx'
@@ -80,6 +85,17 @@ export { DataGrid } from './data-display/data-grid/index.tsx'
 export type { DataGridColumn, DataGridProps } from './data-display/data-grid/index.tsx'
 export { Tree, TreeGrid } from './data-display/tree/index.tsx'
 export type { TreeGridColumn, TreeGridRow, TreeNode } from './data-display/tree/index.tsx'
+export { DataMatrix } from './data-display/matrix/index.tsx'
+export type { DataMatrixColumn, DataMatrixProps, DataMatrixRow } from './data-display/matrix/index.tsx'
+export { BarChart } from './data-display/bar-chart/index.tsx'
+export type {
+  BarChartBar,
+  BarChartKey,
+  BarChartProps,
+  BarChartSegment,
+} from './data-display/bar-chart/index.tsx'
+export { TimeframeFilter } from './data-operations/timeframe-filter/index.tsx'
+export type { TimeframeFilterProps, TimeframeOption } from './data-operations/timeframe-filter/index.tsx'
 
 export { AvatarGroup, DescriptionList, KeyValue, Person, Status } from './record/display/index.tsx'
 export type { KeyValueProps, PersonProps } from './record/display/index.tsx'
@@ -95,16 +111,26 @@ export { Attachments, MediaGallery } from './record/media/index.tsx'
 export type { AttachmentItem, MediaItem } from './record/media/index.tsx'
 
 export {
+  CardGrid,
   ContentCard,
   Disclosure,
   Grid,
   Inline,
+  KanbanCard,
+  KanbanGrid,
   Metric,
   Section,
   Stack,
   Surface,
 } from './layouts/layout/index.tsx'
+export type {
+  CardGridProps,
+  ContentCardProps,
+  KanbanCardProps,
+  KanbanGridProps,
+} from './layouts/layout/index.tsx'
 export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export type { PageHeaderProps, PageProps } from './layouts/shell/index.tsx'
 export {
   AppNavigation,
   NavigationDrawer,

@@ -35,7 +35,7 @@ test('flow epic map: specialized workspace preserves island, identity, return ac
 
   assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="board-page-title">First release/)
+  assert.match(textContent, /data-ui="board-page-title"[^>]*>First release/)
   assert.match(textContent, /Internal platform/)
   assert.match(rendered, /data-island="flow.map"/)
   assert.match(rendered, /href="\/admin\/flow\/epics\/release%2Fone\?lang=en"/)

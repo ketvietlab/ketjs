@@ -5,7 +5,12 @@ export const HOOKS = ['badge', 'tag', 'tag-remove', 'count-badge', 'avatar', 'co
 export type Tone = 'neutral' | 'info' | 'positive' | 'warning' | 'danger'
 
 export const Badge = (props: { label: string; tone?: Tone; value?: string }): TemplateResult => (
-  <span data-ui="badge" data-tone={props.tone ?? 'neutral'} data-value={props.value ?? ''}>
+  <span
+    data-ui="badge"
+    data-pattern="badge"
+    data-tone={props.tone ?? 'neutral'}
+    data-value={props.value ?? ''}
+  >
     {props.label}
   </span>
 )
@@ -44,7 +49,13 @@ export const initials = (name: string): string => {
 }
 
 export const Avatar = (props: { name: string; size?: 'small' | 'default' | 'large' }): TemplateResult => (
-  <span data-ui="avatar" data-size={props.size ?? 'default'} title={props.name} aria-hidden="true">
+  <span
+    data-ui="avatar"
+    data-pattern="avatar"
+    data-size={props.size ?? 'default'}
+    title={props.name}
+    aria-hidden="true"
+  >
     {initials(props.name)}
   </span>
 )

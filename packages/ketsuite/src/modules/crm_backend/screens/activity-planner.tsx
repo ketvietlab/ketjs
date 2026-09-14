@@ -6,6 +6,7 @@ import {
   emptyState,
   ListPage,
   linkButton,
+  pageTrailFromFrame,
   modalForm,
   modalWorkspace,
   Notice,
@@ -144,6 +145,7 @@ export const plannerScreen = (
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(_('crm_backend.planner.title'), frame)}
       title={_('crm_backend.planner.title')}
       description={_('crm_backend.planner.subtitle')}
       actions={
