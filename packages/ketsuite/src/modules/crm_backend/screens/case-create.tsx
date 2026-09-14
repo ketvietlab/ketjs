@@ -6,6 +6,7 @@ import {
   FormPage,
   linkButton,
   Notice,
+  pageTrailFromFrame,
   RecordForm,
   shell,
   stack,
@@ -42,6 +43,7 @@ export const caseCreateScreen = (
     <FormPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(title, frame)}
       scope="crm-case-create"
       title={title}
       description={_('crm_backend.case.create.subtitle')}

@@ -590,15 +590,18 @@ export type ModuleSpec = ModuleMeta & {
    */
   assets?: URL | string
   /**
-   * Stylesheets for the head of every page, relative to `assets`, in the order
-   * written. Across modules the order is dependency order, so a module that
-   * extends another loads after it and can override it.
+   * Stylesheets for the head of every page, in the order written. String entries
+   * are relative to `assets`. A file URL publishes the stylesheet from its own
+   * package directory, including any relative imports beside it.
+   *
+   * Across modules the order is dependency order, so a module that extends
+   * another loads after it and can override it.
    *
    * Declared rather than linked by hand: a deployment that names another module's
    * stylesheet has to know that module's file layout, and goes on linking it long
    * after the module leaves the composition.
    */
-  styles?: string[]
+  styles?: Array<string | URL>
   /**
    * Routes this module serves, one factory per path or dynamic segment pattern.
    *
@@ -646,7 +649,7 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly templates: Record<string, string>
   readonly provides: readonly string[]
   readonly assets: string | URL | null
-  readonly styles: readonly string[]
+  readonly styles: readonly (string | URL)[]
   readonly routes: Record<string, RouteEntry>
   readonly reserves: readonly string[]
   readonly islands: Record<string, import('@ketvietlab/ketjs-view').AnyIslandDefinition>
@@ -686,7 +689,7 @@ export type Manifest = {
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
-  /** Static file directories, per module, behind /_ket/asset/<module>/. */
+  /** Static file directories, per module or resolved package stylesheet, behind /_ket/asset/. */
   assets: Record<string, string>
   /** Stylesheets in dependency order. */
   styles: Array<{ by: string; href: string }>

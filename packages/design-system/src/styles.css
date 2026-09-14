@@ -25,6 +25,9 @@
 @import "./data-display/resource-list/styles.css";
 @import "./data-display/data-grid/styles.css";
 @import "./data-display/tree/styles.css";
+@import "./data-display/matrix/styles.css";
+@import "./data-display/bar-chart/styles.css";
+@import "./data-operations/timeframe-filter/styles.css";
 @import "./record/display/styles.css";
 @import "./record/formatted-values/styles.css";
 @import "./record/composition/styles.css";
@@ -46,5 +49,6 @@
 @import "./patterns/form-page/styles.css";
 @import "./patterns/record-page/styles.css";
 @import "./patterns/workspace-page/styles.css";
+@import "./patterns/page-shell/styles.css";
 @import "./layouts/flat/styles.css";
 @import "./layouts/grouped/styles.css";

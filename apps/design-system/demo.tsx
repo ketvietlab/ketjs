@@ -432,7 +432,12 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
     }
     const context =
       contextMode === 'submenu' ? (
-        <Breadcrumbs label="Vị trí hiện tại" items={breadcrumbItems} />
+        <Breadcrumbs
+          label="Vị trí hiện tại"
+          items={breadcrumbItems}
+          maxItems={3}
+          overflowLabel="Hiện các cấp trung gian"
+        />
       ) : (
         <Inline
           items={[
@@ -962,8 +967,8 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         : activeModule.sections[selectedSection]
       main = (
         <WorkspacePage
-          title={activeModule.label}
-          description={`Điều hành ${activeModule.label.toLocaleLowerCase('vi')} tại tất cả chi nhánh.`}
+          title={sectionLabel}
+          description={`Điều hành ${sectionLabel.toLocaleLowerCase('vi')} trong ${activeModule.label.toLocaleLowerCase('vi')}.`}
           context={context}
           variant="operational"
           actions={

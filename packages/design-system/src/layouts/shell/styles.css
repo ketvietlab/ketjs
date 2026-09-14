@@ -55,41 +55,31 @@
 
   :where([data-kv-design-system]) [data-ui="page"] {
     min-width: 0;
-    padding: var(--kv-page-padding-y) var(--kv-page-padding-x);
   }
 
-  :where([data-kv-design-system]) [data-ui="page-header"] {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--kv-space-6);
-    margin-bottom: var(--kv-space-6);
-  }
-
-  :where([data-kv-design-system]) [data-ui="page-heading"] {
+  :where([data-kv-design-system])
+    :is(
+      [data-ui="page-context"],
+      [data-ui="page-header"],
+      [data-ui="page-heading"],
+      [data-ui="page-title-row"],
+      [data-ui="page-subline"],
+      [data-ui="page-actions"],
+      [data-ui="page-status"],
+      [data-ui="page-meta"]
+    ) {
     min-width: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="page-title"] {
-    margin: 0;
-    font-size: var(--kv-text-2xl);
-    font-weight: var(--kv-weight-semibold);
-    letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
-  }
-
+  :where([data-kv-design-system]) [data-ui="page-eyebrow"],
+  :where([data-kv-design-system]) [data-ui="page-title"],
   :where([data-kv-design-system]) [data-ui="page-description"] {
-    margin: var(--kv-space-1-5) 0 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-  }
-
-  :where([data-kv-design-system]) [data-ui="page-actions"] {
-    flex: 0 0 auto;
+    overflow-wrap: anywhere;
   }
 
   :where([data-kv-design-system]) [data-ui="page-body"] {
     min-width: 0;
+    padding: var(--kv-space-6) var(--kv-page-padding-x) var(--kv-space-10);
   }
 
   :where([data-kv-design-system]) [data-ui="record-canvas"] {
@@ -155,14 +145,9 @@
       border-left: 0;
     }
 
-    :where([data-kv-design-system]) [data-ui="page"],
+    :where([data-kv-design-system]) [data-ui="page-body"],
     :where([data-kv-design-system]) [data-ui="record-canvas"] {
       padding-inline: var(--kv-space-4);
-    }
-
-    :where([data-kv-design-system]) [data-ui="page-header"] {
-      flex-direction: column;
-      gap: var(--kv-space-4);
     }
   }
 }

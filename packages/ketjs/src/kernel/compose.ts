@@ -196,17 +196,43 @@ export function compose(
   // stylesheet after it and can override it. That ordering is the point.
   for (const m of order) {
     if (m.assets) manifest.assets[m.name] = typeof m.assets === 'string' ? m.assets : m.assets.pathname
-    for (const href of m.styles) {
+    for (const [index, declared] of m.styles.entries()) {
+      if (declared instanceof URL) {
+        if (declared.protocol !== 'file:') {
+          diag.add({
+            code: 'E_STYLE_URL_PROTOCOL',
+            module: m.name,
+            message: `"${m.name}" declares non-file stylesheet "${declared.href}"`,
+            hint: 'package styles must resolve to a local file URL so they ship with the deployment',
+          })
+          continue
+        }
+        const slash = declared.pathname.lastIndexOf('/')
+        const file = declared.pathname.slice(slash + 1)
+        const owner = `${m.name}.style-${index}`
+        if (!file) {
+          diag.add({
+            code: 'E_STYLE_URL_FILE',
+            module: m.name,
+            message: `"${m.name}" declares stylesheet URL without a file name`,
+            hint: 'resolve the package stylesheet file, not its directory',
+          })
+          continue
+        }
+        manifest.assets[owner] = declared.pathname.slice(0, slash)
+        manifest.styles.push({ by: m.name, href: `/_ket/asset/${owner}/${file}` })
+        continue
+      }
       if (!m.assets) {
         diag.add({
           code: 'E_STYLE_WITHOUT_ASSETS',
           module: m.name,
-          message: `"${m.name}" declares style "${href}" but no assets directory`,
-          hint: 'styles are resolved against the module assets directory, so a module with styles needs one',
+          message: `"${m.name}" declares style "${declared}" but no assets directory`,
+          hint: 'string styles resolve against module assets; use a file URL for a package stylesheet',
         })
         continue
       }
-      manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${href}` })
+      manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${declared}` })
     }
     for (const [path, make] of Object.entries(m.routes)) {
       let pattern: RoutePattern

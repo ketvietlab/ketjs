@@ -21,6 +21,9 @@ import { HOOKS as inlineEditHooks } from '../data-operations/inline-edit/index.t
 import { HOOKS as resourceListHooks } from '../data-display/resource-list/index.tsx'
 import { HOOKS as dataGridHooks } from '../data-display/data-grid/index.tsx'
 import { HOOKS as treeHooks } from '../data-display/tree/index.tsx'
+import { HOOKS as matrixHooks } from '../data-display/matrix/index.tsx'
+import { HOOKS as barChartHooks } from '../data-display/bar-chart/index.tsx'
+import { HOOKS as timeframeHooks } from '../data-operations/timeframe-filter/index.tsx'
 import { HOOKS as recordDisplayHooks } from '../record/display/index.tsx'
 import { HOOKS as formattedValueHooks } from '../record/formatted-values/index.tsx'
 import { HOOKS as recordCompositionHooks } from '../record/composition/index.tsx'
@@ -64,6 +67,9 @@ const GROUPS = {
   resourceList: resourceListHooks,
   dataGrid: dataGridHooks,
   tree: treeHooks,
+  matrix: matrixHooks,
+  barChart: barChartHooks,
+  timeframe: timeframeHooks,
   recordDisplay: recordDisplayHooks,
   formattedValues: formattedValueHooks,
   recordComposition: recordCompositionHooks,

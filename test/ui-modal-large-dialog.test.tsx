@@ -40,18 +40,17 @@ test('large dialog: it is a workbench width, not a form width', () => {
   assert.match(rule(SIZED) ?? '', /^\s*inline-size: min\(1200px, 100%\);$/mu)
 })
 
-test('large dialog: the frame is fixed, so tabbing does not resize it', () => {
-  // A dialog sized to its content is a different dialog on every tab. The tall
-  // frame is what a workbench wants; the second half of the min() is what keeps
-  // it on a screen that cannot give it, with a margin left over.
-  assert.match(rule(SIZED) ?? '', /^\s*block-size: min\(1000px, calc\(100dvh - 100px\)\);$/mu)
-  assert.doesNotMatch(rule(SIZED) ?? '', /block-size: auto/u)
+test('large dialog: width does not force a nearly full-screen height', () => {
+  // Large is a width choice. A short form should remain a short dialog, while
+  // genuinely long content grows until it reaches the viewport cap.
+  assert.match(rule(SIZED) ?? '', /^\s*block-size: auto;$/mu)
+  assert.match(rule(SIZED) ?? '', /^\s*max-block-size: calc\(100dvh - 100px\);$/mu)
+  assert.doesNotMatch(rule(SIZED) ?? '', /block-size: min\(1000px/u)
 })
 
-test('large dialog: the fixed frame scrolls rather than clips', () => {
-  // A height only holds if the sheet gives its body a row that can be smaller
-  // than its content, and the body scrolls. Both were already there; this fails
-  // if either goes, because then the height would cut the screen off instead.
+test('large dialog: the viewport cap scrolls rather than clips', () => {
+  // Once content reaches the viewport cap, the body row must be able to shrink
+  // and scroll instead of letting the sheet run past the screen.
   assert.match(rule('[data-ui="modal-sheet"]') ?? '', /grid-template-rows: auto minmax\(0, 1fr\);/u)
   assert.match(rule('[data-ui="modal-body"]') ?? '', /overflow: auto;/u)
 })

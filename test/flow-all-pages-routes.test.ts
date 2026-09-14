@@ -63,7 +63,7 @@ test('flow all pages route: ListPage preserves cross-project links, search state
   assert.equal(first.status, 200)
   assert.match(firstHtml, /data-ui="list-page"/)
   assert.doesNotMatch(firstHtml, /data-ui="record-workspace"|data-ui="form-page"|livedoc\.editor/)
-  assert.match(firstText, /data-ui="list-page-title">All docs/)
+  assert.match(firstText, /data-ui="list-page-title"[^>]*>All docs/)
   assert.match(firstText, /data-ui="list-page-footer">All docs: 52/)
   assert.match(firstHtml, /name="q"[^>]*value="Guide"/)
   assert.match(firstHtml, /name="filter" value="project:platform"/)

@@ -118,7 +118,7 @@ const sourceFiles = walk(root).filter(
 const invalidDeepImports = []
 for (const path of sourceFiles) {
   for (const match of read(path).matchAll(/['"]@ketvietlab\/design-system\/([^'"]+)['"]/gu)) {
-    if (!['catalogue', 'contract'].includes(match[1]))
+    if (!['catalogue', 'contract', 'styles.css'].includes(match[1]))
       invalidDeepImports.push(`${relative(root, path)}: ${match[0]}`)
   }
 }
