@@ -185,6 +185,8 @@ export type OperationalScreenOptions = {
    * row out entirely.
    */
   actions?: JSXChild
+  /** Design-system location strip. CRM and customer-care pass breadcrumbs only. */
+  context?: JSXChild
 }
 
 const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
@@ -203,7 +205,7 @@ export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
     options,
     <DesignSystemListPage
       variant="operational"
-      context={pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
       description={options.subtitle}
@@ -222,7 +224,7 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
     options,
     <DesignSystemRecordPage
       variant="operational"
-      context={pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       title={options.title}
       description={options.subtitle}
       actions={operationalActions(options)}
@@ -238,22 +240,31 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
   )
 
 export const workspaceScreen = (
-  options: OperationalScreenOptions & { layout?: 'flow' | 'canvas' },
+  options: OperationalScreenOptions & {
+    layout?: 'flow' | 'canvas'
+    /**
+     * A workspace may lead with domain navigation before the shared list
+     * controls. Supplying the composed control region keeps both inside the
+     * WorkspacePage toolbar instead of pushing tabs into the page body.
+     */
+    controls?: JSXChild
+  },
 ): TemplateResult =>
   operationalShell(
     options,
     <DesignSystemWorkspacePage
       variant="operational"
       layout={options.layout ?? 'flow'}
-      context={pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
       description={options.subtitle}
       actions={operationalActions(options)}
       controls={
-        options.frame.chrome
+        options.controls ??
+        (options.frame.chrome
           ? listChrome(options.translator, options.title, options.frame.chrome, false)
-          : undefined
+          : undefined)
       }
       body={options.body}
     />,

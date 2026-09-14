@@ -3,11 +3,16 @@
 
 import { spawnSync } from 'node:child_process'
 import { buildBackendClients } from './build-backend-client.mjs'
-import { buildBackendDesignSystem } from './build-backend-design-system.mjs'
+import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
 
-await Promise.all([buildBackendClients(), buildBackendDesignSystem(), buildChartClient(), buildFlowClient()])
+await Promise.all([
+  buildBackendClients(),
+  buildDesignSystemStyles('packages/design-system/dist/styles.css'),
+  buildChartClient(),
+  buildFlowClient(),
+])
 
 const check = spawnSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], {
   stdio: 'inherit',

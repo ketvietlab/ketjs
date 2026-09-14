@@ -374,6 +374,14 @@
     overflow: hidden;
   }
 
+  /* Overlay specimens must demonstrate the real layer instead of clipping it
+     to the documentation card. The normal clipped border returns when closed. */
+  :where([data-kv-design-system]) [data-ui="catalogue-specimen"]:has([data-ui="menu"][open]) {
+    position: relative;
+    z-index: var(--kv-layer-menu);
+    overflow: visible;
+  }
+
   :where([data-kv-design-system]) [data-ui="catalogue-specimen-head"] {
     display: flex;
     align-items: start;

@@ -1,4 +1,5 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { pageIdentity, pageIdentityContent, type PageIdentityProps } from '../page-identity/index.tsx'
 
 export const HOOKS = [
   'app-shell',
@@ -6,11 +7,17 @@ export const HOOKS = [
   'app-main',
   'app-right-rail',
   'page',
+  'page-context',
   'page-header',
   'page-heading',
+  'page-eyebrow',
+  'page-title-row',
   'page-title',
   'page-description',
+  'page-subline',
+  'page-status',
   'page-actions',
+  'page-meta',
   'page-body',
   'record-canvas',
   'record-content',
@@ -39,31 +46,27 @@ export const AppShell = (props: {
   </div>
 )
 
-export const PageHeader = (props: {
-  title: string
-  description?: string | null
-  actions?: JSXChild
-}): TemplateResult => (
-  <header data-ui="page-header">
-    <div data-ui="page-heading">
-      <h1 data-ui="page-title">{props.title}</h1>
-      {!!props.description && <p data-ui="page-description">{props.description}</p>}
-    </div>
-    {props.actions !== undefined && <div data-ui="page-actions">{props.actions}</div>}
+export type PageHeaderProps = Omit<PageIdentityProps, 'context'>
+
+export const PageHeader = (props: PageHeaderProps): TemplateResult => (
+  <header data-ui="page-header" data-kv-page-identity="header">
+    {pageIdentityContent('page', props)}
   </header>
 )
 
-export const Page = (props: {
-  title: string
+export type PageProps = PageIdentityProps & {
   body: JSXChild
-  description?: string | null
-  actions?: JSXChild
-}): TemplateResult => (
-  <section data-ui="page">
-    <PageHeader title={props.title} description={props.description} actions={props.actions} />
-    <div data-ui="page-body">{props.body}</div>
-  </section>
-)
+}
+
+export const Page = (props: PageProps): TemplateResult => {
+  const { body, ...identity } = props
+  return (
+    <section data-ui="page">
+      {pageIdentity('page', identity)}
+      <div data-ui="page-body">{body}</div>
+    </section>
+  )
+}
 
 export const RecordCanvas = (props: { body: JSXChild }): TemplateResult => (
   <div data-ui="record-canvas">

@@ -76,7 +76,7 @@ test('flow project epics route: specialized cards and URL modal preserve project
   assert.equal(page.status, 200)
   assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="board-page-title">Internal platform/)
+  assert.match(textContent, /data-ui="board-page-title"[^>]*>Internal platform/)
   assert.match(html, /data-ui="kanban-card" data-interactive="true"/)
   assert.match(html, /href="\/admin\/flow\/epics\/release-one\?lang=en"/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/epics\/release-one\/map\?lang=en"/)

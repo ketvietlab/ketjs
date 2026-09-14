@@ -53,6 +53,25 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 Unknown keys fail with `E_MODULE_UNKNOWN_KEY`. Module names must be snake_case and stable. KetJS has
 no module install state, module group catalogue, or runtime enable/disable lifecycle.
 
+String entries in `styles` resolve inside the module's `assets` directory. A module consuming a
+stylesheet owned by another installed package passes the resolved file URL instead; KetJS serves
+that package directory directly, so relative CSS imports continue to work and the consumer does not
+keep a copied bundle:
+
+```ts
+// File: src/modules/backend/index.ts
+const designSystemStyles = new URL(import.meta.resolve('@ketvietlab/design-system/styles.css'))
+
+export const backend = defineModule({
+  name: 'backend',
+  styles: [designSystemStyles],
+})
+```
+
+Published packages should expose a bundled stylesheet at that URL. The package keeps its authored
+CSS import graph as the only source; the release artifact gives the complete graph one immutable
+cache identity.
+
 ## Permission bundles
 
 A permission-bearing module classifies exact qualified function keys. Bundle names describe bounded

@@ -5,7 +5,19 @@ import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
 import { Breadcrumbs, NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
-import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import {
+  CardGrid,
+  ContentCard,
+  Disclosure,
+  Grid,
+  Inline,
+  KanbanCard,
+  KanbanGrid,
+  Metric,
+  Section,
+  Stack,
+  Surface,
+} from '../layouts/index.tsx'
 import { AppShell, Page } from '../layouts/shell.tsx'
 import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
@@ -54,6 +66,9 @@ import { InlineEdit } from '../data-operations/inline-edit/index.tsx'
 import { ResourceList } from '../data-display/resource-list/index.tsx'
 import { DataGrid } from '../data-display/data-grid/index.tsx'
 import { Tree, TreeGrid } from '../data-display/tree/index.tsx'
+import { DataMatrix } from '../data-display/matrix/index.tsx'
+import { BarChart } from '../data-display/bar-chart/index.tsx'
+import { TimeframeFilter } from '../data-operations/timeframe-filter/index.tsx'
 import { AvatarGroup, DescriptionList, Person, Status } from '../record/display/index.tsx'
 import { FormattedDate, FormattedMoney, FormattedNumber } from '../record/formatted-values/index.tsx'
 import { RecordActions, RecordRail, RecordSummary } from '../record/composition/index.tsx'
@@ -624,30 +639,55 @@ export const componentGroups: readonly ComponentGroup[] = [
         name: 'Content card',
         description: 'A composable record summary with valid nested actions.',
         render: () => (
-          <Grid
-            columns={3}
+          <CardGrid
             items={[
-              <ContentCard
-                title="Commerce"
-                summary="General retail operations"
-                body="24 ready tenants"
-                meta={<Badge label="Stable" tone="positive" />}
-                href="#content-card"
-              />,
-              <ContentCard
-                title="Cosmetic"
-                summary="Care and marketplace workflows"
-                body="9 ready tenants"
-                meta={<Badge label="Review" tone="warning" />}
-                selected
-              />,
-              <ContentCard
-                title="Hospitality"
-                summary="Property and OTA operations"
-                body="6 ready tenants"
-                actions={<Button label="Open cohort" size="compact" />}
-              />,
+              { id: 'commerce', name: 'Commerce', summary: 'General retail operations', state: 'Stable' },
+              {
+                id: 'cosmetic',
+                name: 'Cosmetic',
+                summary: 'Care and marketplace workflows',
+                state: 'Review',
+              },
+              {
+                id: 'hospitality',
+                name: 'Hospitality',
+                summary: 'Property and OTA operations',
+                state: 'Pilot',
+              },
             ]}
+            id={(item) => item.id}
+            card={(item) => (
+              <ContentCard
+                eyebrow="Deployment"
+                title={item.name}
+                summary={item.summary}
+                body="Operational components and workflow recipes"
+                status={<Badge label={item.state} tone={item.state === 'Stable' ? 'positive' : 'warning'} />}
+                href="#content-card"
+                selected={item.id === 'cosmetic'}
+                tone={item.id === 'hospitality' ? 'subtle' : 'default'}
+              />
+            )}
+          />
+        ),
+      },
+      {
+        id: 'kanban-card',
+        name: 'Kanban cards',
+        description: 'Compact record cards keep board metadata and actions consistent across workflows.',
+        render: () => (
+          <KanbanGrid
+            rows={orders}
+            id={(row) => row.id}
+            card={(row) => (
+              <KanbanCard
+                id={row.id}
+                title={`${row.id} · ${row.customer}`}
+                href="#kanban-card"
+                meta={<Badge label={row.state} tone={toneOf(row.state)} />}
+                note={row.total}
+              />
+            )}
           />
         ),
       },
@@ -1000,9 +1040,12 @@ export const componentGroups: readonly ComponentGroup[] = [
             items={[
               <Breadcrumbs
                 label="Current location"
+                maxItems={3}
+                overflowLabel="Show intermediate locations"
                 items={[
                   { label: 'Workspace', href: '#navigation-items' },
                   { label: 'Sales', href: '#navigation-items' },
+                  { label: 'South region', href: '#navigation-items' },
                   { label: 'Orders' },
                 ]}
               />,
@@ -1483,8 +1526,16 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="Record actions"
                 open
                 items={[
+                  { id: 'record-label', kind: 'label', label: 'Record' },
                   { id: 'open', label: 'Open record', href: '#record-page' },
-                  { id: 'duplicate', label: 'Duplicate', value: 'duplicate' },
+                  { id: 'watch', label: 'Watch changes', value: 'watch', checked: true, shortcut: 'W' },
+                  { id: 'separator', kind: 'separator' },
+                  {
+                    id: 'duplicate',
+                    label: 'Duplicate',
+                    value: 'duplicate',
+                    description: 'Create a new draft',
+                  },
                   { id: 'archive', label: 'Archive', value: 'archive', destructive: true },
                 ]}
               />,
@@ -1889,6 +1940,126 @@ export const componentGroups: readonly ComponentGroup[] = [
               { key: 'customer', label: 'Customer', cell: (row) => row.customer, width: '18rem' },
               { key: 'total', label: 'Total', cell: (row) => row.total, width: '10rem' },
               { key: 'state', label: 'State', cell: (row) => row.state, width: '9rem' },
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'timeframe-filter',
+        name: 'Timeframe filter',
+        description:
+          'The period a screen reports on: every option is a link, with the resolved range and build time beside it.',
+        render: () => (
+          <TimeframeFilter
+            id="specimen-period"
+            label="Report period"
+            options={[
+              { id: 'today', label: 'Today', href: '#timeframe-filter' },
+              { id: 'last_7_days', label: 'Last 7 days', href: '#timeframe-filter' },
+              { id: 'last_30_days', label: 'Last 30 days', href: '#timeframe-filter', active: true },
+              { id: 'this_month', label: 'This month', href: '#timeframe-filter' },
+            ]}
+            range="2026-08-06 → 2026-09-04"
+            asOf="2026-09-04 09:40"
+            asOfLabel="Updated"
+            note="Asia/Ho_Chi_Minh"
+          />
+        ),
+      },
+      {
+        id: 'bar-chart',
+        name: 'Bar chart',
+        description:
+          'Magnitudes on one scale as real text: plain bars for ranking, a fixed maximum for rates, segments for a split.',
+        render: () => (
+          <Stack
+            items={[
+              <BarChart
+                label="Lost opportunities by reason"
+                bars={[
+                  { id: 'price', label: 'Price or budget', value: 9, caption: '42.9%' },
+                  { id: 'fit', label: 'Not a fit', value: 6, caption: '28.6%' },
+                  { id: 'competitor', label: 'Chose a competitor', value: 4, caption: '19.0%' },
+                ]}
+                value={(bar) => String(bar.value)}
+              />,
+              <BarChart
+                label="Support SLA"
+                max={100}
+                bars={[
+                  { id: 'met', label: 'Met', value: 94.2, caption: '194 requests' },
+                  { id: 'breached', label: 'Breached', value: 2.4, caption: '5 requests' },
+                ]}
+                value={(bar) => `${bar.value}%`}
+                scale={['0%', '50%', '100%']}
+              />,
+              <BarChart
+                label="Revenue by customer type"
+                keys={[
+                  { id: 'returning', label: 'Returning', series: 1 },
+                  { id: 'new', label: 'New', series: 2 },
+                ]}
+                bars={[
+                  {
+                    id: 'jul',
+                    label: 'July',
+                    value: 379,
+                    segments: [
+                      { series: 1, value: 147 },
+                      { series: 2, value: 232 },
+                    ],
+                  },
+                  {
+                    id: 'aug',
+                    label: 'August',
+                    value: 428.6,
+                    segments: [
+                      { series: 1, value: 164.6 },
+                      { series: 2, value: 264 },
+                    ],
+                  },
+                ]}
+                value={(bar) => `${bar.value}m`}
+              />,
+              <BarChart label="Empty" bars={[]} value={() => ''} empty="No data in this period" />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'data-matrix',
+        name: 'Data matrix',
+        description:
+          'Ordered rows compare the same dimensions while workflow content stays application-owned.',
+        render: () => (
+          <DataMatrix
+            label="Care checkpoints and evidence"
+            rowLabel="Checkpoint"
+            eyebrow="Outcome tracking"
+            title="Barrier recovery routine"
+            description="Started 01 September 2026"
+            summary={<Badge label="2 / 3 complete" tone="info" />}
+            columns={[
+              { id: 'front', label: 'Front', description: 'Required' },
+              { id: 'left', label: 'Left profile' },
+              { id: 'right', label: 'Right profile' },
+            ]}
+            rows={[
+              {
+                id: 'day-1',
+                label: 'D+1 · Baseline',
+                description: '02/09/2026',
+                status: <Badge label="Complete" tone="positive" />,
+                cells: { front: 'Photo 01', left: 'Photo 02', right: 'Photo 03' },
+              },
+              {
+                id: 'day-7',
+                label: 'D+7 · Adaptation',
+                description: '08/09/2026',
+                status: <Badge label="Planned" tone="warning" />,
+                actions: <Button label="Open checkpoint" size="compact" />,
+                cells: { front: 'Upload', left: 'Upload', right: 'Not required' },
+              },
             ]}
           />
         ),

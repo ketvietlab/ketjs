@@ -1,5 +1,5 @@
 @layer ket.app {
-  :where([data-kv-design-system]) [data-ui="badge"] {
+  :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"] {
     display: inline-flex;
     min-height: 1.4rem;
     align-items: center;
@@ -16,22 +16,22 @@
     overflow-wrap: anywhere;
   }
 
-  :where([data-kv-design-system]) [data-ui="badge"][data-tone="info"] {
+  :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"][data-tone="info"] {
     background: var(--kv-color-info-soft);
     color: var(--kv-color-info);
   }
 
-  :where([data-kv-design-system]) [data-ui="badge"][data-tone="positive"] {
+  :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"][data-tone="positive"] {
     background: var(--kv-color-positive-soft);
     color: var(--kv-color-positive);
   }
 
-  :where([data-kv-design-system]) [data-ui="badge"][data-tone="warning"] {
+  :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"][data-tone="warning"] {
     background: var(--kv-color-warning-soft);
     color: var(--kv-color-warning);
   }
 
-  :where([data-kv-design-system]) [data-ui="badge"][data-tone="danger"] {
+  :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"][data-tone="danger"] {
     background: var(--kv-color-danger-soft);
     color: var(--kv-color-danger);
   }
@@ -78,7 +78,7 @@
     font-weight: 800;
   }
 
-  :where([data-kv-design-system]) [data-ui="avatar"] {
+  :where([data-kv-design-system]) [data-ui="avatar"][data-pattern="avatar"] {
     display: inline-grid;
     width: 2rem;
     height: 2rem;
@@ -91,12 +91,12 @@
     font-weight: 800;
   }
 
-  :where([data-kv-design-system]) [data-ui="avatar"][data-size="small"] {
+  :where([data-kv-design-system]) [data-ui="avatar"][data-pattern="avatar"][data-size="small"] {
     width: 1.5rem;
     height: 1.5rem;
   }
 
-  :where([data-kv-design-system]) [data-ui="avatar"][data-size="large"] {
+  :where([data-kv-design-system]) [data-ui="avatar"][data-pattern="avatar"][data-size="large"] {
     width: 3rem;
     height: 3rem;
     font-size: var(--kv-text-sm);
