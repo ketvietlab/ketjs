@@ -14,10 +14,12 @@ import { signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { LoadingState, ModalSheet, Notice, Tabs, Button } from '@ketvietlab/design-system'
 import {
+  RECORD_NEW_ID,
   RECORD_PARAM,
   RECORD_TAB_PARAM,
   readRecordModalTarget,
   recordModalClosedHref,
+  recordModalCreateHref,
   recordModalHost,
   recordModalHref,
 } from '../record-modal.tsx'
@@ -107,6 +109,8 @@ export type RecordContextEnvelope<Data> = {
 export type RecordModalContext<Data> = {
   kind: string
   id: string
+  /** The modal was opened by a create action (`record=<kind>:new`); there is no record yet. */
+  creating: boolean
   tab: string
   data: Data
   /** Translate a key the context shipped, interpolating `{name}` params. */
@@ -144,8 +148,15 @@ export type RecordModalCommand<Data> = {
    * What happens after success. Defaults to `close`. `reload` reads the record
    * again behind a loading state and closes a dialog; `refresh` reads it again in
    * place, keeping the tab, the open dialog and any islands mounted in them.
+   * `open` is for a create command: the modal switches to the record it created
+   * (the id from `created`, else the function value's `id`) on the tab named by
+   * `openTab`, replacing the `:new` history entry.
    */
-  after?: 'close' | 'reload' | 'refresh' | 'stay' | { tab: string } | { dialog: string | null }
+  after?: 'close' | 'reload' | 'refresh' | 'stay' | 'open' | { tab: string } | { dialog: string | null }
+  /** The id of the record a create command made, read from the function's value. */
+  created?: (value: unknown) => string | null
+  /** Tab to open on the created record when `after` is `open`. */
+  openTab?: string
 }
 
 export type RecordModalTab<Data> = {
@@ -164,8 +175,12 @@ export type RecordModalDialog<Data> = {
 export type RecordModalDefinition<Data> = {
   kind: string
   size?: 'default' | 'large'
-  /** A permission-checked read returning `{ data, messages }`. */
-  context: { fn: string; input?: (id: string) => Record<string, unknown> }
+  /**
+   * A permission-checked read returning `{ data, messages }`. For a create action
+   * the default input is `{}` (no id): the read returns the empty record's defaults,
+   * the choices its form needs and the viewer's permissions.
+   */
+  context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
   header?: (context: RecordModalContext<Data>) => JSXChild
@@ -180,7 +195,16 @@ export type RecordModalDefinition<Data> = {
    * built-in English defaults, because `messages` arrive with the context.
    */
   labels?: Record<string, string> | (() => Record<string, string>)
+  /**
+   * Keep read contexts in memory so reopening a record shows at once and is read
+   * again quietly (stale-while-revalidate). On by default; set `false` for a kind
+   * whose context must never be shown before a fresh read.
+   */
+  cache?: boolean
 }
+
+/** How many record contexts one island keeps for instant reopening. */
+export const RECORD_MODAL_CACHE_SIZE = 30
 
 /**
  * English defaults for every label the runtime itself shows. A module passes its
@@ -289,6 +313,8 @@ const uuid = (): string =>
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
 
+const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
+
 /**
  * Create the island controller for one record kind.
  *
@@ -308,6 +334,16 @@ export const createRecordModal =
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
+
+    // Contexts this island has read, newest last: reopening a record (or the create
+    // form) renders immediately and revalidates in place. Bounded and page-scoped;
+    // a successful command or `ket:records-changed` for this kind drops the entries.
+    const cache = new Map<string, RecordContextEnvelope<Data>>()
+    const remember = (id: string, value: RecordContextEnvelope<Data>): void => {
+      cache.delete(id)
+      cache.set(id, value)
+      while (cache.size > RECORD_MODAL_CACHE_SIZE) cache.delete(cache.keys().next().value as string)
+    }
 
     let root: HTMLElement | null = null
     let request: AbortController | null = null
@@ -336,6 +372,7 @@ export const createRecordModal =
       const base: RecordModalContext<Data> = {
         kind: definition.kind,
         id: current.id,
+        creating: current.id === RECORD_NEW_ID,
         tab: current.tab,
         data,
         t,
@@ -358,10 +395,24 @@ export const createRecordModal =
       request?.abort()
       const controller = new AbortController()
       request = controller
+      // A record opened before shows at once from the in-memory cache and is read
+      // again quietly behind it; the reader never waits on a frame they have seen.
+      const cached = definition.cache === false ? undefined : cache.get(id)
+      if (cached) {
+        previousMessages = cached.messages ?? previousMessages
+        envelope.set(cached)
+        status.set('ready')
+        quiet = true
+      }
       if (!quiet) status.set('loading')
       failure.set(null)
       try {
-        const input = definition.context.input ? definition.context.input(id) : { id }
+        const creating = id === RECORD_NEW_ID
+        const input = definition.context.input
+          ? definition.context.input(id, creating)
+          : creating
+            ? {}
+            : { id }
         const result = await callRecordFunction<RecordContextEnvelope<Data> | null>(
           definition.context.fn,
           input,
@@ -376,6 +427,7 @@ export const createRecordModal =
           return
         }
         previousMessages = result.value.messages ?? previousMessages
+        if (definition.cache !== false) remember(id, result.value)
         envelope.set(result.value)
         status.set('ready')
       } catch (caught) {
@@ -539,11 +591,26 @@ export const createRecordModal =
         }
         drafts.set({})
         form.reset()
+        const value = result.value as { id?: unknown } | null | undefined
+        const createdId =
+          after_(command) === 'open'
+            ? (command.created?.(result.value) ??
+              (value && typeof value === 'object' && value.id != null ? String(value.id) : null))
+            : null
+        // What the command changed is no longer what the cache holds.
+        cache.delete(current.id)
+        if (createdId) cache.delete(createdId)
         document.dispatchEvent(
-          new CustomEvent('ket:records-changed', { detail: { kind: definition.kind, ids: [current.id] } }),
+          new CustomEvent('ket:records-changed', {
+            detail: { kind: definition.kind, ids: [createdId ?? current.id] },
+          }),
         )
-        const after = command.after ?? 'close'
-        if (after === 'close') hide('history')
+        const after = after_(command)
+        if (after === 'open') {
+          dialog.set(null)
+          if (createdId) show(createdId, command.openTab ?? null, 'replace')
+          else hide('history')
+        } else if (after === 'close') hide('history')
         else if (after === 'reload') {
           dialog.set(null)
           await load(current.id)
@@ -894,6 +961,19 @@ export const createRecordModal =
         observer.observe(root, { childList: true, subtree: true })
         lifetime.addEventListener('abort', () => observer.disconnect())
 
+        // Another island (or this one) changed records of this kind: drop them so the
+        // next opening reads fresh data first.
+        document.addEventListener(
+          'ket:records-changed',
+          (event) => {
+            const detail = (event as CustomEvent<{ kind?: string; ids?: unknown[] }>).detail
+            if (detail?.kind !== definition.kind) return
+            if (!Array.isArray(detail.ids) || !detail.ids.length) cache.clear()
+            else for (const id of detail.ids) cache.delete(String(id))
+          },
+          { signal: lifetime },
+        )
+
         // Back and forward over entries this modal created change only the modal.
         document.addEventListener(
           'ket:popstate',
@@ -929,4 +1009,12 @@ export const recordIsland = (name: string, props: Record<string, unknown>): Temp
   <ket-island data-island={name} data-props={JSON.stringify(props)} />
 )
 
-export { RECORD_PARAM, RECORD_TAB_PARAM, recordModalHref, recordModalClosedHref, readRecordModalTarget }
+export {
+  RECORD_NEW_ID,
+  RECORD_PARAM,
+  RECORD_TAB_PARAM,
+  recordModalHref,
+  recordModalCreateHref,
+  recordModalClosedHref,
+  readRecordModalTarget,
+}

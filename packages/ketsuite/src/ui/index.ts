@@ -126,12 +126,15 @@ export {
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalForm, modalSheet, modalWorkspace } from './modal.tsx'
 export {
+  RECORD_NEW_ID,
   RECORD_PARAM,
   RECORD_TAB_PARAM,
   defineRecordModalIsland,
   isRecordKind,
+  isRecordModalCreate,
   readRecordModalTarget,
   recordModalClosedHref,
+  recordModalCreateHref,
   recordModalHost,
   recordModalHref,
 } from './record-modal.tsx'
