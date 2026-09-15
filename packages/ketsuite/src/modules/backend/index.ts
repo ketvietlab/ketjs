@@ -52,7 +52,7 @@ export default defineModule({
     'backend.shell': {
       client: 'client/backend-shell.mjs',
       export: 'backendShell',
-      when: '[data-ui="shell"][data-kv-design-system]',
+      when: '[data-kv-design-system] [data-ui="app-shell"]',
     },
   },
   fills: {
