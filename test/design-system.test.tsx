@@ -1874,7 +1874,7 @@ test('design system: inventory classifies every public and compatibility export'
   assert.equal(designSystemInventory.summary.publicExports, 214)
   assert.equal(designSystemInventory.summary.runtimeExports, 117)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 40)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),

@@ -208,7 +208,7 @@ test('crm configuration modal: the team shows members only once it exists, and a
   )
   assert.match(adding, /name="__command" value="memberSave"/)
 
-  const editing = contextOf('crm.team', team(), { dialog: { name: 'member', params: { member: 'm-1' } } })
+  const editing = contextOf('crm.team', team(), { dialog: { name: 'member', params: { id: 'm-1' } } })
   assert.deepEqual(optionsOf(renderToString(memberDialogView(editing)), 'userId'), ['', 'an', 'binh'])
   const form = new FormData()
   form.set('userId', 'an')
