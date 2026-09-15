@@ -126,6 +126,14 @@
     gap: var(--kv-space-2);
   }
 
+  /* One option per line beside the shared label; the first option aligns with the label row. */
+  :where([data-kv-design-system]) [data-ui="field-options"][data-orientation="vertical"] {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
   :where([data-kv-design-system]) [data-ui="field-option"] {
     display: inline-flex;
     align-items: center;

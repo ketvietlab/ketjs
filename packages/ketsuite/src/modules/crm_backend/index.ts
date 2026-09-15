@@ -1,5 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
-import { islands } from './islands.ts'
+import { CONFIGURATION_MODAL_ISLANDS, islands } from './islands.ts'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 
@@ -19,6 +19,10 @@ export default defineModule({
   joints: { 'screen.pipeline': { props: { lang: 'text?', data: 'text?' } } },
   fills: {
     'crm_backend:screen.pipeline': `{% island "crm.pipeline" %}`,
+    // The configuration record modals: closed hosts that open a record from its link.
+    'backend:runtime': Object.keys(CONFIGURATION_MODAL_ISLANDS)
+      .map((name) => `{% island "${name}" %}`)
+      .join(''),
     'partner_backend:record.salesActions': `<a data-ui="action" data-variant="secondary" href="/admin/crm/cases/new?kind=lead&amp;partnerId={{ partnerId }}&amp;lang={{ lang }}"><span data-ui="action-label">{{ 'crm_backend.action.createLead' | _ }}</span></a>`,
   },
   menus: {

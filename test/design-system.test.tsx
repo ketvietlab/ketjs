@@ -1013,6 +1013,42 @@ test('design system: fields cover operational form controls and nested groups', 
     />,
   )
   assert.match(checkboxGroup, /role="group" aria-labelledby="channels-label"/)
+  // Horizontal flow is the default and adds no attribute, so existing forms render unchanged.
+  assert.doesNotMatch(checkboxGroup, /data-orientation=/)
+
+  const verticalGroup = renderToString(
+    <Field
+      id="branches"
+      name="branches"
+      label="Branches"
+      type="checkbox-group"
+      optionsOrientation="vertical"
+      options={[
+        { value: 'thao-dien', label: 'Thao Dien', checked: true },
+        { value: 'cau-giay', label: 'Cau Giay' },
+      ]}
+    />,
+  )
+  assert.match(verticalGroup, /<div data-ui="field-options" data-orientation="vertical" role="group"/)
+  const verticalRadio = renderToString(
+    <Field
+      id="shift"
+      name="shift"
+      label="Shift"
+      type="radio"
+      value="morning"
+      optionsOrientation="vertical"
+      options={[
+        { value: 'morning', label: 'Morning' },
+        { value: 'evening', label: 'Evening' },
+      ]}
+    />,
+  )
+  assert.match(verticalRadio, /<div data-ui="field-options" data-orientation="vertical" role="radiogroup"/)
+  assert.match(
+    primitiveCss,
+    /\[data-ui="field-options"\]\[data-orientation="vertical"\] \{[^}]*flex-direction: column;/,
+  )
   assert.match(checkboxGroup, /data-ui="field-option-input"[^>]*type="checkbox"/)
 
   const grouped = renderToString(
@@ -1087,6 +1123,25 @@ test('design system: modal sheets expose route metadata and become fullscreen on
   assert.match(largeDialog, /width: min\(75rem, 100%\)/)
   assert.match(largeDialog, /height: auto/)
   assert.doesNotMatch(largeDialog, /height: min\(62\.5rem/)
+
+  // Content height is the default and adds no attribute, so existing modals render unchanged.
+  assert.doesNotMatch(modal, /data-height=/)
+  const fixed = renderToString(
+    <ModalSheet
+      id="edit-partner"
+      title="Edit partner"
+      closeLabel="Close"
+      presentation="dialog"
+      height="fixed"
+      body="Partner tabs"
+    />,
+  )
+  assert.match(fixed, /data-ui="modal-sheet"[^>]*data-height="fixed"/)
+  const fixedDialog =
+    css.match(
+      /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
@@ -1819,7 +1874,7 @@ test('design system: inventory classifies every public and compatibility export'
   assert.equal(designSystemInventory.summary.publicExports, 214)
   assert.equal(designSystemInventory.summary.runtimeExports, 117)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 40)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),

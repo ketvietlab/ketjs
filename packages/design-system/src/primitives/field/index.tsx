@@ -60,6 +60,11 @@ export type FieldProps = {
   help?: string | null
   error?: string | null
   options?: readonly FieldOption[]
+  /**
+   * How checkbox-group and radio options flow. `horizontal` (default) wraps them on a line; `vertical` lists
+   * one option per line under the shared label, for choices whose labels should scan as a column.
+   */
+  optionsOrientation?: 'horizontal' | 'vertical'
   span?: 'half' | 'full'
   step?: string | null
   autocomplete?: string | null
@@ -133,7 +138,12 @@ export const Field = (props: FieldProps): TemplateResult => {
             </span>
           )}
         </span>
-        <div data-ui="field-options" role="group" aria-labelledby={`${props.id}-label`}>
+        <div
+          data-ui="field-options"
+          data-orientation={props.optionsOrientation === 'vertical' ? 'vertical' : null}
+          role="group"
+          aria-labelledby={`${props.id}-label`}
+        >
           {each(
             props.options ?? [],
             (option) => option.name ?? option.value,
@@ -184,7 +194,12 @@ export const Field = (props: FieldProps): TemplateResult => {
             </span>
           )}
         </span>
-        <div data-ui="field-options" role="radiogroup" aria-labelledby={`${props.id}-label`}>
+        <div
+          data-ui="field-options"
+          data-orientation={props.optionsOrientation === 'vertical' ? 'vertical' : null}
+          role="radiogroup"
+          aria-labelledby={`${props.id}-label`}
+        >
           {each(
             props.options ?? [],
             (option) => option.value,
