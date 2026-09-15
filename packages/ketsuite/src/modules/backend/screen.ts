@@ -88,7 +88,7 @@ export type FrameOptions = {
  * The shell's half of a screen.
  *
  * `sidebar.foot` is skipped for a navigation fragment on purpose: the foot sits
- * outside `[data-ui="sidebar-main"]`, so it is not one of the slots the client
+ * outside the `backend.sidebar-main` navigation slot, so it is not one of the slots the client
  * replaces, and rendering its islands would build markup the browser discards.
  */
 export const frameOf = async (

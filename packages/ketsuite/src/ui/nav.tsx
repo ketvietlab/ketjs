@@ -14,8 +14,6 @@ import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 
 export const HOOKS = [
-  'sidebar',
-  'sidebar-main',
   'sidebar-search',
   'sidebar-search-icon',
   'sidebar-search-input',
@@ -316,10 +314,11 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
   )
 }
 
-export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => {
-  return (
-    <aside data-ui="sidebar">
-      <div data-ui="sidebar-main">{sidebarMain(_, options)}</div>
-    </aside>
-  )
-}
+/**
+ * The sidebar content for the design-system `AppShell`'s `sidebar` region.
+ *
+ * @deprecated The KetSuite shell renders `AppShell` itself, which supplies the
+ * `app-sidebar` region; call `sidebarMain`. Kept so existing imports keep working
+ * without the legacy `sidebar` and `sidebar-main` wrappers.
+ */
+export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => sidebarMain(_, options)
