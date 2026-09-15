@@ -22,7 +22,11 @@ export const RecordModalForm = (props: {
   command?: string | null
 }): TemplateResult => (
   <form data-ui="record-form" method="post" action="" data-record-kind={props.kind}>
-    {props.command ? <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.command} /> : ''}
+    {props.command ? (
+      <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.command} autocomplete="off" />
+    ) : (
+      ''
+    )}
     <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
