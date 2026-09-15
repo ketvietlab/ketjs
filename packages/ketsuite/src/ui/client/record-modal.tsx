@@ -174,7 +174,48 @@ export type RecordModalDefinition<Data> = {
   body?: (context: RecordModalContext<Data>) => JSXChild
   dialogs?: Record<string, RecordModalDialog<Data>>
   commands?: Record<string, RecordModalCommand<Data>>
+  /**
+   * Runtime labels (`recordModal.*`) in the page's language, available before the
+   * record's context has loaded. Without them the loading state has only the
+   * built-in English defaults, because `messages` arrive with the context.
+   */
+  labels?: Record<string, string> | (() => Record<string, string>)
 }
+
+/**
+ * English defaults for every label the runtime itself shows. A module passes its
+ * own language through `labels`; these only guarantee a reader never sees a key.
+ */
+export const RECORD_MODAL_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  'recordModal.close': 'Close',
+  'recordModal.loading': 'Loading…',
+  'recordModal.loadFailed': 'The record could not be read.',
+  'recordModal.notFound': 'The record is gone or you cannot see it.',
+  'recordModal.retry': 'Retry',
+  'recordModal.errorTitle': 'Not saved',
+  'recordModal.saveFailed': 'That did not work. Try again.',
+  'recordModal.unsaved': 'Discard what you typed?',
+  'recordModal.uploadFailed': 'The file could not be uploaded. Try again.',
+})
+
+/**
+ * The text for a key: the loaded context's messages, then the messages of the
+ * last record this modal opened, then the module's labels, then the defaults.
+ * Only an unknown key falls through to itself.
+ */
+export const resolveRecordModalLabel = (
+  key: string,
+  sources: {
+    messages?: Record<string, string> | null
+    previous?: Record<string, string> | null
+    labels?: Record<string, string> | null
+  },
+): string =>
+  sources.messages?.[key] ??
+  sources.previous?.[key] ??
+  sources.labels?.[key] ??
+  RECORD_MODAL_LABELS[key] ??
+  key
 
 /** Field a form (or its submitter) uses to name the command it runs. */
 export const RECORD_COMMAND_FIELD = '__command'
@@ -274,9 +315,20 @@ export const createRecordModal =
     let returnFocus: HTMLElement | null = null
     let releaseInert: (() => void) | null = null
 
-    const messages = (): Record<string, string> => envelope()?.messages ?? {}
+    // Messages of the last record this modal loaded: opening the next record clears
+    // the envelope, and its loading state still needs words rather than keys.
+    let previousMessages: Record<string, string> | null = null
+    const labels = (): Record<string, string> =>
+      typeof definition.labels === 'function' ? definition.labels() : (definition.labels ?? {})
     const t = (key: string, params?: Record<string, unknown>): string =>
-      interpolate(messages()[key] ?? key, params)
+      interpolate(
+        resolveRecordModalLabel(key, {
+          messages: envelope()?.messages,
+          previous: previousMessages,
+          labels: labels(),
+        }),
+        params,
+      )
     const visibleTabs = (context: RecordModalContext<Data>) =>
       (definition.tabs ?? []).filter((tab) => tab.visible?.(context) ?? true)
 
@@ -323,6 +375,7 @@ export const createRecordModal =
           status.set('error')
           return
         }
+        previousMessages = result.value.messages ?? previousMessages
         envelope.set(result.value)
         status.set('ready')
       } catch (caught) {

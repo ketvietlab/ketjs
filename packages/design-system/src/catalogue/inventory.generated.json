@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 96,
     "cssFiles": 72,
-    "cssLines": 13699
+    "cssLines": 13711
   },
   "rows": [
     {
@@ -10073,7 +10073,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-chrome/styles.css",
-      "lines": 327,
+      "lines": 339,
       "hooks": [
         "bulk-action-list",
         "bulk-actions",
