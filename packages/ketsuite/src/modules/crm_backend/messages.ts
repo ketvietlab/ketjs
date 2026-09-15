@@ -252,6 +252,21 @@ const vi = {
   'kanban.weight': 'Tỷ trọng dự báo của giai đoạn',
   'kanban.columnMenu': 'Thao tác giai đoạn',
   'kanban.moveShort': 'Chuyển',
+  'field.configName': 'Tên',
+  'field.color': 'Màu',
+  'field.priorityHint': 'Số nhỏ được xét trước.',
+  'configuration.stage.create': 'Thêm giai đoạn',
+  'configuration.tag.create': 'Thêm nhãn',
+  'configuration.assignmentRule.create': 'Thêm quy tắc phân công',
+  'configuration.scoreRule.create': 'Thêm quy tắc chấm điểm',
+  'configuration.team.editMember': 'Sửa thành viên',
+  'configuration.readOnlyTitle': 'Chỉ xem',
+  'configuration.readOnly': 'Bạn có thể xem nhưng không thể thay đổi mục cấu hình này.',
+  'configuration.emptyTitle': 'Chưa có mục cấu hình',
+  'configuration.emptyHint': 'Bấm Thêm mới để tạo mục đầu tiên cho danh mục này.',
+  'configuration.emptyFilteredTitle': 'Không có mục nào ở trạng thái này',
+  'configuration.emptyFilteredHint': 'Chọn trạng thái khác để xem các mục còn lại.',
+  'value.archivedTeam': '{name} (đã lưu trữ)',
 }
 
 const en: typeof vi = {
@@ -509,6 +524,21 @@ const en: typeof vi = {
   'kanban.weight': "The stage's share of forecast value",
   'kanban.columnMenu': 'Stage actions',
   'kanban.moveShort': 'Move',
+  'field.configName': 'Name',
+  'field.color': 'Color',
+  'field.priorityHint': 'Lower numbers are checked first.',
+  'configuration.stage.create': 'Add stage',
+  'configuration.tag.create': 'Add tag',
+  'configuration.assignmentRule.create': 'Add assignment rule',
+  'configuration.scoreRule.create': 'Add scoring rule',
+  'configuration.team.editMember': 'Edit member',
+  'configuration.readOnlyTitle': 'Read only',
+  'configuration.readOnly': 'You can view this configuration entry but not change it.',
+  'configuration.emptyTitle': 'Nothing configured yet',
+  'configuration.emptyHint': 'Use Add new to create the first entry in this catalogue.',
+  'configuration.emptyFilteredTitle': 'Nothing in this status',
+  'configuration.emptyFilteredHint': 'Choose another status to see the other entries.',
+  'value.archivedTeam': '{name} (archived)',
 }
 
 export const messages = { vi, en }

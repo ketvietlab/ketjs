@@ -41,6 +41,15 @@ transparent scrolling viewport inside; never wrap it in another `Surface`.
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
+### Popups close on an outside click and on Escape
+
+Every popup built on `<details>` behaves like the action menu: a click outside it
+closes it, and Escape closes the open one and returns focus to its summary. This
+covers `Menu` (`data-ui="menu"`), the period choice of `TimeframeFilter`
+(`data-ui="timeframe-menu"`) and list view settings (`data-ui="view-settings"`).
+The runtime lists the non-menu popups in `DISMISSIBLE_POPUPS`; a new popup component
+adds its hook there instead of wiring its own document listener.
+
 ### Collections open records in a modal
 
 A row of a `DataTable` (or `ResourceList`, `DataGrid`) and a `KanbanCard` always open
@@ -60,11 +69,29 @@ returns them exactly where they were.
   modal host, so the server and first client render stay identical.
 - Size follows content: a short record uses the default size, and only long content
   such as a multi-tab record uses the large size with an internal scroll region.
+- A record with more than one tab passes `height: 'fixed'` to `ModalSheet`: the dialog
+  holds the viewport cap (`data-height="fixed"`) so switching between tabs of different
+  heights never resizes it, and the body scrolls under a still head and tab bar. A
+  single-view record and its nested dialogs keep `height: 'content'` (the default).
 - A child action of the record (reassign, postpone, confirm) opens inside the same
   island as a nested step, not as another page.
 - `RecordPage` remains for records reached directly rather than from a collection,
   such as a shared link or a record without a parent list. It is never the target of
   a collection row or card.
+
+### Option groups
+
+`checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
+fields with those types) keep one label on the left and the options on the right,
+each option's text after its control. `optionsOrientation` sets how the options flow:
+
+- `horizontal` (default): options wrap on one line. Use for a few short choices.
+- `vertical`: one option per line, rendered as `data-orientation="vertical"` on
+  `field-options`. Use when the choices should scan as a list, such as companies,
+  branches or job roles.
+
+Do not restyle `field-options` in an application to stack options; pass
+`optionsOrientation: 'vertical'` instead.
 
 The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`

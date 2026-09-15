@@ -19,6 +19,8 @@ packages/ketsuite/src/ui/client/live-doc.mjs.map
 # backend asset root by tools/build-backend-client.mjs.
 packages/ketsuite/src/ui/client/mail-bundle.mjs
 packages/ketsuite/src/ui/client/mail-bundle.mjs.map
+packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs
+packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs.map
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs

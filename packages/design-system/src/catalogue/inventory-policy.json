@@ -589,6 +589,13 @@
       "target": "Public core",
       "wave": 2,
       "gapTask": "DS-015"
+    },
+    "./client/record-modal-form.tsx": {
+      "owner": "Overlays",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-015"
     }
   },
   "plannedComponents": []

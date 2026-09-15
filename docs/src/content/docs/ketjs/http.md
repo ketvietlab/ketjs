@@ -95,6 +95,8 @@ Route factories receive live runtime services:
 | `reportsOf(url, request, target)` | Installed reports for a model whose source the viewer may call. |
 | `appsOf(request)` | Installed/available module information for this tenant. |
 | `scopeOf(url, request)` | Company and branch scope resolved from the session or development shim. |
+| `requestIdentityOf(url, request)` | The identity the request runs as, or `null`: user, companies, branches and `origin` — `session` for a cookie session, `request` for an identity `resolveIdentity` asserted. Read the viewer from here, not from `sessionsOf(...).of(request)`, which sees only cookies. |
+| `signOutPath` | Where a viewer with a `request` identity signs out (`serve.signOutPath`), or `null`. A cookie session signs out through `POST /logout`; a gateway login must end at the gateway so its upstream login ends too. |
 | `call(name, input, url, request)` | Function call carrying tenant, session, permissions, actor, and scope. |
 | `callUnchecked(...)` | Internal authorization bootstrap only; deliberately easy to audit by name. |
 | `callUncheckedForVerifiedCompany(...)` | Exact-company function dispatch after an external credential has cryptographically authenticated that company. |

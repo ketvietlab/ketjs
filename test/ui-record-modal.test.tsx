@@ -4,10 +4,13 @@ import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { ModalSheet } from '@ketvietlab/design-system'
 import {
+  RECORD_NEW_ID,
   RECORD_PARAM,
   defineRecordModalIsland,
+  isRecordModalCreate,
   readRecordModalTarget,
   recordModalClosedHref,
+  recordModalCreateHref,
   recordModalHost,
   recordModalHref,
 } from '@ketvietlab/ketsuite/ui'
@@ -33,6 +36,33 @@ test('record modal: a link keeps the collection query and names kind, id and tab
   const back = readRecordModalTarget(`http://x${href}`)
   assert.deepEqual(back, { kind: 'customer_care.followup', id: 'native:abc', tab: 'result' })
   assert.equal(recordModalClosedHref(`http://x${href}`), '/admin/crm/followups?bucket=overdue&q=an&cursor=50')
+})
+
+test('record modal: a create action opens the same modal with the reserved new id', () => {
+  // A collection's own tabs use `section`: `record` and `tab` belong to the record modal.
+  const href = recordModalCreateHref(new URL('http://x/admin/crm/configuration?section=stages&status=all'), {
+    kind: 'crm.stage',
+  })
+  assert.equal(href, '/admin/crm/configuration?section=stages&status=all&record=crm.stage%3Anew')
+  const target = readRecordModalTarget(`http://x${href}`)
+  assert.deepEqual(target, { kind: 'crm.stage', id: RECORD_NEW_ID, tab: null })
+  assert.equal(isRecordModalCreate(target), true)
+  assert.equal(isRecordModalCreate({ id: 'stage-1' }), false)
+  // The runtime reads a create without an id, tells views it is creating, and a
+  // create command switches the modal to the record it made instead of closing.
+  assert.match(runtime, /creating: current\.id === RECORD_NEW_ID/u)
+  assert.match(runtime, /creating\s*\?\s*\{\}\s*:\s*\{ id \}/u)
+  assert.match(runtime, /if \(createdId\) show\(createdId, command\.openTab \?\? null, 'replace'\)/u)
+})
+
+test('record modal: a reopened record renders from the island cache and revalidates', () => {
+  // Cached contexts show at once and are read again quietly behind them.
+  assert.match(runtime, /const cached = definition\.cache === false \? undefined : cache\.get\(id\)/u)
+  assert.match(runtime, /envelope\.set\(cached\)[\s\S]*?quiet = true/u)
+  // Bounded, and dropped by a successful command or a change announced for the kind.
+  assert.match(runtime, /while \(cache\.size > RECORD_MODAL_CACHE_SIZE\)/u)
+  assert.match(runtime, /cache\.delete\(current\.id\)/u)
+  assert.match(runtime, /'ket:records-changed',\s*\(event\) =>[\s\S]*?cache\.delete\(String\(id\)\)/u)
 })
 
 test('record modal: a malformed record parameter opens nothing', () => {
@@ -76,6 +106,19 @@ test('record modal: client sheets carry no route-modal marker and close with but
   )
   assert.match(route, /data-route-modal="true"/u)
   assert.match(route, /<a data-ui="modal-close" href="\/list"/u)
+})
+
+test('record modal: a record with several tabs keeps one height while tabs switch', () => {
+  // The record layer asks for a fixed dialog only when there is more than one tab to switch between.
+  const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
+  const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
+  assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
+  // A dialog layer opened from the record keeps sizing to its content.
+  const dialogLayer = runtime.slice(
+    runtime.indexOf('const dialogLayer = '),
+    runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
+  )
+  assert.doesNotMatch(dialogLayer, /height:/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -129,4 +172,16 @@ test('record modal: the loading state never shows a label key', () => {
   )
   for (const key of documented)
     assert.doesNotMatch(resolveRecordModalLabel(key, {}), /^recordModal\./u, `${key} resolves to words`)
+})
+
+test('record modal: a created record is in the address bar before the collection refreshes', () => {
+  // The shell answers `ket:records-changed` by re-fetching `location.href`; announcing
+  // before the `:new` entry is replaced would reload the create form.
+  const openBranch = runtime.slice(runtime.indexOf("if (after === 'open') {"))
+  const showAt = openBranch.indexOf("show(createdId, command.openTab ?? null, 'replace')")
+  const announceAt = openBranch.indexOf('announce()')
+  assert.ok(
+    showAt > 0 && announceAt > showAt,
+    'the URL names the created record before the change is announced',
+  )
 })
