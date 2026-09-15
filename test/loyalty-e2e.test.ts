@@ -1178,7 +1178,8 @@ test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay iso
   assert.equal(portal.status, 200)
   assert.match(portalHtml, /My Loyalty/)
   assert.match(portalHtml, /portal-wallet|9/)
-  assert.doesNotMatch(portalHtml, /999/)
+  // A bare /999/ also matched content-hashed asset URLs such as `v99992668`.
+  assert.doesNotMatch(portalHtml, /\b999\b|other-wallet/)
   assert.doesNotMatch(portalHtml, /undefined/)
 
   await fixture('partner.savePartner', { id: 'globex-party', kind: 'company', name: 'Globex' })
