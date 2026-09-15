@@ -289,7 +289,7 @@
     padding-inline: var(--admin-gap);
     border-block-end: 2px solid transparent;
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     text-decoration: none;
   }
@@ -347,7 +347,7 @@
   [data-ui="doc-title"] {
     flex: 0 0 auto;
     color: var(--admin-ink);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
   [data-ui="doc-summary"] {
@@ -394,7 +394,7 @@
   [data-ui="record-title"] {
     overflow: hidden;
     color: var(--admin-ink);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -409,7 +409,7 @@
   [data-ui="record-value"] {
     flex: 0 0 auto;
     color: var(--admin-ink);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
@@ -459,13 +459,13 @@
     margin: 0;
   }
   [data-ui="notice-title"] {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 700;
   }
   [data-ui="notice-message"] {
     margin-block-start: 0.125rem;
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   [data-ui="notice"][data-tone="positive"] [data-ui="notice-message"],
   [data-ui="notice"][data-tone="warning"] [data-ui="notice-message"],
@@ -487,7 +487,7 @@
   }
   [data-ui="loading-label"] {
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
   /* A line that says work is still going on. It reads as status rather than as
@@ -499,7 +499,7 @@
     gap: var(--admin-gap-xs);
     margin: 0;
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
   }
   [data-ui="live-region"]::before {
@@ -530,7 +530,7 @@
   [data-ui="table-caption"] {
     padding: var(--admin-gap);
     color: var(--admin-ink);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 700;
     text-align: start;
   }

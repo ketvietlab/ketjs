@@ -113,10 +113,12 @@ export const shell = (
       </ket-fragments>
     )
   // The design-system application shell. The theme scope sits above it, as the
-  // shell's own styles expect; the island runtime stays outside the swapped slots,
-  // and the three slots keep the names fragment navigation reconciles.
+  // shell's own styles expect, in the grouped presentation the product mocks use:
+  // one page gutter token (`--kv-page-padding-x`) for context, header, toolbar and
+  // body. The island runtime stays outside the swapped slots, and the three slots
+  // keep the names fragment navigation reconciles.
   return (
-    <div data-kv-design-system>
+    <div data-kv-design-system data-presentation="grouped">
       {AppShell({
         mode: 'viewport',
         sidebar: sidebarMain(_, sidebarOptions),
