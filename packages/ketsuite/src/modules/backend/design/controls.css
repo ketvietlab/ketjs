@@ -79,7 +79,7 @@
     border-radius: var(--admin-radius-sm);
     background: var(--admin-surface);
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1;
     text-decoration: none;
@@ -95,13 +95,13 @@
     min-block-size: var(--admin-control-height);
     padding-inline: 0.5rem;
     border-radius: var(--admin-radius-sm);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   :where([data-ui="action"], [data-control="action"])[data-size="prominent"] {
     min-block-size: var(--admin-control-height);
     padding-inline: var(--admin-gap);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   :where([data-ui="action"], [data-control="action"])[data-variant="primary"] {
@@ -305,7 +305,7 @@
     font-size: var(--admin-size-xs);
   }
   [data-ui="schedule-event-detail"] {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     opacity: 0.82;
   }
 
@@ -338,7 +338,7 @@
     border-radius: 9999px;
     background: var(--admin-accent-soft);
     color: var(--admin-accent-text);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
