@@ -31,7 +31,7 @@ const focusables = (root) =>
  * Popups built on <details> other than the action menu: a period filter and view
  * settings. They close on a click outside them and on Escape, like the menu.
  */
-export const DISMISSIBLE_POPUPS = ['[data-ui="timeframe-menu"]', '[data-ui="view-settings"]']
+const DISMISSIBLE_POPUPS = ['[data-ui="timeframe-menu"]', '[data-ui="view-settings"]']
 const DISMISSIBLE_POPUPS_OPEN = DISMISSIBLE_POPUPS.map((selector) => `${selector}[open]`).join(', ')
 
 export const attachDesignSystemInteractions = (root = document) => {
