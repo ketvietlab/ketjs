@@ -83,6 +83,7 @@ export type {
   ClientCompatibilityPolicy,
   SessionResolveContext,
   RequestIdentity,
+  RequestIdentityOrigin,
   RequestIdentityResolveContext,
   PagesSpec,
   BootedDeployment,

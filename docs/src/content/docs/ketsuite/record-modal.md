@@ -21,12 +21,15 @@ One shape for every module:
   id may.
 - Build links with `recordModalHref(url, { kind, id, tab })`. It keeps the collection's own query, so
   filters, sort and page survive opening and closing.
+- `record` and `tab` are reserved for the record modal. A collection that has its own tabs (for example
+  configuration sections) names them with another parameter, such as `section`; otherwise opening or
+  closing a record would overwrite the collection's tab.
 - The server always renders the collection with a **closed** host. A deep link opens the record after
   hydration; server and first client render stay identical.
 
 ## Server side
 
-1. Rows, cards and create actions link with `recordModalHref`.
+1. Rows and cards link with `recordModalHref`; create actions with `recordModalCreateHref`.
 2. The module declares one island per record kind with `defineRecordModalIsland({ kind, client, export })`
    and places it through `backend:runtime`. Its props are empty.
 3. The module exposes one permission-checked read, `<module>.<kind>.modalContext({ id })`, returning
@@ -64,10 +67,12 @@ The runtime owns, for every module:
 
 | Concern | Behaviour |
 | --- | --- |
-| Opening | A click on a link naming this kind opens it (`pushState`); a link to the open record switches tab (`replaceState`). |
+| Opening | A click on a link naming this kind opens it (`pushState`); a link to the open record switches tab (`replaceState`). `record=<kind>:new` opens the create form (see below). |
 | History | Back and forward over modal entries open or close the modal only. The navigation layer asks through the cancelable `ket:popstate` event and does not re-fetch the page. |
 | Accessibility | `ModalSheet mode="client"`: close controls are buttons, focus moves in and is trapped, Escape closes the top layer, the rest of the page is inert, focus returns to the opener. |
+| Height | A definition with more than one tab renders `ModalSheet height="fixed"`: the dialog keeps one height from loading through every tab, and the body scrolls inside. A single view and dialog layers size to their content. |
 | States | Loading, load failure with retry, not found. |
+| Cache | Each island keeps the last 30 contexts it read (including the create form's). Reopening one renders it at once and reads it again quietly behind it. A successful command drops the record it changed, and `ket:records-changed` for the kind drops the named ids (all when none are named). A definition sets `cache: false` when its context must never be shown before a fresh read. |
 | Commands | A form inside the modal names its command with a `__command` field (or a submit button with `name="__command"`). The runtime maps `FormData` through `command.input`, calls `/_ket/fn` with an idempotency key, and applies `after`: `close`, `reload`, `refresh`, `stay`, `{ tab }` or `{ dialog }`. |
 | Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. What was typed survives through `context.draft(name, fallback)`. |
 | Unsaved input | Closing or switching tab over a typed-in layer asks `recordModal.unsaved`. |
@@ -79,6 +84,31 @@ The runtime owns, for every module:
 
 Views are render-pure. They read the context and return design-system markup (`RecordForm`, `Field`,
 `DataTable`, `Notice`…); they never fetch, never touch history and never query the document.
+
+## Creating a record
+
+A collection's create action opens the **same** record modal as its rows, with no record yet. There is
+no create page and no separate create modal.
+
+```
+# File: URL shape of a create action
+/admin/<collection>?<list state>&record=<kind>:new&tab=<tab>
+```
+
+- Build the link with `recordModalCreateHref(url, { kind, tab })`. `new` (`RECORD_NEW_ID`) is reserved:
+  a kind whose ids could literally be `new` must not use this contract.
+- The runtime calls the context read **without an id** (`{}`) and sets `context.creating = true`.
+  `<module>.<kind>.modalContext` then returns the empty record's defaults, the choices its form needs
+  and the viewer's `permissions` (a viewer who may not create gets a refusal, not an empty form).
+  A definition that needs another input shape uses `context.input(id, creating)`.
+- Views branch on `context.creating`: hide tabs that need an existing record (members, history…),
+  title the modal for creation, and name the create command in the form.
+- The create command is the module's existing save function. Give it `after: 'open'`: on success the
+  runtime reads the new id (`created(value)`, else the value's `id`), replaces the `:new` history
+  entry with the created record and opens it on `openTab` (or the first tab). Without an id it closes.
+  `ket:records-changed` carries the created id, so the collection behind refreshes.
+- A child that only exists once the record does (a team's members, a programme's milestones) is added
+  after the switch, inside the created record's modal.
 
 ## Runtime labels
 

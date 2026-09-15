@@ -1,5 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
-import { functions } from './functions.ts'
+import { functions } from './functions/index.ts'
 import { jobFunctions, jobs } from './jobs.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
@@ -18,7 +18,7 @@ export default defineModule({
 })
 
 export * from './types.ts'
-export { caseWriteEffects, functions } from './functions.ts'
+export { caseWriteEffects, functions } from './functions/index.ts'
 export {
   addCaseMessage,
   addTimeline,

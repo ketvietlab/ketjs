@@ -550,6 +550,19 @@ export const componentGroups: readonly ComponentGroup[] = [
                     ],
                   },
                   {
+                    id: 'settings-branches',
+                    name: 'branches',
+                    label: 'Branches',
+                    type: 'checkbox-group',
+                    optionsOrientation: 'vertical',
+                    span: 'full',
+                    options: [
+                      { value: 'district-1', label: 'District 1 · Head office', checked: true },
+                      { value: 'thao-dien', label: 'Thao Dien', checked: true },
+                      { value: 'cau-giay', label: 'Cau Giay · North' },
+                    ],
+                  },
+                  {
                     id: 'settings-address',
                     name: 'address',
                     label: 'Delivery address',
