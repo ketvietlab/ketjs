@@ -87,7 +87,7 @@ const CatalogueRail = (props: {
       <span aria-hidden="true">K</span>
       <strong>Két Việt</strong>
     </a>
-    <p data-ui="catalogue-kicker">Design system · 0.1.22</p>
+    <p data-ui="catalogue-kicker">Design system · 0.1.23</p>
     <nav data-ui="catalogue-nav" aria-label="Design system documentation">
       <span data-ui="catalogue-nav-section">Get started</span>
       <a
