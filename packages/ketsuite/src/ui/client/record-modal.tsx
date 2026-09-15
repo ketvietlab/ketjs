@@ -600,17 +600,25 @@ export const createRecordModal =
         // What the command changed is no longer what the cache holds.
         cache.delete(current.id)
         if (createdId) cache.delete(createdId)
-        document.dispatchEvent(
-          new CustomEvent('ket:records-changed', {
-            detail: { kind: definition.kind, ids: [createdId ?? current.id] },
-          }),
-        )
+        const announce = (): void => {
+          document.dispatchEvent(
+            new CustomEvent('ket:records-changed', {
+              detail: { kind: definition.kind, ids: [createdId ?? current.id] },
+            }),
+          )
+        }
         const after = after_(command)
         if (after === 'open') {
           dialog.set(null)
+          // Replace `:new` in the address bar before the collection refreshes: the
+          // shell re-fetches `location.href`, which must already name the new record.
           if (createdId) show(createdId, command.openTab ?? null, 'replace')
           else hide('history')
-        } else if (after === 'close') hide('history')
+          announce()
+          return
+        }
+        announce()
+        if (after === 'close') hide('history')
         else if (after === 'reload') {
           dialog.set(null)
           await load(current.id)
