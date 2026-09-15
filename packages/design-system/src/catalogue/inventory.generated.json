@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -7486,6 +7486,7 @@
         "test/company-hierarchy-http.test.ts",
         "test/company-hierarchy-screen.test.tsx",
         "test/crm-cases-routes.test.ts",
+        "test/crm-configuration-permissions.test.ts",
         "test/crm-e2e.test.ts",
         "test/crm-record-access.test.ts",
         "test/crm-ux.test.ts",
@@ -8658,6 +8659,7 @@
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
         "test/crm-cases-routes.test.ts",
+        "test/crm-configuration-permissions.test.ts",
         "test/crm-e2e.test.ts",
         "test/crm-ux.test.ts",
         "test/design-system.test.tsx",
@@ -9376,6 +9378,7 @@
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
         "test/crm-case-detail-screen.test.tsx",
+        "test/crm-configuration-permissions.test.ts",
         "test/crm-ux.test.ts",
         "test/design-system.test.tsx",
         "test/field-classification.test.ts",
