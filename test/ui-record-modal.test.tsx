@@ -173,3 +173,15 @@ test('record modal: the loading state never shows a label key', () => {
   for (const key of documented)
     assert.doesNotMatch(resolveRecordModalLabel(key, {}), /^recordModal\./u, `${key} resolves to words`)
 })
+
+test('record modal: a created record is in the address bar before the collection refreshes', () => {
+  // The shell answers `ket:records-changed` by re-fetching `location.href`; announcing
+  // before the `:new` entry is replaced would reload the create form.
+  const openBranch = runtime.slice(runtime.indexOf("if (after === 'open') {"))
+  const showAt = openBranch.indexOf("show(createdId, command.openTab ?? null, 'replace')")
+  const announceAt = openBranch.indexOf('announce()')
+  assert.ok(
+    showAt > 0 && announceAt > showAt,
+    'the URL names the created record before the change is announced',
+  )
+})
