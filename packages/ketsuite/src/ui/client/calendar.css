@@ -17,7 +17,7 @@
   }
   [data-ui="calendar-range"] {
     color: var(--admin-ink-muted);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   [data-ui="calendar-navigation"],
   [data-ui="calendar-views"] {
@@ -47,7 +47,7 @@
   [data-ui="calendar-create-title"] {
     grid-column: 1 / -1;
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
   [data-ui="calendar-field"] {
     display: grid;
@@ -55,7 +55,7 @@
     align-items: center;
     gap: var(--admin-gap-sm);
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   /* Only the placement; the control itself is `form-control`, which is where the
      focus ring, the disabled state and the invalid state live. */
@@ -111,7 +111,7 @@
   }
   [data-ui="calendar-day-label"] {
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   [data-ui="calendar-day-events"] {
     display: grid;
@@ -129,7 +129,7 @@
   [data-ui="calendar-week"] [data-ui="calendar-event"],
   [data-ui="calendar-month"] [data-ui="calendar-event"] {
     padding: 0.35rem;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   [data-ui="calendar-event-title"] {
     min-inline-size: 0;
@@ -139,7 +139,7 @@
   [data-ui="calendar-event-location"],
   [data-ui="calendar-event-organizer"] {
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   @media (max-width: 63.9375rem) {
     [data-ui="calendar-head"] {

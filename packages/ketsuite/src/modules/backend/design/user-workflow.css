@@ -43,7 +43,7 @@
   display: block;
 }
 .user-steps small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--kv-text-muted);
 }
 .user-steps .current {
@@ -68,7 +68,7 @@
   max-inline-size: calc(50% - var(--admin-gap-lg) / 2 - 9rem - var(--admin-gap));
   margin-inline-start: calc(9rem + var(--admin-gap));
   min-height: 24px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .user-role-search {
   display: block;

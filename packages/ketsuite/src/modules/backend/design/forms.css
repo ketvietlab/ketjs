@@ -97,7 +97,7 @@
     min-inline-size: 0;
     overflow-wrap: anywhere;
     color: var(--admin-accent-text);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     text-decoration: none;
   }
@@ -164,7 +164,7 @@
     /* The same type metrics as [data-ui="form-control"]. Without them the button
        inherits the body's larger line box and stands 2px taller than every other
        control on the row. */
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     text-align: start;
     cursor: pointer;
@@ -566,7 +566,7 @@
     background: var(--admin-surface);
     color: var(--admin-ink-secondary);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1;
   }
@@ -669,7 +669,7 @@
     color: var(--admin-ink);
     background: var(--admin-control-bg);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     transition:
       border-color var(--admin-motion-fast),
@@ -845,7 +845,7 @@
     color: var(--admin-ink);
     background: var(--admin-surface);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     color-scheme: light dark;
     transition:
