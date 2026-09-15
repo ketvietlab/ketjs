@@ -16,7 +16,7 @@ test('design system: popups built on details close on an outside click and on Es
   // The period filter and view settings are <details> popups, like the action menu.
   assert.match(timeframe, /<details data-ui="timeframe-menu">/u)
   assert.match(listControls, /<details data-ui="view-settings">/u)
-  const declared = runtime.match(/export const DISMISSIBLE_POPUPS = \[([^\]]*)\]/u)?.[1] ?? ''
+  const declared = runtime.match(/const DISMISSIBLE_POPUPS = \[(.*?)\]\n/u)?.[1] ?? ''
   for (const hook of ['timeframe-menu', 'view-settings'])
     assert.match(declared, new RegExp(`\\[data-ui="${hook}"\\]`, 'u'), `${hook} is dismissible`)
 
