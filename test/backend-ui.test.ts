@@ -1183,7 +1183,11 @@ test('backend shell: the document uses the design-system application shell', () 
       extras: { runtime: html2`<span data-ui="runtime-probe"></span>`, 'sidebar.foot': 'persistent foot' },
     }),
   ).replace(/<!--k\[?\]?-->/g, '')
-  assert.match(html, /^<div data-kv-design-system(?:="true")?><div data-ui="app-shell"/)
+  assert.match(
+    html,
+    /^<div data-kv-design-system(?:="true")? data-presentation="grouped"><div data-ui="app-shell"/,
+    'the grouped presentation gives every screen the mocks page gutter',
+  )
   assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
   assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
   assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)

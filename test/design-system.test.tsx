@@ -1888,3 +1888,27 @@ test('design system: the pager range keeps its reserved width against the shared
       `no pager-summary rule collapses the width: ${rule.selector}`,
     )
 })
+
+test('design system: root navigation sections read one weight step above their children', () => {
+  const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8').replace(
+    /\s+/gu,
+    ' ',
+  )
+  assert.match(
+    css,
+    /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\):not\( \[data-ui="navigation-children"\] \* \) \{ font-weight: var\(--kv-weight-medium\); \}/u,
+  )
+})
+
+test('design system: table selection checkboxes sit at 14px', () => {
+  const css = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8').replace(
+    /\s+/gu,
+    ' ',
+  )
+  const rule =
+    css.match(
+      /\[data-ui="select-all"\], :where\(\[data-kv-design-system\]\) \[data-ui="table-scroll"\]\[data-pattern="data-table"\] \[data-ui="row-select"\] \{[^}]*\}/u,
+    )?.[0] ?? ''
+  assert.match(rule, /width: 0\.875rem;/u)
+  assert.match(rule, /height: 0\.875rem;/u)
+})

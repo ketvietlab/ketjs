@@ -121,7 +121,7 @@
     background: var(--admin-control-bg);
     color: var(--admin-ink);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     outline: none;
     transition:
@@ -141,7 +141,7 @@
   [data-ui="sidebar-empty"] {
     margin: 0.5rem;
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     white-space: normal;
   }
 
@@ -152,7 +152,7 @@
     place-items: center;
     border-radius: var(--admin-radius-xs);
     background: var(--admin-surface-hover);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
   }
 
