@@ -8,3 +8,13 @@ export type CaseKind = (typeof CASE_KINDS)[number]
 export type TerminalState = (typeof TERMINAL_STATES)[number]
 export type MessageVisibility = (typeof MESSAGE_VISIBILITIES)[number]
 export type AssignmentMode = (typeof ASSIGNMENT_MODES)[number]
+
+/**
+ * The operators a score rule may use, by the case field it reads. Text fields
+ * compare or test presence; the expected revenue compares as a number.
+ */
+export const SCORE_RULE_OPERATORS: Readonly<Record<string, readonly string[]>> = {
+  email: ['eq', 'contains', 'present'],
+  utmSource: ['eq', 'contains', 'present'],
+  expectedRevenue: ['gte', 'eq'],
+}

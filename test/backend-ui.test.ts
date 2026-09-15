@@ -1146,6 +1146,33 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
 })
 
+test('sidebar footer: a gateway viewer signs out where the deployment says, or has no control', () => {
+  const gateway = renderToString(
+    pagesScreen(_, [page()], {
+      menu: MENU,
+      viewer: {
+        name: 'Ngọc Linh',
+        company: 'acme',
+        companies: ['acme'],
+        signOut: { action: '/auth/logout' },
+      },
+    }),
+  )
+  assert.match(gateway, /<details data-ui="viewer">/)
+  assert.match(gateway, /<form data-ui="signout" method="post" action="\/auth\/logout">/)
+  assert.doesNotMatch(gateway, /action="\/logout"/)
+
+  const undeclared = renderToString(
+    pagesScreen(_, [page()], {
+      menu: MENU,
+      viewer: { name: 'Ngọc Linh', company: 'acme', companies: ['acme'], signOut: null },
+    }),
+  )
+  // The viewer still shows who is signed in; only the control that would point nowhere is gone.
+  assert.match(undeclared, /<details data-ui="viewer">/)
+  assert.doesNotMatch(undeclared, /data-ui="signout"/)
+})
+
 test('sidebar: modules expand in place and only submenu links carry active state', () => {
   const html = renderToString(pagesScreen(_, [page()], { menu: MENU }))
   assert.match(html, /data-ui="app-navigation"/)

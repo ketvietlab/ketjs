@@ -32,7 +32,12 @@ test('crm configuration: renders for a manager who may not list users', async (t
     await fixture('user.grantCompany', { id: `${id}:acme`, userId: id, companyId: 'acme' })
   }
   await fixture('user.saveRole', { id: 'crm-configurator', name: 'CRM configurator' })
-  for (const [index, fnKey] of ['crm.configuration.get', 'crm.tag.list', 'crm.team.member.list'].entries())
+  for (const [index, fnKey] of [
+    'crm.configuration.get',
+    'crm.tag.list',
+    'crm.team.member.list',
+    'crm.team.modalContext',
+  ].entries())
     await fixture('user.grantFunction', {
       id: `crm-configurator-${index}`,
       roleId: 'crm-configurator',
@@ -57,10 +62,24 @@ test('crm configuration: renders for a manager who may not list users', async (t
   await app.client.logout()
 
   await app.client.login({ login: 'manager', password: 'manager password' })
-  const page = await app.client.get('/admin/crm/configuration?tab=teams&lang=en')
+  const page = await app.client.get('/admin/crm/configuration?section=teams&lang=en')
   const html = await page.text()
   assert.equal(page.status, 200, html.slice(0, 400))
-  // The people pickers fall back to CRM team members the manager can see.
   assert.match(html, /Care Manager/)
   assert.doesNotMatch(html, /Administrator<\/option>/)
+  // A viewer without `crm.team.save` opens teams read-only and has no create action.
+  assert.match(html, /record=crm\.team%3Acrm-team-sales/)
+  assert.doesNotMatch(html, /record=crm\.team%3Anew/)
+
+  const context = async (input: Record<string, unknown>) =>
+    (await app.client.call<Row | null>('crm.team.modalContext', input)).value
+  assert.equal(await context({}), null, 'a viewer who may not create gets no create form')
+  const read = (await context({ id: 'crm-team-sales', locale: 'en' }))!
+  const data = read.data as Row
+  assert.deepEqual(data.permissions, { save: false, members: false })
+  // The people pickers fall back to CRM team members the manager can see.
+  assert.deepEqual(
+    (data.people as Row[]).map((person) => person.name),
+    ['Care Manager'],
+  )
 })
