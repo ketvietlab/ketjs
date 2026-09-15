@@ -41,7 +41,7 @@
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"] {
     margin-bottom: var(--kv-space-1);
     font-size: var(--kv-text-base);
-    font-weight: 800;
+    font-weight: var(--kv-weight-bold);
     line-height: var(--kv-leading-normal);
   }
 
