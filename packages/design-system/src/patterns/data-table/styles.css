@@ -77,10 +77,11 @@
     vertical-align: middle;
   }
 
+  /* Selection controls sit at the table's text size, not the 16px native default. */
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="select-all"],
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row-select"] {
-    width: 1rem;
-    height: 1rem;
+    width: 0.875rem;
+    height: 0.875rem;
     margin: 0;
     accent-color: var(--kv-color-accent);
   }

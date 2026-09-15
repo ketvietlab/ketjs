@@ -184,7 +184,7 @@
     padding-block-end: var(--admin-gap-sm);
     border-block-end: 1px solid var(--admin-line);
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   [data-ui="flow-map-legend"] span {

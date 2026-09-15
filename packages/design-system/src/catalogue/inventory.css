@@ -73,7 +73,7 @@
   [data-ui="inventory-rail-note"] p {
     margin: var(--kv-space-2) 0 0;
     color: var(--inventory-muted);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.5;
   }
 
@@ -114,7 +114,7 @@
 
   [data-ui="inventory-revision"] code {
     color: var(--inventory-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   [data-ui="inventory-summary"] {
@@ -226,7 +226,7 @@
 
   [data-ui="inventory-filters"] label > span {
     color: var(--inventory-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 700;
   }
 
@@ -260,7 +260,7 @@
     width: 100%;
     min-width: 66rem;
     border-collapse: collapse;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   [data-ui="inventory-table"] th,
@@ -276,7 +276,7 @@
     top: 0;
     color: var(--inventory-muted);
     background: color-mix(in srgb, var(--inventory-paper) 94%, var(--inventory-canvas));
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -314,7 +314,7 @@
     border-radius: 999px;
     color: var(--inventory-ink);
     background: #edf0f2;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -556,7 +556,7 @@
       content: attr(data-label);
       margin-bottom: var(--kv-space-1);
       color: var(--inventory-muted);
-      font-size: 0.6875rem;
+      font-size: 0.75rem;
       font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
