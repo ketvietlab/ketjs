@@ -52,6 +52,11 @@ export type Viewer = {
   contextPath?: string | null
   profilePath?: string | null
   timezone?: string
+  /**
+   * Where the sign-out form posts. Absent keeps `POST /logout`; null hides the control, for an
+   * identity whose sign-out the deployment has not declared.
+   */
+  signOut?: { action: string } | null
 }
 
 export type Indicator = {
@@ -300,12 +305,14 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
                   </span>
                 </a>
               )}
-              <form data-ui="signout" method="post" action="/logout">
-                <button data-ui="signout-button" type="submit">
-                  {icon('log-out')}
-                  <span data-ui="signout-label">{_('backend.signOut')}</span>
-                </button>
-              </form>
+              {viewer.signOut !== null && (
+                <form data-ui="signout" method="post" action={viewer.signOut?.action ?? '/logout'}>
+                  <button data-ui="signout-button" type="submit">
+                    {icon('log-out')}
+                    <span data-ui="signout-label">{_('backend.signOut')}</span>
+                  </button>
+                </form>
+              )}
             </div>
           </details>
         )}
