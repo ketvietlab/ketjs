@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/design-system",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Két Việt's public, server-rendered operational design system.",
   "type": "module",
   "license": "MIT",
@@ -52,7 +52,7 @@
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.20"
+    "@ketvietlab/ketjs-view": "0.1.21"
   },
   "publishConfig": {
     "access": "public",
