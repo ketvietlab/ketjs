@@ -27,11 +27,34 @@
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] {
-    width: 0.65rem;
-    height: 0.65rem;
-    margin-top: 0.35rem;
-    border-radius: 50%;
-    background: currentcolor;
+    display: inline-flex;
+    width: 1.25rem;
+    height: calc(var(--kv-text-base) * var(--kv-leading-normal));
+    align-items: center;
+    color: var(--kv-color-info);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="positive"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-positive);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="warning"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-warning);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="danger"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-danger);
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-copy"] {
@@ -41,7 +64,7 @@
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"] {
     margin-bottom: var(--kv-space-1);
     font-size: var(--kv-text-base);
-    font-weight: 800;
+    font-weight: var(--kv-weight-semibold);
     line-height: var(--kv-leading-normal);
   }
 

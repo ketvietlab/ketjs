@@ -479,7 +479,25 @@ const installRouteModal = (signal: AbortSignal, navigation: BrowserNavigation): 
   return () => observer.disconnect()
 }
 
+/**
+ * A record modal changed something the collection behind it shows.
+ *
+ * The modal lives outside the content slot, so re-fetching the current URL as a
+ * fragment refreshes the list without closing, reloading or rebuilding the modal.
+ */
+const installRecordRefresh = (signal: AbortSignal, navigation: BrowserNavigation): void => {
+  document.addEventListener(
+    'ket:records-changed',
+    () => {
+      if (!document.querySelector('[data-ket-slot="backend.content"]')) return
+      void navigation.navigate(location.href, { replace: true })
+    },
+    { signal },
+  )
+}
+
 export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
+  installRecordRefresh(lifetime, navigation)
   const cleanupDesignSystem = attachDesignSystemInteractions(document)
   const cleanupUserWorkflow = installUserWorkflow(lifetime)
   installThemeToggle(lifetime)
