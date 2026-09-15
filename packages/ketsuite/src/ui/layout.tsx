@@ -5,19 +5,18 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import {
+  AppShell,
   ListPage as DesignSystemListPage,
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
-import { sidebar, sidebarNavigationContent } from './nav.tsx'
+import { sidebarMain, sidebarNavigationContent } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
 import { pageContextFromFrame } from './navigation.tsx'
 
 export const HOOKS = [
-  'shell',
-  'main',
   'topbar',
   'content',
   'group-title',
@@ -113,16 +112,24 @@ export const shell = (
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
+  // The design-system application shell. The theme scope sits above it, as the
+  // shell's own styles expect; the island runtime stays outside the swapped slots,
+  // and the three slots keep the names fragment navigation reconciles.
   return (
-    <div data-ui="shell" data-kv-design-system>
-      {sidebar(_, sidebarOptions)}
-      <main data-ui="main">
-        {extras.runtime ?? ''}
-        <div data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</div>
-        <div data-ui="content" data-ket-slot="backend.content">
-          {body}
-        </div>
-      </main>
+    <div data-kv-design-system>
+      {AppShell({
+        mode: 'viewport',
+        sidebar: sidebarMain(_, sidebarOptions),
+        main: (
+          <>
+            {extras.runtime ?? ''}
+            <div data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</div>
+            <div data-ui="content" data-ket-slot="backend.content">
+              {body}
+            </div>
+          </>
+        ),
+      })}
     </div>
   )
 }

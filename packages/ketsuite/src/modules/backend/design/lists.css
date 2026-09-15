@@ -129,7 +129,7 @@
     display: none;
   }
 
-  [data-ui="shell"]:has([data-ui="row-select"]:checked) [data-ui="bulk-actions"] {
+  [data-ui="app-shell"]:has([data-ui="row-select"]:checked) [data-ui="bulk-actions"] {
     display: block;
   }
 
@@ -700,7 +700,7 @@
     background: var(--admin-success-icon, var(--admin-accent, currentColor));
   }
 
-  [data-ui="main"] {
+  [data-ui="app-main"] {
     min-inline-size: 0;
   }
 
@@ -724,7 +724,7 @@
     display: contents;
   }
 
-  body > [data-ui="shell"] [data-ui="topbar"] {
+  [data-ui="app-main"] [data-ui="topbar"] {
     position: sticky;
     inset-block-start: 0;
   }
@@ -778,14 +778,14 @@
     padding: 0;
   }
 
-  [data-ui="main"]:has(
+  [data-ui="app-main"]:has(
       > [data-ket-slot="backend.topbar"] > [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"]
     )
     > [data-ui="content"] {
     padding: 0 var(--admin-gap-lg) var(--admin-gap-lg);
   }
 
-  [data-ui="main"]:has(
+  [data-ui="app-main"]:has(
       > [data-ket-slot="backend.topbar"] > [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"]
     )
     [data-ui="table-scroll"][data-gutter="compact"] {
@@ -870,7 +870,7 @@
     white-space: nowrap;
   }
 
-  [data-ui="main"]:has(
+  [data-ui="app-main"]:has(
       > [data-ket-slot="backend.topbar"] > [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"]
     )
     [data-ui="table"]
@@ -879,14 +879,14 @@
     background: var(--admin-table-header);
   }
 
-  [data-ui="main"]:has(
+  [data-ui="app-main"]:has(
       > [data-ket-slot="backend.topbar"] > [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"]
     )
     [data-ui="row"] {
     block-size: var(--table-row-height);
   }
 
-  [data-ui="main"]:has(
+  [data-ui="app-main"]:has(
       > [data-ket-slot="backend.topbar"] > [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"]
     )
     [data-ui="row"]
@@ -1392,7 +1392,7 @@
     box-shadow: var(--admin-shadow-card);
   }
 
-  [data-ui="catalogue-frame"] > [data-ui="shell"] {
+  [data-ui="catalogue-frame"] [data-ui="app-shell"] {
     min-inline-size: 50rem;
     min-block-size: 26rem;
   }
