@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 96,
     "cssFiles": 72,
-    "cssLines": 13686
+    "cssLines": 13699
   },
   "rows": [
     {
@@ -9722,7 +9722,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 343,
+      "lines": 347,
       "hooks": []
     },
     {
@@ -9781,7 +9781,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 363,
+      "lines": 372,
       "hooks": [
         "app-navigation",
         "icon",
@@ -10019,7 +10019,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/data-table/styles.css",
-      "lines": 358,
+      "lines": 359,
       "hooks": [
         "cell",
         "col",
@@ -10681,7 +10681,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1427,
+      "lines": 1426,
       "hooks": [
         "app-main",
         "app-shell",
