@@ -357,7 +357,7 @@ export default defineModule({
     'backend.shell': {
       client: 'backend-shell.mjs',
       export: 'backendShell',
-      when: '[data-ui="shell"]',
+      when: '[data-ui="app-shell"]',
     },
   },
 })

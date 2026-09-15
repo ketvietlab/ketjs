@@ -102,7 +102,7 @@ const updateSelection = (table: Element): void => {
     all.indeterminate = checked > 0 && checked < rows.length
   }
   if (!checked) {
-    const shell = table.closest('[data-ui="shell"]')
+    const shell = table.closest('[data-ui="app-shell"]')
     for (const menu of shell?.querySelectorAll<HTMLDetailsElement>('[data-ui="bulk-actions"][open]') ?? [])
       menu.removeAttribute('open')
   }

@@ -1176,6 +1176,29 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
+test('backend shell: the document uses the design-system application shell', () => {
+  const html = renderToString(
+    shell(_, 'Page title', html2`<p>Page body</p>`, {
+      menu: MENU,
+      extras: { runtime: html2`<span data-ui="runtime-probe"></span>`, 'sidebar.foot': 'persistent foot' },
+    }),
+  ).replace(/<!--k\[?\]?-->/g, '')
+  assert.match(html, /^<div data-kv-design-system(?:="true")?><div data-ui="app-shell"/)
+  assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
+  assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
+  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
+  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.content'])
+    assert.equal(
+      (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
+      1,
+      slot,
+    )
+  assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  const runtimeAt = html.indexOf('runtime-probe')
+  const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
+  assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')
+})
+
 test('backend shell: suppressed topbar content keeps the stable navigation slot', () => {
   const html = renderToString(shell(_, 'List title', html2`<p>Page body</p>`, { topbar: false }))
   assert.equal((html.match(/data-ket-slot="backend\.topbar"/g) ?? []).length, 1)
@@ -1226,7 +1249,7 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
   assert.match(
     css,
-    /\[data-ui="main"\]:has\(> \[data-ket-slot="backend\.topbar"\] > \[data-ui="topbar"\] > \*\)[\s\S]*?\[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
+    /\[data-ui="app-main"\]:has\(> \[data-ket-slot="backend\.topbar"\] > \[data-ui="topbar"\] > \*\)[\s\S]*?\[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
   )
 })
 
@@ -1434,12 +1457,21 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   // height — so on a long list the systray, the message and activity counts and the
   // settings link sat hundreds of pixels below the fold. It is the window's height
   // and it sticks; the design-system navigation region takes the overflow inside it.
-  const css = ADMIN_CSS
-  const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
-  assert.match(rule, /position:\s*sticky;/)
-  assert.match(rule, /inset-block-start:\s*0;/)
-  assert.match(rule, /block-size:\s*100dvh;/)
-  assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
+  // The design-system `AppShell` owns that: its sidebar region sticks at the
+  // window's height, and the admin keeps it a column that hides its own overflow.
+  const shellCss = readFileSync('packages/design-system/src/layouts/shell/styles.css', 'utf8')
+  const region = shellCss.match(/\[data-ui="app-sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(region, /position:\s*sticky;/)
+  assert.match(region, /top:\s*0;/)
+  assert.match(region, /height:\s*100dvh;/, 'an explicit height, so the grid cannot stretch it to the page')
+  const admin = ADMIN_CSS.match(/\[data-ui="app-sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(admin, /flex-direction:\s*column;/)
+  assert.match(admin, /overflow:\s*hidden;/)
+  assert.doesNotMatch(
+    ADMIN_CSS,
+    /\[data-ui="(?:shell|sidebar|sidebar-main)"\]/,
+    'no legacy shell selectors remain',
+  )
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
 })
