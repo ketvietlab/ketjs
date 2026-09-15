@@ -98,13 +98,51 @@ const configuration = (ctx: ServeContext, url: URL, req: Req) =>
  * fill the menu that opens before the dialog does.
  */
 const PRELOAD = 40
+
+/**
+ * Call a function only when the viewer may, answering `fallback` otherwise.
+ *
+ * A configuration or case screen reads several modules at once. One read the
+ * viewer's role does not grant used to turn the whole screen into a 403, so a
+ * CRM or care manager could not open CRM configuration at all.
+ */
+const allowed = async <T>(
+  ctx: ServeContext,
+  name: string,
+  input: Record<string, unknown>,
+  url: URL,
+  req: Req,
+  fallback: T,
+): Promise<T> =>
+  (await ctx.allows(name, url, req)) ? (ctx.call(name, input, url, req) as Promise<T>) : fallback
+
+/**
+ * The people a CRM screen may offer in its pickers.
+ *
+ * Listing every user needs `user.listUsers` (the sensitive user bundle). Without
+ * it the screen offers the people already in CRM teams, read through the CRM
+ * team membership the viewer can see, shaped like user rows (`id`, `name`).
+ */
+const people = async (ctx: ServeContext, url: URL, req: Req, limit: number): Promise<AnyRow[]> => {
+  if (await ctx.allows('user.listUsers', url, req))
+    return ctx.call('user.listUsers', { includeArchived: false, limit }, url, req) as Promise<AnyRow[]>
+  const members = await allowed<AnyRow[]>(ctx, 'crm.team.member.list', { limit: 200 }, url, req, [])
+  const byUser = new Map<string, AnyRow>()
+  for (const member of members) {
+    if (member.active === false) continue
+    const id = String(member.userId ?? '')
+    if (id && !byUser.has(id)) byUser.set(id, { id, name: member.userName ?? id })
+  }
+  return [...byUser.values()].slice(0, limit)
+}
+
 const references = async (ctx: ServeContext, url: URL, req: Req) => {
   const [config, partners, users, tags] = await Promise.all([
     configuration(ctx, url, req),
     ctx.call('partner.listPartners', { includeArchived: false, limit: PRELOAD }, url, req) as Promise<
       AnyRow[]
     >,
-    ctx.call('user.listUsers', { includeArchived: false, limit: PRELOAD }, url, req) as Promise<AnyRow[]>,
+    people(ctx, url, req, PRELOAD),
     ctx.call('crm.tag.list', { limit: PRELOAD }, url, req) as Promise<AnyRow[]>,
   ])
   return { config, partners, users, tags }
@@ -588,7 +626,7 @@ const teamConfigurationRoute =
 
     const [config, users, listedMembers] = await Promise.all([
       configuration(ctx, url, req),
-      ctx.call('user.listUsers', { includeArchived: false, limit: 200 }, url, req) as Promise<AnyRow[]>,
+      people(ctx, url, req, 200),
       creating
         ? Promise.resolve([] as AnyRow[])
         : (ctx.call('crm.team.member.list', { teamId: requestedId, limit: 200 }, url, req) as Promise<
@@ -1186,16 +1224,16 @@ export const routes: Record<string, RouteEntry> = {
         url.searchParams.get('modal') === 'close'
       const conversionStages = converting ? stagesFor('opportunity') : []
       const [warehouses, plans, activityTypes, duplicateResult, quotations, products] = await Promise.all([
-        ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
-        ctx.call('activity.listPlans', {}, url, req) as Promise<AnyRow>,
-        ctx.call('activity.listTypes', {}, url, req) as Promise<AnyRow[]>,
+        allowed<AnyRow[]>(ctx, 'stock.listWarehouses', {}, url, req, []),
+        allowed<AnyRow>(ctx, 'activity.listPlans', {}, url, req, { plans: [] }),
+        allowed<AnyRow[]>(ctx, 'activity.listTypes', {}, url, req, []),
         ctx.call(
           'crm.case.detectDuplicates',
           { id: row.id, email: row.email, phone: row.phone, name: row.name },
           url,
           req,
         ) as Promise<AnyRow>,
-        ctx.call('crm_sale.sale.listQuotations', { caseId: params.id }, url, req) as Promise<AnyRow[]>,
+        allowed<AnyRow[]>(ctx, 'crm_sale.sale.listQuotations', { caseId: params.id }, url, req, []),
         row.kind === 'opportunity'
           ? (ctx.call('crm_sale.sale.listQuotableProducts', { limit: PRELOAD }, url, req) as Promise<
               AnyRow[]
@@ -1392,10 +1430,10 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         ) as Promise<AnyRow[]>,
-        ctx.call('activity.listPlans', {}, url, req) as Promise<AnyRow>,
+        allowed<AnyRow>(ctx, 'activity.listPlans', {}, url, req, { plans: [] }),
         ctx.call('crm.calendar.list', { cursor: '0', limit: 100 }, url, req) as Promise<AnyRow>,
-        ctx.call('activity.listTypes', {}, url, req) as Promise<AnyRow[]>,
-        ctx.call('user.listUsers', { includeArchived: false, limit: PRELOAD }, url, req) as Promise<AnyRow[]>,
+        allowed<AnyRow[]>(ctx, 'activity.listTypes', {}, url, req, []),
+        people(ctx, url, req, PRELOAD),
       ])
       // The target used to be a select over a thousand cases, capped at two
       // hundred by the list function without saying so. A picker searches the
@@ -1491,7 +1529,7 @@ export const routes: Record<string, RouteEntry> = {
       const [config, tags, users] = await Promise.all([
         configuration(ctx, url, req),
         ctx.call('crm.tag.list', { includeArchived: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
-        ctx.call('user.listUsers', { includeArchived: false, limit: 200 }, url, req) as Promise<AnyRow[]>,
+        people(ctx, url, req, 200),
       ])
       const allRows = tab === 'tags' ? tags : ((config[tab] as AnyRow[]) ?? [])
       const rows = allRows.filter((row) =>
