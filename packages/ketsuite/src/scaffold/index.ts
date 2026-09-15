@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.1.16'
+const VERSION = '0.1.20'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
 const LAYOUT: Array<[string, string]> = [
