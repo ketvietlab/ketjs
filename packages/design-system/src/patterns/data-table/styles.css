@@ -281,6 +281,14 @@
     min-width: 0;
   }
 
+  /* `strong` defaults to `bolder`, which pushed the semibold primary cell to 800+. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    strong {
+    font-weight: var(--kv-weight-semibold);
+  }
+
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="cell"] small {
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
