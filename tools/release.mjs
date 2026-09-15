@@ -19,8 +19,9 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    // The public 99-component catalogue now includes its machine-readable inventory and KetAtlas adapter.
-    maxPackedBytes: 200_000,
+    // The public 112-component catalogue includes its machine-readable inventory and KetAtlas adapter.
+    // 0.1.16 packed 187 KB; 0.1.17 adds BarChart, TimeframeFilter, DataMatrix and page identity (224 KB).
+    maxPackedBytes: 250_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
