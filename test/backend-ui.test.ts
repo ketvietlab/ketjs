@@ -15,6 +15,7 @@ import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
+import { recordModalHost } from '@ketvietlab/ketsuite/ui'
 import {
   actionGroup,
   attachmentPanel,
@@ -654,6 +655,7 @@ const componentContract = [
 ]
 
 const everything = [
+  recordModalHost('ketsuite.example'),
   shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
   pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {
     menu: MENU,

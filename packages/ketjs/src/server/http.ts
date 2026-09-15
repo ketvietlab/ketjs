@@ -346,6 +346,19 @@ const loadPlaced = async (root, requireKnown = false) => {
 await loadPlaced(document)
 const islands = createIslandManager(domHost(), registry, { strict: false })
 islands.hydrate(document)
+// A client-rendered view (a record modal, say) places island hosts after the page
+// hydrated. It asks here rather than keeping a second registry of island clients.
+document.addEventListener('ket:islands-attach', (event) => {
+  const root = event.detail?.root
+  if (!root) return
+  loadPlaced(root, true)
+    .then(() => islands.mount(root))
+    .catch((error) => console.error('island attach failed', error))
+})
+document.addEventListener('ket:islands-detach', (event) => {
+  const root = event.detail?.root
+  if (root) islands.dispose(root)
+})
 
 const event = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }))
 const hardNavigate = (target) => window.location.assign(String(target))
@@ -561,7 +574,14 @@ document.addEventListener('submit', (submit) => {
 if (navigationEnabled) {
   history.scrollRestoration = 'manual'
   if (!history.state?.__ketScroll) history.replaceState({ ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }, '', location.href)
-  window.addEventListener('popstate', (pop) => void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0]))
+  window.addEventListener('popstate', (pop) => {
+    // A client-owned history entry — a record modal opening over its collection —
+    // changes the URL without changing the server screen. Its owner cancels this
+    // event so going back closes the modal instead of re-fetching the page.
+    const owned = new CustomEvent('ket:popstate', { cancelable: true, detail: { url: location.href, state: pop.state } })
+    if (!document.dispatchEvent(owned)) return
+    void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0])
+  })
 }
 navigation = {
   navigate: (target, options = {}) => navigate(target, options.replace ? 'replace' : 'push'),

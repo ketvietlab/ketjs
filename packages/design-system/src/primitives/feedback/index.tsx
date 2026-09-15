@@ -19,6 +19,37 @@ export const HOOKS = [
 
 export type NoticeTone = 'info' | 'positive' | 'warning' | 'danger'
 
+// Lucide (ISC) glyphs, vendored per tone: info, circle-check, triangle-alert, circle-alert.
+const NOTICE_ICONS: Record<NoticeTone, () => TemplateResult> = {
+  info: () => (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </>
+  ),
+  positive: () => (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </>
+  ),
+  warning: () => (
+    <>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  danger: () => (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v4" />
+      <path d="M12 16h.01" />
+    </>
+  ),
+}
+
 export const Notice = (props: {
   title: string
   message: string
@@ -31,7 +62,20 @@ export const Notice = (props: {
     data-tone={props.tone ?? 'info'}
     role={props.tone === 'danger' ? 'alert' : 'status'}
   >
-    <span data-ui="notice-mark" aria-hidden="true" />
+    <span data-ui="notice-mark" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        {NOTICE_ICONS[props.tone ?? 'info']()}
+      </svg>
+    </span>
     <div data-ui="notice-copy">
       <p data-ui="notice-title">{props.title}</p>
       <p data-ui="notice-message">{props.message}</p>
