@@ -10,6 +10,7 @@ import * as esbuild from 'esbuild'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
 const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
+const CRM_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/crm_backend')
 const entries = [
   {
     source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
@@ -22,6 +23,11 @@ const entries = [
   {
     source: join(UI_CLIENT_DIR, 'mail-entry.mjs'),
     output: join(UI_CLIENT_DIR, 'mail-bundle.mjs'),
+  },
+  // The CRM configuration record modals: one bundle, one export per record kind.
+  {
+    source: join(CRM_BACKEND_DIR, 'modal/configuration-modal-view.tsx'),
+    output: join(CRM_BACKEND_DIR, 'client/crm-configuration-modal.mjs'),
   },
 ]
 

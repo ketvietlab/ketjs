@@ -215,47 +215,60 @@ test('crm HTTP E2E: global filter/grouping, planner and configuration remain ope
   assert.equal(planner.status, 200)
   assert.match(await planner.text(), /CRM activities/)
 
-  const configured = await app.client.post(
-    '/admin/crm/configuration?tab=scoreRules&lang=en',
-    new URLSearchParams({
+  // The configuration modals write through the CRM save functions; the page lists and opens them.
+  const saved = async (name: string, values: Record<string, unknown>, idempotencyKey: string) => {
+    const result = await call<Row>(name, { values, idempotencyKey })
+    assert.equal(result.ok, true, JSON.stringify(result))
+  }
+  await saved(
+    'crm.scoreRule.save',
+    {
+      id: 'score-revenue',
       name: 'Revenue score',
-      active: 'on',
       field: 'expectedRevenue',
       operator: 'gte',
       value: '10000000',
       points: '20',
-    }),
-    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+    },
+    'save-score-revenue',
   )
-  assert.equal(configured.status, 303)
-  const stageConfigured = await app.client.post(
-    '/admin/crm/configuration?tab=stages&lang=en',
-    new URLSearchParams({
+  await saved(
+    'crm.stage.save',
+    {
+      id: 'stage-qualified-lead',
       name: 'Qualified lead',
       code: 'qualified-lead',
-      sequence: '35',
-      kind_lead: '1',
+      sequence: 35,
+      allowedKinds: ['lead'],
       terminalState: 'open',
-      fold: 'on',
-      active: 'on',
-    }),
-    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+      fold: true,
+    },
+    'save-stage-qualified-lead',
   )
-  assert.equal(stageConfigured.status, 303)
-  const assignmentConfigured = await app.client.post(
-    '/admin/crm/configuration?tab=assignmentRules&lang=en',
-    new URLSearchParams({
+  await saved(
+    'crm.assignmentRule.save',
+    {
+      id: 'rule-high-score',
       name: 'High score leads',
-      priority: '5',
-      kind_lead: '1',
+      priority: 5,
+      allowedKinds: ['lead'],
       teamId: 'crm-team-sales',
       assigneeUserId: 'admin',
       minimumScore: '25',
-      active: 'on',
-    }),
-    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+    },
+    'save-rule-high-score',
   )
-  assert.equal(assignmentConfigured.status, 303)
+  for (const [section, name, kind, id] of [
+    ['scoreRules', 'Revenue score', 'crm\\.scoreRule', 'score-revenue'],
+    ['stages', 'Qualified lead', 'crm\\.stage', 'stage-qualified-lead'],
+    ['assignmentRules', 'High score leads', 'crm\\.assignmentRule', 'rule-high-score'],
+  ] as const) {
+    const page = await app.client.get(`/admin/crm/configuration?section=${section}&lang=en`)
+    const html = await page.text()
+    assert.equal(page.status, 200)
+    assert.match(html, new RegExp(name))
+    assert.match(html, new RegExp(`record=${kind}%3A${id}"`))
+  }
   const config = await call<Record<string, Row[]>>('crm.configuration.get')
   assert.equal(
     config.scoreRules.some((item) => item.name === 'Revenue score'),
