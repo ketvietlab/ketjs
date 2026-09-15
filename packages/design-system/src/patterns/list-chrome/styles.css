@@ -270,6 +270,18 @@
     white-space: nowrap;
   }
 
+  /*
+   * A range summary changes length with every filter ("1–50 / 10.000+" becomes
+   * "1–2 / 2"). Reserving the widest common figure and aligning it to the paging
+   * buttons keeps those buttons from jumping sideways as the count changes.
+   */
+  :where([data-kv-design-system]) [data-ui="pager-summary"] {
+    justify-content: flex-end;
+    min-width: 14ch;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
   :where([data-kv-design-system])
     [data-ui="list-chrome"][data-pattern="list-chrome"]
     [data-ui="bulk-action-list"],
