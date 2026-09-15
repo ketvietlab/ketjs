@@ -146,6 +146,11 @@ export {
   createRecordModal,
   recordLayerHasDraft,
 } from './client/record-modal.tsx'
+export {
+  RecordDialogTrigger,
+  RecordModalForm,
+  recordStateSelectControl,
+} from './client/record-modal-form.tsx'
 export type {
   RecordCallResult,
   RecordContextEnvelope,
