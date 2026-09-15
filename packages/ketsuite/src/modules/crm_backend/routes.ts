@@ -12,7 +12,7 @@ import type { AnyRow, Req } from '../backend/screen.ts'
 import type { RelationOption } from '../backend/relation-select.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { caseListSearch } from '../crm/search.ts'
-import { caseFormSchema } from '../crm/functions.ts'
+import { caseFormSchema } from '../crm/functions/index.ts'
 import {
   assigneeControl,
   caseControl,
