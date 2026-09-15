@@ -60,6 +60,10 @@ returns them exactly where they were.
   modal host, so the server and first client render stay identical.
 - Size follows content: a short record uses the default size, and only long content
   such as a multi-tab record uses the large size with an internal scroll region.
+- A record with more than one tab passes `height: 'fixed'` to `ModalSheet`: the dialog
+  holds the viewport cap (`data-height="fixed"`) so switching between tabs of different
+  heights never resizes it, and the body scrolls under a still head and tab bar. A
+  single-view record and its nested dialogs keep `height: 'content'` (the default).
 - A child action of the record (reassign, postpone, confirm) opens inside the same
   island as a nested step, not as another page.
 - `RecordPage` remains for records reached directly rather than from a collection,

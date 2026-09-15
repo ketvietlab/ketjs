@@ -1123,6 +1123,25 @@ test('design system: modal sheets expose route metadata and become fullscreen on
   assert.match(largeDialog, /width: min\(75rem, 100%\)/)
   assert.match(largeDialog, /height: auto/)
   assert.doesNotMatch(largeDialog, /height: min\(62\.5rem/)
+
+  // Content height is the default and adds no attribute, so existing modals render unchanged.
+  assert.doesNotMatch(modal, /data-height=/)
+  const fixed = renderToString(
+    <ModalSheet
+      id="edit-partner"
+      title="Edit partner"
+      closeLabel="Close"
+      presentation="dialog"
+      height="fixed"
+      body="Partner tabs"
+    />,
+  )
+  assert.match(fixed, /data-ui="modal-sheet"[^>]*data-height="fixed"/)
+  const fixedDialog =
+    css.match(
+      /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {

@@ -90,6 +90,13 @@
     height: auto;
   }
 
+  /* A tabbed dialog keeps one height so switching tabs never resizes it; the body scrolls. */
+  :where([data-kv-design-system])
+    [data-ui="modal-layer"][data-presentation="dialog"]
+    [data-ui="modal-sheet"][data-height="fixed"] {
+    height: calc(100dvh - var(--kv-space-12));
+  }
+
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {
     width: min(34rem, 100%);
     height: auto;

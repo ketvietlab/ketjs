@@ -25,6 +25,12 @@ export const ModalSheet = (props: {
   presentation?: 'sheet' | 'dialog'
   size?: 'default' | 'large'
   /**
+   * `content` (default) lets a dialog grow with its body up to the viewport cap. `fixed`
+   * holds the dialog at that cap so switching between tabs of different heights does not
+   * resize it; the body scrolls inside while the head stays put.
+   */
+  height?: 'content' | 'fixed'
+  /**
    * `overlay` is URL-owned: its close controls are links the route runtime
    * follows. `client` belongs to a modal island that opens and closes it in the
    * browser: close controls are buttons, and it carries no route-modal marker, so
@@ -57,6 +63,7 @@ export const ModalSheet = (props: {
         id={props.id}
         data-ui="modal-sheet"
         data-size={props.size ?? 'default'}
+        data-height={props.height === 'fixed' ? 'fixed' : null}
         role="dialog"
         aria-modal={embedded ? 'false' : 'true'}
         aria-labelledby={`${props.id}-title`}

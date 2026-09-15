@@ -108,6 +108,19 @@ test('record modal: client sheets carry no route-modal marker and close with but
   assert.match(route, /<a data-ui="modal-close" href="\/list"/u)
 })
 
+test('record modal: a record with several tabs keeps one height while tabs switch', () => {
+  // The record layer asks for a fixed dialog only when there is more than one tab to switch between.
+  const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
+  const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
+  assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
+  // A dialog layer opened from the record keeps sizing to its content.
+  const dialogLayer = runtime.slice(
+    runtime.indexOf('const dialogLayer = '),
+    runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
+  )
+  assert.doesNotMatch(dialogLayer, /height:/u)
+})
+
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
   const popstate = bootstrap.slice(bootstrap.indexOf("window.addEventListener('popstate'"))
   const dispatchAt = popstate.indexOf("new CustomEvent('ket:popstate', { cancelable: true")
