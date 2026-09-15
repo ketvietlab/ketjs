@@ -1,7 +1,7 @@
 import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { FnSpec, Row } from '@ketvietlab/ketjs'
 import { invalid, issue, n, normalized, stageKinds } from '../operations.ts'
-import { ASSIGNMENT_MODES, CASE_KINDS, TERMINAL_STATES } from '../types.ts'
+import { ASSIGNMENT_MODES, CASE_KINDS, SCORE_RULE_OPERATORS, TERMINAL_STATES } from '../types.ts'
 import { command, optionRows, saveConfiguration } from './shared.ts'
 
 export const configurationFunctions: Record<string, FnSpec> = {
@@ -177,17 +177,30 @@ export const configurationFunctions: Record<string, FnSpec> = {
     },
   }),
 
-  'team.save': saveConfiguration('crm.Team', (args, existing) => ({
-    code: String(args.code ?? existing?.code ?? args.id).trim(),
-    name: String(args.name ?? '').trim(),
-    active: args.active ?? existing?.active ?? true,
-    leaderUserId: args.leaderUserId ?? existing?.leaderUserId ?? null,
-    assignmentMode: ASSIGNMENT_MODES.includes(args.assignmentMode as never)
-      ? args.assignmentMode
-      : (existing?.assignmentMode ?? 'manual'),
-    assignmentCursor: existing?.assignmentCursor ?? 0,
-    version: n(existing?.version) + 1,
-  })),
+  'team.save': saveConfiguration(
+    'crm.Team',
+    (args, existing) => ({
+      code: String(args.code ?? existing?.code ?? args.id).trim(),
+      name: String(args.name ?? '').trim(),
+      active: args.active ?? existing?.active ?? true,
+      leaderUserId: args.leaderUserId ?? existing?.leaderUserId ?? null,
+      assignmentMode: ASSIGNMENT_MODES.includes(args.assignmentMode as never)
+        ? args.assignmentMode
+        : (existing?.assignmentMode ?? 'manual'),
+      assignmentCursor: existing?.assignmentCursor ?? 0,
+      version: n(existing?.version) + 1,
+    }),
+    // A team used to save with an empty name, and a repeated code reached the
+    // unique index as a database error instead of a refusal on the field.
+    async (ctx, args, existing) => {
+      if (!String(args.name ?? '').trim()) return invalid(issue('name', 'crm.error.required'))
+      const code = String(args.code ?? existing?.code ?? '').trim()
+      if (!code) return invalid(issue('code', 'crm.error.required'))
+      if ((await ctx.db.select('crm.Team', { code })).some((row) => row.id !== args.id))
+        return invalid(issue('code', 'crm.error.duplicateCode'))
+      return null
+    },
+  ),
 
   'team.member.save': defineFn({
     input: {
@@ -213,6 +226,10 @@ export const configurationFunctions: Record<string, FnSpec> = {
       if (!team[0]) return invalid(issue('teamId', 'crm.error.notFound'))
       if (!user[0]) return invalid(issue('userId', 'crm.error.notFound'))
       const existing = (await ctx.db.select('crm.TeamMember', { id: args.id }))[0]
+      // One membership per person per team: a second row for the same user used
+      // to reach the unique index as a database error.
+      const same = await ctx.db.select('crm.TeamMember', { teamId: args.teamId, userId: args.userId })
+      if (same.some((row) => row.id !== args.id)) return invalid(issue('userId', 'crm.error.duplicateMember'))
       const values = {
         teamId: args.teamId,
         userId: args.userId,
@@ -245,8 +262,11 @@ export const configurationFunctions: Record<string, FnSpec> = {
       active: args.active ?? existing?.active ?? true,
     }),
     async (ctx, args) => {
-      if (!String(args.name ?? '').trim() || !String(args.code ?? '').trim())
-        return invalid(issue('name', 'crm.error.required'))
+      if (!String(args.name ?? '').trim()) return invalid(issue('name', 'crm.error.required'))
+      const code = String(args.code ?? '').trim()
+      if (!code) return invalid(issue('code', 'crm.error.required'))
+      if ((await ctx.db.select('crm.Stage', { code })).some((row) => row.id !== args.id))
+        return invalid(issue('code', 'crm.error.duplicateCode'))
       if (!Array.isArray(args.allowedKinds) || args.allowedKinds.length === 0)
         return invalid(issue('allowedKinds', 'crm.error.required'))
       if (args.teamId && !(await ctx.db.select('crm.Team', { id: args.teamId, active: true }))[0])
@@ -271,8 +291,9 @@ export const configurationFunctions: Record<string, FnSpec> = {
       active: args.active ?? existing?.active ?? true,
     }),
     async (ctx, args) => {
-      if (!String(args.name ?? '').trim() || !Array.isArray(args.allowedKinds) || !args.allowedKinds.length)
-        return invalid(issue('name', 'crm.error.required'))
+      if (!String(args.name ?? '').trim()) return invalid(issue('name', 'crm.error.required'))
+      if (!Array.isArray(args.allowedKinds) || !args.allowedKinds.length)
+        return invalid(issue('allowedKinds', 'crm.error.required'))
       const team = args.teamId
         ? (await ctx.db.select('crm.Team', { id: args.teamId, active: true }))[0]
         : null
@@ -307,14 +328,10 @@ export const configurationFunctions: Record<string, FnSpec> = {
     (_ctx, args) => {
       const field = String(args.field ?? '')
       const operator = String(args.operator ?? '')
-      const allowed =
-        field === 'expectedRevenue'
-          ? ['gte', 'eq']
-          : field === 'email' || field === 'utmSource'
-            ? ['eq', 'contains', 'present']
-            : []
+      const allowed = SCORE_RULE_OPERATORS[field] ?? []
       if (!String(args.name ?? '').trim()) return invalid(issue('name', 'crm.error.required'))
-      if (!allowed.includes(operator)) return invalid(issue('operator', 'crm.error.invalidKind'))
+      if (!allowed.length) return invalid(issue('field', 'crm.error.required'))
+      if (!allowed.includes(operator)) return invalid(issue('operator', 'crm.error.invalidOperator'))
       if (operator !== 'present' && !String(args.value ?? '').trim())
         return invalid(issue('value', 'crm.error.required'))
       if (field === 'expectedRevenue' && !Number.isFinite(Number(args.value)))
