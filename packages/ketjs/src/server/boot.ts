@@ -81,11 +81,19 @@ export type ServeContext = {
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
   config: RuntimeConfig
-  /** Identity already resolved for this request, whether asserted by a gateway or loaded from a session. */
+  /**
+   * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
+   * `origin` says which: `request` for `resolveIdentity`, `session` for a cookie session.
+   */
   requestIdentityOf: (
     url: URL,
     req: IncomingMessage,
-  ) => Promise<(RequestIdentity & { sessionId: string }) | null>
+  ) => Promise<(RequestIdentity & { sessionId: string; origin: RequestIdentityOrigin }) | null>
+  /**
+   * Where a viewer whose identity a gateway asserted signs out, or null when the deployment declared
+   * none. A cookie session always signs out through `POST /logout`.
+   */
+  signOutPath: string | null
   scopeOf: (url: URL, req: IncomingMessage) => Promise<Scope>
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
@@ -244,6 +252,9 @@ export type RequestIdentity = {
   securityVersion?: number
 }
 
+/** Where a request's identity came from: a cookie session, or `resolveIdentity` for this request. */
+export type RequestIdentityOrigin = 'session' | 'request'
+
 export type RequestIdentityResolveContext = {
   adapter: Adapter
   manifest: Manifest
@@ -317,6 +328,12 @@ export type ServeSpec = {
   resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
   /** Verify and resolve identity asserted by a trusted gateway for this request. */
   resolveIdentity?: (ctx: RequestIdentityResolveContext) => Promise<RequestIdentity | null>
+  /**
+   * Where a viewer signs out when `resolveIdentity` asserted their identity. `POST /logout` only
+   * ends a KetJS cookie session, so a gateway login needs the gateway's own sign-out, which also
+   * ends the upstream login. Absent, the backend shows the viewer without a sign-out control.
+   */
+  signOutPath?: string
   /** Classify non-staff credentials so the generic function transport can fail closed. */
   resolveAudience?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
   /**
@@ -529,6 +546,9 @@ export async function bootDeployment(
   // depend on it. With tenant databases this also avoids three separate leases.
   const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
   const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
+  // Records built from `resolveIdentity`, so `requestIdentityOf` can say where an identity came from
+  // without reading meaning into an id.
+  const requestRecords = new WeakSet<SessionRecord>()
   const sessionRecordOf = (url: URL, req: IncomingMessage): Promise<SessionRecord | null> => {
     if (!authenticationEnabled) return Promise.resolve(null)
     let record = sessionRecords.get(req)
@@ -550,7 +570,7 @@ export async function bootDeployment(
           )
             return null
           const now = Date.now()
-          return {
+          const asserted: SessionRecord = {
             id: `request:${identity.userId}`,
             userId: identity.userId,
             companies,
@@ -562,6 +582,8 @@ export async function bootDeployment(
             createdAt: now,
             expiresAt: now,
           }
+          requestRecords.add(asserted)
+          return asserted
         }
         const manager = await sessionsOf(url, req)
         const raw = (await manager?.of(req)) ?? null
@@ -598,12 +620,13 @@ export async function bootDeployment(
   const requestIdentityOf = async (
     url: URL,
     req: IncomingMessage,
-  ): Promise<(RequestIdentity & { sessionId: string }) | null> => {
+  ): Promise<(RequestIdentity & { sessionId: string; origin: RequestIdentityOrigin }) | null> => {
     const record = await sessionRecordOf(url, req)
     if (!record) return null
     return {
       userId: record.userId,
       sessionId: record.id,
+      origin: requestRecords.has(record) ? 'request' : 'session',
       companies: [...record.companies],
       company: record.company,
       branch: record.branch,
@@ -744,6 +767,7 @@ export async function bootDeployment(
     clientCompatibility: serve.clientCompatibility ?? null,
     config,
     requestIdentityOf,
+    signOutPath: serve.signOutPath ?? null,
     scopeOf,
     localeOf,
     translate,
