@@ -597,6 +597,11 @@
     }
   }
 
+  /* A record modal island's host holds no content until the island opens it. */
+  [data-ui="record-modal-host"] {
+    display: none;
+  }
+
   @media (max-width: 47.9375rem) {
     /* A button sits in a row with the fields it submits, so it is the height of
        one. The 2.75rem touch target this used to take stood half again as tall

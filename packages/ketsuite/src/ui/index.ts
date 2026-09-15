@@ -125,6 +125,34 @@ export {
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalForm, modalSheet, modalWorkspace } from './modal.tsx'
+export {
+  RECORD_PARAM,
+  RECORD_TAB_PARAM,
+  defineRecordModalIsland,
+  isRecordKind,
+  readRecordModalTarget,
+  recordModalClosedHref,
+  recordModalHost,
+  recordModalHref,
+} from './record-modal.tsx'
+export type { RecordModalTarget } from './record-modal.tsx'
+export {
+  RECORD_COMMAND_FIELD,
+  RECORD_DIALOG_ATTRIBUTE,
+  callRecordFunction,
+  createRecordModal,
+  recordLayerHasDraft,
+} from './client/record-modal.tsx'
+export type {
+  RecordCallResult,
+  RecordContextEnvelope,
+  RecordIssue,
+  RecordModalCommand,
+  RecordModalContext,
+  RecordModalDefinition,
+  RecordModalDialog,
+  RecordModalTab,
+} from './client/record-modal.tsx'
 export type {
   RecordBreadcrumbs,
   RecordSummaryItem,
