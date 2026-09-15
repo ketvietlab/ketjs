@@ -41,6 +41,15 @@ transparent scrolling viewport inside; never wrap it in another `Surface`.
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
+### Popups close on an outside click and on Escape
+
+Every popup built on `<details>` behaves like the action menu: a click outside it
+closes it, and Escape closes the open one and returns focus to its summary. This
+covers `Menu` (`data-ui="menu"`), the period choice of `TimeframeFilter`
+(`data-ui="timeframe-menu"`) and list view settings (`data-ui="view-settings"`).
+The runtime lists the non-menu popups in `DISMISSIBLE_POPUPS`; a new popup component
+adds its hook there instead of wiring its own document listener.
+
 ### Collections open records in a modal
 
 A row of a `DataTable` (or `ResourceList`, `DataGrid`) and a `KanbanCard` always open

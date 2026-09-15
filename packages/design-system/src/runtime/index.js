@@ -27,6 +27,13 @@ const focusables = (root) =>
  * @param {ParentNode} [root]
  * @returns {() => void}
  */
+/**
+ * Popups built on <details> other than the action menu: a period filter and view
+ * settings. They close on a click outside them and on Escape, like the menu.
+ */
+export const DISMISSIBLE_POPUPS = ['[data-ui="timeframe-menu"]', '[data-ui="view-settings"]']
+const DISMISSIBLE_POPUPS_OPEN = DISMISSIBLE_POPUPS.map((selector) => `${selector}[open]`).join(', ')
+
 export const attachDesignSystemInteractions = (root = document) => {
   const activeBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const modal = root.querySelector('[data-ui="modal-layer"][data-route-modal="true"] [role="dialog"]')
@@ -353,6 +360,14 @@ export const attachDesignSystemInteractions = (root = document) => {
       event.preventDefault()
       return
     }
+    const openPopup = [...root.querySelectorAll(DISMISSIBLE_POPUPS_OPEN)].at(-1)
+    if (event.key === 'Escape' && openPopup instanceof HTMLDetailsElement) {
+      openPopup.open = false
+      const summary = openPopup.querySelector('summary')
+      if (summary instanceof HTMLElement) summary.focus()
+      event.preventDefault()
+      return
+    }
     const openPopover = document.activeElement?.closest('[data-ui="popover"][data-open="true"]')
     if (event.key === 'Escape' && openPopover instanceof HTMLElement) {
       const close = openPopover.querySelector('[data-ui="popover-close"]')
@@ -448,6 +463,10 @@ export const attachDesignSystemInteractions = (root = document) => {
       if (!(menu instanceof HTMLDetailsElement)) continue
       const item = target instanceof Element ? target.closest('[data-ui="menu-item"]') : null
       if (!menu.contains(target) || (item && item.getAttribute('aria-disabled') !== 'true')) menu.open = false
+    }
+    // Every other popup built on <details> closes when the reader clicks outside it.
+    for (const popup of root.querySelectorAll(DISMISSIBLE_POPUPS_OPEN)) {
+      if (popup instanceof HTMLDetailsElement && !popup.contains(target)) popup.open = false
     }
   }
   document.addEventListener('keydown', onKeydown)
