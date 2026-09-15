@@ -266,8 +266,31 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: var(--kv-space-2);
-    min-width: 0;
     white-space: nowrap;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="bulk-summary"] {
+    min-width: 0;
+  }
+
+  /*
+   * A range summary changes length with every filter ("1–50 / 10.000+" becomes
+   * "1–2 / 2"). Reserving the widest common figure and aligning it to the paging
+   * buttons keeps those buttons from jumping sideways as the count changes.
+   *
+   * This carries the list-chrome scope on purpose: the shared summary rule above
+   * used to set `min-width: 0` with three attribute selectors, and an unscoped
+   * `[data-ui="pager-summary"]` rule lost to it despite coming later.
+   */
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="pager-summary"] {
+    justify-content: flex-end;
+    min-width: 14ch;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 
   :where([data-kv-design-system])
