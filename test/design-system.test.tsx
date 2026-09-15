@@ -1865,3 +1865,26 @@ test('design system: KetSuite consumes the public package without a copied style
   assert.match(publishedStyles, /Generated from @ketvietlab\/design-system\/src\/styles\.css/)
   assert.doesNotMatch(publishedStyles, /@import\s/)
 })
+
+test('design system: the pager range keeps its reserved width against the shared summary rule', () => {
+  const css = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/gu)].map((m) => ({
+    selector: (m[1] as string).replace(/\s+/gu, ' ').trim(),
+    body: m[2] as string,
+  }))
+  const pager = rules.filter((rule) =>
+    rule.selector.split(',').some((part) => part.trim().endsWith('[data-ui="pager-summary"]')),
+  )
+  const reserving = pager.filter((rule) => /min-width:\s*14ch/u.test(rule.body))
+  assert.equal(reserving.length, 1, 'one rule reserves the range width')
+  assert.match(
+    reserving[0]!.selector,
+    /\[data-ui="list-chrome"\]\[data-pattern="list-chrome"\] \[data-ui="pager-summary"\]$/u,
+  )
+  for (const rule of pager)
+    assert.doesNotMatch(
+      rule.body,
+      /min-width:\s*0\b/u,
+      `no pager-summary rule collapses the width: ${rule.selector}`,
+    )
+})
