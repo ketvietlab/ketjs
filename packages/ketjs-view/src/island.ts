@@ -10,7 +10,7 @@ import { renderToString } from './ssr.ts'
 import { escapeHtml } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
-import { mountHydrated } from './mount.ts'
+import { mount as mountFresh, mountHydrated } from './mount.ts'
 import { ISLAND_HOST_ATTRIBUTE, ISLAND_SELECTOR, ISLAND_TAG } from './island-protocol.ts'
 import type { IslandHostTag } from './island-protocol.ts'
 
@@ -197,6 +197,11 @@ export type HydratedIsland = {
 
 export type IslandManager = {
   hydrate(root: IslandElement): HydratedIsland[]
+  /**
+   * Start islands whose hosts a client view created, with no server markup to
+   * adopt: the island builds its own DOM. Hosts already running are left alone.
+   */
+  mount(root: IslandElement): HydratedIsland[]
   reconcile(slot: IslandElement, nextContent: IslandElement): HydratedIsland[]
   dispose(root: IslandElement): void
 }
@@ -278,7 +283,7 @@ export function createIslandManager(
     managed.live.dispose()
   }
 
-  const hydrate = (root: IslandElement): HydratedIsland[] => {
+  const start = (root: IslandElement, adopt: boolean): HydratedIsland[] => {
     const out: HydratedIsland[] = []
     for (const element of elementsOf(root)) {
       const existing = instances.get(element)
@@ -302,7 +307,9 @@ export function createIslandManager(
       const lifetime = new AbortController()
       let mounted: ReturnType<typeof mountHydrated> | null = null
       try {
-        mounted = mountHydrated(host, element, controller.view)
+        mounted = adopt
+          ? mountHydrated(host, element, controller.view)
+          : mountFresh(host, element, controller.view)
         controller.mount?.({ root: element, lifetime: lifetime.signal })
       } catch (error) {
         lifetime.abort()
@@ -329,6 +336,7 @@ export function createIslandManager(
     }
     return out
   }
+  const hydrate = (root: IslandElement): HydratedIsland[] => start(root, true)
 
   const reconcile = (slot: IslandElement, nextContent: IslandElement): HydratedIsland[] => {
     const current = elementsOf(slot)
@@ -373,6 +381,7 @@ export function createIslandManager(
 
   return {
     hydrate,
+    mount: (root) => start(root, false),
     reconcile,
     dispose: (root) => {
       for (const element of elementsOf(root)) disposeElement(element)
