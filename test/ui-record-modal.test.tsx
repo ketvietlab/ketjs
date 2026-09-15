@@ -12,6 +12,11 @@ import {
   recordModalHref,
 } from '@ketvietlab/ketsuite/ui'
 
+import {
+  RECORD_MODAL_LABELS,
+  resolveRecordModalLabel,
+} from '../packages/ketsuite/src/ui/client/record-modal.tsx'
+
 const runtime = readFileSync('packages/ketsuite/src/ui/client/record-modal.tsx', 'utf8')
 const bootstrap = readFileSync('packages/ketjs/src/server/http.ts', 'utf8')
 
@@ -98,4 +103,30 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: the loading state never shows a label key', () => {
+  const docs = readFileSync('docs/src/content/docs/ketsuite/record-modal.md', 'utf8')
+  const documented = [
+    ...new Set([...docs.matchAll(/`(recordModal\.[a-zA-Z]+)`/gu)].map((m) => m[1] as string)),
+  ]
+  assert.ok(documented.length >= 9, 'the runtime label table is documented')
+  for (const key of documented) assert.ok(RECORD_MODAL_LABELS[key], `a default exists for ${key}`)
+  // Before any context loads there are no messages: the module's labels, then the defaults.
+  assert.equal(resolveRecordModalLabel('recordModal.loading', {}), 'Loading…')
+  assert.equal(
+    resolveRecordModalLabel('recordModal.loading', { labels: { 'recordModal.loading': 'Đang tải…' } }),
+    'Đang tải…',
+  )
+  // Opening the next record keeps the previous record's words while it loads.
+  assert.equal(
+    resolveRecordModalLabel('recordModal.close', {
+      messages: null,
+      previous: { 'recordModal.close': 'Đóng' },
+      labels: { 'recordModal.close': 'Close (module)' },
+    }),
+    'Đóng',
+  )
+  for (const key of documented)
+    assert.doesNotMatch(resolveRecordModalLabel(key, {}), /^recordModal\./u, `${key} resolves to words`)
 })

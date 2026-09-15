@@ -82,7 +82,11 @@ Views are render-pure. They read the context and return design-system markup (`R
 
 ## Runtime labels
 
-Every context must ship these keys in `messages`:
+The runtime shows these labels before a record's context has loaded, so a module passes them in the
+page's language through `labels` (an object or a function returning one). The context's `messages`
+override them once loaded, the last record's messages carry over while the next one loads, and the
+runtime keeps English defaults (`RECORD_MODAL_LABELS`) so a reader never sees a key. Contexts should
+still ship the same keys in `messages`:
 
 | Key | Use |
 | --- | --- |
