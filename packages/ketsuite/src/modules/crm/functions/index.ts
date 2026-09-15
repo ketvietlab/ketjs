@@ -5,6 +5,7 @@ import { caseFunctions } from './cases.ts'
 import { activityFunctions } from './activities.ts'
 import { gamificationFunctions } from './gamification.ts'
 import { configurationFunctions } from './configuration.ts'
+import { modalContextFunctions } from './modal-context.ts'
 import { previewFunctions } from './previews.ts'
 
 const groups: Record<string, Record<string, FnSpec>> = {
@@ -13,6 +14,7 @@ const groups: Record<string, Record<string, FnSpec>> = {
   activityFunctions,
   gamificationFunctions,
   configurationFunctions,
+  modalContextFunctions,
   previewFunctions,
 }
 
