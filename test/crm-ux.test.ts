@@ -307,104 +307,193 @@ test('crm backend: an activity can be completed from the case and from the plann
   )
 })
 
-test('crm backend: configuration records can be edited and archived, not only created', async (t) => {
-  const { app, call } = await boot(t)
-  const invalid = await app.client.post(
-    '/admin/crm/configuration?tab=tags&lang=en',
-    new URLSearchParams({ name: '', active: 'on' }),
+test('crm backend: legacy configuration links redirect to sections and record modals', async (t) => {
+  const { app } = await boot(t)
+  const manual = { redirect: 'manual' as const }
+  const location = async (path: string) => {
+    const response = await app.client.get(path, manual)
+    assert.equal(response.status, 303, path)
+    return String(response.headers.get('location'))
+  }
+  // `tab` is the record modal's; a catalogue is a `section`, other query state survives.
+  assert.equal(
+    await location('/admin/crm/configuration?tab=stages&status=archived&lang=en'),
+    '/admin/crm/configuration?status=archived&lang=en&section=stages',
+  )
+  assert.equal(
+    await location('/admin/crm/configuration?tab=tags&edit=tag-1&lang=en'),
+    '/admin/crm/configuration?lang=en&section=tags&record=crm.tag%3Atag-1',
+  )
+  assert.equal(
+    await location('/admin/crm/configuration?tab=scoreRules&create=1'),
+    '/admin/crm/configuration?section=scoreRules&record=crm.scoreRule%3Anew',
+  )
+  assert.equal(
+    await location('/admin/crm/configuration/teams/new?lang=en'),
+    '/admin/crm/configuration?section=teams&lang=en&record=crm.team%3Anew',
+  )
+  assert.equal(
+    await location('/admin/crm/configuration/teams/crm-team-sales?member=new&lang=en'),
+    '/admin/crm/configuration?section=teams&lang=en&record=crm.team%3Acrm-team-sales',
+  )
+
+  // A modal tab next to its record is not a legacy catalogue tab: the page renders.
+  const open = await app.client.get(
+    '/admin/crm/configuration?section=teams&record=crm.team%3Acrm-team-sales&tab=members&lang=en',
+    manual,
+  )
+  const html = await open.text()
+  assert.equal(open.status, 200, html.slice(0, 400))
+  assert.match(html, /data-ui="record-modal-host" data-record-kind="crm\.team"/)
+  for (const kind of ['crm\\.stage', 'crm\\.tag', 'crm\\.assignmentRule', 'crm\\.scoreRule'])
+    assert.match(html, new RegExp(`data-record-kind="${kind}"`))
+  assert.doesNotMatch(html, /data-ui="modal-layer"/, 'the server renders every modal host closed')
+  assert.match(
+    html,
+    /href="\/admin\/crm\/configuration\?section=teams&amp;lang=en&amp;record=crm\.team%3Acrm-team-sales"/,
+  )
+  assert.match(
+    html,
+    /href="\/admin\/crm\/configuration\?section=teams&amp;lang=en&amp;record=crm\.team%3Anew"/,
+  )
+  assert.doesNotMatch(html, /\/admin\/crm\/configuration\/teams\//)
+
+  // Writes go through the CRM functions from the modal; the page takes no form posts.
+  const posted = await app.client.post(
+    '/admin/crm/configuration?section=teams&lang=en',
+    new URLSearchParams({ name: 'Posted team' }),
     post,
   )
-  const invalidHtml = await invalid.text()
-  assert.equal(invalid.status, 200)
-  assert.match(invalidHtml, /data-ui="list-page"/)
-  assert.match(invalidHtml, /data-ui="form-errors"/)
-  assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en&amp;create=1"/)
-  assert.doesNotMatch(invalidHtml, /tab=members/)
-
-  const created = await app.client.post(
-    '/admin/crm/configuration/teams/new?lang=en',
-    new URLSearchParams({ name: 'Field sales', code: 'field', active: 'on', assignmentMode: 'round_robin' }),
-    post,
-  )
-  assert.equal(created.status, 303)
-  assert.match(String(created.headers.get('location')), /\/admin\/crm\/configuration\/teams\/[^?]+\?lang=en/)
-  const teamOf = async () =>
-    (await call<Record<string, Row[]>>('crm.configuration.get')).teams.find((row) => row.code === 'field')!
-  let team = await teamOf()
-  assert.equal(team.name, 'Field sales')
-
-  const page = await app.client.get(`/admin/crm/configuration/teams/${String(team.id)}?lang=en`)
-  const html = await page.text()
-  assert.match(html, /value="Field sales"/, 'the edit form is pre-filled from the row')
-  assert.match(html, /href="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
-  assert.match(html, new RegExp(`action="/admin/crm/configuration/teams/${String(team.id)}\\?lang=en"`))
-
-  const renamed = await app.client.post(
-    `/admin/crm/configuration/teams/${String(team.id)}?lang=en`,
-    new URLSearchParams({
-      id: String(team.id),
-      name: 'Field sales North',
-      code: 'field',
-      active: 'on',
-      assignmentMode: 'round_robin',
-      expectedVersion: String(team.version),
-    }),
-    post,
-  )
-  assert.equal(renamed.status, 303)
-  team = await teamOf()
-  assert.equal(team.name, 'Field sales North', 'editing updates the row instead of minting a second one')
-
-  const archived = await app.client.post(
-    `/admin/crm/configuration/teams/${String(team.id)}?lang=en`,
-    new URLSearchParams({
-      id: String(team.id),
-      name: String(team.name),
-      code: String(team.code),
-      assignmentMode: String(team.assignmentMode),
-      expectedVersion: String(team.version),
-    }),
-    post,
-  )
-  assert.equal(archived.status, 303)
-  assert.equal((await teamOf()).active, false)
-  const activeList = await (await app.client.get('/admin/crm/configuration?tab=teams&lang=en')).text()
-  assert.doesNotMatch(activeList, /Field sales North/)
-  const archivedList = await (
-    await app.client.get('/admin/crm/configuration?tab=teams&status=archived&lang=en')
-  ).text()
-  assert.match(archivedList, /Field sales North/)
+  assert.equal(posted.status, 405)
 })
 
-test('crm backend: team membership and tags are managed from configuration', async (t) => {
-  const { app, call } = await boot(t)
-  const members = await app.client.get('/admin/crm/configuration/teams/crm-team-sales?lang=en')
-  assert.equal(members.status, 200)
-  assert.match(await members.text(), /Team members/)
+test('crm: configuration modal contexts carry defaults, choices and permissions', async (t) => {
+  const { call } = await boot(t)
+  const creating = await call<Row>('crm.team.modalContext', {})
+  const created = creating.data as Row
+  const messages = creating.messages as Record<string, string>
+  assert.equal((created.record as Row).assignmentMode, 'manual')
+  assert.deepEqual(created.members, [])
+  assert.deepEqual(created.permissions, { save: true, members: true })
+  assert.equal(messages['recordModal.close'], 'Đóng')
+  assert.equal(messages['crm_backend.field.configName'], 'Tên')
+  assert.equal(messages['crm.error.duplicateMember'], 'Người này đã là thành viên của đội.')
+  const english = await call<Row>('crm.tag.modalContext', { locale: 'en' })
+  assert.equal((english.messages as Record<string, string>)['recordModal.close'], 'Close')
+  assert.deepEqual((english.data as Row).permissions, { save: true, archive: true })
 
-  const added = await app.client.post(
-    '/admin/crm/configuration/teams/crm-team-sales?member=new&lang=en',
-    new URLSearchParams({
-      userId: 'admin',
-      capacity: '5',
-      sequence: '10',
-      active: 'on',
-    }),
-    post,
+  // Archived teams are not offered in pickers.
+  const retired = await call<Row>('crm.team.save', {
+    values: { id: 'team-old', name: 'Old team', code: 'old', active: false },
+    idempotencyKey: 'team-old-000001',
+  })
+  assert.equal(retired.ok, true)
+  const stage = (await call<Row>('crm.stage.modalContext', {})).data as Row
+  const teamIds = (stage.teams as Row[]).map((row) => row.id)
+  assert.ok(teamIds.includes('crm-team-sales'))
+  assert.ok(!teamIds.includes('team-old'))
+  assert.deepEqual((stage.record as Row).allowedKinds, ['lead', 'opportunity'])
+
+  // Assignees are the chosen team's active members and leader.
+  await call('crm.team.member.save', {
+    id: 'member-admin',
+    teamId: 'crm-team-sales',
+    userId: 'admin',
+    idempotencyKey: 'member-admin-0001',
+  })
+  const rule = (await call<Row>('crm.assignmentRule.modalContext', {})).data as Row
+  const assignees = rule.assignees as Record<string, Row[]>
+  assert.deepEqual(
+    assignees['crm-team-sales']!.map((row) => row.id),
+    ['admin'],
   )
-  assert.equal(added.status, 303)
-  const listed = await call<Row[]>('crm.team.member.list', { teamId: 'crm-team-sales' })
-  assert.equal(listed.length, 1)
-  assert.equal(listed[0]!.userName, 'Administrator')
+  assert.equal('team-old' in assignees, false)
 
-  // Round-robin routing depends on members configured inside the team record.
-  const routed = await call<Row>('crm.case.save', {
+  const score = (await call<Row>('crm.scoreRule.modalContext', {})).data as Row
+  assert.deepEqual((score.operators as Record<string, string[]>).expectedRevenue, ['gte', 'eq'])
+
+  const existing = (await call<Row>('crm.team.modalContext', { id: 'crm-team-sales' })).data as Row
+  assert.deepEqual(
+    (existing.members as Row[]).map((row) => row.userName),
+    ['Administrator'],
+  )
+  assert.equal(await call('crm.tag.modalContext', { id: 'missing-tag' }), null)
+})
+
+test('crm: configuration saves are validated on the server', async (t) => {
+  const { call } = await boot(t)
+  const refusal = async (name: string, input: Record<string, unknown>) => {
+    const result = await call<Row>(name, input)
+    assert.equal(result.ok, false, `${name} ${JSON.stringify(input)}`)
+    const [first] = result.errors as Row[]
+    return [first!.field, first!.code]
+  }
+  const config = await call<Record<string, Row[]>>('crm.configuration.get')
+  const seededTeam = config.teams.find((row) => row.id === 'crm-team-sales')!
+  const seededStage = config.stages[0]!
+
+  assert.deepEqual(
+    await refusal('crm.team.save', {
+      values: { id: 'team-a', name: ' ', code: 'a' },
+      idempotencyKey: 'team-a-0000001',
+    }),
+    ['name', 'crm.error.required'],
+  )
+  assert.deepEqual(
+    await refusal('crm.team.save', {
+      values: { id: 'team-a', name: 'A', code: '' },
+      idempotencyKey: 'team-a-0000002',
+    }),
+    ['code', 'crm.error.required'],
+  )
+  assert.deepEqual(
+    await refusal('crm.team.save', {
+      values: { id: 'team-a', name: 'A', code: seededTeam.code },
+      idempotencyKey: 'team-a-0000003',
+    }),
+    ['code', 'crm.error.duplicateCode'],
+  )
+  assert.deepEqual(
+    await refusal('crm.stage.save', {
+      values: { id: 'stage-a', name: 'A', code: seededStage.code, allowedKinds: ['lead'] },
+      idempotencyKey: 'stage-a-000001',
+    }),
+    ['code', 'crm.error.duplicateCode'],
+  )
+  assert.deepEqual(
+    await refusal('crm.scoreRule.save', {
+      values: { id: 'score-a', name: 'A', field: 'email', operator: 'gte', value: 'x' },
+      idempotencyKey: 'score-a-000001',
+    }),
+    ['operator', 'crm.error.invalidOperator'],
+  )
+
+  const member = { teamId: 'crm-team-sales', userId: 'admin', capacity: 5 }
+  const added = await call<Row>('crm.team.member.save', {
+    ...member,
+    id: 'member-1',
+    idempotencyKey: 'member-1-000001',
+  })
+  assert.equal(added.ok, true)
+  assert.deepEqual(
+    await refusal('crm.team.member.save', { ...member, id: 'member-2', idempotencyKey: 'member-2-000001' }),
+    ['userId', 'crm.error.duplicateMember'],
+  )
+  const edited = await call<Row>('crm.team.member.save', {
+    ...member,
+    id: 'member-1',
+    capacity: 7,
+    idempotencyKey: 'member-1-000002',
+  })
+  assert.equal(edited.ok, true, 'the same membership can still be edited')
+
+  // Round-robin routing depends on the members configured in the team.
+  await call<Row>('crm.case.save', {
     id: 'routed',
     kind: 'lead',
     name: 'Routed record',
     idempotencyKey: 'save-routed-001',
   })
-  assert.equal(routed.ok, true)
   const assigned = await call<Row>('crm.case.assign', {
     id: 'routed',
     teamId: 'crm-team-sales',
@@ -412,17 +501,35 @@ test('crm backend: team membership and tags are managed from configuration', asy
   })
   assert.equal(assigned.assigneeUserId, 'admin')
 
-  const tagged = await app.client.post(
-    '/admin/crm/configuration?tab=tags&lang=en',
-    new URLSearchParams({ name: 'Enterprise', active: 'on' }),
-    post,
-  )
-  assert.equal(tagged.status, 303)
-  const tags = await call<Row[]>('crm.tag.list', {})
-  assert.equal(
-    tags.some((tag) => tag.name === 'Enterprise'),
-    true,
-  )
+  // A tag keeps its colour and archives through `crm.tag.archive`.
+  assert.equal((await call<Row>('crm.tag.save', { id: 'tag-vip', name: 'VIP', color: '#ff0000' })).ok, true)
+  assert.equal((await call<Row>('crm.tag.archive', { id: 'tag-vip' })).ok, true)
+  const tag = (await call<Row[]>('crm.tag.list', { includeArchived: true })).find(
+    (row) => row.id === 'tag-vip',
+  )!
+  assert.equal(tag.active, false)
+  assert.equal(tag.color, '#ff0000')
+})
+
+test('crm backend: the configuration status filter lists archived entries and survives switching catalogues', async (t) => {
+  const { app, call } = await boot(t)
+  const saved = await call<Row>('crm.team.save', {
+    values: { id: 'team-retired', name: 'Retired team', code: 'retired', active: false },
+    idempotencyKey: 'team-retired-001',
+  })
+  assert.equal(saved.ok, true)
+  const active = await (await app.client.get('/admin/crm/configuration?section=teams&lang=en')).text()
+  assert.doesNotMatch(active, /Retired team/)
+  assert.match(active, /data-ui="saved-views"/)
+  const archived = await (
+    await app.client.get('/admin/crm/configuration?section=teams&status=archived&lang=en')
+  ).text()
+  assert.match(archived, /Retired team/)
+  assert.match(archived, /record=crm\.team%3Ateam-retired/)
+  assert.match(archived, /href="\/admin\/crm\/configuration\?section=stages&amp;status=archived&amp;lang=en"/)
+  const all = await (await app.client.get('/admin/crm/configuration?section=teams&status=all&lang=en')).text()
+  assert.match(all, /Retired team/)
+  assert.match(all, /Sales/)
 })
 
 test('crm backend: the leaderboard is reachable and refreshes', async (t) => {
