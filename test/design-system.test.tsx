@@ -1013,6 +1013,42 @@ test('design system: fields cover operational form controls and nested groups', 
     />,
   )
   assert.match(checkboxGroup, /role="group" aria-labelledby="channels-label"/)
+  // Horizontal flow is the default and adds no attribute, so existing forms render unchanged.
+  assert.doesNotMatch(checkboxGroup, /data-orientation=/)
+
+  const verticalGroup = renderToString(
+    <Field
+      id="branches"
+      name="branches"
+      label="Branches"
+      type="checkbox-group"
+      optionsOrientation="vertical"
+      options={[
+        { value: 'thao-dien', label: 'Thao Dien', checked: true },
+        { value: 'cau-giay', label: 'Cau Giay' },
+      ]}
+    />,
+  )
+  assert.match(verticalGroup, /<div data-ui="field-options" data-orientation="vertical" role="group"/)
+  const verticalRadio = renderToString(
+    <Field
+      id="shift"
+      name="shift"
+      label="Shift"
+      type="radio"
+      value="morning"
+      optionsOrientation="vertical"
+      options={[
+        { value: 'morning', label: 'Morning' },
+        { value: 'evening', label: 'Evening' },
+      ]}
+    />,
+  )
+  assert.match(verticalRadio, /<div data-ui="field-options" data-orientation="vertical" role="radiogroup"/)
+  assert.match(
+    primitiveCss,
+    /\[data-ui="field-options"\]\[data-orientation="vertical"\] \{[^}]*flex-direction: column;/,
+  )
   assert.match(checkboxGroup, /data-ui="field-option-input"[^>]*type="checkbox"/)
 
   const grouped = renderToString(

@@ -66,6 +66,20 @@ returns them exactly where they were.
   such as a shared link or a record without a parent list. It is never the target of
   a collection row or card.
 
+### Option groups
+
+`checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
+fields with those types) keep one label on the left and the options on the right,
+each option's text after its control. `optionsOrientation` sets how the options flow:
+
+- `horizontal` (default): options wrap on one line. Use for a few short choices.
+- `vertical`: one option per line, rendered as `data-orientation="vertical"` on
+  `field-options`. Use when the choices should scan as a list, such as companies,
+  branches or job roles.
+
+Do not restyle `field-options` in an application to stack options; pass
+`optionsOrientation: 'vertical'` instead.
+
 The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
 with `layout="flow"`), and canvas workspace (`WorkspacePage` with
