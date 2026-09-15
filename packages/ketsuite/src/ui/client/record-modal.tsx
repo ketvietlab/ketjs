@@ -723,6 +723,9 @@ export const createRecordModal =
               mode: 'client',
               presentation: 'dialog',
               size: definition.size ?? 'default',
+              // Tabs have different heights; a fixed dialog does not jump when the reader switches
+              // tabs, nor when the loading state gives way to the record.
+              height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               closeLabel: t('recordModal.close'),
