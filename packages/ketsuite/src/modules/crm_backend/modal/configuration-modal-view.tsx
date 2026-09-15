@@ -2,22 +2,13 @@
 //
 // Teams, stages, tags, assignment rules and score rules open their rows and their
 // create action in one client-side modal each. Every view is render-pure: it reads
-// the context `crm.<kind>.modalContext` returned and writes design-system markup.
+// the context each `crm.*.modalContext` returned and writes design-system markup.
 // The runtime owns reading, submitting, history and focus; commands call the CRM's
 // existing save functions, so the server stays authoritative for validation.
 //
 // Bundled by tools/build-backend-client.mjs into crm_backend/client/.
 
-import {
-  ActionGroup,
-  Badge,
-  Button,
-  DataTable,
-  Field,
-  Inline,
-  Notice,
-  Stack,
-} from '@ketvietlab/design-system'
+import { Badge, Button, DataTable, Inline, Notice, Stack } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { createRecordModal } from '../../../ui/client/record-modal.tsx'
@@ -26,9 +17,14 @@ import type {
   RecordModalContext,
   RecordModalDefinition,
 } from '../../../ui/client/record-modal.tsx'
+import {
+  RecordDialogTrigger,
+  RecordModalForm,
+  recordStateSelectControl,
+} from '../../../ui/client/record-modal-form.tsx'
 import { CRM_RECORD_MODAL_LABELS } from '../../crm/record-modal-labels.ts'
 
-// biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by crm.<kind>.modalContext
+// biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by the crm modal contexts
 type AnyRow = Record<string, any>
 type Base = { record: AnyRow; permissions: Record<string, boolean>; lang: string }
 export type TeamData = Base & { members: AnyRow[]; people: AnyRow[]; assignmentModes: string[] }
@@ -109,23 +105,16 @@ const stateSelect = (
   return {
     ...base,
     options: props.options,
-    control: (
-      <select
-        data-ui="field-control"
-        data-record-state={props.state}
-        id={base.id}
-        name={props.name}
-        required={props.required === true}
-        disabled={base.disabled === true}
-        aria-invalid={base.error ? 'true' : null}
-      >
-        {props.options.map((option) => (
-          <option value={option.value} selected={option.value === props.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    ),
+    control: recordStateSelectControl({
+      id: base.id,
+      name: props.name,
+      state: props.state,
+      value: props.value,
+      options: props.options,
+      required: props.required,
+      disabled: base.disabled === true,
+      invalid: !!base.error,
+    }),
   }
 }
 
@@ -176,7 +165,11 @@ const statusHeader = (c: Context<Base>): JSXChild =>
  * The record form. A viewer who may not save sees the same fields disabled and
  * no actions. Archive and restore are explicit actions, not a checkbox.
  */
-const recordForm = (c: Context<Base>, fields: readonly FieldProps[], archivable = true): TemplateResult => {
+const configurationForm = (
+  c: Context<Base>,
+  fields: readonly FieldProps[],
+  archivable = true,
+): TemplateResult => {
   const editable = canSave(c)
   const actions: JSXChild[] = []
   if (editable) {
@@ -208,10 +201,7 @@ const recordForm = (c: Context<Base>, fields: readonly FieldProps[], archivable 
       editable
         ? ''
         : Notice({ title: t(c, 'configuration.readOnlyTitle'), message: t(c, 'configuration.readOnly') }),
-      <form data-ui="record-form" method="post" action="" data-record-kind={c.kind}>
-        <div data-ui="form-grid">{fields.map((item) => Field(item))}</div>
-        {actions.length ? <div data-ui="form-actions">{ActionGroup({ actions })}</div> : ''}
-      </form>,
+      RecordModalForm({ kind: c.kind, fields, actions }),
     ],
   })
 }
@@ -251,7 +241,7 @@ const createTitle = (c: Context<Base>, key: string): string =>
 // ── Team ────────────────────────────────────────────────────────────────────
 
 export const teamInfoView = (c: Context<TeamData>): TemplateResult =>
-  recordForm(c, [
+  configurationForm(c, [
     field(c, { name: 'name', label: t(c, 'field.configName'), value: c.data.record.name, required: true }),
     field(c, { name: 'code', label: t(c, 'field.code'), value: c.data.record.code, required: true }),
     field(c, {
@@ -274,15 +264,12 @@ export const teamInfoView = (c: Context<TeamData>): TemplateResult =>
   ])
 
 /** A button that opens the member dialog of this team, for one member or a new one. */
-const memberOpener = (
-  label: string,
-  memberId: string | null,
-  variant: 'secondary' | 'tertiary',
-): JSXChild => (
-  <span data-record-dialog="member" data-record-param-member={memberId}>
-    {Button({ label, variant, size: variant === 'tertiary' ? 'compact' : 'default' })}
-  </span>
-)
+const memberOpener = (label: string, memberId: string | null, variant: 'secondary' | 'tertiary'): JSXChild =>
+  RecordDialogTrigger({
+    dialog: 'member',
+    id: memberId,
+    children: Button({ label, variant, size: variant === 'tertiary' ? 'compact' : 'default' }),
+  })
 
 export const teamMembersView = (c: Context<TeamData>): TemplateResult => {
   const manage = c.data.permissions.members === true
@@ -346,7 +333,7 @@ export const teamMembersView = (c: Context<TeamData>): TemplateResult => {
 }
 
 const editedMember = (c: Context<TeamData>): AnyRow | null => {
-  const id = c.dialog?.params.member
+  const id = c.dialog?.params.id
   return id ? (c.data.members.find((row) => String(row.id) === id) ?? null) : null
 }
 
@@ -363,62 +350,53 @@ export const memberDialogView = (c: Context<TeamData>): TemplateResult => {
     id: `crm-team-member-${props.name}`,
     disabled: !editable,
   })
-  return (
-    <form data-ui="record-form" method="post" action="" data-record-kind={c.kind}>
-      <input type="hidden" name={COMMAND_FIELD} value="memberSave" />
-      <div data-ui="form-grid">
-        {[
-          memberField({
-            name: 'userId',
-            label: t(c, 'configuration.team.member'),
-            type: 'select',
-            required: true,
-            value: member?.userId ?? '',
-            options: [
-              { value: '', label: t(c, 'value.unset') },
-              ...people.map((person) => ({ value: String(person.id), label: String(person.name) })),
-            ],
+  return RecordModalForm({
+    kind: c.kind,
+    command: 'memberSave',
+    fields: [
+      memberField({
+        name: 'userId',
+        label: t(c, 'configuration.team.member'),
+        type: 'select',
+        required: true,
+        value: member?.userId ?? '',
+        options: [
+          { value: '', label: t(c, 'value.unset') },
+          ...people.map((person) => ({ value: String(person.id), label: String(person.name) })),
+        ],
+      }),
+      memberField({
+        name: 'capacity',
+        label: t(c, 'field.capacity'),
+        type: 'number',
+        min: 1,
+        value: String(member?.capacity ?? 1),
+        help: t(c, 'field.capacityHint'),
+      }),
+      memberField({
+        name: 'sequence',
+        label: t(c, 'field.sequence'),
+        type: 'number',
+        value: String(member?.sequence ?? 10),
+      }),
+      memberField({
+        name: 'active',
+        label: t(c, 'field.active'),
+        type: 'checkbox',
+        value: member ? member.active !== false : true,
+      }),
+    ],
+    actions: editable
+      ? [
+          Button({
+            type: 'submit',
+            label: member ? t(c, 'action.save') : t(c, 'configuration.team.addMember'),
+            variant: 'primary',
+            loading: c.busy,
           }),
-          memberField({
-            name: 'capacity',
-            label: t(c, 'field.capacity'),
-            type: 'number',
-            min: 1,
-            value: String(member?.capacity ?? 1),
-            help: t(c, 'field.capacityHint'),
-          }),
-          memberField({
-            name: 'sequence',
-            label: t(c, 'field.sequence'),
-            type: 'number',
-            value: String(member?.sequence ?? 10),
-          }),
-          memberField({
-            name: 'active',
-            label: t(c, 'field.active'),
-            type: 'checkbox',
-            value: member ? member.active !== false : true,
-          }),
-        ].map((item) => Field(item))}
-      </div>
-      {editable ? (
-        <div data-ui="form-actions">
-          {ActionGroup({
-            actions: [
-              Button({
-                type: 'submit',
-                label: member ? t(c, 'action.save') : t(c, 'configuration.team.addMember'),
-                variant: 'primary',
-                loading: c.busy,
-              }),
-            ],
-          })}
-        </div>
-      ) : (
-        ''
-      )}
-    </form>
-  )
+        ]
+      : [],
+  })
 }
 
 export const teamDefinition: RecordModalDefinition<TeamData> = {
@@ -455,7 +433,7 @@ export const teamDefinition: RecordModalDefinition<TeamData> = {
     memberSave: {
       fn: 'crm.team.member.save',
       input: (form, c) => ({
-        id: c.dialog?.params.member || uuid(),
+        id: c.dialog?.params.id || uuid(),
         teamId: c.id,
         userId: text(form, 'userId'),
         capacity: number(form, 'capacity', 1),
@@ -472,7 +450,7 @@ export const teamDefinition: RecordModalDefinition<TeamData> = {
 // ── Stage ───────────────────────────────────────────────────────────────────
 
 export const stageView = (c: Context<StageData>): TemplateResult =>
-  recordForm(c, [
+  configurationForm(c, [
     field(c, { name: 'name', label: t(c, 'field.configName'), value: c.data.record.name, required: true }),
     field(c, { name: 'code', label: t(c, 'field.code'), value: c.data.record.code, required: true }),
     field(c, {
@@ -526,7 +504,7 @@ export const stageDefinition: RecordModalDefinition<StageData> = {
 // ── Tag ─────────────────────────────────────────────────────────────────────
 
 export const tagView = (c: Context<TagData>): TemplateResult =>
-  recordForm(c, [
+  configurationForm(c, [
     field(c, { name: 'name', label: t(c, 'field.configName'), value: c.data.record.name, required: true }),
     field(c, {
       name: 'color',
@@ -574,7 +552,7 @@ export const chosenTeam = (c: Context<AssignmentRuleData>): string =>
 export const assignmentRuleView = (c: Context<AssignmentRuleData>): TemplateResult => {
   const team = chosenTeam(c)
   const assignees = c.data.assignees[team] ?? []
-  return recordForm(c, [
+  return configurationForm(c, [
     field(c, { name: 'name', label: t(c, 'field.configName'), value: c.data.record.name, required: true }),
     field(c, {
       name: 'priority',
@@ -653,7 +631,7 @@ export const scoreRuleChoice = (
 
 export const scoreRuleView = (c: Context<ScoreRuleData>): TemplateResult => {
   const choice = scoreRuleChoice(c)
-  return recordForm(c, [
+  return configurationForm(c, [
     field(c, { name: 'name', label: t(c, 'field.configName'), value: c.data.record.name, required: true }),
     stateSelect(c, {
       name: 'field',
