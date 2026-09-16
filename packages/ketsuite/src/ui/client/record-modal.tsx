@@ -12,7 +12,7 @@
 
 import { signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { LoadingState, ModalSheet, Notice, Tabs, Button } from '@ketvietlab/design-system'
+import { Button, LoadingState, ModalSheet, Notice, TabbedView } from '@ketvietlab/design-system'
 import {
   RECORD_NEW_ID,
   RECORD_PARAM,
@@ -119,6 +119,8 @@ export type RecordModalContext<Data> = {
   fieldError: (name: string) => string | null
   /** What was typed into a field before a refused submit, or the fallback. */
   draft: (name: string, fallback?: string) => string
+  /** Whether a checkbox/radio value was selected before the view re-rendered. */
+  draftChecked: (name: string, value?: string, fallback?: boolean) => boolean
   /**
    * A submit has been in flight long enough to be worth saying so. A command the
    * server answers at once never sets it, so a button bound to it does not flash
@@ -326,6 +328,16 @@ const uuid = (): string =>
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
 
+type DraftState = {
+  values: Record<string, string>
+  checks: Record<string, boolean>
+}
+
+type DraftScope = 'record' | 'dialog'
+
+const emptyDraftState = (): DraftState => ({ values: {}, checks: {} })
+const draftCheckKey = (name: string, value: string): string => `${name}\u0000${value}`
+
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
 /**
@@ -394,7 +406,8 @@ export const createRecordModal =
     const envelope = signal<RecordContextEnvelope<Data> | null>(null)
     const failure = signal<string | null>(null)
     const issues = signal<RecordIssue[]>([])
-    const drafts = signal<Record<string, string>>({})
+    const recordDrafts = signal<DraftState>(emptyDraftState())
+    const dialogDrafts = signal<DraftState>(emptyDraftState())
     // `running` is the guard — one command at a time — and `busy` is what the
     // views show. They are not the same thing: a save the server answers in
     // twenty milliseconds would otherwise flash the button through its spinner
@@ -431,6 +444,7 @@ export const createRecordModal =
     let request: AbortController | null = null
     let pushed = false
     let returnFocus: HTMLElement | null = null
+    let dialogReturnFocus: HTMLElement | null = null
     let releaseInert: (() => void) | null = null
 
     // Messages of the last record this modal loaded: opening the next record clears
@@ -450,7 +464,12 @@ export const createRecordModal =
     const visibleTabs = (context: RecordModalContext<Data>) =>
       (definition.tabs ?? []).filter((tab) => tab.visible?.(context) ?? true)
 
-    const contextFor = (current: { id: string; tab: string }, data: Data): RecordModalContext<Data> => {
+    const contextFor = (
+      current: { id: string; tab: string },
+      data: Data,
+      scope: DraftScope = 'record',
+    ): RecordModalContext<Data> => {
+      const draftState = (): DraftState => (scope === 'dialog' ? dialogDrafts() : recordDrafts())
       const base: RecordModalContext<Data> = {
         kind: definition.kind,
         id: current.id,
@@ -462,7 +481,9 @@ export const createRecordModal =
           const hit = issues().find((issue) => issue.field === name)
           return hit ? (hit.message ?? t(hit.code, hit.params)) : null
         },
-        draft: (name, fallback = '') => drafts()[name] ?? fallback,
+        draft: (name, fallback = '') => draftState().values[name] ?? fallback,
+        draftChecked: (name, value = '1', fallback = false) =>
+          draftState().checks[draftCheckKey(name, value)] ?? fallback,
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
@@ -519,32 +540,60 @@ export const createRecordModal =
       }
     }
 
-    const layer = (): HTMLElement | null =>
-      root?.querySelector<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]') ?? null
+    const layers = (): HTMLElement[] =>
+      root ? [...root.querySelectorAll<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')] : []
+    const recordLayer = (): HTMLElement | null => layers()[0] ?? null
+    const topLayer = (): HTMLElement | null => layers().at(-1) ?? null
 
-    const keepDrafts = (): void => {
-      const current = layer()
-      if (!current || !recordLayerHasDraft(current)) return
-      const kept: Record<string, string> = {}
-      for (const form of current.querySelectorAll('form'))
-        for (const [key, value] of new FormData(form))
-          if (typeof value === 'string' && key !== RECORD_COMMAND_FIELD) kept[key] = value
-      drafts.set({ ...drafts(), ...kept })
+    const keepDrafts = (current: HTMLElement | null, scope: DraftScope): void => {
+      if (!current) return
+      const previous = scope === 'dialog' ? dialogDrafts() : recordDrafts()
+      const kept: DraftState = {
+        values: { ...previous.values },
+        checks: { ...previous.checks },
+      }
+      for (const control of current.querySelectorAll<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >('input[name], select[name], textarea[name]')) {
+        if (control.disabled || control.name === RECORD_COMMAND_FIELD) continue
+        if (control instanceof HTMLInputElement) {
+          if (control.type === 'file' || control.type === 'hidden') continue
+          if (control.type === 'checkbox' || control.type === 'radio') {
+            kept.checks[draftCheckKey(control.name, control.value)] = control.checked
+            if (control.type === 'checkbox') kept.values[control.name] = control.checked ? control.value : ''
+            else if (control.checked) kept.values[control.name] = control.value
+            continue
+          }
+        }
+        kept.values[control.name] = control.value
+      }
+      if (scope === 'dialog') dialogDrafts.set(kept)
+      else recordDrafts.set(kept)
     }
 
-    const mayDiscard = (): boolean => {
-      const current = layer()
+    const keepAllDrafts = (): void => {
+      const currentLayers = layers()
+      keepDrafts(currentLayers[0] ?? null, 'record')
+      if (currentLayers.length > 1) keepDrafts(currentLayers.at(-1) ?? null, 'dialog')
+    }
+
+    const mayDiscard = (current: HTMLElement | null): boolean => {
       if (!current || !recordLayerHasDraft(current)) return true
       return globalThis.confirm(t('recordModal.unsaved'))
     }
 
-    const afterRender = (): void => {
+    const afterRender = (preferred?: () => HTMLElement | null): void => {
       requestAnimationFrame(() => {
-        const layers = root?.querySelectorAll<HTMLElement>(
-          '[data-ui="modal-layer"][data-client-modal="true"]',
-        )
-        const top = layers?.[layers.length - 1]
+        const currentLayers = layers()
+        const record = currentLayers[0]
+        const top = currentLayers.at(-1)
         if (!top) return
+        if (record) record.inert = currentLayers.length > 1
+        const target = preferred?.()
+        if (target?.isConnected && top.contains(target)) {
+          target.focus()
+          return
+        }
         if (top.contains(document.activeElement)) return
         const sheet = top.querySelector<HTMLElement>('[data-ui="modal-sheet"]')
         const first = focusablesIn(top).find((item) => !item.matches('[data-ui="modal-close"]'))
@@ -552,7 +601,12 @@ export const createRecordModal =
       })
     }
 
-    const show = (id: string, tab: string | null, how: 'push' | 'replace' | 'none'): void => {
+    const show = (
+      id: string,
+      tab: string | null,
+      how: 'push' | 'replace' | 'none',
+      preferredFocus?: () => HTMLElement | null,
+    ): void => {
       const current = open()
       const sameRecord = current?.id === id
       const nextTab = tab ?? (sameRecord ? current.tab : '')
@@ -560,9 +614,11 @@ export const createRecordModal =
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
         saved.set(false)
-        drafts.set({})
+        recordDrafts.set(emptyDraftState())
+        dialogDrafts.set(emptyDraftState())
         viewState.set({})
         dialog.set(null)
+        dialogReturnFocus = null
         envelope.set(null)
         void load(id)
       }
@@ -573,7 +629,7 @@ export const createRecordModal =
         pushed = true
       } else if (how === 'replace') history.replaceState(history.state ?? {}, '', href)
       if (root && !releaseInert) releaseInert = inertOutside(root)
-      afterRender()
+      afterRender(preferredFocus)
     }
 
     const hide = (how: 'history' | 'replace' | 'none'): void => {
@@ -582,7 +638,8 @@ export const createRecordModal =
       dialog.set(null)
       issues.set([])
       saved.set(false)
-      drafts.set({})
+      recordDrafts.set(emptyDraftState())
+      dialogDrafts.set(emptyDraftState())
       viewState.set({})
       status.set('idle')
       envelope.set(null)
@@ -597,18 +654,22 @@ export const createRecordModal =
       }
       const target = returnFocus
       returnFocus = null
+      dialogReturnFocus = null
       if (target?.isConnected) requestAnimationFrame(() => target.focus())
     }
 
     const close = (): void => {
       if (dialog()) {
-        if (!mayDiscard()) return
+        if (!mayDiscard(topLayer())) return
+        const target = dialogReturnFocus
+        dialogReturnFocus = null
         dialog.set(null)
+        dialogDrafts.set(emptyDraftState())
         issues.set([])
-        afterRender()
+        afterRender(() => (target?.isConnected ? target : null))
         return
       }
-      if (!mayDiscard()) return
+      if (!mayDiscard(recordLayer())) return
       hide('history')
     }
 
@@ -618,7 +679,10 @@ export const createRecordModal =
       const data = envelope()?.data
       if (!command || !current || data === undefined || running()) return
       const formData = new FormData(form, submitter instanceof HTMLButtonElement ? submitter : null)
-      const context = contextFor(current, data)
+      const currentLayer = form.closest<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')
+      const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
+      keepDrafts(currentLayer, scope)
+      const context = contextFor(current, data, scope)
       setRunning(true)
       issues.set([])
       try {
@@ -655,10 +719,7 @@ export const createRecordModal =
           idempotencyKey: uuid(),
         })
         if (!result.ok) {
-          // Keep what was typed: the view reads it back through `draft`.
-          const kept: Record<string, string> = {}
-          for (const [key, value] of formData) if (typeof value === 'string') kept[key] = value
-          drafts.set({ ...drafts(), ...kept })
+          // The layer was snapshotted before the busy state rendered, including unchecked controls.
           issues.set(
             result.issues.length
               ? result.issues
@@ -673,7 +734,8 @@ export const createRecordModal =
           )
           return
         }
-        drafts.set({})
+        if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
+        else recordDrafts.set(emptyDraftState())
         form.reset()
         const value = result.value as { id?: unknown } | null | undefined
         const createdId =
@@ -696,6 +758,7 @@ export const createRecordModal =
         if (after !== 'close') saved.set(true)
         if (after === 'open') {
           dialog.set(null)
+          dialogDrafts.set(emptyDraftState())
           // Replace `:new` in the address bar before the collection refreshes: the
           // shell re-fetches `location.href`, which must already name the new record.
           if (createdId) show(createdId, command.openTab ?? null, 'replace')
@@ -706,17 +769,27 @@ export const createRecordModal =
         announce()
         if (after === 'close') hide('history')
         else if (after === 'reload') {
+          const target = dialogReturnFocus
+          dialogReturnFocus = null
           dialog.set(null)
+          dialogDrafts.set(emptyDraftState())
           await load(current.id)
+          afterRender(() => (target?.isConnected ? target : null))
         } else if (after === 'refresh') await load(current.id, true)
         else if (after === 'stay') version.set(version() + 1)
         else if ('tab' in after) {
+          dialogReturnFocus = null
           dialog.set(null)
+          dialogDrafts.set(emptyDraftState())
           show(current.id, after.tab, 'replace')
           await load(current.id)
         } else {
+          const target = after.dialog ? null : dialogReturnFocus
+          dialogReturnFocus = after.dialog && submitter instanceof HTMLElement ? submitter : null
           dialog.set(after.dialog ? { name: after.dialog, params: {} } : null)
+          dialogDrafts.set(emptyDraftState())
           await load(current.id, true)
+          afterRender(() => (target?.isConnected ? target : null))
         }
       } catch {
         issues.set([{ field: null, code: 'recordModal.saveFailed', message: null, params: {} }])
@@ -765,22 +838,33 @@ export const createRecordModal =
       const context = contextFor(current, data)
       const tabs = visibleTabs(context)
       const active = tabs.find((tab) => tab.id === context.tab)
+      const header = definition.header?.(context) ?? ''
+      const issueNotice = formIssues(context)
+      const body = active ? active.view(context) : (definition.body?.(context) ?? '')
+      if (tabs.length)
+        return TabbedView({
+          id: `record-view-${definition.kind.replaceAll('.', '-')}`,
+          label: definition.title(context),
+          items: tabs.map((tab) => ({
+            id: tab.id,
+            label: tab.label(context),
+            href: context.href(tab.id),
+            active: tab.id === context.tab,
+          })),
+          context:
+            header !== '' || issueNotice !== '' ? (
+              <>
+                {header}
+                {issueNotice}
+              </>
+            ) : undefined,
+          body,
+        })
       return (
         <>
-          {definition.header?.(context) ?? ''}
-          {formIssues(context)}
-          {tabs.length
-            ? Tabs({
-                label: definition.title(context),
-                items: tabs.map((tab) => ({
-                  id: tab.id,
-                  label: tab.label(context),
-                  href: context.href(tab.id),
-                  active: tab.id === context.tab,
-                })),
-              })
-            : ''}
-          {active ? active.view(context) : (definition.body?.(context) ?? '')}
+          {header}
+          {issueNotice}
+          {body}
         </>
       )
     }
@@ -792,7 +876,7 @@ export const createRecordModal =
       if (!current || !opened || data === undefined) return ''
       const spec = definition.dialogs?.[opened.name]
       if (!spec) return ''
-      const context = contextFor(current, data)
+      const context = contextFor(current, data, 'dialog')
       return ModalSheet({
         id: `record-dialog-${definition.kind.replaceAll('.', '-')}-${opened.name}`,
         mode: 'client',
@@ -867,6 +951,7 @@ export const createRecordModal =
               )
               if (stateControl) {
                 event.preventDefault()
+                keepAllDrafts()
                 viewState.set({
                   ...viewState(),
                   [stateControl.getAttribute('data-record-state') ?? '']:
@@ -877,6 +962,12 @@ export const createRecordModal =
               const opener = element?.closest<HTMLElement>(`[${RECORD_DIALOG_ATTRIBUTE}]`)
               if (opener) {
                 event.preventDefault()
+                const focused = document.activeElement
+                dialogReturnFocus =
+                  focused instanceof HTMLElement && opener.contains(focused)
+                    ? focused
+                    : opener.querySelector<HTMLElement>(focusable)
+                dialogDrafts.set(emptyDraftState())
                 const params: Record<string, string> = {}
                 for (const [key, value] of Object.entries(opener.dataset))
                   if (key.startsWith('recordParam') && value !== undefined)
@@ -905,9 +996,15 @@ export const createRecordModal =
               if ((target.tab ?? '') === current.tab) return
               // Switching tab is not discarding: what was typed rides along as drafts,
               // which the views read back, so no prompt stands between two tabs.
-              keepDrafts()
+              keepDrafts(recordLayer(), 'record')
               issues.set([])
-              show(target.id, target.tab ?? null, 'replace')
+              show(
+                target.id,
+                target.tab ?? null,
+                'replace',
+                () =>
+                  recordLayer()?.querySelector<HTMLElement>('[data-ui="tab"][data-active="true"]') ?? null,
+              )
               return
             }
             show(target.id, target.tab ?? null, 'push')
@@ -1003,6 +1100,7 @@ export const createRecordModal =
               (control instanceof HTMLSelectElement || control instanceof HTMLInputElement) &&
               control.hasAttribute('data-record-state')
             ) {
+              keepAllDrafts()
               viewState.set({
                 ...viewState(),
                 [control.getAttribute('data-record-state') ?? '']: control.value,

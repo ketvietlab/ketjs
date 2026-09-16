@@ -136,11 +136,14 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /event\.key === 'Escape'/u)
   assert.match(runtime, /const inertOutside = /u)
   assert.match(runtime, /restore|returnFocus/u)
-  assert.match(
-    runtime,
-    /drafts\.set\(\{ \.\.\.drafts\(\), \.\.\.kept \}\)/u,
-    'a refused submit keeps what was typed',
-  )
+  // The layer is snapshotted before the guard goes up, so what was typed survives
+  // the render that disables the form.
+  assert.match(runtime, /keepDrafts\(currentLayer, scope\)[\s\S]*?setRunning\(true\)/u)
+  assert.match(runtime, /kept\.checks\[draftCheckKey\(control\.name, control\.value\)\] = control\.checked/u)
+  assert.match(runtime, /if \(!mayDiscard\(topLayer\(\)\)\) return/u)
+  assert.match(runtime, /record\.inert = currentLayers\.length > 1/u)
+  assert.match(runtime, /dialogReturnFocus/u)
+  assert.match(runtime, /keepAllDrafts\(\)[\s\S]*?viewState\.set/u)
   assert.match(runtime, /'idempotency-key'/u)
   assert.match(runtime, /new CustomEvent\('ket:records-changed'/u)
   // A view never fetches: only the runtime calls the function endpoint and `/files`.
@@ -148,6 +151,13 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: tab layout is owned by the runtime instead of module views', () => {
+  assert.match(runtime, /return TabbedView\(\{/u)
+  assert.match(runtime, /body = active \? active\.view\(context\)/u)
+  assert.match(runtime, /keepDrafts\(recordLayer\(\), 'record'\)/u)
+  assert.match(runtime, /\[data-ui="tab"\]\[data-active="true"\]/u)
 })
 
 test('record modal: the loading state never shows a label key', () => {

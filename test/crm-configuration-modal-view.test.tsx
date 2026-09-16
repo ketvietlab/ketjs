@@ -29,6 +29,7 @@ type Options = {
   creating?: boolean
   state?: Record<string, string>
   drafts?: Record<string, string>
+  draftChecks?: Record<string, boolean>
   dialog?: { name: string; params: Record<string, string> } | null
 }
 
@@ -41,6 +42,8 @@ const contextOf = <Data,>(kind: string, data: Data, options: Options = {}): Reco
   t: (key, params) => (key === 'crm_backend.value.archivedTeam' ? `${String(params?.name)} (archived)` : key),
   fieldError: () => null,
   draft: (name, fallback = '') => options.drafts?.[name] ?? fallback,
+  draftChecked: (name, value = '1', fallback = false) =>
+    options.draftChecks?.[`${name}\u0000${value}`] ?? fallback,
   busy: false,
   dialog: options.dialog ?? null,
   href: () => '',
