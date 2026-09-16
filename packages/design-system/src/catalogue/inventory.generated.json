@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 100,
     "cssFiles": 72,
-    "cssLines": 13762
+    "cssLines": 13774
   },
   "rows": [
     {
@@ -10287,7 +10287,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/data-table/styles.css",
-      "lines": 359,
+      "lines": 371,
       "hooks": [
         "cell",
         "col",
