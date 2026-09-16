@@ -327,6 +327,18 @@
     z-index: 1;
   }
 
+  /* A row that is itself a link may still carry its own controls — a milestone
+     that opens one tab of the record, a per-row action. The row link's overlay
+     covers the whole row, so anything else a reader can press has to sit above
+     it or the row swallows the click. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    :is(a, button, summary, input, select, textarea):not([data-ui="row-link"]) {
+    position: relative;
+    z-index: 1;
+  }
+
   :where([data-kv-design-system])
     [data-ui="table-scroll"][data-pattern="data-table"]
     [data-ui="row"]:focus-within {
