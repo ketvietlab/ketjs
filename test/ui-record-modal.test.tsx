@@ -203,8 +203,7 @@ const clickedOn = (
           return { ...node(at), ...chain[at] }
       return null
     },
-    getAttribute: (name: string) =>
-      name === 'data-row-href' ? (chain[index]?.href ?? null) : null,
+    getAttribute: (name: string) => (name === 'data-row-href' ? (chain[index]?.href ?? null) : null),
   })
   return node(0) as unknown as Element
 }
