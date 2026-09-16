@@ -78,9 +78,18 @@ const field = (c: Context<Base>, props: Omit<FieldProps, 'id'>): FieldProps => (
   ...props,
   id: fieldId(c, props.name),
   value:
-    props.type === 'checkbox' || props.type === 'checkbox-group'
-      ? props.value
-      : c.draft(props.name, String(props.value ?? '')),
+    props.type === 'checkbox'
+      ? c.draftChecked(props.name, '1', props.value === true || props.value === '1')
+      : props.type === 'checkbox-group'
+        ? props.value
+        : c.draft(props.name, String(props.value ?? '')),
+  options:
+    props.type === 'checkbox-group'
+      ? props.options?.map((option) => ({
+          ...option,
+          checked: c.draftChecked(option.name ?? `${props.name}[]`, option.value, option.checked === true),
+        }))
+      : props.options,
   error: c.fieldError(props.name),
   disabled: props.disabled === true || !canSave(c),
 })

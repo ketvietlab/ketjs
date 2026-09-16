@@ -193,6 +193,33 @@
     overflow-x: auto;
   }
 
+  :where([data-kv-design-system]) [data-ui="tabbed-view"] {
+    display: grid;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabbed-view"]:not(:has(> [data-ui="tabbed-view-context"])) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabbed-view-context"] {
+    min-width: 0;
+    padding-block-end: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab-panel"] {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-block: var(--kv-space-5);
+    padding-inline: 0;
+    overscroll-behavior: contain;
+  }
+
   :where([data-kv-design-system]) [data-ui="tabs"][data-pattern="tabs"] [data-ui="tab"] {
     position: relative;
     display: inline-flex;

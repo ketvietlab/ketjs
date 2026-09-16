@@ -19,7 +19,7 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    // The public 112-component catalogue includes its machine-readable inventory and KetAtlas adapter.
+    // The public 115-component catalogue includes its machine-readable inventory and KetAtlas adapter.
     // 0.1.16 packed 187 KB; 0.1.17 adds BarChart, TimeframeFilter, DataMatrix and page identity (224 KB).
     maxPackedBytes: 250_000,
   },

@@ -12,12 +12,24 @@ export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.ts
 export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
 export type { FieldOption, FieldProps } from './primitives/field/index.tsx'
-export { Breadcrumbs, NavItem, NavList, Tabs } from './primitives/navigation/index.tsx'
+export {
+  Breadcrumbs,
+  NavItem,
+  NavList,
+  Tab,
+  TabPanel,
+  TabbedView,
+  Tabs,
+} from './primitives/navigation/index.tsx'
 export type {
   BreadcrumbItem,
   BreadcrumbsProps,
   NavItemProps,
   TabItem,
+  TabPanelProps,
+  TabProps,
+  TabbedViewProps,
+  TabsProps,
 } from './primitives/navigation/index.tsx'
 export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'

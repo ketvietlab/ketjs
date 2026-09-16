@@ -38,7 +38,7 @@ test('design system: KetAtlas materialization is complete and reproducible', () 
     assert.equal(lock.schemaVersion, 'ketatlas.design-system-lock.v1')
     assert.equal(lock.adapterSchemaVersion, 'ketatlas.design-system-adapter.v1')
     assert.equal(lock.adapter, '@ketvietlab/design-system')
-    assert.equal(lock.registeredComponents, 112)
+    assert.equal(lock.registeredComponents, 115)
     assert.deepEqual(
       lock.files.map((file) => file.path),
       [
