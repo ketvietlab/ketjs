@@ -752,11 +752,17 @@ export const routes: Record<string, RouteEntry> = {
         active: '/admin/roles',
         body: async (_, frame) =>
           rolesScreen(_, frame, {
+            // A row and the create action open the same record modal over this
+            // collection, which is what the design system asks of a collection.
             rows: (await rolesOf(ctx, url, req)).map((row) => ({
               ...row,
-              detailHref: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
+              detailHref: recordModalHref(`${url.pathname}${url.search}`, {
+                kind: 'user.role',
+                id: row.id,
+                tab: 'info',
+              }),
             })),
-            createHref: inLocale(url, '/admin/roles/new'),
+            createHref: recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.role' }),
             presetsHref: inLocale(url, '/admin/permission-presets'),
           }),
       })
