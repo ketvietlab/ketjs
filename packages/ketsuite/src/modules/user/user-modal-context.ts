@@ -181,6 +181,40 @@ const authorizationAuditOf = async (ctx: Ctx, userId: string): Promise<Row[]> =>
 /** How much of the log one read carries. A tab is a window, not an export. */
 const AUDIT_PAGE = 50
 
+/**
+ * What a role actually covers, in the words a business reads.
+ *
+ * A grant is one function key; nobody staffs a branch by function key. The
+ * catalogue groups those keys into bundles, so a role is reported as the areas it
+ * touches and how much of each it holds — and a bundle the role does not touch at
+ * all is not listed, because a list of everything it cannot do says nothing.
+ */
+const roleCoverage = async (ctx: Ctx, roleIds: string[]): Promise<Record<string, Row[]>> => {
+  const out: Record<string, Row[]> = {}
+  if (!roleIds.length) return out
+  const bundles = Object.entries(ctx.manifest.permissions.bundles ?? {})
+  const G = ctx.table('user.Grant')
+  for (const roleId of roleIds) {
+    const granted = new Set(
+      (await ctx.db.all(from(G).where(eq(G.roleId, roleId)))).map((row) => String(row.fnKey)),
+    )
+    out[roleId] = bundles
+      .map(([key, bundle]) => {
+        const functions = (bundle as { functions?: string[] }).functions ?? []
+        const covered = functions.filter((fn) => granted.has(fn)).length
+        return {
+          key,
+          labels: (bundle as { labels?: Record<string, string> }).labels ?? {},
+          covered,
+          total: functions.length,
+        }
+      })
+      .filter((row) => row.covered > 0)
+      .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+  }
+  return out
+}
+
 const newUserRecord = (): Row => ({
   id: '',
   name: '',
@@ -208,6 +242,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       // The profile form edits where this person works.
       'read:user.Membership',
       'read:user.BranchMembership',
+      // What each held role covers.
+      'read:user.Grant',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
@@ -233,6 +269,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
         : ((await ctx.db.select('user.User', { id: args.id }))[0] ?? null)
       if (!record) return null
       const { companies, branches } = await workplaces(ctx)
+      const assignments = creating ? [] : await assignmentsOf(ctx, String(args.id))
       const lang: Lang = args.locale === 'en' ? 'en' : 'vi'
       return {
         data: {
@@ -268,7 +305,10 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
               },
           companies,
           branches,
-          assignments: creating ? [] : await assignmentsOf(ctx, String(args.id)),
+          assignments,
+          // What each held role covers, so the role a reader opens says what it is
+          // for instead of only where it applies.
+          roleCoverage: await roleCoverage(ctx, [...new Set(assignments.map((row) => String(row.roleId)))]),
           audit: creating || !permissions.audit ? [] : await authorizationAuditOf(ctx, String(args.id)),
           roles: await assignableRoles(ctx),
           scopeKinds: ['company', 'branch', 'tenant'],

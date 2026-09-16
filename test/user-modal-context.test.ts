@@ -64,6 +64,7 @@ type Context = {
     roles: Array<{ id: string; name: string }>
     assignments: Array<{ id: string; roleId: string; scopeKey: string; company: string | null }>
     audit: Array<{ event: string; reason: string | null; roleIds: string[]; outcome: string }>
+    roleCoverage: Record<string, Array<{ key: string; covered: number; total: number }>>
     revision: number
     permissions: Record<string, boolean>
   }
@@ -273,6 +274,14 @@ test('the access tab can give a role and take it back with what the context carr
   assert.deepEqual(
     finally_!.data.assignments.map((item) => item.roleId),
     ['reader'],
+  )
+
+  // A role is reported as the areas it covers, measured from its grants — not as a
+  // list of function keys nobody staffs a branch by.
+  const covered = finally_!.data.roleCoverage.reader
+  assert.deepEqual(
+    covered?.map((row) => [row.key, row.covered, row.total]),
+    [['permission_probe.view', 1, 1]],
   )
 
   // Everything above is written down, newest first, with the reason each carried.
