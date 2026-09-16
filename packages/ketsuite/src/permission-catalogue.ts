@@ -1327,6 +1327,7 @@ const sources = {
       setDefaultContext: ['security', 'security', 'user.security-audit'],
       unassignRole: ['security', 'security', 'user.security-audit'],
       unassignScopedRole: ['security', 'security', 'user.security-audit'],
+      userModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
     },
     exemptions: {
       authenticate: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
