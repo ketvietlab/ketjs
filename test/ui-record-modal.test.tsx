@@ -17,6 +17,7 @@ import {
 
 import {
   RECORD_MODAL_LABELS,
+  openerHref,
   resolveRecordModalLabel,
 } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 
@@ -184,4 +185,53 @@ test('record modal: a created record is in the address bar before the collection
     showAt > 0 && announceAt > showAt,
     'the URL names the created record before the change is announced',
   )
+})
+
+/**
+ * A stand-in for the element a click landed on. `closest` answers from a chain
+ * of ancestors, each described by the selectors it matches, which is all the
+ * opener resolver asks of the DOM.
+ */
+const clickedOn = (
+  chain: ReadonlyArray<{ matches: readonly string[]; href?: string; target?: string }>,
+): Element => {
+  const node = (index: number): Record<string, unknown> => ({
+    closest: (selector: string) => {
+      for (let at = index; at < chain.length; at += 1)
+        if (chain[at]?.matches.some((one) => selector.split(', ').includes(one)))
+          return { ...node(at), ...chain[at] }
+      return null
+    },
+    getAttribute: (name: string) =>
+      name === 'data-row-href' ? (chain[index]?.href ?? null) : null,
+  })
+  return node(0) as unknown as Element
+}
+
+const ROW = { matches: ['[data-row-href]'], href: '/list?record=crm.stage%3Aqualified' }
+
+test('record modal: a click opens from the link it landed on, or the row it landed in', () => {
+  // A row carries its destination on the row (`rowLink: false`), so the modal
+  // has to read the row: the shell would navigate it and leave the modal shut.
+  assert.equal(openerHref(clickedOn([{ matches: ['td'] }, ROW])), ROW.href)
+  assert.equal(openerHref(clickedOn([ROW])), ROW.href)
+
+  // A link inside a row wins over the row: it names its own destination.
+  const link = { matches: ['a', 'a[href]'], href: '/list?record=crm.stage%3Awon' }
+  assert.equal(openerHref(clickedOn([link, ROW])), link.href)
+  // …unless it opens elsewhere, which is not this modal's business.
+  assert.equal(openerHref(clickedOn([{ ...link, target: '_blank' }, ROW])), null)
+
+  // A control inside the row does its own thing; the row is not a second target.
+  for (const control of ['button', 'input', 'select', 'textarea', 'label', 'summary', 'details'])
+    assert.equal(
+      openerHref(clickedOn([{ matches: [control] }, ROW])),
+      null,
+      `${control} inside a row keeps the row shut`,
+    )
+  assert.equal(openerHref(clickedOn([{ matches: ['[data-ui="select-cell"]'] }, ROW])), null)
+
+  // Nothing to open.
+  assert.equal(openerHref(clickedOn([{ matches: ['td'] }])), null)
+  assert.equal(openerHref(null), null)
 })

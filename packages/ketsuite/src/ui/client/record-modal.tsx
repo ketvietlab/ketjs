@@ -315,6 +315,23 @@ type Status = 'idle' | 'loading' | 'ready' | 'error'
 
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
+/** Controls inside a row do their own thing; the row's destination is for the rest of it. */
+const rowControl = 'a, button, input, select, textarea, label, summary, details, [data-ui="select-cell"]'
+
+/**
+ * Where a click is asking to go: the link it landed on, or the row it landed
+ * in. A table row carries its destination on the row itself (`rowLink: false`),
+ * so the whole row is one target rather than a link around the first cell. The
+ * shell would navigate such a row through the navigation layer, which fetches
+ * the collection again and leaves the modal unopened, so this reads it first.
+ */
+export const openerHref = (element: Element | null): string | null => {
+  const anchor = element?.closest<HTMLAnchorElement>('a[href]')
+  if (anchor) return anchor.target && anchor.target !== '_self' ? null : anchor.href
+  if (element?.closest(rowControl)) return null
+  return element?.closest<HTMLElement>('[data-row-href]')?.getAttribute('data-row-href') ?? null
+}
+
 /**
  * Create the island controller for one record kind.
  *
@@ -799,9 +816,9 @@ export const createRecordModal =
                 return
               }
             }
-            const anchor = element?.closest<HTMLAnchorElement>('a[href]')
-            if (!anchor || (anchor.target && anchor.target !== '_self')) return
-            const url = new URL(anchor.href, location.href)
+            const href = openerHref(element)
+            if (!href) return
+            const url = new URL(href, location.href)
             if (url.origin !== location.origin || url.pathname !== location.pathname) return
             const target = readRecordModalTarget(url)
             if (!target || target.kind !== definition.kind) return
@@ -820,6 +837,25 @@ export const createRecordModal =
           },
           // Capture: the navigation layer listens on the document too, and was
           // installed first, so a bubbling listener would see the page fetched.
+          { signal: lifetime, capture: true },
+        )
+
+        // A row is reached by keyboard, not by pointer alone: Enter and Space on
+        // the focused row open what clicking it opens.
+        document.addEventListener(
+          'keydown',
+          (event) => {
+            if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+            const element = event.target instanceof Element ? event.target : null
+            if (!element?.matches('[data-row-href][tabindex="0"]')) return
+            const href = element.getAttribute('data-row-href')
+            const url = href ? new URL(href, location.href) : null
+            if (!url || url.origin !== location.origin || url.pathname !== location.pathname) return
+            const target = readRecordModalTarget(url)
+            if (!target || target.kind !== definition.kind) return
+            event.preventDefault()
+            show(target.id, target.tab ?? null, 'push')
+          },
           { signal: lifetime, capture: true },
         )
 
