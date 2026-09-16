@@ -283,3 +283,26 @@ test('record modal: a command that leaves the modal open says it worked', () => 
   const hide = runtime.slice(runtime.indexOf('const hide = '))
   assert.match(hide.slice(0, hide.indexOf('releaseInert?.()')), /saved\.set\(false\)/u)
 })
+
+test('record modal: a record wears its state beside the title, inside the head', () => {
+  const html = renderToString(
+    ModalSheet({
+      id: 'sheet',
+      mode: 'client',
+      title: 'Qualified',
+      status: 'Đang dùng',
+      closeLabel: 'Đóng',
+      body: 'nội dung',
+    }),
+  )
+  const head = html.slice(html.indexOf('data-ui="modal-head"'), html.indexOf('data-ui="modal-body"'))
+  // In the head, so it stays put while the body scrolls, and on the title's own
+  // row rather than above the form where it reads as part of the record.
+  assert.match(head, /data-ui="modal-title-row"[\s\S]*?Qualified[\s\S]*?Đang dùng/u)
+  assert.doesNotMatch(html.slice(html.indexOf('data-ui="modal-body"')), /Đang dùng/u)
+  // A record with no state to report leaves the row to the title.
+  const plain = renderToString(
+    ModalSheet({ id: 'sheet', mode: 'client', title: 'Qualified', closeLabel: 'Đóng', body: '' }),
+  )
+  assert.match(plain, /data-ui="modal-title-row"/u)
+})

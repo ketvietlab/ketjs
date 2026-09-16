@@ -446,6 +446,13 @@
     min-inline-size: 0;
     gap: var(--admin-gap-xs);
   }
+  /* The title and what state its record is in read as one line. */
+  [data-ui="modal-title-row"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
   [data-ui="modal-title"] {
     min-inline-size: 0;
     margin: 0;
