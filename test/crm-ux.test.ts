@@ -520,7 +520,7 @@ test('crm backend: the configuration status filter lists archived entries and su
   assert.equal(saved.ok, true)
   const active = await (await app.client.get('/admin/crm/configuration?section=teams&lang=en')).text()
   assert.doesNotMatch(active, /Retired team/)
-  assert.match(active, /data-ui="saved-views"/)
+  assert.match(active, /data-ui="list-facets"/)
   const archived = await (
     await app.client.get('/admin/crm/configuration?section=teams&status=archived&lang=en')
   ).text()

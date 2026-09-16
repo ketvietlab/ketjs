@@ -66,14 +66,16 @@ test('crm configuration: catalogues are sections, and the status filter is a vis
       new RegExp(`href="/admin/crm/configuration\\?section=${section}&amp;status=archived&amp;lang=vi"`),
       `switching to ${section} keeps the status`,
     )
-  assert.match(rendered, /data-ui="saved-views"[^>]*aria-label="Lọc trạng thái cấu hình"/)
+  // Status filters one catalogue; it is a facet row, not a saved view of its own.
+  assert.doesNotMatch(rendered, /data-ui="saved-views"/)
+  assert.match(rendered, /data-ui="list-facets"[^>]*aria-label="Lọc trạng thái cấu hình"/)
   for (const status of CONFIGURATION_STATUSES) {
     const query = status === 'active' ? '' : `&amp;status=${status}`
     assert.match(rendered, new RegExp(`href="/admin/crm/configuration\\?section=teams${query}&amp;lang=vi"`))
   }
   assert.match(
     rendered,
-    /<a data-ui="saved-view" href="\/admin\/crm\/configuration\?section=teams&amp;status=archived&amp;lang=vi" aria-current="page"/,
+    /<a data-ui="list-facet" data-active="true" href="\/admin\/crm\/configuration\?section=teams&amp;status=archived&amp;lang=vi" aria-current="page"/,
   )
   assert.match(rendered, /Đã lưu trữ/)
 })
