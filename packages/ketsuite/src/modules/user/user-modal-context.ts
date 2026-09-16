@@ -205,6 +205,9 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       'read:partner.Partner',
       // The log tab reads what was done to this person's authority.
       'read:user.SecurityAudit',
+      // The profile form edits where this person works.
+      'read:user.Membership',
+      'read:user.BranchMembership',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
@@ -218,6 +221,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
         preview: can('user.previewRoleAssignment'),
         resetPassword: can('user.issueAuthToken'),
         audit: can('user.listAuthorizationAudit'),
+        workplaces: can('user.setWorkplaces'),
       }
       const creating = !args.id
       // The modal is a read of a person, so it answers only a viewer allowed that read:
@@ -246,7 +250,22 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
             // what tells a prepared account from a live one.
             lastLoginAt: record.lastLoginAt ? String(record.lastLoginAt) : null,
             passwordReady: !!record.passwordHash,
+            // Where they land. The profile form offers these back as the default
+            // among the workplaces it is being given.
+            defaultCompanyId: record.defaultCompanyId ? String(record.defaultCompanyId) : null,
+            defaultBranchId: record.defaultBranchId ? String(record.defaultBranchId) : null,
           },
+          // Where this person works today, which the profile form edits as a whole.
+          memberships: creating
+            ? { companies: [], branches: [] }
+            : {
+                companies: (await ctx.db.select('user.Membership', { userId: args.id })).map((row) =>
+                  String(row.companyId),
+                ),
+                branches: (await ctx.db.select('user.BranchMembership', { userId: args.id })).map((row) =>
+                  String(row.branchId),
+                ),
+              },
           companies,
           branches,
           assignments: creating ? [] : await assignmentsOf(ctx, String(args.id)),

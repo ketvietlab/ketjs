@@ -42,6 +42,8 @@ export type UserRecord = {
   superuser: boolean
   lastLoginAt: string | null
   passwordReady: boolean
+  defaultCompanyId: string | null
+  defaultBranchId: string | null
 }
 
 export type UserModalData = {
@@ -50,6 +52,7 @@ export type UserModalData = {
   branches: AnyRow[]
   assignments: AnyRow[]
   audit: AnyRow[]
+  memberships: { companies: string[]; branches: string[] }
   roles: AnyRow[]
   scopeKinds: string[]
   revision: number
@@ -243,6 +246,86 @@ const profileFields = (c: Context): FieldProps[] => [
   }),
   field(c, { name: 'active', label: t(c, 'state.active'), type: 'checkbox', value: c.data.record.active }),
 ]
+
+const companyFieldName = (companyId: string): string => `company_${companyId}`
+const branchFieldName = (branchId: string): string => `branch_${branchId}`
+
+const selectedIds = (form: FormData, rows: AnyRow[], name: (id: string) => string): string[] =>
+  rows.map((row) => String(row.id)).filter((id) => checked(form, name(id)))
+
+/**
+ * Where this person works, edited as one decision.
+ *
+ * Companies, branches and the workplace they land in are one answer, not five, so
+ * they are one form and one command. Holding a company always carries its root
+ * branch, which is why a company can be ticked without naming any branch.
+ */
+const workplaceFields = (c: Context): FieldProps[] => {
+  const companies = c.data.memberships.companies
+  const branches = c.data.memberships.branches
+  const chosenCompanies = c.data.companies.filter((company) =>
+    c.draftChecked(companyFieldName(String(company.id)), '1', companies.includes(String(company.id))),
+  )
+  const chosen = new Set(chosenCompanies.map((company) => String(company.id)))
+  const offeredBranches = c.data.branches.filter((branch) => chosen.has(String(branch.companyId)))
+  return [
+    field(c, {
+      name: 'companies',
+      label: t(c, 'field.companies'),
+      type: 'checkbox-group',
+      required: true,
+      span: 'full',
+      optionsOrientation: 'vertical',
+      options: c.data.companies.map((company) => ({
+        name: companyFieldName(String(company.id)),
+        value: '1',
+        label: String(company.name),
+        checked: companies.includes(String(company.id)),
+      })),
+    }),
+    field(c, {
+      name: 'branches',
+      label: t(c, 'field.branches'),
+      type: 'checkbox-group',
+      span: 'full',
+      optionsOrientation: 'vertical',
+      options: offeredBranches.map((branch) => ({
+        name: branchFieldName(String(branch.id)),
+        value: '1',
+        label: `${String(branch.name)} · ${String(
+          c.data.companies.find((company) => String(company.id) === String(branch.companyId))?.name ?? '',
+        )}`,
+        checked: branches.includes(String(branch.id)),
+      })),
+    }),
+    field(c, {
+      name: 'defaultCompanyId',
+      label: t(c, 'field.defaultCompany'),
+      type: 'select',
+      required: true,
+      value: c.data.record.defaultCompanyId ?? String(chosenCompanies[0]?.id ?? ''),
+      options: chosenCompanies.map((company) => ({
+        value: String(company.id),
+        label: String(company.name),
+      })),
+    }),
+    field(c, {
+      name: 'defaultBranchId',
+      label: t(c, 'field.defaultBranch'),
+      type: 'select',
+      required: true,
+      value: c.data.record.defaultBranchId ?? '',
+      options: offeredBranches.map((branch) => ({ value: String(branch.id), label: String(branch.name) })),
+    }),
+    field(c, {
+      name: 'workplaceReason',
+      label: t(c, 'field.reason'),
+      type: 'textarea',
+      required: true,
+      span: 'full',
+    }),
+  ]
+}
 
 /** The person, named once at the top of every tab, with the state that decides access. */
 const header = (c: Context): JSXChild =>
@@ -809,11 +892,40 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     edit: {
       title: (c) => t(c, 'action.editProfile'),
       view: (c) =>
-        RecordModalForm({
-          kind: c.kind,
-          fields: profileFields(c),
-          command: 'save',
-          actions: [Button({ label: t(c, 'action.save'), variant: 'primary', type: 'submit' })],
+        Stack({
+          gap: 'default',
+          items: [
+            Section({
+              title: t(c, 'users.profileTitle'),
+              body: RecordModalForm({
+                kind: c.kind,
+                fields: profileFields(c),
+                command: 'save',
+                actions: [Button({ label: t(c, 'action.save'), variant: 'primary', type: 'submit' })],
+              }),
+            }),
+            // Its own form and its own command: who a person is and where they work
+            // are separate decisions, and only the second one is audited authority.
+            ...(c.data.permissions.workplaces
+              ? [
+                  Section({
+                    title: t(c, 'users.workplaceTitle'),
+                    body: RecordModalForm({
+                      kind: c.kind,
+                      fields: workplaceFields(c),
+                      command: 'setWorkplaces',
+                      actions: [
+                        Button({
+                          label: t(c, 'action.saveWorkplaces'),
+                          variant: 'primary',
+                          type: 'submit',
+                        }),
+                      ],
+                    }),
+                  }),
+                ]
+              : []),
+          ],
         }),
     },
   },
@@ -841,6 +953,21 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
       },
+    },
+    setWorkplaces: {
+      fn: 'user.setWorkplaces',
+      input: (form, c) => ({
+        userId: c.id,
+        companyIds: selectedIds(form, c.data.companies, companyFieldName),
+        branchIds: selectedIds(form, c.data.branches, branchFieldName),
+        defaultCompanyId: text(form, 'defaultCompanyId'),
+        defaultBranchId: text(form, 'defaultBranchId'),
+        reason: text(form, 'workplaceReason'),
+        expectedAuthorizationRevision: c.data.revision,
+        idempotencyKey: uuid(),
+      }),
+      // Read the person again: every tab shows where they now work.
+      after: 'reload',
     },
     resetPassword: {
       fn: 'user.issueAuthToken',

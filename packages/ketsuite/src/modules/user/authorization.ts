@@ -1605,6 +1605,136 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
         return result
       }),
   }),
+  /**
+   * Where a person works, decided in one go.
+   *
+   * The screen asks for the whole answer — which companies, which branches, and
+   * which of them is the one they land in — so this settles it in one commit. The
+   * older path granted and revoked one workplace per call from a route loop, which
+   * could fail halfway and leave a person holding half a decision.
+   *
+   * Holding a company implies holding its root branch: that is what makes a company
+   * membership usable, and every grant has always written it.
+   */
+  setWorkplaces: defineFn({
+    input: {
+      userId: 'id',
+      companyIds: 'json',
+      branchIds: 'json',
+      defaultCompanyId: 'id',
+      defaultBranchId: 'id',
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.User',
+      'write:user.User',
+      'read:company.Company',
+      'read:company.Branch',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-workplaces:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const userId = String(args.userId)
+        const U = tx.table('user.User')
+        const person = await tx.db.one(from(U).where(eq(U.id, userId)))
+        if (!person) required('userId', 'user.error.userMissing')
+
+        const companyIds = [...new Set((args.companyIds as string[]).map(String))]
+        if (!companyIds.length) required('companyIds', 'user.error.companyRequired')
+        const C = tx.table('company.Company')
+        const B = tx.table('company.Branch')
+        const roots = new Map<string, string>()
+        for (const companyId of companyIds) {
+          if (!(await tx.db.one(from(C).where(eq(C.id, companyId), eq(C.active, true)))))
+            required('companyIds', 'user.error.companyMissing')
+          const root = await tx.db.one(from(B).where(eq(B.rootKey, companyId), eq(B.active, true)))
+          if (!root) required('companyIds', 'user.error.rootBranchMissing')
+          roots.set(companyId, String(root!.id))
+        }
+
+        // A branch is only a workplace if its company is one too.
+        const held = new Set(companyIds)
+        const branchIds = new Set<string>(roots.values())
+        for (const branchId of new Set((args.branchIds as string[]).map(String))) {
+          const branch = await tx.db.one(from(B).where(eq(B.id, branchId), eq(B.active, true)))
+          if (!branch) required('branchIds', 'user.error.branchMissing')
+          if (!held.has(String(branch!.companyId)))
+            required('branchIds', 'user.error.branchCompanyMembership')
+          branchIds.add(branchId)
+        }
+
+        // Where they land has to be somewhere they work.
+        const defaultCompanyId = String(args.defaultCompanyId)
+        const defaultBranchId = String(args.defaultBranchId)
+        if (!held.has(defaultCompanyId)) required('defaultCompanyId', 'user.error.defaultCompanyRevoke')
+        if (!branchIds.has(defaultBranchId)) required('defaultBranchId', 'user.error.branchMissing')
+        const defaultBranch = await tx.db.one(from(B).where(eq(B.id, defaultBranchId)))
+        if (String(defaultBranch?.companyId ?? '') !== defaultCompanyId)
+          required('defaultBranchId', 'user.error.branchCompanyMembership')
+
+        const M = tx.table('user.Membership')
+        const BM = tx.table('user.BranchMembership')
+        const beforeCompanies = (await tx.db.all(from(M).where(eq(M.userId, userId)))).map((row) =>
+          String(row.companyId),
+        )
+        const beforeBranches = (await tx.db.all(from(BM).where(eq(BM.userId, userId)))).map((row) =>
+          String(row.branchId),
+        )
+
+        for (const companyId of companyIds)
+          await tx.db.insertIfAbsent('user.Membership', {
+            id: `membership:${userId}:${companyId}`,
+            userId,
+            companyId,
+          })
+        for (const branchId of branchIds)
+          await tx.db.insertIfAbsent('user.BranchMembership', {
+            id: `branch:${userId}:${branchId}`,
+            userId,
+            branchId,
+          })
+        const goneCompanies = beforeCompanies.filter((id) => !held.has(id))
+        if (goneCompanies.length)
+          await tx.db.del(deleteFrom(M).where(eq(M.userId, userId), inArray(M.companyId, goneCompanies)))
+        const goneBranches = beforeBranches.filter((id) => !branchIds.has(id))
+        if (goneBranches.length)
+          await tx.db.del(deleteFrom(BM).where(eq(BM.userId, userId), inArray(BM.branchId, goneBranches)))
+
+        await tx.db.update('user.User', { id: userId }, { defaultCompanyId, defaultBranchId })
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.updated',
+          targetKind: 'user',
+          targetId: userId,
+          scopeKey: `company:${defaultCompanyId}`,
+          source: 'membership',
+          reason,
+          userId,
+          before: { companies: beforeCompanies, branches: beforeBranches },
+          after: { companies: companyIds, branches: [...branchIds], defaultCompanyId, defaultBranchId },
+          revision: revision!,
+          metadata: { companyIds, branchIds: [...branchIds], defaultCompanyId, defaultBranchId },
+        })
+        const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
   previewRoleAssignment: defineFn({
     input: { ...selectionInput, assignmentId: 'id?' },
     output: { ok: 'bool', revision: 'int?', contexts: 'json?', errors: 'json?' },
