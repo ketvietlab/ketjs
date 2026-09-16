@@ -16,7 +16,7 @@ These rules apply to every change in this repository. The public design-system c
 - KétSuite tabs are URL-backed navigation. Preserve native links and `aria-current="page"`; do not add ARIA `tablist`/`tab` behaviour unless the interaction is changed to an actual in-page tab widget with the full keyboard contract.
 - A tabbed record modal must render through `TabbedView`. The runtime, not each module, owns the stable height, active-tab association, focus, and scroll container.
 - `TabPanel` has no left or right padding. Horizontal spacing comes from the containing modal/page or an explicit child layout. Do not add module-specific margin or padding to imitate a panel inset.
-- In a fixed-height tabbed surface, the tab bar stays visible and only `TabPanel` scrolls. Content differences between tabs must not resize the modal.
+- In a fixed-height tabbed surface, the tab bar stays visible and only `TabPanel` scrolls. The runtime sets that height from what it has actually rendered — the tallest tab shown so far, held as a min-height — so the surface never shrinks under the reader and a record whose tabs are all short is never given the height of the screen. Do not pin the height to the viewport.
 - A module supplies tab identity, translated label, URL, visibility, and panel view only. It must not wrap each tab in a custom body shell.
 
 ## Record modals
