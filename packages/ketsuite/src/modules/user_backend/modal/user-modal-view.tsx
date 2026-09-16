@@ -53,6 +53,7 @@ export type UserModalData = {
   assignments: AnyRow[]
   audit: AnyRow[]
   memberships: { companies: string[]; branches: string[] }
+  roleCoverage: Record<string, AnyRow[]>
   roles: AnyRow[]
   scopeKinds: string[]
   revision: number
@@ -641,7 +642,10 @@ const assignDialog = (c: Context): JSXChild =>
         ],
       })
 
-/** The role as held: where it applies, and the form that takes it back. */
+/** The areas one role covers, as the context measured them. */
+const coverageOf = (c: Context, roleId: string): AnyRow[] => c.data.roleCoverage[roleId] ?? []
+
+/** The role as held: what it covers, where it applies, and the form that takes it back. */
 const roleDialog = (c: Context): JSXChild => {
   const assignment = c.data.assignments.find((row) => String(row.id) === String(c.dialog?.params.id ?? ''))
   if (!assignment) return Notice({ tone: 'info', title: t(c, 'users.noAssignments'), message: '' })
@@ -655,6 +659,31 @@ const roleDialog = (c: Context): JSXChild => {
           { id: 'scope', label: t(c, 'field.scope'), value: scopeName(c, assignment) },
         ],
       }),
+      // What the role is for, not only where it applies.
+      ...(coverageOf(c, String(assignment.roleId)).length
+        ? [
+            Section({
+              title: t(c, 'preview.bundle'),
+              body: DataTable<AnyRow>({
+                rows: coverageOf(c, String(assignment.roleId)),
+                id: (row) => String(row.key),
+                columns: [
+                  {
+                    key: 'bundle',
+                    label: t(c, 'preview.bundle'),
+                    priority: 'primary',
+                    cell: (row) => String(row.labels?.[c.data.lang] ?? row.key),
+                  },
+                  {
+                    key: 'level',
+                    label: t(c, 'coverage.level'),
+                    cell: (row) => coverage(c, Number(row.covered), Number(row.total)),
+                  },
+                ],
+              }),
+            }),
+          ]
+        : []),
       ...(c.data.permissions.remove
         ? [
             Stack({

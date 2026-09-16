@@ -53,6 +53,12 @@ const dataOf = (over: Partial<UserModalData> = {}): UserModalData => ({
   assignments: [assignment()],
   audit: [],
   memberships: { companies: ['company-a'], branches: ['cau-giay'] },
+  roleCoverage: {
+    'care-agent': [
+      { key: 'crm.care', labels: { vi: 'Chăm sóc', en: 'Care' }, covered: 4, total: 4 },
+      { key: 'crm.claim', labels: { vi: 'Khiếu nại', en: 'Claims' }, covered: 2, total: 5 },
+    ],
+  },
   roles: [{ id: 'care-agent', name: 'Chăm sóc khách hàng' }],
   scopeKinds: ['company', 'branch', 'tenant'],
   revision: 7,
@@ -191,6 +197,11 @@ test('a role dialog says where the role applies and takes it back behind a previ
 
   assert.match(html, /Chăm sóc khách hàng/)
   assert.match(html, /An Việt Miền Bắc · Cầu Giấy/)
+  // What the role is for: the areas it touches and how much of each it holds.
+  assert.match(html, /Chăm sóc/)
+  assert.match(html, /coverage\.full/)
+  assert.match(html, /Khiếu nại/)
+  assert.match(html, /coverage\.partial/)
   assert.match(html, /name="reason"/)
   assert.match(html, /name="__command" value="previewUnassign"/)
   // Removal is committed only after its own preview, like an assignment.
