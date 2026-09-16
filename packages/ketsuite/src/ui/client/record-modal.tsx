@@ -187,6 +187,13 @@ export type RecordModalDefinition<Data> = {
   context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
+  /**
+   * What state this record is in, beside the modal's title: a badge, not a
+   * strip. It stays put while the body scrolls, and a reader looking at the
+   * title learns the state without reading down into the form.
+   */
+  status?: (context: RecordModalContext<Data>) => JSXChild
+  /** A strip above the body — a customer, a summary — for what a badge cannot hold. */
   header?: (context: RecordModalContext<Data>) => JSXChild
   tabs?: readonly RecordModalTab<Data>[]
   /** The body of a record without tabs. */
@@ -822,6 +829,7 @@ export const createRecordModal =
               height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
+              status: context ? definition.status?.(context) : undefined,
               closeLabel: t('recordModal.close'),
               body: recordBody(),
             })}
