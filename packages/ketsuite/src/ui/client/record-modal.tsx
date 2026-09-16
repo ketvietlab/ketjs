@@ -119,7 +119,11 @@ export type RecordModalContext<Data> = {
   fieldError: (name: string) => string | null
   /** What was typed into a field before a refused submit, or the fallback. */
   draft: (name: string, fallback?: string) => string
-  /** A submit is in flight. */
+  /**
+   * A submit has been in flight long enough to be worth saying so. A command the
+   * server answers at once never sets it, so a button bound to it does not flash
+   * its spinner; the runtime stops a second submit either way.
+   */
   busy: boolean
   dialog: { name: string; params: Record<string, string> } | null
   href: (tab: string) => string
@@ -315,6 +319,41 @@ type Status = 'idle' | 'loading' | 'ready' | 'error'
 
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
+/**
+ * How long a command may run before its button says so. Below this the answer
+ * arrives while the reader is still lifting their finger, and a spinner shown
+ * and withdrawn inside that window is noise; above it, silence would read as a
+ * click that did nothing.
+ */
+export const BUSY_AFTER_MS = 400
+
+/**
+ * A flag that turns on late and off at once. Work that finishes inside the
+ * window never raises it, so a progress indicator bound to it appears only when
+ * there is progress to report, and never flashes on its way back out.
+ */
+export const delayedFlag = (
+  show: (value: boolean) => void,
+  after: number = BUSY_AFTER_MS,
+): { set: (running: boolean) => void; stop: () => void } => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const stop = (): void => {
+    clearTimeout(timer)
+    timer = undefined
+  }
+  return {
+    set: (running) => {
+      stop()
+      if (!running) {
+        show(false)
+        return
+      }
+      timer = setTimeout(() => show(true), after)
+    },
+    stop,
+  }
+}
+
 /** Controls inside a row do their own thing; the row's destination is for the rest of it. */
 const rowControl = 'a, button, input, select, textarea, label, summary, details, [data-ui="select-cell"]'
 
@@ -347,7 +386,18 @@ export const createRecordModal =
     const failure = signal<string | null>(null)
     const issues = signal<RecordIssue[]>([])
     const drafts = signal<Record<string, string>>({})
+    // `running` is the guard — one command at a time — and `busy` is what the
+    // views show. They are not the same thing: a save the server answers in
+    // twenty milliseconds would otherwise flash the button through its spinner
+    // and back, which reads as a glitch rather than as progress. The spinner
+    // waits; the guard does not.
+    const running = signal(false)
     const busy = signal(false)
+    const showBusy = delayedFlag((value) => busy.set(value))
+    const setRunning = (value: boolean): void => {
+      running.set(value)
+      showBusy.set(value)
+    }
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
@@ -549,10 +599,10 @@ export const createRecordModal =
       const command = definition.commands?.[name]
       const current = open()
       const data = envelope()?.data
-      if (!command || !current || data === undefined || busy()) return
+      if (!command || !current || data === undefined || running()) return
       const formData = new FormData(form, submitter instanceof HTMLButtonElement ? submitter : null)
       const context = contextFor(current, data)
-      busy.set(true)
+      setRunning(true)
       issues.set([])
       try {
         const uploads: RecordUploads = {}
@@ -652,7 +702,7 @@ export const createRecordModal =
       } catch {
         issues.set([{ field: null, code: 'recordModal.saveFailed', message: null, params: {} }])
       } finally {
-        busy.set(false)
+        setRunning(false)
       }
     }
 
@@ -1040,6 +1090,7 @@ export const createRecordModal =
 
         lifetime.addEventListener('abort', () => {
           request?.abort()
+          showBusy.stop()
           releaseInert?.()
           releaseInert = null
           root = null

@@ -17,6 +17,7 @@ import {
 
 import {
   RECORD_MODAL_LABELS,
+  delayedFlag,
   openerHref,
   resolveRecordModalLabel,
 } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
@@ -234,4 +235,32 @@ test('record modal: a click opens from the link it landed on, or the row it land
   // Nothing to open.
   assert.equal(openerHref(clickedOn([{ matches: ['td'] }])), null)
   assert.equal(openerHref(null), null)
+})
+
+test('record modal: a save the server answers at once never flashes its spinner', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const seen: boolean[] = []
+  const busy = delayedFlag((value) => seen.push(value), 400)
+
+  // A command that answers inside the window says nothing at all.
+  busy.set(true)
+  t.mock.timers.tick(399)
+  busy.set(false)
+  t.mock.timers.tick(5000)
+  assert.deepEqual(seen, [false], 'the button never went through its loading state')
+
+  // One that outlasts the window reports, and stops reporting when it ends.
+  seen.length = 0
+  busy.set(true)
+  t.mock.timers.tick(400)
+  assert.deepEqual(seen, [true])
+  busy.set(false)
+  assert.deepEqual(seen, [true, false])
+
+  // An island torn down mid-command leaves no timer to fire into a dead view.
+  seen.length = 0
+  busy.set(true)
+  busy.stop()
+  t.mock.timers.tick(5000)
+  assert.deepEqual(seen, [])
 })
