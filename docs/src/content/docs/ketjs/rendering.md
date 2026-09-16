@@ -180,6 +180,9 @@ Explicit island boundaries are the exception. Descendants of both the legacy `<k
 the standard `<div data-ket-island>` host keep hydration markers automatically. This lets a static
 document remain inert and comment-free outside the small regions that `hydrateIslands()` adopts.
 
+For file-based routes, CSS and JavaScript bundling, live reload, and automatic island bootstrapping,
+use the [static site toolkit](/ketjs/view-static-sites/).
+
 ## JSX authoring
 
 Configure TypeScript's automatic runtime:
@@ -426,8 +429,9 @@ instances.
 
 ## Trusted markup
 
-Plain strings in template holes are escaped. `trustedMarkup()` exists for markup produced by a
-restricted compiler such as KTL:
+Plain strings in template holes are escaped. `trustedMarkup()` exists for markup that a trusted
+framework producer constructed or validated, such as restricted KTL compiler output. Higher-level
+helpers such as the static toolkit's `island()` own that trust decision internally:
 
 ```ts
 // File: src/ui/order-page.ts
