@@ -445,33 +445,11 @@
   [data-ui="notice"][data-tone="danger"] {
     color: var(--admin-status-fixed-ink);
   }
-  /*
-   * Two notices reach this theme: the KetSuite one, whose icon is optional
-   * (`notice-icon`), and the design-system one, which always draws its tone's
-   * mark (`notice-mark`). The mark was left unsized here, so a design-system
-   * notice — every record modal's — showed a collapsed glyph and read as a
-   * plain coloured box.
-   */
-  [data-ui="notice-icon"],
-  [data-ui="notice-mark"] {
+  [data-ui="notice-icon"] {
     display: grid;
     inline-size: 1.25rem;
     block-size: 1.25rem;
     place-items: center;
-    color: var(--admin-accent);
-  }
-  [data-ui="notice-mark"] svg {
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
-  }
-  [data-ui="notice"][data-tone="positive"] [data-ui="notice-mark"] {
-    color: var(--admin-success-icon);
-  }
-  [data-ui="notice"][data-tone="warning"] [data-ui="notice-mark"] {
-    color: var(--admin-warning-icon);
-  }
-  [data-ui="notice"][data-tone="danger"] [data-ui="notice-mark"] {
-    color: var(--admin-danger);
   }
   [data-ui="notice-copy"] {
     min-inline-size: 0;
