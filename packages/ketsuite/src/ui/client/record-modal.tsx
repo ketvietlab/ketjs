@@ -119,6 +119,11 @@ export type RecordModalContext<Data> = {
   fieldError: (name: string) => string | null
   /** What was typed into a field before a refused submit, or the fallback. */
   draft: (name: string, fallback?: string) => string
+  /**
+   * What a preview command answered, for the view to render. Null until that
+   * command has run in this layer, and again as soon as anything moves.
+   */
+  outcome: <T>(command: string) => T | null
   /** A submit is in flight. */
   busy: boolean
   dialog: { name: string; params: Record<string, string> } | null
@@ -153,6 +158,15 @@ export type RecordModalCommand<Data> = {
    * `openTab`, replacing the `:new` history entry.
    */
   after?: 'close' | 'reload' | 'refresh' | 'stay' | 'open' | { tab: string } | { dialog: string | null }
+  /**
+   * The command asks what would happen instead of making it happen: its function
+   * writes nothing, so the record is not re-read, the collection is not told and
+   * what was typed stays on screen. The answer reaches the view through
+   * `context.outcome`, beside the very form that asked for it, so the person can
+   * read the consequence and then submit the command that commits it. `after` is
+   * not consulted — a preview always stays in its layer.
+   */
+  preview?: boolean
   /** The id of the record a create command made, read from the function's value. */
   created?: (value: unknown) => string | null
   /** Tab to open on the created record when `after` is `open`. */
@@ -334,6 +348,10 @@ export const createRecordModal =
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
+    // What the last preview command answered. One at a time: a second preview
+    // replaces the first, and anything that moves the layer clears it, so a
+    // consequence is never read beside a selection it was not computed from.
+    const outcome = signal<{ command: string; value: unknown } | null>(null)
 
     // Contexts this island has read, newest last: reopening a record (or the create
     // form) renders immediately and revalidates in place. Bounded and page-scoped;
@@ -381,6 +399,10 @@ export const createRecordModal =
           return hit ? (hit.message ?? t(hit.code, hit.params)) : null
         },
         draft: (name, fallback = '') => drafts()[name] ?? fallback,
+        outcome: <T,>(command: string) => {
+          const held = outcome()
+          return held?.command === command ? (held.value as T) : null
+        },
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
@@ -430,6 +452,8 @@ export const createRecordModal =
         if (definition.cache !== false) remember(id, result.value)
         envelope.set(result.value)
         status.set('ready')
+        // The record replaced the loading state: measure what it actually needs.
+        requestAnimationFrame(holdHeight)
       } catch (caught) {
         if (controller.signal.aborted || (caught as Error)?.name === 'AbortError') return
         failure.set('recordModal.loadFailed')
@@ -456,7 +480,26 @@ export const createRecordModal =
       return globalThis.confirm(t('recordModal.unsaved'))
     }
 
+    // The tallest this record's dialog has been. A tabbed dialog holds it as a
+    // min-height so moving between tabs never resizes it, while a record whose
+    // tabs are all short still gets a dialog the size of what is in it. It is the
+    // record that owns the number: opening another one starts again.
+    let tallest = 0
+    const holdHeight = (): void => {
+      if ((definition.tabs?.length ?? 0) <= 1) return
+      const sheet = root?.querySelector<HTMLElement>(
+        '[data-ui="modal-layer"][data-client-modal="true"] [data-ui="modal-sheet"][data-height="fixed"]',
+      )
+      if (!sheet) return
+      // Measured with the hold released, so a dialog that has grown is not read
+      // back as its own floor for ever.
+      sheet.style.minHeight = ''
+      tallest = Math.max(tallest, sheet.offsetHeight)
+      sheet.style.minHeight = `${tallest}px`
+    }
+
     const afterRender = (): void => {
+      requestAnimationFrame(holdHeight)
       requestAnimationFrame(() => {
         const layers = root?.querySelectorAll<HTMLElement>(
           '[data-ui="modal-layer"][data-client-modal="true"]',
@@ -479,6 +522,8 @@ export const createRecordModal =
         issues.set([])
         drafts.set({})
         viewState.set({})
+        outcome.set(null)
+        tallest = 0
         dialog.set(null)
         envelope.set(null)
         void load(id)
@@ -500,6 +545,8 @@ export const createRecordModal =
       issues.set([])
       drafts.set({})
       viewState.set({})
+      outcome.set(null)
+      tallest = 0
       status.set('idle')
       envelope.set(null)
       releaseInert?.()
@@ -521,6 +568,7 @@ export const createRecordModal =
         if (!mayDiscard()) return
         dialog.set(null)
         issues.set([])
+        outcome.set(null)
         afterRender()
         return
       }
@@ -575,6 +623,8 @@ export const createRecordModal =
           const kept: Record<string, string> = {}
           for (const [key, value] of formData) if (typeof value === 'string') kept[key] = value
           drafts.set({ ...drafts(), ...kept })
+          // A refused submit leaves an answer that was computed from something else.
+          outcome.set(null)
           issues.set(
             result.issues.length
               ? result.issues
@@ -589,7 +639,18 @@ export const createRecordModal =
           )
           return
         }
+        if (command.preview) {
+          // Nothing changed, so nothing is dropped, re-read or announced. The
+          // selection stays on screen beside the answer it produced.
+          const kept: Record<string, string> = {}
+          for (const [key, value] of formData) if (typeof value === 'string') kept[key] = value
+          drafts.set({ ...drafts(), ...kept })
+          outcome.set({ command: name, value: result.value })
+          version.set(version() + 1)
+          return
+        }
         drafts.set({})
+        outcome.set(null)
         form.reset()
         const value = result.value as { id?: unknown } | null | undefined
         const createdId =
@@ -788,6 +849,7 @@ export const createRecordModal =
                   if (key.startsWith('recordParam') && value !== undefined)
                     params[key.slice('recordParam'.length).replace(/^./u, (c) => c.toLowerCase())] = value
                 issues.set([])
+                outcome.set(null)
                 dialog.set({ name: opener.getAttribute(RECORD_DIALOG_ATTRIBUTE) ?? '', params })
                 afterRender()
                 return
@@ -813,6 +875,8 @@ export const createRecordModal =
               // which the views read back, so no prompt stands between two tabs.
               keepDrafts()
               issues.set([])
+              // The answer belonged to the tab that asked for it.
+              outcome.set(null)
               show(target.id, target.tab ?? null, 'replace')
               return
             }

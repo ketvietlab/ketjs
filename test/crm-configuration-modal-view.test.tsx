@@ -39,6 +39,7 @@ const contextOf = <Data,>(kind: string, data: Data, options: Options = {}): Reco
   t: (key, params) => (key === 'crm_backend.value.archivedTeam' ? `${String(params?.name)} (archived)` : key),
   fieldError: () => null,
   draft: (name, fallback = '') => options.drafts?.[name] ?? fallback,
+  outcome: () => null,
   busy: false,
   dialog: options.dialog ?? null,
   href: () => '',
