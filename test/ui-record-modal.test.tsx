@@ -17,6 +17,8 @@ import {
 
 import {
   RECORD_MODAL_LABELS,
+  delayedFlag,
+  openerHref,
   resolveRecordModalLabel,
 } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 
@@ -184,4 +186,122 @@ test('record modal: a created record is in the address bar before the collection
     showAt > 0 && announceAt > showAt,
     'the URL names the created record before the change is announced',
   )
+})
+
+/**
+ * A stand-in for the element a click landed on. `closest` answers from a chain
+ * of ancestors, each described by the selectors it matches, which is all the
+ * opener resolver asks of the DOM.
+ */
+const clickedOn = (
+  chain: ReadonlyArray<{ matches: readonly string[]; href?: string; target?: string }>,
+): Element => {
+  const node = (index: number): Record<string, unknown> => ({
+    closest: (selector: string) => {
+      for (let at = index; at < chain.length; at += 1)
+        if (chain[at]?.matches.some((one) => selector.split(', ').includes(one)))
+          return { ...node(at), ...chain[at] }
+      return null
+    },
+    getAttribute: (name: string) => (name === 'data-row-href' ? (chain[index]?.href ?? null) : null),
+  })
+  return node(0) as unknown as Element
+}
+
+const ROW = { matches: ['[data-row-href]'], href: '/list?record=crm.stage%3Aqualified' }
+
+test('record modal: a click opens from the link it landed on, or the row it landed in', () => {
+  // A row carries its destination on the row (`rowLink: false`), so the modal
+  // has to read the row: the shell would navigate it and leave the modal shut.
+  assert.equal(openerHref(clickedOn([{ matches: ['td'] }, ROW])), ROW.href)
+  assert.equal(openerHref(clickedOn([ROW])), ROW.href)
+
+  // A link inside a row wins over the row: it names its own destination.
+  const link = { matches: ['a', 'a[href]'], href: '/list?record=crm.stage%3Awon' }
+  assert.equal(openerHref(clickedOn([link, ROW])), link.href)
+  // …unless it opens elsewhere, which is not this modal's business.
+  assert.equal(openerHref(clickedOn([{ ...link, target: '_blank' }, ROW])), null)
+
+  // A control inside the row does its own thing; the row is not a second target.
+  for (const control of ['button', 'input', 'select', 'textarea', 'label', 'summary', 'details'])
+    assert.equal(
+      openerHref(clickedOn([{ matches: [control] }, ROW])),
+      null,
+      `${control} inside a row keeps the row shut`,
+    )
+  assert.equal(openerHref(clickedOn([{ matches: ['[data-ui="select-cell"]'] }, ROW])), null)
+
+  // Nothing to open.
+  assert.equal(openerHref(clickedOn([{ matches: ['td'] }])), null)
+  assert.equal(openerHref(null), null)
+})
+
+test('record modal: a save the server answers at once never flashes its spinner', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const seen: boolean[] = []
+  const busy = delayedFlag((value) => seen.push(value), 400)
+
+  // A command that answers inside the window says nothing at all.
+  busy.set(true)
+  t.mock.timers.tick(399)
+  busy.set(false)
+  t.mock.timers.tick(5000)
+  assert.deepEqual(seen, [false], 'the button never went through its loading state')
+
+  // One that outlasts the window reports, and stops reporting when it ends.
+  seen.length = 0
+  busy.set(true)
+  t.mock.timers.tick(400)
+  assert.deepEqual(seen, [true])
+  busy.set(false)
+  assert.deepEqual(seen, [true, false])
+
+  // An island torn down mid-command leaves no timer to fire into a dead view.
+  seen.length = 0
+  busy.set(true)
+  busy.stop()
+  t.mock.timers.tick(5000)
+  assert.deepEqual(seen, [])
+})
+
+test('record modal: a command that leaves the modal open says it worked', () => {
+  // A save is answered before the button could say anything and often changes
+  // nothing the reader can see, so the form says so in the slot a refusal uses.
+  const notice = runtime.slice(runtime.indexOf('const formIssues = '))
+  assert.match(
+    notice.slice(0, notice.indexOf('return Notice({', notice.indexOf('if (!all.length)'))),
+    /saved\(\)[\s\S]*?tone: 'positive'/u,
+    'the positive notice stands where the danger notice would',
+  )
+  // One that closes says it by closing.
+  assert.match(runtime, /if \(after !== 'close'\) saved\.set\(true\)/u)
+  // It is never stale: a new submit, another record and closing all clear it.
+  assert.match(runtime, /showBusy\.set\(value\)\s*\n\s*if \(value\) saved\.set\(false\)/u)
+  const show = runtime.slice(runtime.indexOf('const show = '))
+  assert.match(show.slice(0, show.indexOf('open.set({ id, tab: nextTab })')), /saved\.set\(false\)/u)
+  const hide = runtime.slice(runtime.indexOf('const hide = '))
+  assert.match(hide.slice(0, hide.indexOf('releaseInert?.()')), /saved\.set\(false\)/u)
+})
+
+test('record modal: a record wears its state beside the title, inside the head', () => {
+  const html = renderToString(
+    ModalSheet({
+      id: 'sheet',
+      mode: 'client',
+      title: 'Qualified',
+      status: 'Đang dùng',
+      closeLabel: 'Đóng',
+      body: 'nội dung',
+    }),
+  )
+  const head = html.slice(html.indexOf('data-ui="modal-head"'), html.indexOf('data-ui="modal-body"'))
+  // In the head, so it stays put while the body scrolls, and on the title's own
+  // row rather than above the form where it reads as part of the record.
+  assert.match(head, /data-ui="modal-title-row"[\s\S]*?Qualified[\s\S]*?Đang dùng/u)
+  assert.doesNotMatch(html.slice(html.indexOf('data-ui="modal-body"')), /Đang dùng/u)
+  // A record with no state to report leaves the row to the title.
+  const plain = renderToString(
+    ModalSheet({ id: 'sheet', mode: 'client', title: 'Qualified', closeLabel: 'Đóng', body: '' }),
+  )
+  assert.match(plain, /data-ui="modal-title-row"/u)
 })

@@ -37,7 +37,7 @@ export {
 export type { TemplateResult, EachResult, Renderable, Root } from './render.ts'
 export { mount, mountHydrated } from './mount.ts'
 export type { Mounted } from './mount.ts'
-export { countingHost, domHost, escapeHtml } from './host.ts'
+export { SVG_NAMESPACE, countingHost, domHost, escapeHtml } from './host.ts'
 export type { Host, HostNode } from './host.ts'
 export {
   renderToString,

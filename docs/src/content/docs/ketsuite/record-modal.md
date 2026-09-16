@@ -75,6 +75,7 @@ The runtime owns, for every module:
 | Cache | Each island keeps the last 30 contexts it read (including the create form's). Reopening one renders it at once and reads it again quietly behind it. A successful command drops the record it changed, and `ket:records-changed` for the kind drops the named ids (all when none are named). A definition sets `cache: false` when its context must never be shown before a fresh read. |
 | Commands | A form inside the modal names its command with a `__command` field (or a submit button with `name="__command"`). The runtime maps `FormData` through `command.input`, calls `/_ket/fn` with an idempotency key, and applies `after`: `close`, `reload`, `refresh`, `stay`, `{ tab }` or `{ dialog }`. |
 | Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. What was typed survives through `context.draft(name, fallback)`. |
+| Success | A command that leaves the modal open says so where a refusal would have appeared: a positive notice at the top of the layer (`recordModal.savedTitle` / `recordModal.saved`). It clears on the next submit and when another record opens. A command that closes the modal says it by closing. |
 | Unsaved input | Closing or switching tab over a typed-in layer asks `recordModal.unsaved`. |
 | Dialogs | An element with `data-record-dialog="<name>"` opens a dialog layer of the same record; `data-record-param-*` attributes become its params. Closing it returns to the record without reloading. |
 | Uploads | A command's `upload` names file fields; each file is stored through `/files` with the metadata the command gives, and the attachment ids reach `input` as its third argument. A `data-record-submit` file input submits on choice, and a `data-record-dropzone` form takes a dropped file. |
@@ -127,6 +128,8 @@ still ship the same keys in `messages`:
 | `recordModal.retry` | Retry after a load failure |
 | `recordModal.errorTitle` | Title of the refusal notice |
 | `recordModal.saveFailed` | A command failed without issues |
+| `recordModal.savedTitle` | Title of the notice a succeeded command leaves |
+| `recordModal.saved` | A command succeeded and the modal stayed open |
 | `recordModal.unsaved` | Prompt before discarding typed input |
 | `recordModal.uploadFailed` | A file could not be stored |
 
