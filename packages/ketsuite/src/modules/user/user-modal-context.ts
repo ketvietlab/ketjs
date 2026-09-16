@@ -9,7 +9,7 @@
 
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { AUTHORIZATION_EFFECTS, effectiveFunctionKeys } from './authorization.ts'
+import { AUTHORIZATION_EFFECTS, authorizationRevisionOf, effectiveFunctionKeys } from './authorization.ts'
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
@@ -40,21 +40,57 @@ const byName = (a: Row, b: Row) =>
   String(a.name ?? '').localeCompare(String(b.name ?? '')) || String(a.id).localeCompare(String(b.id))
 
 /**
- * The roles a create form may offer.
+ * The roles this modal may offer, which is exactly the set the server will accept.
  *
- * Managed roles only: a custom role is a local edit of one deployment's policy and
- * is assigned from the access tab, where its provenance is on screen. A role row
- * written before the managed-role migration has no mode and is not offered either.
+ * `assertAssignableRoles` takes a managed role whose stored template still matches
+ * the one this deployment ships; anything else — a custom role, a row written
+ * before the managed-role migration, a role left behind by a template that has
+ * moved on — is refused. Offering a wider list would put choices on screen that
+ * only fail on submit.
  */
 const assignableRoles = async (ctx: Ctx): Promise<Row[]> =>
   (await ctx.db.select('user.Role'))
-    .filter((role) => String(role.mode ?? '') === 'managed')
+    .filter((role) => {
+      if (String(role.mode ?? '') !== 'managed') return false
+      const template = ctx.manifest.permissions.roleTemplates[String(role.templateKey)]
+      return (
+        !!template &&
+        template.version === Number(role.templateVersion) &&
+        template.digest === role.templateDigest
+      )
+    })
     .map((role): Row => ({ id: String(role.id), name: String(role.name ?? role.id) }))
     .sort(byName)
 
+/**
+ * What a company is called.
+ *
+ * A company row holds no name: its party record does, and the business code is
+ * what stands in when there is no party. Reading `name` off the company row gives
+ * the reader a uuid.
+ */
+const companyNames = async (ctx: Ctx): Promise<Map<string, string>> => {
+  const companies = await ctx.db.select('company.Company')
+  const partners = new Map(
+    (await ctx.db.select('partner.Partner')).map((row) => [String(row.id), String(row.name ?? '')]),
+  )
+  return new Map(
+    companies.map((company) => [
+      String(company.id),
+      partners.get(String(company.partnerId)) || String(company.code ?? company.id),
+    ]),
+  )
+}
+
 const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[] }> => {
+  const names = await companyNames(ctx)
   const companies = (await ctx.db.select('company.Company', { active: true }))
-    .map((company): Row => ({ id: String(company.id), name: String(company.name ?? company.id) }))
+    .map(
+      (company): Row => ({
+        id: String(company.id),
+        name: names.get(String(company.id)) ?? String(company.id),
+      }),
+    )
     .sort(byName)
   const known = new Set(companies.map((company) => String(company.id)))
   const branches = (await ctx.db.select('company.Branch', { active: true }))
@@ -81,9 +117,7 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
   const roles = new Map(
     (await ctx.db.select('user.Role')).map((role) => [String(role.id), String(role.name ?? role.id)]),
   )
-  const companies = new Map(
-    (await ctx.db.select('company.Company')).map((row) => [String(row.id), String(row.name ?? row.id)]),
-  )
+  const companies = await companyNames(ctx)
   const branches = new Map(
     (await ctx.db.select('company.Branch')).map((row) => [String(row.id), String(row.name ?? row.id)]),
   )
@@ -95,15 +129,16 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
       roleId: String(assignment.roleId),
       roleName: roles.get(String(assignment.roleId)) ?? String(assignment.roleId),
       scopeKind: String(assignment.scopeKind ?? 'tenant'),
+      companyId: companyId || null,
+      branchId: branchId || null,
+      // The scope as the remove path names it. A tenant assignment stores no scope
+      // key at all, and `unassignScopedRole` matches that null against 'tenant'.
+      scopeKey: String(assignment.scopeKey ?? 'tenant'),
       company: companyId ? (companies.get(companyId) ?? companyId) : null,
       branch: branchId ? (branches.get(branchId) ?? branchId) : null,
     }
   })
 }
-
-/** The revision a role assignment must present, so a stale modal is refused rather than applied. */
-const authorizationRevision = async (ctx: Ctx): Promise<number> =>
-  Number((await ctx.db.select('user.AuthorizationRevision', { id: 'global' }))[0]?.revision ?? 0)
 
 const newUserRecord = (): Row => ({
   id: '',
@@ -125,13 +160,19 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       'read:user.Assignment',
       'read:company.Company',
       'read:company.Branch',
+      // A company is named by its party record.
+      'read:partner.Partner',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
       const permissions = {
         create: can('user.createUser'),
         save: can('user.saveUser'),
-        assignRole: can('user.assignScopedRole'),
+        // Each names the function the access tab would actually call, so a viewer is
+        // never offered a control whose command the server then refuses.
+        assign: can('user.assignRoles'),
+        remove: can('user.unassignScopedRole'),
+        preview: can('user.previewRoleAssignment'),
         invite: can('user.issueAuthToken'),
       }
       const creating = !args.id
@@ -163,7 +204,10 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
           assignments: creating ? [] : await assignmentsOf(ctx, String(args.id)),
           roles: await assignableRoles(ctx),
           scopeKinds: ['company', 'branch', 'tenant'],
-          revision: await authorizationRevision(ctx),
+          // The revision a write must carry. It has to be read the way the writers
+          // read it: a different row id here is a revision that never moves, which
+          // every write then refuses as stale.
+          revision: await authorizationRevisionOf(ctx),
           permissions,
           lang,
         },

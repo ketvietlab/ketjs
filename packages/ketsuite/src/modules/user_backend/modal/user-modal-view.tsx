@@ -21,7 +21,7 @@ import {
 } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { createRecordModal } from '../../../ui/client/record-modal.tsx'
+import { createRecordModal, RECORD_COMMAND_FIELD } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import {
   RecordDialogTrigger,
@@ -201,15 +201,22 @@ const createFields = (c: Context): FieldProps[] => {
 }
 
 const createView = (c: Context): JSXChild =>
-  Section({
-    title: t(c, 'users.newTitle'),
-    body: RecordModalForm({
-      kind: c.kind,
-      fields: createFields(c),
-      command: 'create',
-      actions: [Button({ label: t(c, 'action.createUser'), variant: 'primary', type: 'submit' })],
-    }),
-  })
+  !c.data.roles.length
+    ? // Hiring asks for at least one role, so without one the form cannot succeed.
+      Notice({
+        tone: 'warning',
+        title: t(c, 'access.noAssignableRoles'),
+        message: t(c, 'access.noAssignableRolesHint'),
+      })
+    : Section({
+        title: t(c, 'users.newTitle'),
+        body: RecordModalForm({
+          kind: c.kind,
+          fields: createFields(c),
+          command: 'create',
+          actions: [Button({ label: t(c, 'action.createUser'), variant: 'primary', type: 'submit' })],
+        }),
+      })
 
 const profileFields = (c: Context): FieldProps[] => [
   field(c, { name: 'name', label: t(c, 'field.name'), value: c.data.record.name, required: true }),
@@ -280,32 +287,341 @@ const overviewTab = (c: Context): JSXChild => {
   })
 }
 
+/** Where an assignment applies, written the way the person reads it. */
+const scopeName = (c: Context, row: AnyRow): string =>
+  row.branch
+    ? `${String(row.company)} · ${String(row.branch)}`
+    : row.company
+      ? String(row.company)
+      : t(c, 'scope.choice.tenant')
+
+/** One group per place: authority is held somewhere, and the place is what differs. */
+const assignmentGroups = (c: Context): Array<{ key: string; title: string; rows: AnyRow[] }> => {
+  const groups = new Map<string, { key: string; title: string; rows: AnyRow[] }>()
+  for (const row of c.data.assignments) {
+    const key = String(row.scopeKey ?? 'tenant')
+    const group = groups.get(key) ?? { key, title: scopeName(c, row), rows: [] }
+    group.rows.push(row)
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+}
+
 /** What this person may do, as rows of role and place — the authority they actually hold. */
-const accessTab = (c: Context): JSXChild =>
-  c.data.assignments.length
-    ? DataTable<AnyRow>({
-        rows: c.data.assignments,
-        id: (row) => String(row.id),
-        columns: [
-          {
-            key: 'role',
-            label: t(c, 'field.assignment'),
-            priority: 'primary',
-            cell: (row) => String(row.roleName),
-          },
-          {
-            key: 'scope',
-            label: t(c, 'field.scope'),
-            cell: (row) =>
-              row.branch
-                ? `${String(row.company)} · ${String(row.branch)}`
-                : row.company
-                  ? String(row.company)
-                  : t(c, 'scope.choice.tenant'),
-          },
+const accessTab = (c: Context): JSXChild => {
+  const groups = assignmentGroups(c)
+  return Stack({
+    gap: 'default',
+    items: [
+      ...(c.data.permissions.assign
+        ? [
+            RecordDialogTrigger({
+              dialog: 'assign',
+              children: Button({ label: t(c, 'action.assignRole'), variant: 'primary' }),
+            }),
+          ]
+        : [
+            Notice({
+              tone: 'info',
+              title: t(c, 'users.readOnlyTitle'),
+              message: t(c, 'access.readOnlyHint'),
+            }),
+          ]),
+      ...(groups.length
+        ? groups.map((group) =>
+            Section({
+              title: group.title,
+              body: DataTable<AnyRow>({
+                rows: group.rows,
+                id: (row) => String(row.id),
+                columns: [
+                  {
+                    key: 'role',
+                    label: t(c, 'field.assignment'),
+                    priority: 'primary',
+                    // The row opens the role: what it covers, and the way to take it back.
+                    cell: (row) =>
+                      RecordDialogTrigger({
+                        dialog: 'role',
+                        id: String(row.id),
+                        children: String(row.roleName),
+                      }),
+                  },
+                ],
+              }),
+            }),
+          )
+        : [
+            Notice({
+              tone: 'info',
+              title: t(c, 'users.noAssignments'),
+              message: t(c, 'access.emptyHint'),
+            }),
+          ]),
+    ],
+  })
+}
+
+/** The fields that say where a role would apply and which roles are being given. */
+const assignFields = (c: Context): FieldProps[] => {
+  const scopeKind = c.state('scopeKind', 'branch')
+  const companyId = c.state('companyId', String(c.data.companies[0]?.id ?? ''))
+  return [
+    stateSelect(c, {
+      name: 'scopeKind',
+      label: t(c, 'field.scope'),
+      value: scopeKind,
+      required: true,
+      options: c.data.scopeKinds.map((kind) => ({ value: kind, label: t(c, `scope.choice.${kind}`) })),
+    }),
+    ...(scopeKind === 'tenant'
+      ? []
+      : [
+          stateSelect(c, {
+            name: 'companyId',
+            label: t(c, 'field.company'),
+            value: companyId,
+            required: true,
+            options: c.data.companies.map((company) => ({
+              value: String(company.id),
+              label: String(company.name),
+            })),
+          }),
+        ]),
+    ...(scopeKind === 'branch'
+      ? [
+          field(c, {
+            name: 'branchId',
+            label: t(c, 'field.branch'),
+            type: 'select',
+            required: true,
+            options: c.data.branches
+              .filter((branch) => String(branch.companyId) === companyId)
+              .map((branch) => ({ value: String(branch.id), label: String(branch.name) })),
+          }),
+        ]
+      : []),
+    field(c, {
+      name: 'roleIds',
+      label: t(c, 'field.jobRoles'),
+      type: 'checkbox-group',
+      required: true,
+      span: 'full',
+      optionsOrientation: 'vertical',
+      options: c.data.roles.map((role) => ({
+        name: roleFieldName(String(role.id)),
+        value: '1',
+        label: String(role.name),
+        checked: c.draft(roleFieldName(String(role.id)), '') === '1',
+      })),
+    }),
+    field(c, {
+      name: 'reason',
+      label: t(c, 'field.reason'),
+      type: 'textarea',
+      required: true,
+      span: 'full',
+    }),
+  ]
+}
+
+type PreviewBundle = {
+  key: string
+  labels: { vi: string; en: string }
+  before: number
+  after: number
+  total: number
+}
+type PreviewContext = {
+  companyId: string
+  branchId: string | null
+  superuser: boolean
+  bundles: PreviewBundle[]
+  sensitiveChange: boolean
+}
+type Preview = { ok: boolean; contexts?: PreviewContext[] }
+
+/** How much of a bundle a person covers, said in words rather than a fraction. */
+const coverage = (c: Context, covered: number, total: number): string =>
+  covered === 0 ? t(c, 'coverage.none') : covered >= total ? t(c, 'coverage.full') : t(c, 'coverage.partial')
+
+/**
+ * What the selection would change, before it changes anything.
+ *
+ * The answer is the server's, computed from the same selection that is still on
+ * screen: every bundle the added or removed roles touch, with the reach the
+ * person has now beside the reach they would have.
+ */
+const previewPanel = (c: Context, command: string): JSXChild => {
+  const preview = c.outcome<Preview>(command)
+  if (!preview) return ''
+  if (!preview.ok) return Notice({ tone: 'warning', title: t(c, 'preview.unavailable'), message: '' })
+  const contexts = preview.contexts ?? []
+  if (!contexts.length)
+    return Notice({ tone: 'info', title: t(c, 'preview.noChange'), message: t(c, 'preview.noChangeHint') })
+  return Stack({
+    gap: 'compact',
+    items: contexts.flatMap((entry): JSXChild[] => [
+      ...(entry.sensitiveChange
+        ? [
+            Notice({
+              tone: 'warning',
+              title: t(c, 'preview.sensitiveTitle'),
+              message: t(c, 'preview.sensitiveHint'),
+            }),
+          ]
+        : []),
+      ...(entry.superuser
+        ? [Notice({ tone: 'info', title: t(c, 'preview.superuser'), message: '' })]
+        : entry.bundles.length
+          ? [
+              DataTable<PreviewBundle>({
+                rows: entry.bundles,
+                id: (row) => `${entry.companyId}:${entry.branchId ?? ''}:${row.key}`,
+                columns: [
+                  {
+                    key: 'bundle',
+                    label: t(c, 'preview.bundle'),
+                    priority: 'primary',
+                    cell: (row) => row.labels[c.data.lang] ?? row.key,
+                  },
+                  {
+                    key: 'before',
+                    label: t(c, 'preview.before'),
+                    cell: (row) => coverage(c, row.before, row.total),
+                  },
+                  {
+                    key: 'after',
+                    label: t(c, 'preview.after'),
+                    cell: (row) => coverage(c, row.after, row.total),
+                  },
+                ],
+              }),
+            ]
+          : [Notice({ tone: 'info', title: t(c, 'preview.noChange'), message: '' })]),
+    ]),
+  })
+}
+
+/** Ask what a role would do here, then give it. Both steps are one form and one selection. */
+const assignDialog = (c: Context): JSXChild =>
+  !c.data.roles.length
+    ? // Nothing to choose from is a state of the deployment, not an empty field: a
+      // role can only be given here once it has been built from a role template.
+      Notice({
+        tone: 'warning',
+        title: t(c, 'access.noAssignableRoles'),
+        message: t(c, 'access.noAssignableRolesHint'),
+      })
+    : Stack({
+        gap: 'default',
+        items: [
+          RecordModalForm({
+            kind: c.kind,
+            fields: assignFields(c),
+            actions: [
+              Button({
+                label: t(c, 'action.previewAssignment'),
+                variant: 'secondary',
+                type: 'submit',
+                name: RECORD_COMMAND_FIELD,
+                value: 'previewAssign',
+              }),
+              // Only offered once the consequence has been read: the confirm button
+              // appears beside the answer, not before it.
+              ...(c.outcome<Preview>('previewAssign')
+                ? [
+                    Button({
+                      label: t(c, 'action.confirmAssign'),
+                      variant: 'primary',
+                      type: 'submit',
+                      name: RECORD_COMMAND_FIELD,
+                      value: 'assign',
+                    }),
+                  ]
+                : []),
+            ],
+          }),
+          previewPanel(c, 'previewAssign'),
         ],
       })
-    : Notice({ tone: 'info', title: t(c, 'users.noAssignments'), message: t(c, 'users.readOnlyHint') })
+
+/** The role as held: where it applies, and the form that takes it back. */
+const roleDialog = (c: Context): JSXChild => {
+  const assignment = c.data.assignments.find((row) => String(row.id) === String(c.dialog?.params.id ?? ''))
+  if (!assignment) return Notice({ tone: 'info', title: t(c, 'users.noAssignments'), message: '' })
+  return Stack({
+    gap: 'default',
+    items: [
+      DescriptionList({
+        columns: 2,
+        items: [
+          { id: 'role', label: t(c, 'field.assignment'), value: String(assignment.roleName) },
+          { id: 'scope', label: t(c, 'field.scope'), value: scopeName(c, assignment) },
+        ],
+      }),
+      ...(c.data.permissions.remove
+        ? [
+            Stack({
+              gap: 'default',
+              items: [
+                RecordModalForm({
+                  kind: c.kind,
+                  fields: [
+                    field(c, {
+                      name: 'reason',
+                      label: t(c, 'field.reason'),
+                      type: 'textarea',
+                      required: true,
+                      span: 'full',
+                      disabled: false,
+                    }),
+                  ],
+                  actions: [
+                    Button({
+                      label: t(c, 'action.previewRemoval'),
+                      variant: 'secondary',
+                      type: 'submit',
+                      name: RECORD_COMMAND_FIELD,
+                      value: 'previewUnassign',
+                    }),
+                    ...(c.outcome<Preview>('previewUnassign')
+                      ? [
+                          Button({
+                            label: t(c, 'action.unassignScopedRole'),
+                            variant: 'destructive',
+                            type: 'submit',
+                            name: RECORD_COMMAND_FIELD,
+                            value: 'unassign',
+                          }),
+                        ]
+                      : []),
+                  ],
+                }),
+                previewPanel(c, 'previewUnassign'),
+              ],
+            }),
+          ]
+        : []),
+    ],
+  })
+}
+
+/** The assignment a role dialog is open on, for the commands it submits. */
+const openAssignment = (c: Context): AnyRow =>
+  c.data.assignments.find((row) => String(row.id) === String(c.dialog?.params.id ?? '')) ?? {}
+
+/** The workplace and roles a submitted assign form is asking for. */
+const assignSelection = (form: FormData, c: Context): Record<string, unknown> => ({
+  userId: c.id,
+  roleIds: selectedRoles(form, c.data.roles),
+  scopeKind: text(form, 'scopeKind') || 'branch',
+  companyId: text(form, 'companyId') || null,
+  branchId: text(form, 'branchId') || null,
+  // A role given somewhere the person does not yet work brings the workplace with
+  // it; the server refuses that unless the actor may also grant the membership.
+  addMembership: true,
+})
 
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
@@ -332,6 +648,8 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     },
   ],
   dialogs: {
+    assign: { title: (c) => t(c, 'action.assignRole'), view: assignDialog },
+    role: { title: (c) => String(openAssignment(c).roleName ?? ''), view: roleDialog },
     edit: {
       title: (c) => t(c, 'action.editProfile'),
       view: (c) =>
@@ -367,6 +685,53 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
       },
+    },
+    previewAssign: {
+      fn: 'user.previewRoleAssignment',
+      input: (form, c) => assignSelection(form, c),
+      preview: true,
+    },
+    assign: {
+      fn: 'user.assignRoles',
+      input: (form, c) => ({
+        ...assignSelection(form, c),
+        reason: text(form, 'reason'),
+        expectedAuthorizationRevision: c.data.revision,
+        idempotencyKey: uuid(),
+      }),
+      // Read the person again: the access tab is a list of what they now hold.
+      after: 'reload',
+    },
+    previewUnassign: {
+      fn: 'user.previewRoleAssignment',
+      input: (_form, c) => {
+        const assignment = openAssignment(c)
+        return {
+          userId: c.id,
+          assignmentId: String(assignment.id ?? ''),
+          roleIds: [String(assignment.roleId ?? '')],
+          scopeKind: String(assignment.scopeKind ?? 'tenant'),
+          companyId: assignment.companyId ?? null,
+          branchId: assignment.branchId ?? null,
+        }
+      },
+      preview: true,
+    },
+    unassign: {
+      fn: 'user.unassignScopedRole',
+      input: (form, c) => {
+        const assignment = openAssignment(c)
+        return {
+          userId: c.id,
+          assignmentId: String(assignment.id ?? ''),
+          roleId: String(assignment.roleId ?? ''),
+          scopeKey: String(assignment.scopeKey ?? 'tenant'),
+          reason: text(form, 'reason'),
+          expectedAuthorizationRevision: c.data.revision,
+          idempotencyKey: uuid(),
+        }
+      },
+      after: 'reload',
     },
     save: {
       fn: 'user.saveUser',
