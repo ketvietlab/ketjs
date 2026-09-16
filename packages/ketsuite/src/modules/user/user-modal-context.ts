@@ -7,7 +7,7 @@
 // view never fetches anything else, so a reader sees one loading state and the
 // server stays the only place that decides what is allowed.
 
-import { defineFn } from '@ketvietlab/ketjs'
+import { and, defineFn, desc, eq, from, isNotNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { AUTHORIZATION_EFFECTS, authorizationRevisionOf, effectiveFunctionKeys } from './authorization.ts'
 
@@ -140,6 +140,47 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
   })
 }
 
+/**
+ * What was done to this person's authority, newest first.
+ *
+ * The log tab reads these. It is a separate permission from opening the record:
+ * a viewer may be allowed to see who somebody is without being allowed to read
+ * the history of who gave them what.
+ */
+const authorizationAuditOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
+  const A = ctx.table('user.SecurityAudit')
+  const rows = await ctx.db.all(
+    from(A)
+      // By `userId`, which is the person the authority belongs to. `targetId` is the
+      // assignment row, so filtering on it would drop every removal from the log —
+      // exactly the entries that take authority away.
+      .where(and(eq(A.userId, userId), isNotNull(A.authorizationRevision)))
+      .orderBy(desc(A.authorizationRevision), desc(A.id))
+      .limit(AUDIT_PAGE),
+  )
+  return rows.map((row): Row => {
+    const metadata = (row.metadata ?? {}) as { roleIds?: unknown; roleId?: unknown }
+    const roleIds = Array.isArray(metadata.roleIds)
+      ? metadata.roleIds.map(String)
+      : metadata.roleId
+        ? [String(metadata.roleId)]
+        : []
+    return {
+      id: String(row.id),
+      event: String(row.event ?? ''),
+      occurredAt: row.occurredAt ? String(row.occurredAt) : null,
+      actor: row.actorKey ? String(row.actorKey) : null,
+      reason: row.reason ? String(row.reason) : null,
+      scopeKey: row.scopeKey ? String(row.scopeKey) : 'tenant',
+      outcome: String(row.outcome ?? 'success'),
+      roleIds,
+    }
+  })
+}
+
+/** How much of the log one read carries. A tab is a window, not an export. */
+const AUDIT_PAGE = 50
+
 const newUserRecord = (): Row => ({
   id: '',
   name: '',
@@ -162,6 +203,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       'read:company.Branch',
       // A company is named by its party record.
       'read:partner.Partner',
+      // The log tab reads what was done to this person's authority.
+      'read:user.SecurityAudit',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
@@ -173,7 +216,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
         assign: can('user.assignRoles'),
         remove: can('user.unassignScopedRole'),
         preview: can('user.previewRoleAssignment'),
-        invite: can('user.issueAuthToken'),
+        resetPassword: can('user.issueAuthToken'),
+        audit: can('user.listAuthorizationAudit'),
       }
       const creating = !args.id
       // The modal is a read of a person, so it answers only a viewer allowed that read:
@@ -198,10 +242,15 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
             // Carried so saving a profile cannot quietly drop or grant it; the form
             // never offers it, because who may mint a superuser is its own decision.
             superuser: record.superuser === true,
+            // Whether they have ever signed in is what the login tab reports, and
+            // what tells a prepared account from a live one.
+            lastLoginAt: record.lastLoginAt ? String(record.lastLoginAt) : null,
+            passwordReady: !!record.passwordHash,
           },
           companies,
           branches,
           assignments: creating ? [] : await assignmentsOf(ctx, String(args.id)),
+          audit: creating || !permissions.audit ? [] : await authorizationAuditOf(ctx, String(args.id)),
           roles: await assignableRoles(ctx),
           scopeKinds: ['company', 'branch', 'tenant'],
           // The revision a write must carry. It has to be read the way the writers

@@ -63,6 +63,7 @@ type Context = {
     branches: Array<{ id: string; name: string; companyId: string }>
     roles: Array<{ id: string; name: string }>
     assignments: Array<{ id: string; roleId: string; scopeKey: string; company: string | null }>
+    audit: Array<{ event: string; reason: string | null; roleIds: string[]; outcome: string }>
     revision: number
     permissions: Record<string, boolean>
   }
@@ -132,6 +133,8 @@ test('the create context offers the workplaces and managed roles the viewer may 
     accessKind: 'internal',
     active: true,
     superuser: false,
+    lastLoginAt: null,
+    passwordReady: false,
   })
   assert.deepEqual(
     context.companies.map((company) => company.id),
@@ -269,6 +272,45 @@ test('the access tab can give a role and take it back with what the context carr
     finally_!.data.assignments.map((item) => item.roleId),
     ['reader'],
   )
+
+  // Everything above is written down, newest first, with the reason each carried.
+  const log = finally_!.data.audit
+  assert.deepEqual(
+    log.map((entry) => entry.event),
+    [
+      'authorization.assignment.removed',
+      'authorization.assignment.created',
+      'authorization.assignment.created',
+    ],
+  )
+  assert.equal(log[0]?.reason, 'Hết kiêm nhiệm')
+  assert.deepEqual(log[0]?.roleIds, ['second'])
+  assert.equal(log.at(-1)?.reason, 'Nhân viên mới')
+})
+
+test('the log is refused to a viewer who may not read it, and the record still opens', async (t) => {
+  const run = await boot(t)
+  const opened = await run<Context>('user.userModalContext', {})
+  await run('user.provisionUser', {
+    id: 'trang',
+    name: 'Minh Trang',
+    login: 'minhtrang',
+    roleIds: ['reader'],
+    scopeKind: 'company',
+    companyId: 'company-a',
+    reason: 'Nhân viên mới',
+    expectedAuthorizationRevision: opened!.data.revision,
+    idempotencyKey: 'hire-trang',
+  })
+
+  // 'staff' may not even open a user, so grant the one read the modal gates on and
+  // nothing else: the record comes back, the log does not.
+  const asStaff = await run<Context>('user.userModalContext', { id: 'trang' }, 'staff')
+  assert.equal(asStaff, null, 'without user.getUser there is no record at all')
+
+  const asRoot = await run<Context>('user.userModalContext', { id: 'trang' })
+  assert.equal(asRoot!.data.permissions.audit, true)
+  assert.ok(asRoot!.data.audit.length > 0)
 })
 
 test('the create context is refused to a viewer who may not create a user', async (t) => {
