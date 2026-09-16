@@ -45,7 +45,15 @@ const companyScope = (company: string, branch = `root:${company}`) => ({
 
 type Context = {
   data: {
-    record: { id: string; login: string; name: string; email: string; accessKind: string; active: boolean }
+    record: {
+      id: string
+      login: string
+      name: string
+      email: string
+      accessKind: string
+      active: boolean
+      superuser: boolean
+    }
     companies: Array<{ id: string; name: string }>
     branches: Array<{ id: string; name: string; companyId: string }>
     roles: Array<{ id: string; name: string }>
@@ -111,6 +119,7 @@ test('the create context offers the workplaces and managed roles the viewer may 
     email: '',
     accessKind: 'internal',
     active: true,
+    superuser: false,
   })
   assert.deepEqual(
     context.companies.map((company) => company.id),
@@ -144,6 +153,9 @@ test('an existing person is read as the record the modal opens', async (t) => {
   assert.equal(result.data.record.login, 'staff')
   assert.equal(result.data.record.name, 'Staff')
   assert.equal(result.data.record.active, true)
+  // Saving a profile sends this back unchanged, so the form can never mint a superuser.
+  assert.equal(result.data.record.superuser, false)
+  assert.equal((await run<Context>('user.userModalContext', { id: 'root' }))?.data.record.superuser, true)
   // The modal's text travels with its data, so the view never shows a message key.
   assert.equal(result.messages['user_backend.users.create'], 'Tạo người dùng')
   assert.equal(await run<Context>('user.userModalContext', { id: 'ghost' }), null)

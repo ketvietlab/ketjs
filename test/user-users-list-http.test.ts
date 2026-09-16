@@ -49,7 +49,7 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   assert.match(archived, /31-32 \/ 32/)
   assert.match(
     archived,
-    /data-row-href="\/admin\/users\/user-31\?lang=en&amp;returnTo=%2Fadmin%2Fusers%3Farchived%3D1%26page%3D2%26lang%3Den"/,
+    /data-row-href="\/admin\/users\?archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3Auser-31"/,
   )
 
   const byName = await (await app.client.get('/admin/users?q=needle&lang=en')).text()
@@ -76,4 +76,10 @@ test('the create action opens a person in the record modal, keeping the list sta
   )
   // The closed host is what opens that link once the page hydrates.
   assert.match(page, /data-ui="record-modal-host" data-record-kind="user\.user"/)
+  // A row opens the same modal on the person it names, not a page of its own.
+  assert.match(
+    page,
+    /data-row-href="\/admin\/users\?q=user&amp;archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3A[^"]+"/,
+  )
+  assert.doesNotMatch(page, /data-row-href="\/admin\/users\/[^"?]+\?/)
 })

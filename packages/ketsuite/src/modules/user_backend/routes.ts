@@ -19,7 +19,7 @@ import type {
   UserFormValues,
   UserRow,
 } from './screens/index.ts'
-import { recordModalCreateHref } from '../../ui/record-modal.tsx'
+import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -335,7 +335,12 @@ export const routes: Record<string, RouteEntry> = {
           return usersScreen(_, frame, {
             rows: rows.map((row) => ({
               ...row,
-              detailHref: userDetailPath(url, row.id, returnTo),
+              // A row opens the person in the record modal; the collection behind it
+              // keeps its search, page and archive state.
+              detailHref: recordModalHref(`${url.pathname}${url.search}`, {
+                kind: 'user.user',
+                id: row.id,
+              }),
             })),
             total: matching.length,
             createHref: deploymentCreatesAccounts
