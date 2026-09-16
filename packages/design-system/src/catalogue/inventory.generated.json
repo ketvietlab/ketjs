@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 100,
     "cssFiles": 72,
-    "cssLines": 13747
+    "cssLines": 13762
   },
   "rows": [
     {
@@ -2674,7 +2674,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/backend-ui.test.ts", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/backend-ui.test.ts",
+        "test/design-system.test.tsx",
+        "test/ui-record-modal.test.tsx"
+      ],
       "gapTask": "DS-016"
     },
     {
@@ -3680,7 +3684,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx", "test/flow-issue-detail-screen.test.tsx"],
+      "testFiles": [
+        "test/crm-configuration-screen.test.tsx",
+        "test/design-system.test.tsx",
+        "test/flow-issue-detail-screen.test.tsx"
+      ],
       "gapTask": "DS-035"
     },
     {
@@ -5703,7 +5711,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/backend-ui.test.ts"],
+      "testFiles": ["test/backend-ui.test.ts", "test/ui-record-modal.test.tsx"],
       "gapTask": "DS-016"
     },
     {
@@ -7379,6 +7387,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/crm-configuration-modal-view.test.tsx",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
         "test/hr-attendance-employees-screen.test.tsx",
@@ -8338,6 +8347,7 @@
         "test/menu.test.ts",
         "test/product-list-screen.test.tsx",
         "test/sale-e2e.test.ts",
+        "test/view.test.ts",
         "test/website-cms.test.ts"
       ],
       "gapTask": "DS-010"
@@ -8777,6 +8787,7 @@
         "test/purchase-order-lists-screen.test.tsx",
         "test/purchase-overview-screen.test.tsx",
         "test/purchase-vendor-pricelists-screen.test.tsx",
+        "test/ui-record-modal.test.tsx",
         "test/website-arguments-no-screen-passed.test.tsx",
         "test/website-form-editor.test.tsx",
         "test/website-form-lifecycle.test.ts",
@@ -9649,6 +9660,7 @@
         "test/ketsuite-permission-catalogue.test.ts",
         "test/postgres.test.ts",
         "test/ssr.test.ts",
+        "test/view.test.ts",
         "test/website-cms.test.ts",
         "test/website-preview-renderer.test.ts"
       ],
@@ -10415,7 +10427,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 232,
+      "lines": 240,
       "hooks": [
         "action",
         "modal-actions",
@@ -10428,6 +10440,7 @@
         "modal-layer",
         "modal-sheet",
         "modal-title",
+        "modal-title-row",
         "tabbed-view"
       ]
     },
@@ -10821,7 +10834,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 1204,
+      "lines": 1211,
       "hooks": [
         "action",
         "action-group",
@@ -10883,6 +10896,7 @@
         "modal-layer",
         "modal-sheet",
         "modal-title",
+        "modal-title-row",
         "record-form",
         "relation-chip",
         "relation-chip-clear",

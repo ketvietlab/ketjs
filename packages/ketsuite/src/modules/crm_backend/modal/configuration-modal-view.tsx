@@ -156,18 +156,14 @@ const teamOptions = (c: Context<Base & { teams: AnyRow[] }>): FieldOption[] =>
 
 const isActive = (c: Context<Base>): boolean => c.data.record.active !== false
 
-/** The status of an existing record, next to its title. */
-const statusHeader = (c: Context<Base>): JSXChild =>
+/** The status of an existing record, beside its title. A record being created has none. */
+const statusBadge = (c: Context<Base>): JSXChild =>
   c.creating
     ? ''
-    : Inline({
-        items: [
-          Badge({
-            label: isActive(c) ? t(c, 'state.active') : t(c, 'state.archived'),
-            tone: isActive(c) ? 'positive' : 'neutral',
-            value: isActive(c) ? 'active' : 'archived',
-          }),
-        ],
+    : Badge({
+        label: isActive(c) ? t(c, 'state.active') : t(c, 'state.archived'),
+        tone: isActive(c) ? 'positive' : 'neutral',
+        value: isActive(c) ? 'active' : 'archived',
       })
 
 /**
@@ -415,7 +411,7 @@ export const teamDefinition: RecordModalDefinition<TeamData> = {
   labels,
   title: (c) => createTitle(c, 'configuration.team.create'),
   description: (c) => t(c, 'configuration.team.subtitle'),
-  header: statusHeader,
+  status: statusBadge,
   tabs: [
     { id: 'info', label: (c) => t(c, 'configuration.team.identity'), view: teamInfoView },
     {
@@ -497,7 +493,7 @@ export const stageDefinition: RecordModalDefinition<StageData> = {
   context: contextOf('crm.stage.modalContext'),
   labels,
   title: (c) => createTitle(c, 'configuration.stage.create'),
-  header: statusHeader,
+  status: statusBadge,
   body: stageView,
   commands: versionedCommands<StageData>('crm.stage.save', (form, c) => ({
     name: text(form, 'name'),
@@ -528,7 +524,7 @@ export const tagDefinition: RecordModalDefinition<TagData> = {
   context: contextOf('crm.tag.modalContext'),
   labels,
   title: (c) => createTitle(c, 'configuration.tag.create'),
-  header: statusHeader,
+  status: statusBadge,
   body: tagView,
   commands: {
     create: {
@@ -607,7 +603,7 @@ export const assignmentRuleDefinition: RecordModalDefinition<AssignmentRuleData>
   context: contextOf('crm.assignmentRule.modalContext'),
   labels,
   title: (c) => createTitle(c, 'configuration.assignmentRule.create'),
-  header: statusHeader,
+  status: statusBadge,
   body: assignmentRuleView,
   commands: versionedCommands<AssignmentRuleData>('crm.assignmentRule.save', (form, c) => ({
     name: text(form, 'name'),
@@ -694,7 +690,7 @@ export const scoreRuleDefinition: RecordModalDefinition<ScoreRuleData> = {
   context: contextOf('crm.scoreRule.modalContext'),
   labels,
   title: (c) => createTitle(c, 'configuration.scoreRule.create'),
-  header: statusHeader,
+  status: statusBadge,
   body: scoreRuleView,
   commands: versionedCommands<ScoreRuleData>('crm.scoreRule.save', (form) => {
     const operator = text(form, 'operator')

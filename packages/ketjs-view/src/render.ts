@@ -4,6 +4,7 @@
 
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
+import { SVG_NAMESPACE } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
 import type { Markup } from './ssr.ts'
@@ -355,7 +356,7 @@ class Instance {
   }
 
   mount(parent: HostNode, anchor: HostNode | null): void {
-    const build = (node: TplNode, target: HostNode): void => {
+    const build = (node: TplNode, target: HostNode, namespace?: string): void => {
       const atRoot = target === parent
       if (node.type === 'text') {
         const t = this.host.createText(node.value)
@@ -370,7 +371,12 @@ class Instance {
         this.parts[node.index] = new Part(this.host, target, marker)
         return
       }
-      const el = this.host.createElement((node as TplEl).tag)
+      const tag = (node as TplEl).tag
+      // SVG elements are only drawn when they are created in the SVG namespace.
+      // Server-rendered markup gets this from the HTML parser; a client render
+      // builds every node itself, so it has to carry the namespace down.
+      const childNamespace = tag === 'svg' ? SVG_NAMESPACE : tag === 'foreignObject' ? undefined : namespace
+      const el = this.host.createElement(tag, childNamespace)
       for (const a of (node as TplEl).attrs) {
         if (a.hole == null) {
           this.host.setAttribute(el, a.name, a.value ?? '')
@@ -382,7 +388,7 @@ class Instance {
       }
       this.host.insert(target, el, atRoot ? anchor : null)
       if (atRoot) this.roots.push(el)
-      for (const c of (node as TplEl).children) build(c, el)
+      for (const c of (node as TplEl).children) build(c, el, childNamespace)
     }
     for (const n of this.tpl.children) build(n, parent)
   }
