@@ -3,7 +3,7 @@ import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actio
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
-import { Breadcrumbs, NavList, Tabs } from '../primitives/navigation.tsx'
+import { Breadcrumbs, NavList, TabbedView, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import {
   CardGrid,
@@ -1070,13 +1070,15 @@ export const componentGroups: readonly ComponentGroup[] = [
                   { label: 'Inventory', href: '#navigation-items', leading: '≡' },
                 ]}
               />,
-              <Tabs
+              <TabbedView
+                id="catalogue-record-views"
                 label="Record views"
                 items={[
                   { id: 'summary', label: 'Summary', href: '#navigation-items', active: true },
                   { id: 'activity', label: 'Activity', href: '#navigation-items', count: 8 },
                   { id: 'files', label: 'Files', href: '#navigation-items', count: 3 },
                 ]}
+                body={<p>The active panel owns vertical rhythm and scrolling, without horizontal padding.</p>}
                 extension={
                   <a data-ui="tab" href="#navigation-items">
                     Extension

@@ -167,6 +167,12 @@
     overscroll-behavior: contain;
   }
 
+  /* TabbedView owns the scroll container so its navigation stays visible. */
+  :where([data-kv-design-system]) [data-ui="modal-body"]:has(> [data-ui="tabbed-view"]) {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   :where([data-kv-design-system]) [data-ui="modal-actions"] {
     display: flex;
     flex-wrap: wrap;

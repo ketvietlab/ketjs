@@ -15,6 +15,9 @@ export const HOOKS = [
   'tabs',
   'tab',
   'tab-count',
+  'tabbed-view',
+  'tabbed-view-context',
+  'tab-panel',
 ] as const
 
 export type BreadcrumbItem = {
@@ -144,27 +147,107 @@ export type TabItem = {
   active?: boolean
 }
 
-export const Tabs = (props: {
+export type TabProps = TabItem & {
+  /** DOM id used to associate this navigation item with the active panel. */
+  elementId?: string
+  /** Id of the panel this navigation item opens. */
+  controls?: string
+}
+
+export const Tab = (props: TabProps): TemplateResult => (
+  <a
+    data-ui="tab"
+    data-active={props.active === true ? 'true' : null}
+    id={props.elementId}
+    href={props.href}
+    aria-current={props.active === true ? 'page' : null}
+    aria-controls={props.controls}
+  >
+    {props.label}
+    {props.count !== undefined && <span data-ui="tab-count">{String(props.count)}</span>}
+  </a>
+)
+
+export type TabsProps = {
+  /** Stable id used to associate the active tab with a TabPanel. */
+  id?: string
   label: string
   items: readonly TabItem[]
   extension?: JSXChild
-}): TemplateResult => (
+  /** Panel controlled by these route-navigation tabs. */
+  panelId?: string
+}
+
+const tabElementId = (tabsId: string, itemId: string): string =>
+  `${tabsId}-${itemId.replace(/[^a-zA-Z0-9_-]+/gu, '-')}-tab`
+
+export const Tabs = (props: TabsProps): TemplateResult => (
   <nav data-ui="tabs" data-pattern="tabs" aria-label={props.label}>
     {each(
       props.items,
       (item) => item.id,
       (item) => (
-        <a
-          data-ui="tab"
-          data-active={item.active === true ? 'true' : null}
-          href={item.href}
-          aria-current={item.active === true ? 'page' : null}
-        >
-          {item.label}
-          {item.count !== undefined && <span data-ui="tab-count">{String(item.count)}</span>}
-        </a>
+        <Tab
+          {...item}
+          elementId={props.id ? tabElementId(props.id, item.id) : undefined}
+          controls={props.panelId}
+        />
       ),
     )}
     {props.extension}
   </nav>
 )
+
+export type TabPanelProps = {
+  id?: string
+  labelledBy?: string
+  body: JSXChild
+}
+
+/**
+ * Content associated with route-navigation tabs. It owns scrolling and vertical
+ * rhythm, but deliberately adds no left or right padding.
+ */
+export const TabPanel = (props: TabPanelProps): TemplateResult => (
+  <section data-ui="tab-panel" id={props.id} aria-labelledby={props.labelledBy} tabindex="-1">
+    {props.body}
+  </section>
+)
+
+export type TabbedViewProps = {
+  id: string
+  label: string
+  items: readonly TabItem[]
+  body: JSXChild
+  /** Stable content above the tab bar, such as a record summary or issues. */
+  context?: JSXChild
+  extension?: JSXChild
+}
+
+/** A complete tabbed region with one stable navigation bar and one scrolling panel. */
+export const TabbedView = (props: TabbedViewProps): TemplateResult => {
+  const tabsId = `${props.id}-tabs`
+  const panelId = `${props.id}-panel`
+  const active = props.items.find((item) => item.active === true)
+  return (
+    <div data-ui="tabbed-view">
+      {props.context !== undefined && props.context !== '' ? (
+        <div data-ui="tabbed-view-context">{props.context}</div>
+      ) : (
+        ''
+      )}
+      <Tabs
+        id={tabsId}
+        label={props.label}
+        items={props.items}
+        extension={props.extension}
+        panelId={panelId}
+      />
+      <TabPanel
+        id={panelId}
+        labelledBy={active ? tabElementId(tabsId, active.id) : undefined}
+        body={props.body}
+      />
+    </div>
+  )
+}
