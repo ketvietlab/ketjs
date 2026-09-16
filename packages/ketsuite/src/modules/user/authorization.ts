@@ -1400,6 +1400,13 @@ export async function addSelectedRoles(ctx: Ctx, args: RoleSelection) {
   return { assignments: added, scope: state.scope }
 }
 
+/** The login as the user module stores it; provisioning must not invent its own spelling. */
+const normalizedLogin = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+
 const selectionInput = {
   userId: 'id',
   roleIds: 'json',
@@ -1489,6 +1496,111 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           metadata: { roleIds: selection.roleIds, assignmentIds: added.assignments.map((a) => a.id) },
         })
         const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  /**
+   * Create a person and the access they were hired for, in one decision.
+   *
+   * An account with no role is not what anyone asks for: the request is "this
+   * person does this job at this branch". Splitting it into create-then-assign
+   * leaves half-made people behind whenever the second step is abandoned, and
+   * leaves the reason — the thing the audit is for — attached to nothing. This
+   * does both inside the authorization transaction: either the person exists with
+   * their workplace and roles, or nothing happened.
+   */
+  provisionUser: defineFn({
+    input: {
+      id: 'id',
+      name: 'text',
+      login: 'text',
+      email: 'text?',
+      accessKind: 'text?',
+      roleIds: 'json',
+      scopeKind: 'text',
+      companyId: 'id?',
+      branchId: 'id?',
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.User',
+      'write:user.User',
+      'read:user.EmailReservation',
+      'write:user.EmailReservation',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `provision-user:${String(args.idempotencyKey).trim()}`
+        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const userId = String(args.id)
+        const login = normalizedLogin(args.login)
+        const name = String(args.name).trim()
+        const accessKind = String(args.accessKind ?? 'internal')
+        if (!login) required('login', 'user.error.required')
+        if (!name) required('name', 'user.error.required')
+        if (!['internal', 'portal', 'public'].includes(accessKind))
+          required('accessKind', 'user.error.accessKind')
+        const U = tx.table('user.User')
+        if (await tx.db.one(from(U).where(eq(U.id, userId)))) required('id', 'user.error.idConflict')
+        if (await tx.db.one(from(U).where(eq(U.login, login)))) required('login', 'user.error.loginUnique')
+
+        await reserveUserEmail(tx, args.email ? String(args.email) : null, userId)
+        const inserted = await tx.db.insertIfAbsent('user.User', {
+          id: userId,
+          login,
+          // No password: the account is reached through an invitation or the
+          // deployment's identity provider, never a password an admin chose.
+          passwordHash: null,
+          name,
+          email: args.email || null,
+          timezone: null,
+          partnerId: null,
+          defaultCompanyId: args.companyId || null,
+          defaultBranchId: args.branchId || null,
+          accessKind,
+          securityVersion: 0,
+          lastLoginAt: null,
+          active: true,
+          superuser: false,
+        })
+        if (!('dryRun' in inserted) && !inserted.inserted) required('login', 'user.error.loginUnique')
+
+        const selection = parseSelection({ ...args, userId, addMembership: true })
+        if (!selection.roleIds.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
+        const added = await addSelectedRoles(tx, selection)
+        const revision =
+          (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.assignment.created',
+          targetKind: 'user',
+          targetId: userId,
+          userId,
+          scopeKey: added.scope.scopeKey,
+          source: 'system-roles',
+          reason: String(args.reason).trim(),
+          before: null,
+          after: added.assignments,
+          revision,
+          metadata: {
+            provisioned: true,
+            roleIds: selection.roleIds,
+            assignmentIds: added.assignments.map((a) => a.id),
+          },
+        })
+        const result = { ok: true, id: userId, revision }
         await completeOperation(tx, op, result)
         return result
       }),
