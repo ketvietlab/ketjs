@@ -20,6 +20,7 @@ import type {
   UserRow,
 } from './screens/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import type { TailMenu } from '../../ui/index.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -59,6 +60,29 @@ const withUserReturnTo = (url: URL, path: string, returnTo: string): string => {
 
 const userDetailPath = (url: URL, id: string, returnTo: string): string =>
   withUserReturnTo(url, `/admin/users/${encodeURIComponent(id)}`, returnTo)
+
+/**
+ * One narrowing question, offered beside paging.
+ *
+ * Choosing the row that is already chosen clears it, so the menu is both how a
+ * filter is set and how it is dropped.
+ */
+const listFilterMenu = (
+  url: URL,
+  param: string,
+  label: string,
+  current: string,
+  options: AnyRow[],
+): TailMenu => ({
+  id: param,
+  label,
+  items: options.map((option) => ({
+    id: `${param}:${String(option.id)}`,
+    label: String(option.name ?? option.id),
+    path: withParam(url, param, current === String(option.id) ? null : String(option.id)),
+    active: current === String(option.id),
+  })),
+})
 
 const translatedErrors = (ctx: ServeContext, url: URL, req: Req, result: unknown): string[] => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -299,7 +323,24 @@ export const routes: Record<string, RouteEntry> = {
       const currentPage = pageOf(url)
       const locale = ctx.localeOf(url, req)
       const needle = search.toLocaleLowerCase(locale)
-      const allRows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
+      // Who works where and who holds what: the two questions this list is read
+      // with. Both are answered by the query, because neither is on a user row.
+      const companyFilter = url.searchParams.get('company') ?? ''
+      const roleFilter = url.searchParams.get('role') ?? ''
+      const [companies, roles] = (await Promise.all([
+        ctx.call('company.listCompanies', {}, url, req),
+        ctx.call('user.listRoles', {}, url, req),
+      ])) as [AnyRow[], AnyRow[]]
+      const allRows = (await ctx.call(
+        'user.listUsers',
+        {
+          includeArchived,
+          ...(companyFilter ? { companyId: companyFilter } : {}),
+          ...(roleFilter ? { roleId: roleFilter } : {}),
+        },
+        url,
+        req,
+      )) as UserRow[]
       const matching = (
         needle
           ? allRows.filter((row) =>
@@ -326,10 +367,40 @@ export const routes: Record<string, RouteEntry> = {
               placeholder: _('user_backend.search.users'),
               keep: {
                 ...(includeArchived ? { archived: '1' } : {}),
+                ...(companyFilter ? { company: companyFilter } : {}),
+                ...(roleFilter ? { role: roleFilter } : {}),
                 ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
               },
+              // A filter that is on says so above the table, and says it removably.
+              facets: [
+                ...(companyFilter
+                  ? [
+                      {
+                        label: String(
+                          companies.find((company) => String(company.id) === companyFilter)?.name ??
+                            companyFilter,
+                        ),
+                        without: withParam(url, 'company', null),
+                      },
+                    ]
+                  : []),
+                ...(roleFilter
+                  ? [
+                      {
+                        label: String(
+                          roles.find((role) => String(role.id) === roleFilter)?.name ?? roleFilter,
+                        ),
+                        without: withParam(url, 'role', null),
+                      },
+                    ]
+                  : []),
+              ],
             },
             pager: pager(url, currentPage, rows.length, matching.length),
+            tailMenus: [
+              listFilterMenu(url, 'company', _('user_backend.field.company'), companyFilter, companies),
+              listFilterMenu(url, 'role', _('user_backend.field.role'), roleFilter, roles),
+            ],
           }
           const returnTo = safeUserReturnTo(url, `${url.pathname}${url.search}`)
           return usersScreen(_, frame, {
@@ -348,6 +419,7 @@ export const routes: Record<string, RouteEntry> = {
               : recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.user' }),
             toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
             includeArchived,
+            clearHref: search || companyFilter || roleFilter ? inLocale(url, '/admin/users') : null,
           })
         },
       })
