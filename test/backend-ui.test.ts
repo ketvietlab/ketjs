@@ -1959,3 +1959,33 @@ test('backend shell: the phone menu uses the design-system left drawer', () => {
   assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobile ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
 })
+
+test('admin theme: a design-system notice draws its tone mark', () => {
+  // The backend does not load the design-system stylesheet, so every hook a
+  // design-system component renders inside it needs an admin rule of its own.
+  // `notice-mark` had none — it is the design-system name; the KetSuite notice
+  // calls the same slot `notice-icon` — so a record modal's notice showed a
+  // collapsed glyph in a coloured box.
+  const rules = [...ADMIN_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((rule) => ({
+    selector: (rule[1] ?? '').trim(),
+    body: rule[2] ?? '',
+  }))
+  const marks = rules.filter(
+    (rule) => rule.selector.includes('[data-ui="notice-mark"]') && !rule.selector.includes('svg'),
+  )
+  assert.ok(
+    marks.some((rule) => /inline-size/u.test(rule.body) && /block-size/u.test(rule.body)),
+    'the mark is given a box of its own, not left to collapse',
+  )
+  assert.ok(
+    rules.some(
+      (rule) => rule.selector.includes('[data-ui="notice-mark"]') && rule.selector.includes('svg'),
+    ),
+    'and the glyph inside it is sized',
+  )
+  for (const tone of ['positive', 'warning', 'danger'])
+    assert.ok(
+      marks.some((rule) => rule.selector.includes(`[data-tone="${tone}"]`) && /color:/u.test(rule.body)),
+      `${tone} colours its mark`,
+    )
+})
