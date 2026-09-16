@@ -94,10 +94,13 @@ test('crm configuration: rows and the create action open record modals, never a 
       },
     ),
   )
+  // The whole row opens the record and is reachable by keyboard; the name is
+  // not a second, narrower target inside it.
   assert.match(
     rendered,
-    /<a data-ui="row-link" href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Ateam-north">/,
+    /<tr data-ui="row" data-row="team-north" data-row-href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Ateam-north" tabindex="0"/,
   )
+  assert.doesNotMatch(rendered, /data-ui="row-link"/)
   assert.match(
     rendered,
     /href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Anew"/,

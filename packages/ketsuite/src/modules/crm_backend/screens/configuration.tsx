@@ -302,6 +302,10 @@ export const configurationScreen = (
               id: (row) => String(row.id),
               columns: columnsFor(_, section, teamNames, userNames),
               rowHref: (row) => recordModalHref(listHref, { kind, id: String(row.id) }),
+              // The whole row opens the record, and it is the only thing that
+              // does: a link around the name as well makes the name the target
+              // a reader aims for and leaves the rest of the row looking inert.
+              rowLink: false,
               responsive: 'stack',
             })
           : empty
