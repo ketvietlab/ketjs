@@ -121,7 +121,11 @@ export type RecordModalContext<Data> = {
   draft: (name: string, fallback?: string) => string
   /** Whether a checkbox/radio value was selected before the view re-rendered. */
   draftChecked: (name: string, value?: string, fallback?: boolean) => boolean
-  /** A submit is in flight. */
+  /**
+   * A submit has been in flight long enough to be worth saying so. A command the
+   * server answers at once never sets it, so a button bound to it does not flash
+   * its spinner; the runtime stops a second submit either way.
+   */
   busy: boolean
   dialog: { name: string; params: Record<string, string> } | null
   href: (tab: string) => string
@@ -185,6 +189,13 @@ export type RecordModalDefinition<Data> = {
   context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
+  /**
+   * What state this record is in, beside the modal's title: a badge, not a
+   * strip. It stays put while the body scrolls, and a reader looking at the
+   * title learns the state without reading down into the form.
+   */
+  status?: (context: RecordModalContext<Data>) => JSXChild
+  /** A strip above the body — a customer, a summary — for what a badge cannot hold. */
   header?: (context: RecordModalContext<Data>) => JSXChild
   tabs?: readonly RecordModalTab<Data>[]
   /** The body of a record without tabs. */
@@ -220,6 +231,8 @@ export const RECORD_MODAL_LABELS: Readonly<Record<string, string>> = Object.free
   'recordModal.retry': 'Retry',
   'recordModal.errorTitle': 'Not saved',
   'recordModal.saveFailed': 'That did not work. Try again.',
+  'recordModal.savedTitle': 'Saved',
+  'recordModal.saved': 'The change is in.',
   'recordModal.unsaved': 'Discard what you typed?',
   'recordModal.uploadFailed': 'The file could not be uploaded. Try again.',
 })
@@ -328,6 +341,58 @@ const draftCheckKey = (name: string, value: string): string => `${name}\u0000${v
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
 /**
+ * How long a command may run before its button says so. Below this the answer
+ * arrives while the reader is still lifting their finger, and a spinner shown
+ * and withdrawn inside that window is noise; above it, silence would read as a
+ * click that did nothing.
+ */
+export const BUSY_AFTER_MS = 400
+
+/**
+ * A flag that turns on late and off at once. Work that finishes inside the
+ * window never raises it, so a progress indicator bound to it appears only when
+ * there is progress to report, and never flashes on its way back out.
+ */
+export const delayedFlag = (
+  show: (value: boolean) => void,
+  after: number = BUSY_AFTER_MS,
+): { set: (running: boolean) => void; stop: () => void } => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const stop = (): void => {
+    clearTimeout(timer)
+    timer = undefined
+  }
+  return {
+    set: (running) => {
+      stop()
+      if (!running) {
+        show(false)
+        return
+      }
+      timer = setTimeout(() => show(true), after)
+    },
+    stop,
+  }
+}
+
+/** Controls inside a row do their own thing; the row's destination is for the rest of it. */
+const rowControl = 'a, button, input, select, textarea, label, summary, details, [data-ui="select-cell"]'
+
+/**
+ * Where a click is asking to go: the link it landed on, or the row it landed
+ * in. A table row carries its destination on the row itself (`rowLink: false`),
+ * so the whole row is one target rather than a link around the first cell. The
+ * shell would navigate such a row through the navigation layer, which fetches
+ * the collection again and leaves the modal unopened, so this reads it first.
+ */
+export const openerHref = (element: Element | null): string | null => {
+  const anchor = element?.closest<HTMLAnchorElement>('a[href]')
+  if (anchor) return anchor.target && anchor.target !== '_self' ? null : anchor.href
+  if (element?.closest(rowControl)) return null
+  return element?.closest<HTMLElement>('[data-row-href]')?.getAttribute('data-row-href') ?? null
+}
+
+/**
  * Create the island controller for one record kind.
  *
  * The returned factory is what a module exports as its island client:
@@ -343,7 +408,24 @@ export const createRecordModal =
     const issues = signal<RecordIssue[]>([])
     const recordDrafts = signal<DraftState>(emptyDraftState())
     const dialogDrafts = signal<DraftState>(emptyDraftState())
+    // `running` is the guard — one command at a time — and `busy` is what the
+    // views show. They are not the same thing: a save the server answers in
+    // twenty milliseconds would otherwise flash the button through its spinner
+    // and back, which reads as a glitch rather than as progress. The spinner
+    // waits; the guard does not.
+    const running = signal(false)
     const busy = signal(false)
+    const showBusy = delayedFlag((value) => busy.set(value))
+    // A command that succeeded while the modal stayed open. Saving is usually
+    // answered before the button could say anything, and a record that looks
+    // the same afterwards leaves the reader unsure anything happened, so the
+    // form says so where it would have said the opposite.
+    const saved = signal(false)
+    const setRunning = (value: boolean): void => {
+      running.set(value)
+      showBusy.set(value)
+      if (value) saved.set(false)
+    }
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
@@ -531,6 +613,7 @@ export const createRecordModal =
       if (!sameRecord) {
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
+        saved.set(false)
         recordDrafts.set(emptyDraftState())
         dialogDrafts.set(emptyDraftState())
         viewState.set({})
@@ -554,6 +637,7 @@ export const createRecordModal =
       open.set(null)
       dialog.set(null)
       issues.set([])
+      saved.set(false)
       recordDrafts.set(emptyDraftState())
       dialogDrafts.set(emptyDraftState())
       viewState.set({})
@@ -593,13 +677,13 @@ export const createRecordModal =
       const command = definition.commands?.[name]
       const current = open()
       const data = envelope()?.data
-      if (!command || !current || data === undefined || busy()) return
+      if (!command || !current || data === undefined || running()) return
       const formData = new FormData(form, submitter instanceof HTMLButtonElement ? submitter : null)
       const currentLayer = form.closest<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')
       const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
       keepDrafts(currentLayer, scope)
       const context = contextFor(current, data, scope)
-      busy.set(true)
+      setRunning(true)
       issues.set([])
       try {
         const uploads: RecordUploads = {}
@@ -670,6 +754,8 @@ export const createRecordModal =
           )
         }
         const after = after_(command)
+        // A modal that closes says so by closing; one that stays owes an answer.
+        if (after !== 'close') saved.set(true)
         if (after === 'open') {
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
@@ -708,7 +794,7 @@ export const createRecordModal =
       } catch {
         issues.set([{ field: null, code: 'recordModal.saveFailed', message: null, params: {} }])
       } finally {
-        busy.set(false)
+        setRunning(false)
       }
     }
 
@@ -718,7 +804,14 @@ export const createRecordModal =
         (issue) => issue.field && !root?.querySelector(`[name="${CSS.escape(issue.field)}"]`),
       )
       const all = [...general, ...fieldless]
-      if (!all.length) return ''
+      if (!all.length)
+        return saved()
+          ? Notice({
+              title: context.t('recordModal.savedTitle'),
+              message: context.t('recordModal.saved'),
+              tone: 'positive',
+            })
+          : ''
       return Notice({
         title: context.t('recordModal.errorTitle'),
         message: all.map((issue) => issue.message ?? context.t(issue.code, issue.params)).join(' · '),
@@ -820,6 +913,7 @@ export const createRecordModal =
               height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
+              status: context ? definition.status?.(context) : undefined,
               closeLabel: t('recordModal.close'),
               body: recordBody(),
             })}
@@ -890,9 +984,9 @@ export const createRecordModal =
                 return
               }
             }
-            const anchor = element?.closest<HTMLAnchorElement>('a[href]')
-            if (!anchor || (anchor.target && anchor.target !== '_self')) return
-            const url = new URL(anchor.href, location.href)
+            const href = openerHref(element)
+            if (!href) return
+            const url = new URL(href, location.href)
             if (url.origin !== location.origin || url.pathname !== location.pathname) return
             const target = readRecordModalTarget(url)
             if (!target || target.kind !== definition.kind) return
@@ -917,6 +1011,25 @@ export const createRecordModal =
           },
           // Capture: the navigation layer listens on the document too, and was
           // installed first, so a bubbling listener would see the page fetched.
+          { signal: lifetime, capture: true },
+        )
+
+        // A row is reached by keyboard, not by pointer alone: Enter and Space on
+        // the focused row open what clicking it opens.
+        document.addEventListener(
+          'keydown',
+          (event) => {
+            if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+            const element = event.target instanceof Element ? event.target : null
+            if (!element?.matches('[data-row-href][tabindex="0"]')) return
+            const href = element.getAttribute('data-row-href')
+            const url = href ? new URL(href, location.href) : null
+            if (!url || url.origin !== location.origin || url.pathname !== location.pathname) return
+            const target = readRecordModalTarget(url)
+            if (!target || target.kind !== definition.kind) return
+            event.preventDefault()
+            show(target.id, target.tab ?? null, 'push')
+          },
           { signal: lifetime, capture: true },
         )
 
@@ -1102,6 +1215,7 @@ export const createRecordModal =
 
         lifetime.addEventListener('abort', () => {
           request?.abort()
+          showBusy.stop()
           releaseInert?.()
           releaseInert = null
           root = null

@@ -66,14 +66,16 @@ test('crm configuration: catalogues are sections, and the status filter is a vis
       new RegExp(`href="/admin/crm/configuration\\?section=${section}&amp;status=archived&amp;lang=vi"`),
       `switching to ${section} keeps the status`,
     )
-  assert.match(rendered, /data-ui="saved-views"[^>]*aria-label="Lọc trạng thái cấu hình"/)
+  // Status filters one catalogue; it is a facet row, not a saved view of its own.
+  assert.doesNotMatch(rendered, /data-ui="saved-views"/)
+  assert.match(rendered, /data-ui="list-facets"[^>]*aria-label="Lọc trạng thái cấu hình"/)
   for (const status of CONFIGURATION_STATUSES) {
     const query = status === 'active' ? '' : `&amp;status=${status}`
     assert.match(rendered, new RegExp(`href="/admin/crm/configuration\\?section=teams${query}&amp;lang=vi"`))
   }
   assert.match(
     rendered,
-    /<a data-ui="saved-view" href="\/admin\/crm\/configuration\?section=teams&amp;status=archived&amp;lang=vi" aria-current="page"/,
+    /<a data-ui="list-facet" data-active="true" href="\/admin\/crm\/configuration\?section=teams&amp;status=archived&amp;lang=vi" aria-current="page"/,
   )
   assert.match(rendered, /Đã lưu trữ/)
 })
@@ -92,10 +94,13 @@ test('crm configuration: rows and the create action open record modals, never a 
       },
     ),
   )
+  // The whole row opens the record and is reachable by keyboard; the name is
+  // not a second, narrower target inside it.
   assert.match(
     rendered,
-    /<a data-ui="row-link" href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Ateam-north">/,
+    /<tr data-ui="row" data-row="team-north" data-row-href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Ateam-north" tabindex="0"/,
   )
+  assert.doesNotMatch(rendered, /data-ui="row-link"/)
   assert.match(
     rendered,
     /href="\/admin\/crm\/configuration\?section=teams&amp;lang=vi&amp;record=crm\.team%3Anew"/,
