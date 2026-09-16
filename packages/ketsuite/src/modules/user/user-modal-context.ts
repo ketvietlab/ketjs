@@ -70,6 +70,37 @@ const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[]
   return { companies, branches }
 }
 
+/**
+ * What this person holds today: one row per assignment, named and placed.
+ *
+ * The access tab reads these; the overview counts them. A role removed from the
+ * catalogue still shows its assignment, marked by its id, because hiding it would
+ * hide authority the person still carries.
+ */
+const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
+  const roles = new Map(
+    (await ctx.db.select('user.Role')).map((role) => [String(role.id), String(role.name ?? role.id)]),
+  )
+  const companies = new Map(
+    (await ctx.db.select('company.Company')).map((row) => [String(row.id), String(row.name ?? row.id)]),
+  )
+  const branches = new Map(
+    (await ctx.db.select('company.Branch')).map((row) => [String(row.id), String(row.name ?? row.id)]),
+  )
+  return (await ctx.db.select('user.Assignment', { userId })).map((assignment): Row => {
+    const companyId = assignment.companyId ? String(assignment.companyId) : ''
+    const branchId = assignment.branchId ? String(assignment.branchId) : ''
+    return {
+      id: String(assignment.id),
+      roleId: String(assignment.roleId),
+      roleName: roles.get(String(assignment.roleId)) ?? String(assignment.roleId),
+      scopeKind: String(assignment.scopeKind ?? 'tenant'),
+      company: companyId ? (companies.get(companyId) ?? companyId) : null,
+      branch: branchId ? (branches.get(branchId) ?? branchId) : null,
+    }
+  })
+}
+
 /** The revision a role assignment must present, so a stale modal is refused rather than applied. */
 const authorizationRevision = async (ctx: Ctx): Promise<number> =>
   Number((await ctx.db.select('user.AuthorizationRevision', { id: 'global' }))[0]?.revision ?? 0)
@@ -91,6 +122,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       ...readEffects,
       'read:user.User',
       'read:user.Role',
+      'read:user.Assignment',
       'read:company.Company',
       'read:company.Branch',
     ],
@@ -128,6 +160,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
           },
           companies,
           branches,
+          assignments: creating ? [] : await assignmentsOf(ctx, String(args.id)),
           roles: await assignableRoles(ctx),
           scopeKinds: ['company', 'branch', 'tenant'],
           revision: await authorizationRevision(ctx),
