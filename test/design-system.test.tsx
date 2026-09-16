@@ -71,6 +71,9 @@ import {
   Status,
   Switch,
   TagPicker,
+  Tab,
+  TabPanel,
+  TabbedView,
   Tabs,
   TextArea,
   TextField,
@@ -1409,6 +1412,46 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(tabs, /href="\/all"[\s\S]*href="\/custom"/)
   assert.match(tabs, /aria-current="page"/)
 
+  const tab = renderToString(
+    <Tab
+      id="details"
+      label="Details"
+      href="/details"
+      active
+      elementId="record-tabs-details-tab"
+      controls="record-panel"
+    />,
+  )
+  assert.match(tab, /id="record-tabs-details-tab"/)
+  assert.match(tab, /aria-controls="record-panel"/)
+
+  const panel = renderToString(
+    <TabPanel id="record-panel" labelledBy="record-tabs-details-tab" body="Record details" />,
+  )
+  assert.match(panel, /data-ui="tab-panel"/)
+  assert.match(panel, /aria-labelledby="record-tabs-details-tab"/)
+  assert.match(panel, /tabindex="-1"/)
+
+  const tabbed = renderToString(
+    <TabbedView
+      id="record"
+      label="Record"
+      items={[{ id: 'details', label: 'Details', href: '/details', active: true }]}
+      body="Record details"
+    />,
+  )
+  assert.match(tabbed, /data-ui="tabbed-view"/)
+  assert.match(tabbed, /aria-controls="record-panel"/)
+  assert.match(tabbed, /aria-labelledby="record-tabs-details-tab"/)
+  assert.doesNotMatch(tabbed, /role="tablist"|role="tab"/)
+
+  const navigationCss = readFileSync('packages/design-system/src/primitives/navigation/styles.css', 'utf8')
+  const panelRule = navigationCss.match(/\[data-ui="tab-panel"\] \{(?<body>[^}]+)\}/u)?.groups?.body ?? ''
+  assert.match(panelRule, /overflow: auto/u)
+  assert.match(panelRule, /padding-inline: 0/u)
+  const modalCss = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  assert.match(modalCss, /\[data-ui="modal-body"\]:has\(> \[data-ui="tabbed-view"\]\)/u)
+
   const progress = renderToString(<Progress label="Complete" value={118} tone="positive" />)
   assert.match(progress, /role="progressbar"/)
   assert.match(progress, /aria-valuenow="100"/)
@@ -1838,7 +1881,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 112)
+  assert.equal(names.length, 115)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1875,8 +1918,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 214)
-  assert.equal(designSystemInventory.summary.runtimeExports, 117)
+  assert.equal(designSystemInventory.summary.publicExports, 221)
+  assert.equal(designSystemInventory.summary.runtimeExports, 120)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 41)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

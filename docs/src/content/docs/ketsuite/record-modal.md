@@ -70,13 +70,14 @@ The runtime owns, for every module:
 | Opening | A click on a link naming this kind opens it (`pushState`); a link to the open record switches tab (`replaceState`). `record=<kind>:new` opens the create form (see below). |
 | History | Back and forward over modal entries open or close the modal only. The navigation layer asks through the cancelable `ket:popstate` event and does not re-fetch the page. |
 | Accessibility | `ModalSheet mode="client"`: close controls are buttons, focus moves in and is trapped, Escape closes the top layer, the rest of the page is inert, focus returns to the opener. |
-| Height | A definition with more than one tab renders `ModalSheet height="fixed"`: the runtime measures each tab it renders and holds the tallest one as a min-height, so the dialog opens at the size of its content, never shrinks while the reader moves between tabs, and never stands taller than anything the record has in it. The floor belongs to the record and starts again with the next one; the body scrolls once the viewport cap is reached. A single view and dialog layers size to their content. |
+| Height | A definition with more than one tab renders `ModalSheet height="fixed"`, and the runtime owns that height: it measures each tab it renders and holds the tallest as a min-height, so the dialog opens at the size of its content and never shrinks as the reader moves between tabs — and a record whose tabs are all short never gets a dialog the height of the screen. The floor belongs to the record and starts again with the next one. `TabbedView` keeps the bar fixed and only its `TabPanel` scrolls; the panel adds no horizontal padding. A single view and dialog layers size to their content. |
 | States | Loading, load failure with retry, not found. |
 | Cache | Each island keeps the last 30 contexts it read (including the create form's). Reopening one renders it at once and reads it again quietly behind it. A successful command drops the record it changed, and `ket:records-changed` for the kind drops the named ids (all when none are named). A definition sets `cache: false` when its context must never be shown before a fresh read. |
 | Commands | A form inside the modal names its command with a `__command` field (or a submit button with `name="__command"`). The runtime maps `FormData` through `command.input`, calls `/_ket/fn` with an idempotency key, and applies `after`: `close`, `reload`, `refresh`, `stay`, `{ tab }` or `{ dialog }`. |
 | Previews | A command marked `preview: true` asks what would happen instead of making it happen. Its function writes nothing, so the record is not re-read, the collection is not told and what was typed stays on screen. The answer reaches the view as `context.outcome<T>('<command>')`, beside the form that asked for it, and is cleared as soon as anything moves — another record, tab or dialog, a refusal, or the write itself. This is how a change with consequences is confirmed: one form, two submit buttons, and the commit offered only once the consequence has been read. |
-| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. What was typed survives through `context.draft(name, fallback)`. |
-| Unsaved input | Closing or switching tab over a typed-in layer asks `recordModal.unsaved`. |
+| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. Text/select values survive through `context.draft(name, fallback)` and checkbox/radio state through `context.draftChecked(name, value, fallback)`. |
+| Success | A command that leaves the modal open says so where a refusal would have appeared: a positive notice at the top of the layer (`recordModal.savedTitle` / `recordModal.saved`). It clears on the next submit and when another record opens. A command that closes the modal says it by closing. |
+| Unsaved input | Switching tabs preserves text, select, checkbox and radio drafts without prompting. Closing asks `recordModal.unsaved` only for the top layer being discarded. |
 | Dialogs | An element with `data-record-dialog="<name>"` opens a dialog layer of the same record; `data-record-param-*` attributes become its params. Closing it returns to the record without reloading. |
 | Uploads | A command's `upload` names file fields; each file is stored through `/files` with the metadata the command gives, and the attachment ids reach `input` as its third argument. A `data-record-submit` file input submits on choice, and a `data-record-dropzone` form takes a dropped file. |
 | View state | `context.state(key)` reads what a `data-record-state` control set: a button or link with `data-record-value` on click, an input or select on change. It resets when another record opens. |
@@ -84,7 +85,9 @@ The runtime owns, for every module:
 | Collection | After a successful command the runtime dispatches `ket:records-changed`; the backend shell re-fetches the content slot as a fragment. The modal lives outside that slot and is untouched. |
 
 Views are render-pure. They read the context and return design-system markup (`RecordForm`, `Field`,
-`DataTable`, `Notice`…); they never fetch, never touch history and never query the document.
+`DataTable`, `Notice`…); they never fetch, never touch history and never query the document. The runtime
+builds `TabbedView` and `TabPanel`; a module supplies the tab's label and view and must not create its own
+tab-body wrapper, padding, or scrolling contract.
 
 ## Creating a record
 
@@ -128,6 +131,8 @@ still ship the same keys in `messages`:
 | `recordModal.retry` | Retry after a load failure |
 | `recordModal.errorTitle` | Title of the refusal notice |
 | `recordModal.saveFailed` | A command failed without issues |
+| `recordModal.savedTitle` | Title of the notice a succeeded command leaves |
+| `recordModal.saved` | A command succeeded and the modal stayed open |
 | `recordModal.unsaved` | Prompt before discarding typed input |
 | `recordModal.uploadFailed` | A file could not be stored |
 
