@@ -352,17 +352,6 @@ test('client render: svg elements are created in the svg namespace', () => {
     made.push(self)
     return self
   }
-  const host = domHost({
-    createElement: (tag: string) => node(tag, null),
-    createElementNS: (ns: string, tag: string) => node(tag, ns),
-    createTextNode: () => node('#text', null),
-  } as never)
-  const root = node('root', null)
-  Object.assign(root, {
-    insertBefore(child: Node) {
-      root.children.push(child)
-    },
-  })
   const withParent = (self: Node) =>
     Object.assign(self, {
       insertBefore(child: Node) {
@@ -370,16 +359,36 @@ test('client render: svg elements are created in the svg namespace', () => {
       },
       setAttribute() {},
       removeAttribute() {},
+      remove() {},
     })
+  const host = domHost({
+    createElement: (tag: string) => node(tag, null),
+    createElementNS: (ns: string, tag: string) => node(tag, ns),
+    createTextNode: () => withParent(node('#text', null)),
+  } as never)
   const original = host.createElement
   host.createElement = (tag: string, ns?: string) => withParent(original(tag, ns) as never) as never
-  createRoot(host, root as never).render(
-    html`<span><svg viewBox="0 0 24 24"><circle cx="12" /><path d="M12 8h.01" /></svg></span>`,
-  )
+  const root = withParent(node('root', null))
   const byTag = (tag: string) => made.find((one) => one.tag === tag)
+
+  // A glyph reaches its `<svg>` through a hole, which is how every design-system
+  // icon is written: the children are a template of their own, mounted into the
+  // `<svg>` by a part. They need the namespace just as much as the `<svg>` does.
+  createRoot(host, root as never).render(
+    html`<span
+      ><svg viewBox="0 0 24 24">${html`<circle cx="12" /><path d="M12 8h.01" />`}</svg></span
+    >`,
+  )
   assert.equal(byTag('span')?.ns, null, 'html elements stay in the html namespace')
   assert.equal(byTag('svg')?.ns, SVG_NAMESPACE)
-  // Children inherit it: a `<circle>` in the html namespace draws nothing either.
-  assert.equal(byTag('circle')?.ns, SVG_NAMESPACE)
+  assert.equal(byTag('circle')?.ns, SVG_NAMESPACE, 'a circle in the html namespace draws nothing')
   assert.equal(byTag('path')?.ns, SVG_NAMESPACE)
+
+  // And the static case, where the children are part of the same template.
+  made.length = 0
+  createRoot(host, withParent(node('root2', null)) as never).render(
+    html`<svg viewBox="0 0 24 24"><rect x="1" /></svg>`,
+  )
+  assert.equal(byTag('svg')?.ns, SVG_NAMESPACE)
+  assert.equal(byTag('rect')?.ns, SVG_NAMESPACE)
 })
