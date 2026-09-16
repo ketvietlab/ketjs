@@ -64,6 +64,7 @@ const contextOf = (data: UserModalData, options: Options = {}): RecordModalConte
   t: (key) => key,
   fieldError: () => null,
   draft: (name, fallback = '') => options.drafts?.[name] ?? fallback,
+  draftChecked: (name, value = '1', fallback = false) => options.drafts?.[name] === value || fallback,
   outcome: <T,>(command: string) =>
     options.outcome?.command === command ? (options.outcome.value as T) : null,
   busy: false,

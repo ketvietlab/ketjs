@@ -13,9 +13,13 @@ export type HostNode = {
   parent: HostNode | null
 }
 
+/** Elements of an `<svg>` subtree only draw when created in this namespace. */
+export const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
 export type Host = {
   ops: Record<string, number> | null
-  createElement(tag: string): HostNode
+  /** `namespace` is set for every element inside an `<svg>`, including the `<svg>` itself. */
+  createElement(tag: string, namespace?: string): HostNode
   createText(value: unknown): HostNode
   setText(node: HostNode, value: unknown): void
   setAttribute(node: HostNode, name: string, value: unknown): void
@@ -163,6 +167,7 @@ export function countingHost(): CountingHost {
 // verifies the algorithm; this is what actually runs in a browser.
 type DomLike = {
   createElement(tag: string): unknown
+  createElementNS?(namespace: string, tag: string): unknown
   createTextNode(data: string): unknown
   /** Test hosts may supply their small parser instead of implementing <template>. */
   parseHTML?(html: string): { childNodes: Iterable<unknown> }
@@ -181,7 +186,10 @@ export function domHost(doc: DomLike = (globalThis as { document?: DomLike }).do
   const el = (n: HostNode) => n as unknown as El
   return {
     ops: null,
-    createElement: (tag) => doc.createElement(tag) as unknown as HostNode,
+    createElement: (tag, namespace) =>
+      (namespace && doc.createElementNS
+        ? doc.createElementNS(namespace, tag)
+        : doc.createElement(tag)) as unknown as HostNode,
     createText: (value) => doc.createTextNode(String(value)) as unknown as HostNode,
     setText: (node, value) => {
       el(node).data = String(value)

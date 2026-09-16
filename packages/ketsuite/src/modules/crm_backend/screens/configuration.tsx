@@ -267,8 +267,11 @@ export const configurationScreen = (
             })
           : undefined
       }
-      controls={
-        <>
+      controls={designSystem.Stack({
+        // The catalogue tabs and the status facets are two rows of one control
+        // group, so the stack owns the gap between them.
+        gap: 'compact',
+        items: [
           <Tabs
             label={_('crm_backend.configuration.title')}
             items={CONFIGURATION_SECTIONS.map((id) => ({
@@ -277,18 +280,20 @@ export const configurationScreen = (
               href: configurationHref(id, locale, status),
               active: section === id,
             }))}
-          />
-          {designSystem.SavedViews({
-            label: _('crm_backend.configuration.statusFilter'),
-            views: CONFIGURATION_STATUSES.map((id) => ({
+          />,
+          // Status is a filter over one catalogue, not a saved view of its own:
+          // the same facet row the follow-up workbench filters with.
+          designSystem.ListChrome({
+            filtersLabel: _('crm_backend.configuration.statusFilter'),
+            facets: CONFIGURATION_STATUSES.map((id) => ({
               id,
               label: _(`crm_backend.configuration.status.${id}`),
               href: configurationHref(section, locale, id),
               active: status === id,
             })),
-          })}
-        </>
-      }
+          }),
+        ],
+      })}
       status={`${_(`crm_backend.configuration.${section}`)} · ${options.rows.length}`}
       body={
         options.rows.length
@@ -297,6 +302,10 @@ export const configurationScreen = (
               id: (row) => String(row.id),
               columns: columnsFor(_, section, teamNames, userNames),
               rowHref: (row) => recordModalHref(listHref, { kind, id: String(row.id) }),
+              // The whole row opens the record, and it is the only thing that
+              // does: a link around the name as well makes the name the target
+              // a reader aims for and leaves the rest of the row looking inert.
+              rowLink: false,
               responsive: 'stack',
             })
           : empty
