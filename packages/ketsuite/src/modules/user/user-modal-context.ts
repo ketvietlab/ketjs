@@ -81,6 +81,7 @@ const newUserRecord = (): Row => ({
   email: '',
   accessKind: 'internal',
   active: true,
+  superuser: false,
 })
 
 export const userModalContextFunctions: Record<string, FnSpec> = {
@@ -121,6 +122,9 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
             email: String(record.email ?? ''),
             accessKind: String(record.accessKind ?? 'internal'),
             active: record.active !== false,
+            // Carried so saving a profile cannot quietly drop or grant it; the form
+            // never offers it, because who may mint a superuser is its own decision.
+            superuser: record.superuser === true,
           },
           companies,
           branches,

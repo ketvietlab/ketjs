@@ -3,12 +3,12 @@
 // The users collection opens a person, and its create action opens the same modal
 // with an empty record. The view is render-pure: it reads what `user.userModalContext`
 // returned and writes design-system markup. The runtime owns reading, submitting,
-// history and focus; the command calls `user.createUser`, so the server stays the
-// only place that decides whether a login may exist.
+// history and focus; the commands call `user.createUser` and `user.saveUser`, so the
+// server stays the only place that decides whether a login may exist or change.
 //
 // Bundled by tools/build-backend-client.mjs into user_backend/client/.
 
-import { Button, LinkButton, Notice, Stack } from '@ketvietlab/design-system'
+import { Button, Notice, Stack } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { createRecordModal } from '../../../ui/client/record-modal.tsx'
@@ -25,6 +25,7 @@ export type UserRecord = {
   email: string
   accessKind: string
   active: boolean
+  superuser: boolean
 }
 
 export type UserModalData = {
@@ -54,7 +55,12 @@ const t = (c: Context, key: string): string => c.t(`user_backend.${key}`)
 
 const text = (form: FormData, name: string): string => String(form.get(name) ?? '').trim()
 
-const canCreate = (c: Context): boolean => c.data.permissions.create === true
+const checked = (form: FormData, name: string): boolean =>
+  ['1', 'on', 'true'].includes(String(form.get(name) ?? ''))
+
+/** Whether this reader may write what the open form offers: create one, or save this one. */
+const canWrite = (c: Context): boolean =>
+  c.creating ? c.data.permissions.create === true : c.data.permissions.save === true
 
 const fieldId = (c: Context, name: string): string => `user-user-${name}`
 
@@ -64,7 +70,7 @@ const field = (c: Context, props: Omit<FieldProps, 'id'>): FieldProps => ({
   id: fieldId(c, props.name),
   value: c.draft(props.name, String(props.value ?? '')),
   error: c.fieldError(props.name),
-  disabled: props.disabled === true || !canCreate(c),
+  disabled: props.disabled === true || !canWrite(c),
 })
 
 /** The company choice decides which branches the form offers, before anything is submitted. */
@@ -121,27 +127,49 @@ const createFields = (c: Context): FieldProps[] => {
   ]
 }
 
+const profileFields = (c: Context): FieldProps[] => [
+  field(c, { name: 'name', label: t(c, 'field.name'), value: c.data.record.name, required: true }),
+  field(c, { name: 'login', label: t(c, 'field.login'), value: c.data.record.login, required: true }),
+  field(c, { name: 'email', label: t(c, 'field.email'), type: 'email', value: c.data.record.email }),
+  field(c, {
+    name: 'accessKind',
+    label: t(c, 'field.accessKind'),
+    type: 'select',
+    value: c.data.record.accessKind,
+    options: ACCESS_KINDS.map((kind) => ({ value: kind, label: t(c, `access.${kind}`) })),
+  }),
+  field(c, {
+    name: 'active',
+    label: t(c, 'state.active'),
+    type: 'checkbox',
+    value: c.data.record.active,
+  }),
+]
+
 /**
- * The created person, before their access exists.
+ * A person the collection opened.
  *
- * Creating an account and granting it authority are separate decisions and
- * separate permissions, so the modal says what was made and sends the reader to
- * the record where roles are assigned rather than implying the person can already
- * work.
+ * Their profile is edited here rather than on a page of its own, so reading the
+ * list and changing one person stay the same place. A viewer who may open a person
+ * without being allowed to change them gets the same form, read-only, and is told
+ * why rather than meeting a refusal after typing.
  */
-const createdView = (c: Context): JSXChild =>
+const profileView = (c: Context): JSXChild =>
   Stack({
     gap: 'default',
     items: [
-      Notice({
-        tone: 'info',
-        title: t(c, 'users.createdTitle'),
-        message: t(c, 'users.createdHint'),
-      }),
-      LinkButton({
-        label: t(c, 'action.openUser'),
-        variant: 'primary',
-        href: `/admin/users/${encodeURIComponent(c.data.record.id)}`,
+      ...(c.data.permissions.save
+        ? []
+        : [
+            Notice({ tone: 'info', title: t(c, 'users.readOnlyTitle'), message: t(c, 'users.readOnlyHint') }),
+          ]),
+      RecordModalForm({
+        kind: c.kind,
+        fields: profileFields(c),
+        command: 'save',
+        actions: c.data.permissions.save
+          ? [Button({ label: t(c, 'action.save'), variant: 'primary', type: 'submit' })]
+          : [],
       }),
     ],
   })
@@ -154,7 +182,7 @@ const view = (c: Context): JSXChild =>
         command: 'create',
         actions: [Button({ label: t(c, 'action.createUser'), variant: 'primary', type: 'submit' })],
       })
-    : createdView(c)
+    : profileView(c)
 
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
@@ -176,12 +204,28 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         defaultCompanyId: text(form, 'companyId') || null,
         defaultBranchId: text(form, 'branchId') || null,
       }),
-      // The modal switches to the person it created, so the reader stays in one place.
+      // The modal switches to the person it created, so the reader stays in one place
+      // and edits the profile they just made without leaving the collection.
       after: 'open',
       created: (value) => {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
       },
+    },
+    save: {
+      fn: 'user.saveUser',
+      input: (form, c) => ({
+        id: c.id,
+        name: text(form, 'name'),
+        login: text(form, 'login'),
+        email: text(form, 'email') || null,
+        accessKind: text(form, 'accessKind') || 'internal',
+        active: checked(form, 'active'),
+        // Never offered by this form: saving a profile must not change who is a superuser.
+        superuser: c.data.record.superuser,
+      }),
+      // Read the person again so the form shows what the server kept.
+      after: 'refresh',
     },
   },
 }
