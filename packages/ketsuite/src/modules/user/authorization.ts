@@ -1735,6 +1735,99 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
         return result
       }),
   }),
+  /**
+   * What a custom role is allowed to do, decided by area rather than by key.
+   *
+   * The screen offers the catalogue's bundles, because that is the vocabulary a
+   * business has; this turns the chosen bundles into the function keys they stand
+   * for and makes the role hold exactly those. Areas dropped from the selection go
+   * with their grants, so the form is the whole answer rather than an addition.
+   *
+   * A managed role is refused: its authority comes from a template this deployment
+   * ships, and editing it here would put a local decision where everyone reads the
+   * shipped one. Copy it first.
+   */
+  setRoleBundles: defineFn({
+    input: {
+      roleId: 'id',
+      bundleKeys: 'json',
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.Role',
+      'read:user.Grant',
+      'write:user.Grant',
+      'read:user.GrantSource',
+      'write:user.GrantSource',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-role-bundles:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const roleId = String(args.roleId)
+        const R = tx.table('user.Role')
+        const role = await tx.db.one(from(R).where(eq(R.id, roleId)))
+        if (!role) required('roleId', 'user.error.roleMissing')
+        if (String(role!.mode ?? '') === 'managed') required('roleId', 'E_ROLE_NOT_ASSIGNABLE')
+
+        const catalogue = tx.manifest.permissions.bundles ?? {}
+        const wanted = new Set<string>()
+        for (const key of new Set((args.bundleKeys as string[]).map(String))) {
+          const bundle = catalogue[key] as { functions?: string[] } | undefined
+          if (!bundle) required('bundleKeys', 'user.error.bundleMissing')
+          for (const fnKey of bundle!.functions ?? []) if (tx.manifest.functions[fnKey]) wanted.add(fnKey)
+        }
+
+        const G = tx.table('user.Grant')
+        const S = tx.table('user.GrantSource')
+        const before = (await tx.db.all(from(G).where(eq(G.roleId, roleId)))).map((row) => String(row.fnKey))
+        const gone = before.filter((fnKey) => !wanted.has(fnKey))
+        for (const fnKey of wanted) {
+          await tx.db.insertIfAbsent('user.GrantSource', {
+            id: `custom:${roleId}:${fnKey}`,
+            roleId,
+            fnKey,
+            sourceKind: 'custom',
+            sourceKey: 'direct',
+            sourceVersion: null,
+          })
+          await tx.db.insertIfAbsent('user.Grant', { id: `grant:${roleId}:${fnKey}`, roleId, fnKey })
+        }
+        if (gone.length) {
+          await tx.db.del(deleteFrom(G).where(eq(G.roleId, roleId), inArray(G.fnKey, gone)))
+          await tx.db.del(deleteFrom(S).where(eq(S.roleId, roleId), inArray(S.fnKey, gone)))
+        }
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.role.updated',
+          targetKind: 'role',
+          targetId: roleId,
+          source: 'bundles',
+          reason,
+          before: { functions: before },
+          after: { functions: [...wanted] },
+          revision: revision!,
+          metadata: { bundleKeys: [...new Set((args.bundleKeys as string[]).map(String))] },
+        })
+        const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
   previewRoleAssignment: defineFn({
     input: { ...selectionInput, assignmentId: 'id?' },
     output: { ok: 'bool', revision: 'int?', contexts: 'json?', errors: 'json?' },

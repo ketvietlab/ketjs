@@ -10,6 +10,7 @@ import {
   abortAuthorization,
 } from './authorization.ts'
 import { roleFunctions } from './roles.ts'
+import { roleModalContextFunctions } from './role-modal-context.ts'
 import { userModalContextFunctions } from './user-modal-context.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -233,6 +234,7 @@ const contextFor = (
 export const functions: Record<string, FnSpec> = {
   ...roleFunctions,
   ...userModalContextFunctions,
+  ...roleModalContextFunctions,
 
   listUsers: defineFn({
     // `search` and `limit` are what a relational picker sends on every

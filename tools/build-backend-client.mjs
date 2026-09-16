@@ -35,6 +35,11 @@ const entries = [
     source: join(USER_BACKEND_DIR, 'modal/user-modal-view.tsx'),
     output: join(USER_BACKEND_DIR, 'client/user-modal.mjs'),
   },
+  // The role record modal, including the roles collection's create action.
+  {
+    source: join(USER_BACKEND_DIR, 'modal/role-modal-view.tsx'),
+    output: join(USER_BACKEND_DIR, 'client/role-modal.mjs'),
+  },
 ]
 
 /** @type {import('esbuild').Plugin} */

@@ -27,7 +27,10 @@ test('roles HTTP list preserves locale, encoded identity and GET-only semantics'
   const html = await response.text()
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="list-page"/)
-  assert.match(html, /data-row-href="\/admin\/roles\/manager%2Fa\?lang=en"/)
-  assert.match(html, /href="\/admin\/roles\/new\?lang=en"/)
+  // A row and the create action open the role over its own collection, keeping the
+  // list's query, rather than navigating to a record page.
+  assert.match(html, /data-row-href="[^"]*record=user\.role%3Amanager%2Fa[^"]*tab=info"/)
+  assert.match(html, /href="[^"]*record=user\.role%3Anew"/)
+  assert.doesNotMatch(html, /href="\/admin\/roles\/new/)
   assert.equal((await app.client.request('/admin/roles?lang=en', { method: 'POST' })).status, 405)
 })
