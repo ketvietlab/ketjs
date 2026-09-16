@@ -15,11 +15,4 @@ export const menus: Record<string, MenuDef> = {
     needs: 'user.listRoles',
     sequence: 26,
   },
-  'admin.permission-presets': {
-    parent: 'admin.config',
-    label: 'menu.presets',
-    path: '/admin/permission-presets',
-    needs: 'user.applyPreset',
-    sequence: 27,
-  },
 }
