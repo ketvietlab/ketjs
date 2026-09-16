@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import {
   batch,
   computed,
+  SVG_NAMESPACE,
   countingHost,
   createRoot,
+  domHost,
   each,
   effect,
   html,
@@ -336,4 +338,48 @@ test('view: an unchanged list still costs no host operation at all', () => {
     move: 0,
     listen: 0,
   })
+})
+
+test('client render: svg elements are created in the svg namespace', () => {
+  // Server-rendered markup gets the namespace from the HTML parser; a client
+  // render builds each node itself. Created through `createElement`, an `<svg>`
+  // subtree lands in the HTML namespace and the browser draws nothing at all —
+  // which is what happened to every icon inside a record modal.
+  type Node = { tag: string; ns: string | null; children: Node[] }
+  const made: Node[] = []
+  const node = (tag: string, ns: string | null): Node => {
+    const self: Node = { tag, ns, children: [] }
+    made.push(self)
+    return self
+  }
+  const host = domHost({
+    createElement: (tag: string) => node(tag, null),
+    createElementNS: (ns: string, tag: string) => node(tag, ns),
+    createTextNode: () => node('#text', null),
+  } as never)
+  const root = node('root', null)
+  Object.assign(root, {
+    insertBefore(child: Node) {
+      root.children.push(child)
+    },
+  })
+  const withParent = (self: Node) =>
+    Object.assign(self, {
+      insertBefore(child: Node) {
+        self.children.push(child)
+      },
+      setAttribute() {},
+      removeAttribute() {},
+    })
+  const original = host.createElement
+  host.createElement = (tag: string, ns?: string) => withParent(original(tag, ns) as never) as never
+  createRoot(host, root as never).render(
+    html`<span><svg viewBox="0 0 24 24"><circle cx="12" /><path d="M12 8h.01" /></svg></span>`,
+  )
+  const byTag = (tag: string) => made.find((one) => one.tag === tag)
+  assert.equal(byTag('span')?.ns, null, 'html elements stay in the html namespace')
+  assert.equal(byTag('svg')?.ns, SVG_NAMESPACE)
+  // Children inherit it: a `<circle>` in the html namespace draws nothing either.
+  assert.equal(byTag('circle')?.ns, SVG_NAMESPACE)
+  assert.equal(byTag('path')?.ns, SVG_NAMESPACE)
 })

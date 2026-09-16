@@ -6,6 +6,7 @@ export const HOOKS = [
   'modal-sheet',
   'modal-head',
   'modal-heading',
+  'modal-title-row',
   'modal-title',
   'modal-description',
   'modal-close',
@@ -21,6 +22,12 @@ export const ModalSheet = (props: {
   closeHref?: string
   closeLabel: string
   description?: string | null
+  /**
+   * What state the thing in this dialog is in, beside its title — a badge, not a
+   * sentence. It belongs to the heading, so it stays put when the body scrolls
+   * and is read out with the title rather than after it.
+   */
+  status?: JSXChild
   actions?: JSXChild
   presentation?: 'sheet' | 'dialog'
   size?: 'default' | 'large'
@@ -72,9 +79,12 @@ export const ModalSheet = (props: {
       >
         <header data-ui="modal-head">
           <div data-ui="modal-heading">
-            <h2 data-ui="modal-title" id={`${props.id}-title`}>
-              {props.title}
-            </h2>
+            <div data-ui="modal-title-row">
+              <h2 data-ui="modal-title" id={`${props.id}-title`}>
+                {props.title}
+              </h2>
+              {props.status !== undefined && props.status}
+            </div>
             {!!props.description && (
               <p data-ui="modal-description" id={`${props.id}-description`}>
                 {props.description}
