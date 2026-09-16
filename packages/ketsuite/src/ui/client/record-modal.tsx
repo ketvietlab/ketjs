@@ -222,6 +222,8 @@ export const RECORD_MODAL_LABELS: Readonly<Record<string, string>> = Object.free
   'recordModal.retry': 'Retry',
   'recordModal.errorTitle': 'Not saved',
   'recordModal.saveFailed': 'That did not work. Try again.',
+  'recordModal.savedTitle': 'Saved',
+  'recordModal.saved': 'The change is in.',
   'recordModal.unsaved': 'Discard what you typed?',
   'recordModal.uploadFailed': 'The file could not be uploaded. Try again.',
 })
@@ -394,9 +396,15 @@ export const createRecordModal =
     const running = signal(false)
     const busy = signal(false)
     const showBusy = delayedFlag((value) => busy.set(value))
+    // A command that succeeded while the modal stayed open. Saving is usually
+    // answered before the button could say anything, and a record that looks
+    // the same afterwards leaves the reader unsure anything happened, so the
+    // form says so where it would have said the opposite.
+    const saved = signal(false)
     const setRunning = (value: boolean): void => {
       running.set(value)
       showBusy.set(value)
+      if (value) saved.set(false)
     }
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
@@ -544,6 +552,7 @@ export const createRecordModal =
       if (!sameRecord) {
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
+        saved.set(false)
         drafts.set({})
         viewState.set({})
         dialog.set(null)
@@ -565,6 +574,7 @@ export const createRecordModal =
       open.set(null)
       dialog.set(null)
       issues.set([])
+      saved.set(false)
       drafts.set({})
       viewState.set({})
       status.set('idle')
@@ -675,6 +685,8 @@ export const createRecordModal =
           )
         }
         const after = after_(command)
+        // A modal that closes says so by closing; one that stays owes an answer.
+        if (after !== 'close') saved.set(true)
         if (after === 'open') {
           dialog.set(null)
           // Replace `:new` in the address bar before the collection refreshes: the
@@ -712,7 +724,14 @@ export const createRecordModal =
         (issue) => issue.field && !root?.querySelector(`[name="${CSS.escape(issue.field)}"]`),
       )
       const all = [...general, ...fieldless]
-      if (!all.length) return ''
+      if (!all.length)
+        return saved()
+          ? Notice({
+              title: context.t('recordModal.savedTitle'),
+              message: context.t('recordModal.saved'),
+              tone: 'positive',
+            })
+          : ''
       return Notice({
         title: context.t('recordModal.errorTitle'),
         message: all.map((issue) => issue.message ?? context.t(issue.code, issue.params)).join(' · '),

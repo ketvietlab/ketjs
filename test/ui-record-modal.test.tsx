@@ -264,3 +264,22 @@ test('record modal: a save the server answers at once never flashes its spinner'
   t.mock.timers.tick(5000)
   assert.deepEqual(seen, [])
 })
+
+test('record modal: a command that leaves the modal open says it worked', () => {
+  // A save is answered before the button could say anything and often changes
+  // nothing the reader can see, so the form says so in the slot a refusal uses.
+  const notice = runtime.slice(runtime.indexOf('const formIssues = '))
+  assert.match(
+    notice.slice(0, notice.indexOf('return Notice({', notice.indexOf('if (!all.length)'))),
+    /saved\(\)[\s\S]*?tone: 'positive'/u,
+    'the positive notice stands where the danger notice would',
+  )
+  // One that closes says it by closing.
+  assert.match(runtime, /if \(after !== 'close'\) saved\.set\(true\)/u)
+  // It is never stale: a new submit, another record and closing all clear it.
+  assert.match(runtime, /showBusy\.set\(value\)\s*\n\s*if \(value\) saved\.set\(false\)/u)
+  const show = runtime.slice(runtime.indexOf('const show = '))
+  assert.match(show.slice(0, show.indexOf('open.set({ id, tab: nextTab })')), /saved\.set\(false\)/u)
+  const hide = runtime.slice(runtime.indexOf('const hide = '))
+  assert.match(hide.slice(0, hide.indexOf('releaseInert?.()')), /saved\.set\(false\)/u)
+})
