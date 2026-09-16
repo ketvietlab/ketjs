@@ -81,11 +81,18 @@ class Part {
   keys: unknown[] = []
   markupNodes: HostNode[] = []
   markupHtml = ''
+  /**
+   * The namespace of the element this part renders into. A hole inside an
+   * `<svg>` mounts its template through here, and its elements only draw when
+   * they are created in that namespace too.
+   */
+  namespace: string | undefined
 
-  constructor(host: Host, parent: HostNode, anchor: HostNode) {
+  constructor(host: Host, parent: HostNode, anchor: HostNode, namespace?: string) {
     this.host = host
     this.parent = parent
     this.anchor = anchor
+    this.namespace = namespace
   }
 
   clear(): void {
@@ -166,7 +173,7 @@ class Part {
     this.clear()
     this.kind = 'result'
     this.child = new Instance(this.host, result.strings)
-    this.child.mount(this.parent, this.anchor)
+    this.child.mount(this.parent, this.anchor, this.namespace)
     this.child.update(result.values)
   }
 
@@ -268,7 +275,7 @@ class Part {
       } else {
         if (inst) inst.remove()
         inst = new Instance(this.host, result.strings)
-        inst.mount(this.parent, nextAnchor)
+        inst.mount(this.parent, nextAnchor, this.namespace)
         inst.update(result.values)
         keyed.set(key, inst)
       }
@@ -355,7 +362,8 @@ class Instance {
     this.tpl = templateFor(strings)
   }
 
-  mount(parent: HostNode, anchor: HostNode | null): void {
+  /** `into` is the namespace of `parent`: set when this template is mounted inside an `<svg>`. */
+  mount(parent: HostNode, anchor: HostNode | null, into?: string): void {
     const build = (node: TplNode, target: HostNode, namespace?: string): void => {
       const atRoot = target === parent
       if (node.type === 'text') {
@@ -368,7 +376,7 @@ class Instance {
         const marker = this.host.createText('')
         this.host.insert(target, marker, atRoot ? anchor : null)
         if (atRoot) this.roots.push(marker)
-        this.parts[node.index] = new Part(this.host, target, marker)
+        this.parts[node.index] = new Part(this.host, target, marker, namespace)
         return
       }
       const tag = (node as TplEl).tag
@@ -390,7 +398,7 @@ class Instance {
       if (atRoot) this.roots.push(el)
       for (const c of (node as TplEl).children) build(c, el, childNamespace)
     }
-    for (const n of this.tpl.children) build(n, parent)
+    for (const n of this.tpl.children) build(n, parent, into)
   }
 
   update(values: unknown[]): void {
