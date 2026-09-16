@@ -9,7 +9,6 @@ export type RoleListRow = RoleRow & { detailHref: string }
 export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
   createHref: string
-  presetsHref: string
 }
 
 export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
@@ -62,11 +61,6 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
           label={_('user_backend.action.createRole')}
           href={options.createHref}
           variant="primary"
-        />,
-        <LinkButton
-          label={_('user_backend.action.presets')}
-          href={options.presetsHref}
-          variant="secondary"
         />,
         frame.extras?.['topbar.end'] ?? '',
       ])}

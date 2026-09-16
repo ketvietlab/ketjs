@@ -29,14 +29,4 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export {
-  presetsScreen,
-  profileScreen,
-  roleScreen,
-  rolesScreen,
-  sessionsScreen,
-  userFormScreen,
-  usersScreen,
-} from './screens/index.ts'
-
-export { accessError, accessOptions } from './access-routes.tsx'
+export { profileScreen, rolesScreen, sessionsScreen, usersScreen } from './screens/index.ts'
