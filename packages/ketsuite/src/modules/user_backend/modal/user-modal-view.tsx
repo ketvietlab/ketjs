@@ -20,7 +20,7 @@ import {
   Stack,
 } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
-import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import {
@@ -84,9 +84,18 @@ const field = (c: Context, props: Omit<FieldProps, 'id'>): FieldProps => ({
   ...props,
   id: fieldId(props.name),
   value:
-    props.type === 'checkbox' || props.type === 'checkbox-group'
-      ? props.value
-      : c.draft(props.name, String(props.value ?? '')),
+    props.type === 'checkbox'
+      ? c.draftChecked(props.name, '1', props.value === true || props.value === '1')
+      : props.type === 'checkbox-group'
+        ? props.value
+        : c.draft(props.name, String(props.value ?? '')),
+  options:
+    props.type === 'checkbox-group'
+      ? props.options?.map((option) => ({
+          ...option,
+          checked: c.draftChecked(option.name ?? `${props.name}[]`, option.value, option.checked === true),
+        }))
+      : props.options,
   error: c.fieldError(props.name),
   disabled: props.disabled === true || !canWrite(c),
 })
@@ -187,7 +196,7 @@ const createFields = (c: Context): FieldProps[] => {
         value: '1',
         label: String(role.name),
         // What was ticked before a refusal comes back ticked.
-        checked: c.draft(roleFieldName(String(role.id)), '') === '1',
+        checked: c.draftChecked(roleFieldName(String(role.id))),
       })),
     }),
     field(c, {

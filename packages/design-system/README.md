@@ -71,7 +71,9 @@ returns them exactly where they were.
   such as a multi-tab record uses the large size with an internal scroll region.
 - A record with more than one tab passes `height: 'fixed'` to `ModalSheet`: the dialog
   holds the viewport cap (`data-height="fixed"`) so switching between tabs of different
-  heights never resizes it, and the body scrolls under a still head and tab bar. A
+  heights never resizes it. `TabbedView` keeps the tab bar visible and only `TabPanel`
+  scrolls. The panel deliberately owns no left or right padding; the containing modal
+  supplies the horizontal inset. A
   single-view record and its nested dialogs keep `height: 'content'` (the default).
 - A child action of the record (reassign, postpone, confirm) opens inside the same
   island as a nested step, not as another page.
@@ -234,7 +236,7 @@ The contract is intentionally strict:
 - component CSS consumes semantic/component roles, not numbered palette swatches.
 
 The public entry exports actions, status and feedback objects, fields, navigation,
-tabs, progress, layout primitives, the responsive application navigation, the
+`Tab`, `Tabs`, `TabPanel` and `TabbedView`, progress, layout primitives, the responsive application navigation, the
 three-region app shell, page/record layouts,
 `ListChrome` with `BulkActions` and `PagerBar`, the canonical list and record page
 compositions, data tables, forms, and modal sheets. Use `ListPage` for operational
