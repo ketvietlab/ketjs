@@ -135,6 +135,8 @@ test('the create context offers the workplaces and managed roles the viewer may 
     superuser: false,
     lastLoginAt: null,
     passwordReady: false,
+    defaultCompanyId: null,
+    defaultBranchId: null,
   })
   assert.deepEqual(
     context.companies.map((company) => company.id),

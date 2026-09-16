@@ -45,11 +45,14 @@ const dataOf = (over: Partial<UserModalData> = {}): UserModalData => ({
     superuser: false,
     lastLoginAt: '16/09/2026 08:42',
     passwordReady: true,
+    defaultCompanyId: 'company-a',
+    defaultBranchId: 'cau-giay',
   },
   companies: [{ id: 'company-a', name: 'An Việt Miền Bắc' }],
   branches: [{ id: 'cau-giay', name: 'Cầu Giấy', companyId: 'company-a' }],
   assignments: [assignment()],
   audit: [],
+  memberships: { companies: ['company-a'], branches: ['cau-giay'] },
   roles: [{ id: 'care-agent', name: 'Chăm sóc khách hàng' }],
   scopeKinds: ['company', 'branch', 'tenant'],
   revision: 7,
@@ -61,6 +64,7 @@ const dataOf = (over: Partial<UserModalData> = {}): UserModalData => ({
     preview: true,
     resetPassword: true,
     audit: true,
+    workplaces: true,
   },
   lang: 'vi',
   ...over,
@@ -273,6 +277,45 @@ test('the log says what changed, who did it and why — and is its own permissio
     tab.visible?.(contextOf(dataOf({ permissions: { ...dataOf().permissions, audit: false } }))),
     false,
   )
+})
+
+test('the profile dialog edits who a person is and where they work as two decisions', () => {
+  const html = render(dialogView('edit')(contextOf(dataOf())))
+
+  assert.match(html, /name="__command" value="save"|command="save"/)
+  assert.match(html, /users\.workplaceTitle/)
+  // The company they already work for comes back ticked, and its branch is offered
+  // because that company is held.
+  assert.match(html, /name="company_company-a"[^>]*checked/)
+  assert.match(html, /name="branch_cau-giay"/)
+  assert.match(html, /name="defaultCompanyId"/)
+  assert.match(html, /name="workplaceReason"/)
+
+  // A company nobody ticked offers none of its branches.
+  const other = render(
+    dialogView('edit')(
+      contextOf(
+        dataOf({
+          companies: [
+            { id: 'company-a', name: 'An Việt Miền Bắc' },
+            { id: 'company-b', name: 'An Việt Miền Nam' },
+          ],
+          branches: [
+            { id: 'cau-giay', name: 'Cầu Giấy', companyId: 'company-a' },
+            { id: 'thao-dien', name: 'Thảo Điền', companyId: 'company-b' },
+          ],
+        }),
+      ),
+    ),
+  )
+  assert.match(other, /name="branch_cau-giay"/)
+  assert.doesNotMatch(other, /name="branch_thao-dien"/)
+
+  // Without the authority the workplace form is not offered at all.
+  const reader = render(
+    dialogView('edit')(contextOf(dataOf({ permissions: { ...dataOf().permissions, workplaces: false } }))),
+  )
+  assert.doesNotMatch(reader, /users\.workplaceTitle/)
 })
 
 test('the commands send the selection the person made, and the revision they were shown', () => {

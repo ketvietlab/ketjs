@@ -1320,6 +1320,7 @@ const sources = {
       previewRoleTemplate: ['sensitive', 'sensitive', 'user.sensitive-data'],
       provisionUser: ['security', 'security', 'user.security-audit'],
       revokeBranch: ['security', 'security', 'user.security-audit'],
+      setWorkplaces: ['security', 'security', 'user.security-audit'],
       revokeCompany: ['security', 'security', 'user.security-audit'],
       revokeFunction: ['security', 'security', 'user.security-audit'],
       saveRole: ['security', 'security', 'user.security-audit'],
