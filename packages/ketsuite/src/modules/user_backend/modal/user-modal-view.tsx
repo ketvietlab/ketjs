@@ -40,6 +40,8 @@ export type UserRecord = {
   accessKind: string
   active: boolean
   superuser: boolean
+  lastLoginAt: string | null
+  passwordReady: boolean
 }
 
 export type UserModalData = {
@@ -47,6 +49,7 @@ export type UserModalData = {
   companies: AnyRow[]
   branches: AnyRow[]
   assignments: AnyRow[]
+  audit: AnyRow[]
   roles: AnyRow[]
   scopeKinds: string[]
   revision: number
@@ -616,6 +619,136 @@ const roleDialog = (c: Context): JSXChild => {
   })
 }
 
+/**
+ * What it takes to sign in as this person, and the one thing an administrator may
+ * do about it.
+ *
+ * There is no session list and no way to set somebody else's password. A session
+ * belongs to the serve layer rather than to this module, so there is nothing here
+ * to read or revoke; and a reset does the administrator's work — a new credential,
+ * every session ended — while leaving the password itself with its owner.
+ */
+const loginTab = (c: Context): JSXChild => {
+  const issued = c.outcome<{ ok?: boolean; token?: string }>('resetPassword')
+  return Stack({
+    gap: 'default',
+    items: [
+      Section({
+        title: t(c, 'login.accountTitle'),
+        body: DescriptionList({
+          columns: 3,
+          items: [
+            {
+              id: 'credential',
+              label: t(c, 'field.credential'),
+              value: Badge({
+                label: c.data.record.passwordReady ? t(c, 'login.ready') : t(c, 'login.preparing'),
+                tone: c.data.record.passwordReady ? 'positive' : 'warning',
+              }),
+            },
+            { id: 'login', label: t(c, 'field.login'), value: c.data.record.login },
+            {
+              id: 'lastLogin',
+              label: t(c, 'login.lastSignIn'),
+              value: c.data.record.lastLoginAt || t(c, 'login.never'),
+            },
+          ],
+        }),
+      }),
+      // Shown once, by the only party that ever holds it in the clear.
+      ...(issued?.token
+        ? [
+            Section({
+              title: t(c, 'login.oneTimeTitle'),
+              body: Stack({
+                gap: 'compact',
+                items: [
+                  Notice({
+                    tone: 'warning',
+                    title: t(c, 'login.oneTimeTitle'),
+                    message: t(c, 'login.oneTimeHint'),
+                  }),
+                  DescriptionList({
+                    columns: 1,
+                    items: [{ id: 'token', label: t(c, 'login.oneTimeLabel'), value: issued.token }],
+                  }),
+                ],
+              }),
+            }),
+          ]
+        : []),
+      ...(c.data.permissions.resetPassword
+        ? [
+            Section({
+              title: t(c, 'login.resetTitle'),
+              description: t(c, 'login.resetHint'),
+              body: RecordModalForm({
+                kind: c.kind,
+                fields: [
+                  field(c, {
+                    name: 'reason',
+                    label: t(c, 'field.reason'),
+                    type: 'textarea',
+                    required: true,
+                    span: 'full',
+                    disabled: false,
+                  }),
+                ],
+                command: 'resetPassword',
+                actions: [
+                  Button({ label: t(c, 'action.resetPassword'), variant: 'primary', type: 'submit' }),
+                ],
+              }),
+            }),
+          ]
+        : [
+            Notice({ tone: 'info', title: t(c, 'users.readOnlyTitle'), message: t(c, 'login.readOnlyHint') }),
+          ]),
+    ],
+  })
+}
+
+/** What was done to this person's authority, and who did it. */
+const auditTab = (c: Context): JSXChild =>
+  c.data.audit.length
+    ? DataTable<AnyRow>({
+        rows: c.data.audit,
+        id: (row) => String(row.id),
+        columns: [
+          { key: 'when', label: t(c, 'audit.when'), cell: (row) => String(row.occurredAt ?? '—') },
+          {
+            key: 'event',
+            label: t(c, 'audit.action'),
+            priority: 'primary',
+            cell: (row) => `${t(c, `audit.event.${String(row.event)}`)} · ${String(row.actor ?? '—')}`,
+          },
+          {
+            key: 'roles',
+            label: t(c, 'field.assignment'),
+            cell: (row) => (row.roleIds as string[]).map((id) => roleNameOf(c, id)).join(' · ') || '—',
+          },
+          { key: 'reason', label: t(c, 'field.reason'), cell: (row) => String(row.reason ?? '—') },
+          {
+            key: 'outcome',
+            label: t(c, 'audit.outcome'),
+            cell: (row) =>
+              Badge({
+                label: t(c, `audit.outcome.${String(row.outcome)}`),
+                tone: String(row.outcome) === 'success' ? 'positive' : 'danger',
+              }),
+          },
+        ],
+      })
+    : Notice({ tone: 'info', title: t(c, 'audit.empty'), message: t(c, 'audit.emptyHint') })
+
+/** A role named by what it is called, falling back to the id it was recorded under. */
+const roleNameOf = (c: Context, roleId: string): string =>
+  String(
+    c.data.assignments.find((row) => String(row.roleId) === roleId)?.roleName ??
+      c.data.roles.find((row) => String(row.id) === roleId)?.name ??
+      roleId,
+  )
+
 /** The assignment a role dialog is open on, for the commands it submits. */
 const openAssignment = (c: Context): AnyRow =>
   c.data.assignments.find((row) => String(row.id) === String(c.dialog?.params.id ?? '')) ?? {}
@@ -654,6 +787,20 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       label: (c) => `${t(c, 'tab.access')} ${String(c.data.assignments.length)}`,
       visible: (c) => !c.creating,
       view: accessTab,
+    },
+    {
+      id: 'login',
+      label: (c) => t(c, 'tab.login'),
+      visible: (c) => !c.creating,
+      view: loginTab,
+    },
+    {
+      id: 'audit',
+      label: (c) => t(c, 'tab.audit'),
+      // The log is its own permission: a viewer may open a person without being
+      // allowed to read the history of who gave them what.
+      visible: (c) => !c.creating && c.data.permissions.audit === true,
+      view: auditTab,
     },
   ],
   dialogs: {
@@ -694,6 +841,13 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
       },
+    },
+    resetPassword: {
+      fn: 'user.issueAuthToken',
+      input: (_form, c) => ({ userId: c.id, kind: 'reset', realm: 'backend' }),
+      // Stay: the server hands back a credential it will never say again, and the
+      // tab is where the person reading it is.
+      after: 'stay',
     },
     previewAssign: {
       fn: 'user.previewRoleAssignment',

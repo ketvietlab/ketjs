@@ -195,9 +195,14 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
     ['another tab', /outcome\.set\(null\)\n              show\(/u],
     ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
-    ['a write', /recordDrafts\.set\(emptyDraftState\(\)\)\n        outcome\.set\(null\)/u],
   ] as const)
     assert.match(runtime, near, `${what} clears the answer`)
+  // A write keeps its answer only when it stays in the layer, which is how a
+  // credential the server says once reaches the reader.
+  assert.match(
+    runtime,
+    /outcome\.set\(after_\(command\) === 'stay' \? \{ command: name, value: result\.value \} : null\)/u,
+  )
   assert.match(runtime, /held\?\.command === command \? \(held\.value as T\) : null/u)
 })
 

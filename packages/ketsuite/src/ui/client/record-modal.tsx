@@ -794,7 +794,10 @@ export const createRecordModal =
         }
         if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
         else recordDrafts.set(emptyDraftState())
-        outcome.set(null)
+        // A command that stays in its layer leaves its answer for the view, which is
+        // how something the server can only say once — a one-time credential — reaches
+        // the reader. Every other `after` replaces the layer, so the answer goes.
+        outcome.set(after_(command) === 'stay' ? { command: name, value: result.value } : null)
         form.reset()
         const value = result.value as { id?: unknown } | null | undefined
         const createdId =

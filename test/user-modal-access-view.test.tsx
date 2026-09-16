@@ -43,14 +43,25 @@ const dataOf = (over: Partial<UserModalData> = {}): UserModalData => ({
     accessKind: 'internal',
     active: true,
     superuser: false,
+    lastLoginAt: '16/09/2026 08:42',
+    passwordReady: true,
   },
   companies: [{ id: 'company-a', name: 'An Việt Miền Bắc' }],
   branches: [{ id: 'cau-giay', name: 'Cầu Giấy', companyId: 'company-a' }],
   assignments: [assignment()],
+  audit: [],
   roles: [{ id: 'care-agent', name: 'Chăm sóc khách hàng' }],
   scopeKinds: ['company', 'branch', 'tenant'],
   revision: 7,
-  permissions: { create: true, save: true, assign: true, remove: true, preview: true, invite: true },
+  permissions: {
+    create: true,
+    save: true,
+    assign: true,
+    remove: true,
+    preview: true,
+    resetPassword: true,
+    audit: true,
+  },
   lang: 'vi',
   ...over,
 })
@@ -200,6 +211,68 @@ test('a viewer who may not remove sees the role without a way to take it back', 
 
   assert.match(html, /Chăm sóc khách hàng/)
   assert.doesNotMatch(html, /name="__command"/)
+})
+
+test('the sign-in tab offers a reset and nothing else, and shows what it gets back once', () => {
+  const before = render(tabView('login')(contextOf(dataOf())))
+
+  assert.match(before, /login\.accountTitle/)
+  assert.match(before, /name="__command"|value="resetPassword"|command="resetPassword"/)
+  // The block the mock dropped: no session list, no setting somebody else's password.
+  assert.doesNotMatch(before, /session|Session/i)
+  assert.doesNotMatch(before, /login\.oneTimeLabel/, 'nothing to show before a reset')
+
+  const after = render(
+    tabView('login')(
+      contextOf(dataOf(), { outcome: { command: 'resetPassword', value: { ok: true, token: 'k3t-9f2x' } } }),
+    ),
+  )
+  assert.match(after, /k3t-9f2x/, 'the one-time credential reaches the reader')
+  assert.match(after, /login\.oneTimeHint/)
+})
+
+test('a viewer who may not reset sees the account without the action', () => {
+  const html = render(
+    tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, resetPassword: false } }))),
+  )
+
+  assert.match(html, /login\.accountTitle/)
+  assert.doesNotMatch(html, /type="submit"/)
+  assert.match(html, /login\.readOnlyHint/)
+})
+
+test('the log says what changed, who did it and why — and is its own permission', () => {
+  const rows = [
+    {
+      id: 'e1',
+      event: 'authorization.assignment.created',
+      occurredAt: '16/09/2026 09:10',
+      actor: 'an@ketviet.test',
+      reason: 'Chuyển sang tổ chăm sóc',
+      scopeKey: 'branch:company-a:cau-giay',
+      outcome: 'success',
+      roleIds: ['care-agent'],
+    },
+  ]
+  const html = render(tabView('audit')(contextOf(dataOf({ audit: rows }))))
+
+  assert.match(html, /audit\.event\.authorization\.assignment\.created/)
+  assert.match(html, /an@ketviet\.test/)
+  assert.match(html, /Chuyển sang tổ chăm sóc/)
+  // The role is named, not shown as the id it was recorded under.
+  assert.match(html, /Chăm sóc khách hàng/)
+  assert.match(html, /audit\.outcome\.success/)
+
+  const empty = render(tabView('audit')(contextOf(dataOf())))
+  assert.match(empty, /audit\.empty/)
+
+  // Without the read the tab is not offered at all.
+  const tab = (userModalDefinition.tabs ?? []).find((item) => item.id === 'audit')!
+  assert.equal(tab.visible?.(contextOf(dataOf({ audit: rows }))), true)
+  assert.equal(
+    tab.visible?.(contextOf(dataOf({ permissions: { ...dataOf().permissions, audit: false } }))),
+    false,
+  )
 })
 
 test('the commands send the selection the person made, and the revision they were shown', () => {
