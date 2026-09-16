@@ -23,6 +23,9 @@ export const RecordModalForm = (props: {
 }): TemplateResult => (
   <form data-ui="record-form" method="post" action="" data-record-kind={props.kind}>
     {props.command ? (
+      // autocomplete="off" like every other input the kit writes: the ui contract
+      // holds for a hidden field too, and a browser restoring one would submit a
+      // command the reader never chose.
       <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.command} autocomplete="off" />
     ) : (
       ''

@@ -1,4 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { USER_MODAL_ISLANDS, islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
@@ -10,9 +11,17 @@ export default defineModule({
   title: 'Người dùng và phân quyền',
   summary: 'Quản lý tài khoản, vai trò, session và vòng đời truy cập.',
   category: 'Hệ thống',
+  assets: new URL('./client/', import.meta.url),
   routes,
   menus,
   messages,
+  islands,
+  fills: {
+    // The user record modal: a closed host that opens a person from their link.
+    'backend:runtime': Object.keys(USER_MODAL_ISLANDS)
+      .map((name) => `{% island "${name}" %}`)
+      .join(''),
+  },
   joints: {
     'user.external-identities': { props: { userId: 'id' } },
     'profile.external-identities': { props: { userId: 'id' } },
