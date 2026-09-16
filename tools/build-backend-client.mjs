@@ -11,6 +11,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
 const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
 const CRM_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/crm_backend')
+const USER_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/user_backend')
 const entries = [
   {
     source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
@@ -28,6 +29,11 @@ const entries = [
   {
     source: join(CRM_BACKEND_DIR, 'modal/configuration-modal-view.tsx'),
     output: join(CRM_BACKEND_DIR, 'client/crm-configuration-modal.mjs'),
+  },
+  // The user record modal, including the users collection's create action.
+  {
+    source: join(USER_BACKEND_DIR, 'modal/user-modal-view.tsx'),
+    output: join(USER_BACKEND_DIR, 'client/user-modal.mjs'),
   },
 ]
 
