@@ -83,7 +83,7 @@ test('archives and restores from the record header', async ({ page }) => {
   await expect(dialog.getByRole('button', { name: 'Lưu trữ' })).toBeVisible()
 })
 
-test('adds an attribute line, generates variants and edits one through its dialog', async ({ page }) => {
+test('builds attributes and variants in one editor and saves them together', async ({ page }) => {
   await page.goto('/admin/product/templates?lang=vi')
   await page.getByRole('link', { name: 'Tạo sản phẩm' }).click()
   const dialog = page.getByRole('dialog')
@@ -92,22 +92,39 @@ test('adds an attribute line, generates variants and edits one through its dialo
   await expect(dialog.locator('[data-ui="modal-title"]')).toHaveText('Sản phẩm biến thể E2E')
 
   await dialog.locator('[data-ui="tab"]', { hasText: 'Thuộc tính & biến thể' }).click()
-  await expect(dialog.getByText('Chưa có biến thể')).toBeVisible()
-  await dialog.locator('select[name="attributeId"]').selectOption('color')
-  await dialog.getByLabel('Xanh nghiệp vụ').check()
-  await dialog.getByLabel('Cam cảnh báo').check()
-  await dialog.getByRole('button', { name: 'Thêm thuộc tính' }).click()
-  await expect(dialog.locator('[data-ui="table"] [data-ui="row"]')).toHaveCount(1)
+  const editor = dialog.locator('[data-ui="variant-editor"]')
+  await expect(editor.getByText('Chưa có thuộc tính')).toBeVisible()
+  await editor.getByLabel('Thêm thuộc tính…').selectOption('color')
+  await editor.getByLabel('+ giá trị').selectOption('color-blue')
+  await editor.getByLabel('+ giá trị').selectOption('color-orange')
 
-  await dialog.getByRole('button', { name: 'Sinh biến thể' }).click()
-  const variantRows = dialog.locator('[data-ui="table"] [data-ui="row"]')
-  await expect(variantRows).toHaveCount(3) // 1 attribute line + 2 generated variants
+  // A price extra on one value reprices only the variants that carry it.
+  await editor.getByRole('button', { name: 'Cam cảnh báo' }).click()
+  await editor.getByLabel('Giá cộng thêm').fill('50000')
+  await editor.getByRole('button', { name: 'Xong' }).click()
 
-  await dialog.getByRole('button', { name: 'Sửa biến thể' }).first().click()
-  const variantDialog = page.getByRole('dialog').last()
-  await variantDialog.locator('input[name="defaultCode"]').fill('BIENTHE-E2E-01')
-  await variantDialog.getByRole('button', { name: 'Lưu', exact: true }).click()
-  await expect(dialog.getByText('BIENTHE-E2E-01')).toBeVisible()
+  await editor.getByRole('button', { name: 'Tạo các tổ hợp còn thiếu' }).click()
+  const rows = editor.locator('[data-ui="variant-editor-row"]')
+  await expect(rows).toHaveCount(2)
+
+  // Two rows on the same combination block Save until one of them changes.
+  await editor.getByRole('button', { name: 'Thêm biến thể' }).click()
+  await rows.nth(2).getByLabel('Màu sắc').selectOption('color-blue')
+  await expect(rows.nth(2)).toContainText('Trùng với #1')
+  const save = editor.getByRole('button', { name: 'Lưu thuộc tính & biến thể' })
+  await expect(save).toBeDisabled()
+  await rows.nth(2).getByRole('button', { name: 'Bỏ' }).click()
+
+  await rows.first().getByRole('button', { name: 'Sửa' }).click()
+  await rows.first().getByLabel('Mã nội bộ (SKU)').fill('BIENTHE-E2E-01')
+  await save.click()
+  await expect(editor.getByText('Đã lưu: tạo 2, lưu trữ 0.')).toBeVisible()
+
+  await page.reload()
+  const reloaded = page.getByRole('dialog').locator('[data-ui="variant-editor"]')
+  await expect(reloaded.locator('[data-ui="variant-editor-row"]')).toHaveCount(2)
+  await expect(reloaded.getByText('BIENTHE-E2E-01')).toBeVisible()
+  await expect(reloaded.getByRole('button', { name: /Cam cảnh báo\s*\+50\.000/ })).toBeVisible()
 })
 
 for (const viewport of [

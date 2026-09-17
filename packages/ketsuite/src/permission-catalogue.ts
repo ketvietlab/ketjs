@@ -1017,6 +1017,7 @@ const sources = {
       saveCategory: ['configure', 'configure', 'product.configuration-audit'],
       saveTemplate: ['configure', 'configure', 'product.configuration-audit'],
       saveVariant: ['configure', 'configure', 'product.configuration-audit'],
+      saveVariantSetup: ['configure', 'configure', 'product.configuration-audit'],
       setCost: ['configure', 'configure', 'product.configuration-audit'],
       setProductUom: ['configure', 'configure', 'product.configuration-audit'],
       templateModalContext: ['read', 'view'],
@@ -1270,6 +1271,7 @@ const sources = {
       getAttachment: ['read', 'view'],
       listAttachments: ['read', 'view'],
       removeAttachment: ['operate', 'operate'],
+      requestRender: ['operate', 'operate'],
       requestSweep: ['operate', 'operate'],
     },
     exemptions: {

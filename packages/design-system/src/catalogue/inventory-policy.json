@@ -119,6 +119,20 @@
       "wave": 2,
       "gapTask": "DS-014"
     },
+    "./interactions/lightbox/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-046"
+    },
+    "./interactions/relation-select/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-045"
+    },
     "./interactions/skeleton/index.tsx": {
       "owner": "Feedback",
       "maturity": "stable",

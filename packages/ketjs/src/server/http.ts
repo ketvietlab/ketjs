@@ -335,7 +335,10 @@ const loadFactory = async (name) => {
   try { return await pending } finally { loading.delete(name) }
 }
 const loadPlaced = async (root, requireKnown = false) => {
-  const names = new Set(Array.from(root.querySelectorAll(ISLAND_SELECTOR), (element) => element.getAttribute('data-island')).filter(Boolean))
+  // The root itself may be the island host — a client view that swaps in a bare
+  // island — and the manager starts it, so its factory must be loaded too.
+  const placed = [...(root.matches?.(ISLAND_SELECTOR) ? [root] : []), ...root.querySelectorAll(ISLAND_SELECTOR)]
+  const names = new Set(placed.map((element) => element.getAttribute('data-island')).filter(Boolean))
   if (requireKnown) {
     const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')

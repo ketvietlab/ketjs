@@ -2,6 +2,7 @@ import { defineIsland, html, signal } from '@ketvietlab/ketjs-view'
 import { createProductEditorStatusView } from './client/editor-view.mjs'
 import { createProductMediaUploadView } from './client/media-upload-view.mjs'
 import { defineRecordModalIsland } from '../../ui/record-modal.tsx'
+import { createVariantEditorView, type VariantEditorProps } from '../../ui/client/variant-editor-view.tsx'
 
 const runtime = { html, signal }
 
@@ -28,5 +29,22 @@ export const islands = {
     kind: 'product.template',
     client: 'product-modal.mjs',
     export: 'templateModal',
+  }),
+  // The template modal's "Attributes & variants" tab — see ui/client/variant-editor-view.tsx.
+  'product.variant-editor': defineIsland<VariantEditorProps>()({
+    props: {
+      id: 'id',
+      kind: 'text',
+      setup: 'json',
+      editable: 'bool',
+      saveFunction: 'text',
+      labels: 'json',
+      lightboxLabels: 'json',
+      media: 'json',
+    },
+    key: ['id'],
+    client: 'variant-editor.mjs',
+    export: 'variantEditor',
+    view: (props) => createVariantEditorView(props),
   }),
 }
