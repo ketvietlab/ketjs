@@ -1488,6 +1488,44 @@ test('design system: interaction essentials preserve native and accessible fallb
   assert.match(menu, /role="menuitem" aria-disabled="true"/)
   assert.match(renderToString(<ActionMenu id="more" label="More" items={[]} />), /data-align="end"/)
 
+  // A filter that picks people: an icon trigger at the facets' height, a count of
+  // what is picked, and a search that keeps the rest of the query.
+  const people = renderToString(
+    <ListChrome
+      filterMenus={
+        <Menu
+          id="assignee"
+          label="Filter by assignee"
+          size="compact"
+          count={2}
+          trigger={<span>@</span>}
+          search={{
+            action: '/followups',
+            name: 'assigneeQ',
+            value: 'ng',
+            label: 'Search people',
+            hidden: { bucket: 'due', assignee: 'u1,u2' },
+          }}
+          items={[{ id: 'u1', label: 'Ngọc Linh', href: '?assignee=u2', checked: true }]}
+        />
+      }
+      facets={[{ id: 'required', label: 'Required', href: '?required=1' }]}
+    />,
+  ).replaceAll(/<!--k[[\]]?-->/gu, '')
+  assert.match(
+    people,
+    /data-row="filters"><div data-ui="list-filter-menus"><details[^>]*data-size="compact"[^>]*data-active="true"/,
+  )
+  assert.match(people, /list-filter-menus[\s\S]*data-ui="list-facets"/, 'menus lead the facets')
+  assert.match(people, /<summary[^>]*aria-label="Filter by assignee" title="Filter by assignee"/)
+  assert.match(people, /data-ui="menu-trigger-count">2</)
+  assert.match(people, /<form data-ui="menu-search" role="search" method="get" action="\/followups">/)
+  assert.match(people, /type="hidden" name="bucket" value="due"/)
+  assert.match(people, /type="hidden" name="assignee" value="u1,u2"/)
+  assert.match(people, /data-ui="menu-search-input" type="search" name="assigneeQ" value="ng"/)
+  const quiet = renderToString(<Menu id="plain" label="Plain" items={[]} count={0} />)
+  assert.doesNotMatch(quiet, /menu-trigger-count|data-active|data-size|aria-label="Plain" title/)
+
   const closed = renderToString(
     <Popover
       id="owner"

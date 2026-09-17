@@ -74,6 +74,11 @@ export type PagerBarProps = {
 
 export type ListChromeProps = {
   filtersLabel?: string
+  /**
+   * Filters that pick from a list rather than toggle — a compact `Menu` each.
+   * They lead the facet row, at the facets' height.
+   */
+  filterMenus?: JSXChild
   viewsLabel?: string
   search?: ListSearch
   facets?: readonly ListFacet[]
@@ -92,6 +97,7 @@ export const HOOKS = [
   'list-search-label',
   'list-search-input',
   'list-search-submit',
+  'list-filter-menus',
   'list-facets',
   'list-facet',
   'list-facet-count',
@@ -288,8 +294,12 @@ export const PagerBar = (props: PagerBarProps): TemplateResult => (
 
 export const ListChrome = (props: ListChromeProps): TemplateResult => {
   const filters =
-    (props.facets?.length ?? 0) > 0 || (props.views?.length ?? 0) > 0 || props.sort ? (
+    props.filterMenus !== undefined ||
+    (props.facets?.length ?? 0) > 0 ||
+    (props.views?.length ?? 0) > 0 ||
+    props.sort ? (
       <div data-ui="list-chrome-row" data-row="filters">
+        {props.filterMenus !== undefined && <div data-ui="list-filter-menus">{props.filterMenus}</div>}
         {props.facets && props.facets.length > 0 && (
           <FacetNav
             label={props.filtersLabel ?? 'Filters'}
