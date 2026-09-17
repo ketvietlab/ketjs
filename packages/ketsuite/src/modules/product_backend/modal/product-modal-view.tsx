@@ -30,6 +30,9 @@ import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import {
+  RecordActionForm,
+  RecordCloseTrigger,
+  RecordCommandForm,
   RecordDialogTrigger,
   RecordModalForm,
   recordStateSelectControl,
@@ -162,15 +165,13 @@ const submitButton = (
  * `data-layout="actions"` opts the form out of the record-form grid (built for a
  * field/label pair), which would otherwise stretch this lone button to fill it.
  */
-const actionForm = (c: Context, command: string, hidden: Record<string, string>, label: string): JSXChild => (
-  <form data-ui="record-form" data-layout="actions" method="post" action="" data-record-kind={c.kind}>
-    <input type="hidden" name={COMMAND_FIELD} value={command} autocomplete="off" />
-    {Object.entries(hidden).map(([name, value]) => (
-      <input type="hidden" name={name} value={value} autocomplete="off" />
-    ))}
-    {Button({ type: 'submit', label, variant: 'secondary', size: 'compact', loading: c.busy })}
-  </form>
-)
+const actionForm = (c: Context, command: string, hidden: Record<string, string>, label: string): JSXChild =>
+  RecordActionForm({
+    kind: c.kind,
+    command,
+    hidden,
+    children: Button({ type: 'submit', label, variant: 'secondary', size: 'compact', loading: c.busy }),
+  })
 
 const MORE_FORM_ID = 'product-template-more-form'
 const GENERAL_FORM_ID = 'product-template-general-form'
@@ -180,18 +181,15 @@ const GENERAL_FORM_ID = 'product-template-general-form'
  * submits it through the HTML `form` attribute, naming its own command on
  * itself (name/value), so one empty form serves the whole menu.
  */
-const menuForm = (c: Context, id: string): JSXChild => (
-  <form id={id} data-record-kind={c.kind} method="post" action="" hidden />
-)
+const menuForm = (c: Context, id: string): JSXChild => RecordCommandForm({ kind: c.kind, id })
 
 /**
  * A labeled Close button placed in the header, next to Save and More.
  * `data-record-close` (not `data-ui="modal-close"`, the icon-only corner
  * control's own attribute) is what the runtime's click handler recognizes.
  */
-const closeButton = (c: Context): JSXChild => (
-  <span data-record-close="true">{Button({ label: t(c, 'action.close'), variant: 'secondary' })}</span>
-)
+const closeButton = (c: Context): JSXChild =>
+  RecordCloseTrigger({ children: Button({ label: t(c, 'action.close'), variant: 'secondary' }) })
 
 // ── General tab ─────────────────────────────────────────────────────────────
 
