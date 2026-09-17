@@ -140,6 +140,10 @@ export default defineModule({
       'variant.collaboration.label': 'Trao đổi và hoạt động của biến thể',
       'action.create': 'Tạo mới',
       'action.save': 'Lưu',
+      'action.saveTracking': 'Lưu theo dõi tồn kho',
+      'action.saveTax': 'Lưu thuế suất',
+      'readOnly.title': 'Chỉ xem',
+      'readOnly.message': 'Bạn không có quyền chỉnh sửa sản phẩm này.',
       'action.saveClose': 'Lưu & đóng',
       'action.saveOptions': 'Tuỳ chọn lưu',
       'action.internalNote': 'Ghi chú nội bộ',
@@ -352,6 +356,10 @@ export default defineModule({
       'variant.collaboration.label': 'Variant conversation and activities',
       'action.create': 'Create',
       'action.save': 'Save',
+      'action.saveTracking': 'Save inventory tracking',
+      'action.saveTax': 'Save tax rate',
+      'readOnly.title': 'Read only',
+      'readOnly.message': 'You do not have permission to edit this product.',
       'action.saveClose': 'Save & close',
       'action.saveOptions': 'Save options',
       'action.internalNote': 'Internal note',
@@ -492,6 +500,10 @@ export default defineModule({
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
     'product_backend:media.upload': `{% island "product.media-upload" %}`,
+    // The catalogue's rows and its create action open a template in a client-side
+    // record modal (KetSuite record-modal contract): a closed host on every admin
+    // page, opened by a link naming `product.template`.
+    'backend:runtime': `{% island "product.template-modal" %}`,
   },
 })
 
