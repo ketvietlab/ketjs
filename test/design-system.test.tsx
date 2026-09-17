@@ -1144,7 +1144,11 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
-  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+  // The marker is for the owner that measures, not a height of its own: the sheet
+  // sizes to its content and its owner holds the tallest tab as a min-height, so a
+  // short record never renders a dialog the height of the screen.
+  assert.match(fixedDialog, /height: auto/)
+  assert.doesNotMatch(fixedDialog, /100dvh/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {

@@ -22,6 +22,8 @@ export type UsersListScreenOptions = {
   createHref: string
   toggleHref: string
   includeArchived: boolean
+  /** Where the list stands with nothing narrowing it, when something does. */
+  clearHref?: string | null
 }
 
 export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
@@ -30,7 +32,11 @@ export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
     label: _('user_backend.field.name'),
     priority: 'primary',
     width: 'wide',
-    cell: (row) => row.name,
+    // Authority that answers to nothing else is said on the row that holds it.
+    cell: (row) =>
+      row.superuser
+        ? inline([row.name, badge(_('user_backend.field.superuser'), 'warning', 'superuser')])
+        : row.name,
   },
   {
     key: 'login',
@@ -42,16 +48,25 @@ export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
     key: 'access',
     label: _('user_backend.field.accessKind'),
     kind: 'status',
-    cell: (row) => badge(_(`user_backend.access.${row.accessKind}`), 'info', row.accessKind),
+    // Each kind of access reads differently, so each carries its own tone rather
+    // than three shades of the same one.
+    cell: (row) =>
+      badge(
+        _(`user_backend.access.${row.accessKind}`),
+        row.accessKind === 'internal' ? 'info' : row.accessKind === 'portal' ? 'neutral' : 'warning',
+        row.accessKind,
+      ),
   },
   {
     key: 'credential',
     label: _('user_backend.field.credential'),
     kind: 'status',
+    // What the reader wants to know is whether this person can sign in, not which
+    // mechanism is pending behind it.
     cell: (row) =>
       row.passwordReady
-        ? badge(_('user_backend.state.passwordReady'), 'positive', 'ready')
-        : badge(_('user_backend.state.invitationPending'), 'warning', 'pending'),
+        ? badge(_('user_backend.login.ready'), 'positive', 'ready')
+        : badge(_('user_backend.login.preparing'), 'warning', 'pending'),
   },
   {
     key: 'state',
@@ -109,7 +124,19 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
               rowHref: (row) => row.detailHref,
               columns: userListColumns(_),
             })
-          : emptyState(_('user_backend.users.empty'), _('user_backend.users.emptyHint'))
+          : options.clearHref
+            ? // Nothing matched what was asked for, so the way out is dropping the
+              // question rather than the hint for an empty deployment.
+              emptyState(_('user_backend.users.noMatch'), _('user_backend.users.noMatchHint'), {
+                actions: (
+                  <LinkButton
+                    label={_('user_backend.action.clearFilters')}
+                    href={options.clearHref}
+                    variant="secondary"
+                  />
+                ),
+              })
+            : emptyState(_('user_backend.users.empty'), _('user_backend.users.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },

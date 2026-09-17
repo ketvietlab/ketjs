@@ -115,6 +115,21 @@ test('record modal: a record with several tabs keeps one height while tabs switc
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
   assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
+
+  // That height is the tallest tab this record has shown, not the viewport: it is
+  // measured with the hold released, only ever grows, and belongs to one record.
+  const hold = /const holdHeight = \(\): void => \{([\s\S]*?)\n    \}/u.exec(runtime)
+  assert.ok(hold, 'the runtime holds the height itself')
+  assert.match(hold[1]!, /if \(\(definition\.tabs\?\.length \?\? 0\) <= 1\) return/u)
+  assert.match(hold[1]!, /sheet\.style\.minHeight = ''[\s\S]*?Math\.max\(tallest, sheet\.offsetHeight\)/u)
+  assert.match(hold[1]!, /sheet\.style\.minHeight = `\$\{tallest\}px`/u)
+  assert.equal((runtime.match(/tallest = 0/gu) ?? []).length, 3, 'reset on open, on close, and declared')
+  // The stylesheet no longer forces a tabbed dialog to the full viewport.
+  const sheetCss = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  const fixed = /\[data-ui="modal-sheet"\]\[data-height="fixed"\] \{([^}]*)\}/u.exec(sheetCss)
+  assert.ok(fixed)
+  assert.match(fixed[1]!, /height: auto/u)
+  assert.doesNotMatch(fixed[1]!, /100dvh/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
@@ -151,6 +166,44 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: a preview command changes nothing and leaves its answer on screen', () => {
+  const branch = /if \(command\.preview\) \{([\s\S]*?)\n        \}/u.exec(runtime)
+  assert.ok(branch, 'the submit path has a preview branch')
+  const body = branch[1]!
+
+  // It hands the answer to the view and stops. The selection needs no saving here:
+  // every submit snapshots its layer before it runs, and a preview clears nothing.
+  assert.match(body, /outcome\.set\(\{ command: name, value: result\.value \}\)/u)
+  assert.match(body, /return/u)
+  assert.doesNotMatch(body, /Drafts\.set|drafts\.set/u, 'a preview does not touch the drafts')
+  // Nothing is dropped, re-read or announced: the record did not change.
+  assert.doesNotMatch(body, /cache\.delete|announce\(\)|load\(/u)
+  assert.ok(
+    runtime.indexOf('if (command.preview)') < runtime.indexOf('cache.delete(current.id)'),
+    'the preview returns before the runtime treats the submit as a change',
+  )
+
+  // An answer is only ever read beside the selection it was computed from, so
+  // everything that moves the layer clears it: another record, a closed modal, a
+  // closed or newly opened dialog, another tab, a refusal, and a real write.
+  for (const [what, near] of [
+    ['another record', /outcome\.set\(null\)\n        tallest = 0/u],
+    ['a closed modal', /outcome\.set\(null\)\n      tallest = 0\n      status\.set\('idle'\)/u],
+    ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
+    ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
+    ['another tab', /outcome\.set\(null\)\n              show\(/u],
+    ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
+  ] as const)
+    assert.match(runtime, near, `${what} clears the answer`)
+  // A write keeps its answer only when it stays in the layer, which is how a
+  // credential the server says once reaches the reader.
+  assert.match(
+    runtime,
+    /outcome\.set\(after_\(command\) === 'stay' \? \{ command: name, value: result\.value \} : null\)/u,
+  )
+  assert.match(runtime, /held\?\.command === command \? \(held\.value as T\) : null/u)
 })
 
 test('record modal: tab layout is owned by the runtime instead of module views', () => {

@@ -90,11 +90,16 @@
     height: auto;
   }
 
-  /* A tabbed dialog keeps one height so switching tabs never resizes it; the body scrolls. */
+  /*
+   * A tabbed dialog opens at the size of its content and never shrinks again: its
+   * owner measures each tab it renders and holds the tallest as a min-height, so
+   * switching tabs never resizes it and a short record never gets a dialog taller
+   * than anything in it. With no owner to measure, it sizes to its content.
+   */
   :where([data-kv-design-system])
     [data-ui="modal-layer"][data-presentation="dialog"]
     [data-ui="modal-sheet"][data-height="fixed"] {
-    height: calc(100dvh - var(--kv-space-12));
+    height: auto;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {
