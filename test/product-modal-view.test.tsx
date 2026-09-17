@@ -263,7 +263,7 @@ test("product modal: the footer's More menu names archive vs restore by the reco
   assert.equal(templateModalDefinition.actions!(contextOf(templateData(), { creating: true })), undefined)
 })
 
-test('product modal: the footer carries Save (targeting the General form by id) and Close beside More, outside the scrolling body', () => {
+test('product modal: the footer carries Save (the General form, or the variant editor form on its tab) and Close beside More, outside the scrolling body', () => {
   const onGeneral = render(
     templateModalDefinition.actions!(contextOf(templateData(), { tab: 'general' })) as JSXChild,
   )
@@ -273,11 +273,16 @@ test('product modal: the footer carries Save (targeting the General form by id) 
   assert.match(onGeneral, /data-record-close="true"/)
   assert.match(onGeneral, /product_backend\.action\.close/)
 
-  // The General form isn't mounted on another tab, so Save is disabled rather than a dead click.
+  // On Attributes & variants, Save submits the editor island's own form instead, and
+  // starts disabled until the island has a valid change to send.
   const onVariants = render(
-    templateModalDefinition.actions!(contextOf(templateData(), { tab: 'variants' })) as JSXChild,
+    templateModalDefinition.actions!(
+      contextOf(templateData({ variantSetup: teeSetup() }), { tab: 'variants' }),
+    ) as JSXChild,
   )
-  assert.match(onVariants.match(/name="__command" value="save"[^>]*/)?.[0] ?? '', /disabled/)
+  assert.doesNotMatch(onVariants, /name="__command" value="save"/)
+  const variantSave = onVariants.match(/<button[^>]*form="product-variant-editor-[^"]*-save"[^>]*/)?.[0] ?? ''
+  assert.match(variantSave, /disabled/)
 
   const readOnly = render(
     templateModalDefinition.actions!(
