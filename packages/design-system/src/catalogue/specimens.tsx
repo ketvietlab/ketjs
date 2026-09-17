@@ -1651,7 +1651,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'search-filter',
         name: 'Search filter',
         description:
-          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. Mirrors Odoo\'s own search bar: one caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
         render: () =>
           createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
       },
