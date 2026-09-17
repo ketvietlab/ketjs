@@ -40,10 +40,19 @@ export default defineModule({
     /** Presentation-only entries owned by modules that add product operations. */
     'catalogue.actions': { props: { locale: 'text?' }, multiple: true },
     'template.actions': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
+    /**
+     * A tab another module adds to the template record modal. Fill it with one
+     * island placement; the island renders the tab's panel with `{ templateId,
+     * locale }`. The tab is labelled by the filling module's
+     * `<module>.productTemplateTab` message and addressed as `tab=<module>`.
+     */
+    'template.recordTabs': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
+    /** Server detail page only; the record modal reads `template.recordTabs`. */
     'template.tabs': {
       props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
       multiple: true,
     },
+    /** Server detail page only; the record modal reads `template.recordTabs`. */
     'template.panel': {
       props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
       multiple: true,
@@ -140,10 +149,15 @@ export default defineModule({
       'variant.collaboration.label': 'Trao đổi và hoạt động của biến thể',
       'action.create': 'Tạo mới',
       'action.save': 'Lưu',
+      'action.delete': 'Xoá vĩnh viễn',
+      'readOnly.title': 'Chỉ xem',
+      'readOnly.message': 'Bạn không có quyền chỉnh sửa sản phẩm này.',
       'action.saveClose': 'Lưu & đóng',
       'action.saveOptions': 'Tuỳ chọn lưu',
       'action.internalNote': 'Ghi chú nội bộ',
       'action.more': 'Thêm thao tác',
+      'action.moreShort': 'Thêm',
+      'action.close': 'Đóng',
       'action.actions': 'Thao tác sản phẩm',
       'action.cancel': 'Hủy',
       'favorite.create': 'Lưu tìm kiếm hiện tại',
@@ -245,6 +259,7 @@ export default defineModule({
       'archive.restoreTitle': 'Sản phẩm đã lưu trữ',
       'archive.restoreHint': 'Khôi phục để sản phẩm xuất hiện trở lại trong danh mục.',
       'archive.restore': 'Khôi phục',
+      'archive.deleteConfirm': 'Xoá vĩnh viễn sản phẩm "{name}"? Không thể hoàn tác.',
       'advanced.title': 'Thiết lập nâng cao',
       'rail.system': 'Thông tin hệ thống',
       'rail.id': 'ID',
@@ -352,10 +367,15 @@ export default defineModule({
       'variant.collaboration.label': 'Variant conversation and activities',
       'action.create': 'Create',
       'action.save': 'Save',
+      'action.delete': 'Delete permanently',
+      'readOnly.title': 'Read only',
+      'readOnly.message': 'You do not have permission to edit this product.',
       'action.saveClose': 'Save & close',
       'action.saveOptions': 'Save options',
       'action.internalNote': 'Internal note',
       'action.more': 'More actions',
+      'action.moreShort': 'More',
+      'action.close': 'Close',
       'action.actions': 'Product actions',
       'action.cancel': 'Cancel',
       'favorite.create': 'Save current search',
@@ -457,6 +477,7 @@ export default defineModule({
       'archive.restoreTitle': 'This product is archived',
       'archive.restoreHint': 'Restore it to bring it back into the catalogue.',
       'archive.restore': 'Restore',
+      'archive.deleteConfirm': 'Permanently delete "{name}"? This cannot be undone.',
       'advanced.title': 'Advanced settings',
       'rail.system': 'System information',
       'rail.id': 'ID',
@@ -492,6 +513,10 @@ export default defineModule({
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
     'product_backend:media.upload': `{% island "product.media-upload" %}`,
+    // The catalogue's rows and its create action open a template in a client-side
+    // record modal (KetSuite record-modal contract): a closed host on every admin
+    // page, opened by a link naming `product.template`.
+    'backend:runtime': `{% island "product.template-modal" %}`,
   },
 })
 

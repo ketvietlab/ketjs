@@ -1019,6 +1019,7 @@ const sources = {
       saveVariant: ['configure', 'configure', 'product.configuration-audit'],
       setCost: ['configure', 'configure', 'product.configuration-audit'],
       setProductUom: ['configure', 'configure', 'product.configuration-audit'],
+      templateModalContext: ['read', 'view'],
     },
     exemptions: {},
   },

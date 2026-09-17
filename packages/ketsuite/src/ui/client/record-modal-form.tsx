@@ -20,8 +20,10 @@ export const RecordModalForm = (props: {
   fields: readonly FieldProps[]
   actions?: readonly JSXChild[]
   command?: string | null
+  /** Lets a button outside this form submit it via the HTML `form` attribute. */
+  id?: string
 }): TemplateResult => (
-  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind}>
+  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind} id={props.id}>
     {props.command ? (
       // autocomplete="off" like every other input the kit writes: the ui contract
       // holds for a hidden field too, and a browser restoring one would submit a
@@ -79,4 +81,42 @@ export const RecordDialogTrigger = (props: {
   <span data-record-dialog={props.dialog} data-record-param-id={props.id ?? null}>
     {props.children}
   </span>
+)
+
+/**
+ * A bare form for an action that names no field of its own — generate, remove.
+ * `data-layout="actions"` opts the form out of the record-form grid (built for a
+ * field/label pair), which would otherwise stretch a lone submit button to fill it.
+ */
+export const RecordActionForm = (props: {
+  kind: string
+  command: string
+  hidden?: Record<string, string>
+  children: JSXChild
+}): TemplateResult => (
+  <form data-ui="record-form" data-layout="actions" method="post" action="" data-record-kind={props.kind}>
+    <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.command} autocomplete="off" />
+    {Object.entries(props.hidden ?? {}).map(([name, value]) => (
+      <input type="hidden" name={name} value={value} autocomplete="off" />
+    ))}
+    {props.children}
+  </form>
+)
+
+/**
+ * A form with no field or button of its own, submitted only through the HTML
+ * `form` attribute on buttons placed elsewhere — a menu whose every item names
+ * its own command on itself, so one empty form serves the whole menu.
+ */
+export const RecordCommandForm = (props: { kind: string; id: string }): TemplateResult => (
+  <form id={props.id} data-record-kind={props.kind} method="post" action="" hidden />
+)
+
+/**
+ * Marks its child as a labeled close control the runtime's own click handler
+ * recognizes from anywhere in the record's body — distinct from
+ * `data-ui="modal-close"`, the icon-only corner control's own styling hook.
+ */
+export const RecordCloseTrigger = (props: { children: JSXChild }): TemplateResult => (
+  <span data-record-close="true">{props.children}</span>
 )

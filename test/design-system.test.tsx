@@ -1140,11 +1140,41 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     />,
   )
   assert.match(fixed, /data-ui="modal-sheet"[^>]*data-height="fixed"/)
+  // No fixedHeight given: no inline override, so the CSS default (below) applies.
+  assert.doesNotMatch(fixed, /style="[^"]+"/)
   const fixedDialog =
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
   assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+
+  // A module whose own content is shorter than the viewport caps the fixed height instead.
+  // Set inline with `!important`, not a plain CSS rule: a legacy admin stylesheet targets
+  // these same hooks at equal specificity and would otherwise win by loading later.
+  const capped = renderToString(
+    <ModalSheet
+      id="edit-template"
+      title="Edit template"
+      closeLabel="Close"
+      presentation="dialog"
+      height="fixed"
+      fixedHeight="min(48rem, calc(100dvh - var(--kv-space-12)))"
+      body="Template tabs"
+    />,
+  )
+  assert.match(capped, /style="height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\) !important"/)
+  // Ignored outside `height: 'fixed'` — a content-sized dialog has nothing to cap.
+  const contentSized = renderToString(
+    <ModalSheet
+      id="edit-note"
+      title="Edit note"
+      closeLabel="Close"
+      presentation="dialog"
+      fixedHeight="40rem"
+      body="Note fields"
+    />,
+  )
+  assert.doesNotMatch(contentSized, /style="[^"]+"/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
@@ -1487,6 +1517,13 @@ test('design system: interaction essentials preserve native and accessible fallb
   assert.match(menu, /type="submit" name="intent" value="archive" form="record"/)
   assert.match(menu, /role="menuitem" aria-disabled="true"/)
   assert.match(renderToString(<ActionMenu id="more" label="More" items={[]} />), /data-align="end"/)
+  assert.match(menu, /data-ui="menu"[^>]*data-placement="bottom"/, 'opens downward by default')
+  const upward = renderToString(<Menu id="footer-more" label="More" items={[]} placement="top" />)
+  assert.match(upward, /data-ui="menu"[^>]*data-placement="top"/)
+  assert.match(
+    css,
+    /\[data-ui="menu"\]\[data-placement="top"\] \[data-ui="menu-panel"\]\s*\{\s*top: auto;\s*bottom: calc\(100% \+ var\(--kv-space-1\)\);/,
+  )
 
   // A filter that picks people: an icon trigger at the facets' height, a count of
   // what is picked, and a search that keeps the rest of the query.
