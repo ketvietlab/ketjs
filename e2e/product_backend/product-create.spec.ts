@@ -53,9 +53,7 @@ for (const viewport of [
     test(`renders the ${locale} create form correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto(`/admin/product/templates?lang=${locale}`)
-      await page
-        .getByRole('link', { name: locale === 'vi' ? 'Tạo sản phẩm' : 'Create product' })
-        .click()
+      await page.getByRole('link', { name: locale === 'vi' ? 'Tạo sản phẩm' : 'Create product' }).click()
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
