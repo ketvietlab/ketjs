@@ -156,11 +156,15 @@
     width: 2rem;
     height: 2rem;
     place-items: center;
+    appearance: none;
+    border: none;
     border-radius: 50%;
+    background: none;
     color: var(--kv-color-ink-muted);
     font-size: 1.4rem;
     line-height: 1;
     text-decoration: none;
+    cursor: pointer;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-close"]:hover {

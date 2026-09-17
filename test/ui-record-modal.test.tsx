@@ -110,17 +110,33 @@ test('record modal: client sheets carry no route-modal marker and close with but
   assert.match(route, /<a data-ui="modal-close" href="\/list"/u)
 })
 
-test('record modal: a record with several tabs keeps one height while tabs switch', () => {
+test('record modal: a record with several tabs keeps one height while tabs switch, and a definition may cap it', () => {
   // The record layer asks for a fixed dialog only when there is more than one tab to switch between.
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
-  assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
+  assert.match(
+    call,
+    /height:\s*\(definition\.tabs\?\.length \?\? 0\) \+ \(definition\.extensionTabs \? 1 : 0\) > 1 \? 'fixed' : 'content'/u,
+  )
+  assert.match(call, /fixedHeight: definition\.fixedHeight/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
   assert.doesNotMatch(dialogLayer, /height:/u)
+})
+
+test('record modal: a definition may put a footer of actions outside the scrolling body', () => {
+  const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
+  const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
+  assert.match(call, /actions: context \? definition\.actions\?\.\(context\) : undefined/u)
+  // A dialog layer never gets one — it already carries its own in-body submit button.
+  const dialogLayer = runtime.slice(
+    runtime.indexOf('const dialogLayer = '),
+    runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
+  )
+  assert.doesNotMatch(dialogLayer, /actions:/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -130,6 +146,20 @@ test('record modal: going back over a client-owned entry does not refetch the pa
   assert.ok(dispatchAt > 0 && navigateAt > dispatchAt, 'the owner is asked before the page is re-fetched')
   assert.match(popstate.slice(dispatchAt, navigateAt), /if \(!document\.dispatchEvent\(owned\)\) return/u)
   assert.match(runtime, /'ket:popstate'[\s\S]*?event\.preventDefault\(\)/u)
+})
+
+test("record modal: opening a record saves the list page's scroll position before pushing, so closing restores it", () => {
+  // Mirrors `saveScroll` in packages/ketjs/src/server/http.ts: without this, going back
+  // out of the modal restores no scroll (the entry never carried one) and the page jumps
+  // to the top, since the shell's own `popstate` handler falls back to `__ketScroll ?? [0, 0]`.
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  const pushBranch = show.slice(show.indexOf("if (how === 'push') {"))
+  const scrollSaveAt = pushBranch.indexOf('__ketScroll: [window.scrollX, window.scrollY]')
+  const pushStateAt = pushBranch.indexOf('history.pushState(')
+  assert.ok(
+    scrollSaveAt > 0 && pushStateAt > scrollSaveAt,
+    'scroll is snapshotted before the new entry is pushed',
+  )
 })
 
 test('record modal: the runtime owns focus, escape, inertness, drafts and collection refresh', () => {
@@ -151,6 +181,18 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: tabs another module adds follow the declared ones through the same filter', () => {
+  const visible = runtime.slice(
+    runtime.indexOf('const visibleTabs = '),
+    runtime.indexOf('const contextFor = '),
+  )
+  assert.match(
+    visible,
+    /\[\.\.\.\(definition\.tabs \?\? \[\]\), \.\.\.\(definition\.extensionTabs\?\.\(context\) \?\? \[\]\)\]/u,
+  )
+  assert.match(visible, /tab\.visible\?\.\(context\) \?\? true/u)
 })
 
 test('record modal: tab layout is owned by the runtime instead of module views', () => {
@@ -291,6 +333,22 @@ test('record modal: a command that leaves the modal open says it worked', () => 
   assert.match(show.slice(0, show.indexOf('open.set({ id, tab: nextTab })')), /saved\.set\(false\)/u)
   const hide = runtime.slice(runtime.indexOf('const hide = '))
   assert.match(hide.slice(0, hide.indexOf('releaseInert?.()')), /saved\.set\(false\)/u)
+})
+
+test('record modal: a multi-step command stops at the first failing call and skips a step whose `when` says no', () => {
+  // A "save" spanning functions in different modules — none may call another —
+  // still reads as one action: one busy state, one notice, stopping on the first
+  // call that fails rather than papering over it with a later step's success.
+  assert.match(runtime, /command\.also \?\? \[\]/u)
+  assert.match(runtime, /if \(step\.when && !step\.when\(context\)\) continue/u)
+  assert.match(runtime, /if \(!result\.ok\) break/u)
+})
+
+test('record modal: a command may ask before it runs, and a decline leaves the record untouched', () => {
+  const runAt = runtime.indexOf('const run = async')
+  const run = runtime.slice(runAt, runtime.indexOf('setRunning(true)', runAt))
+  assert.match(run, /if \(command\.confirm\)/u)
+  assert.match(run, /if \(message && !globalThis\.confirm\(message\)\) return/u)
 })
 
 test('record modal: a record wears its state beside the title, inside the head', () => {
