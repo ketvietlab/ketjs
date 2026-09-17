@@ -71,6 +71,9 @@ import {
   Status,
   Switch,
   TagPicker,
+  Tab,
+  TabPanel,
+  TabbedView,
   Tabs,
   TextArea,
   TextField,
@@ -1137,11 +1140,41 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     />,
   )
   assert.match(fixed, /data-ui="modal-sheet"[^>]*data-height="fixed"/)
+  // No fixedHeight given: no inline override, so the CSS default (below) applies.
+  assert.doesNotMatch(fixed, /style="[^"]+"/)
   const fixedDialog =
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
   assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+
+  // A module whose own content is shorter than the viewport caps the fixed height instead.
+  // Set inline with `!important`, not a plain CSS rule: a legacy admin stylesheet targets
+  // these same hooks at equal specificity and would otherwise win by loading later.
+  const capped = renderToString(
+    <ModalSheet
+      id="edit-template"
+      title="Edit template"
+      closeLabel="Close"
+      presentation="dialog"
+      height="fixed"
+      fixedHeight="min(48rem, calc(100dvh - var(--kv-space-12)))"
+      body="Template tabs"
+    />,
+  )
+  assert.match(capped, /style="height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\) !important"/)
+  // Ignored outside `height: 'fixed'` — a content-sized dialog has nothing to cap.
+  const contentSized = renderToString(
+    <ModalSheet
+      id="edit-note"
+      title="Edit note"
+      closeLabel="Close"
+      presentation="dialog"
+      fixedHeight="40rem"
+      body="Note fields"
+    />,
+  )
+  assert.doesNotMatch(contentSized, /style="[^"]+"/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
@@ -1405,6 +1438,46 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(tabs, /href="\/all"[\s\S]*href="\/custom"/)
   assert.match(tabs, /aria-current="page"/)
 
+  const tab = renderToString(
+    <Tab
+      id="details"
+      label="Details"
+      href="/details"
+      active
+      elementId="record-tabs-details-tab"
+      controls="record-panel"
+    />,
+  )
+  assert.match(tab, /id="record-tabs-details-tab"/)
+  assert.match(tab, /aria-controls="record-panel"/)
+
+  const panel = renderToString(
+    <TabPanel id="record-panel" labelledBy="record-tabs-details-tab" body="Record details" />,
+  )
+  assert.match(panel, /data-ui="tab-panel"/)
+  assert.match(panel, /aria-labelledby="record-tabs-details-tab"/)
+  assert.match(panel, /tabindex="-1"/)
+
+  const tabbed = renderToString(
+    <TabbedView
+      id="record"
+      label="Record"
+      items={[{ id: 'details', label: 'Details', href: '/details', active: true }]}
+      body="Record details"
+    />,
+  )
+  assert.match(tabbed, /data-ui="tabbed-view"/)
+  assert.match(tabbed, /aria-controls="record-panel"/)
+  assert.match(tabbed, /aria-labelledby="record-tabs-details-tab"/)
+  assert.doesNotMatch(tabbed, /role="tablist"|role="tab"/)
+
+  const navigationCss = readFileSync('packages/design-system/src/primitives/navigation/styles.css', 'utf8')
+  const panelRule = navigationCss.match(/\[data-ui="tab-panel"\] \{(?<body>[^}]+)\}/u)?.groups?.body ?? ''
+  assert.match(panelRule, /overflow: auto/u)
+  assert.match(panelRule, /padding-inline: 0/u)
+  const modalCss = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  assert.match(modalCss, /\[data-ui="modal-body"\]:has\(> \[data-ui="tabbed-view"\]\)/u)
+
   const progress = renderToString(<Progress label="Complete" value={118} tone="positive" />)
   assert.match(progress, /role="progressbar"/)
   assert.match(progress, /aria-valuenow="100"/)
@@ -1444,6 +1517,51 @@ test('design system: interaction essentials preserve native and accessible fallb
   assert.match(menu, /type="submit" name="intent" value="archive" form="record"/)
   assert.match(menu, /role="menuitem" aria-disabled="true"/)
   assert.match(renderToString(<ActionMenu id="more" label="More" items={[]} />), /data-align="end"/)
+  assert.match(menu, /data-ui="menu"[^>]*data-placement="bottom"/, 'opens downward by default')
+  const upward = renderToString(<Menu id="footer-more" label="More" items={[]} placement="top" />)
+  assert.match(upward, /data-ui="menu"[^>]*data-placement="top"/)
+  assert.match(
+    css,
+    /\[data-ui="menu"\]\[data-placement="top"\] \[data-ui="menu-panel"\]\s*\{\s*top: auto;\s*bottom: calc\(100% \+ var\(--kv-space-1\)\);/,
+  )
+
+  // A filter that picks people: an icon trigger at the facets' height, a count of
+  // what is picked, and a search that keeps the rest of the query.
+  const people = renderToString(
+    <ListChrome
+      filterMenus={
+        <Menu
+          id="assignee"
+          label="Filter by assignee"
+          size="compact"
+          count={2}
+          trigger={<span>@</span>}
+          search={{
+            action: '/followups',
+            name: 'assigneeQ',
+            value: 'ng',
+            label: 'Search people',
+            hidden: { bucket: 'due', assignee: 'u1,u2' },
+          }}
+          items={[{ id: 'u1', label: 'Ngọc Linh', href: '?assignee=u2', checked: true }]}
+        />
+      }
+      facets={[{ id: 'required', label: 'Required', href: '?required=1' }]}
+    />,
+  ).replaceAll(/<!--k[[\]]?-->/gu, '')
+  assert.match(
+    people,
+    /data-row="filters"><div data-ui="list-filter-menus"><details[^>]*data-size="compact"[^>]*data-active="true"/,
+  )
+  assert.match(people, /list-filter-menus[\s\S]*data-ui="list-facets"/, 'menus lead the facets')
+  assert.match(people, /<summary[^>]*aria-label="Filter by assignee" title="Filter by assignee"/)
+  assert.match(people, /data-ui="menu-trigger-count">2</)
+  assert.match(people, /<form data-ui="menu-search" role="search" method="get" action="\/followups">/)
+  assert.match(people, /type="hidden" name="bucket" value="due"/)
+  assert.match(people, /type="hidden" name="assignee" value="u1,u2"/)
+  assert.match(people, /data-ui="menu-search-input" type="search" name="assigneeQ" value="ng"/)
+  const quiet = renderToString(<Menu id="plain" label="Plain" items={[]} count={0} />)
+  assert.doesNotMatch(quiet, /menu-trigger-count|data-active|data-size|aria-label="Plain" title/)
 
   const closed = renderToString(
     <Popover
@@ -1834,7 +1952,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 112)
+  assert.equal(names.length, 115)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1871,8 +1989,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 214)
-  assert.equal(designSystemInventory.summary.runtimeExports, 117)
+  assert.equal(designSystemInventory.summary.publicExports, 221)
+  assert.equal(designSystemInventory.summary.runtimeExports, 120)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 41)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

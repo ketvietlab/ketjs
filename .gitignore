@@ -21,6 +21,10 @@ packages/ketsuite/src/ui/client/mail-bundle.mjs
 packages/ketsuite/src/ui/client/mail-bundle.mjs.map
 packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs
 packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs.map
+packages/ketsuite/src/modules/user_backend/client/user-modal.mjs
+packages/ketsuite/src/modules/user_backend/client/user-modal.mjs.map
+packages/ketsuite/src/modules/product_backend/client/product-modal.mjs
+packages/ketsuite/src/modules/product_backend/client/product-modal.mjs.map
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs

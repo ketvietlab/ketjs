@@ -55,6 +55,8 @@ KetJS is organized around six constraints:
 | `@ketvietlab/ketjs/theme` | KTL compilation, theme runtime helpers, view models, and design tokens. |
 | `@ketvietlab/ketjs/testing` | Isolated headless end-to-end applications and an HTTP test client. |
 | `@ketvietlab/ketjs-view` | Browser-safe signals, HTML templates, SSR, hydration, JSX, and islands. |
+| `@ketvietlab/ketjs-view-tools` | File-based static pages, asset bundling, live development, preview, and validation. |
+| `@ketvietlab/create-view` | A runnable static Ket view project scaffold. |
 | `@ketvietlab/ketjs-postgres` | The optional PostgreSQL adapter. SQLite remains the built-in default. |
 
 `@ketvietlab/ketjs` depends only on `@ketvietlab/ketjs-view`. The core package has no required database driver or service SDK.

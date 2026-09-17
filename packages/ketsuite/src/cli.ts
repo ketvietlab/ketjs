@@ -4,14 +4,15 @@ import { resolve } from 'node:path'
 import { serveDeployment } from '@ketvietlab/ketjs'
 import { ketsuite } from './deployment.ts'
 import { ensureDevelopmentAdmin } from './development.ts'
+import { seedDemoData } from './demo/seed.ts'
 import { scaffoldKetsuite } from './scaffold/index.ts'
 
-const VERSION = '0.1.23'
+const VERSION = '0.1.24'
 const HELP = `KetSuite ${VERSION}
 
 Usage:
   ketsuite new NAME [--dir DIR]
-  ketsuite serve [--dev-admin]
+  ketsuite serve [--dev-admin] [--demo-data]
 
 Commands:
   new       scaffold a standalone KetSuite application
@@ -19,6 +20,7 @@ Commands:
 
 Options:
   --dev-admin  create admin/admin only when the database is empty (development only)
+  --demo-data  also seed a demo dataset (partners, catalog, CRM, orders); implies --dev-admin
   --help       show this help
   --version    show the CLI version`
 
@@ -41,13 +43,17 @@ try {
     const dir = resolve(option('dir') ?? name)
     for (const line of scaffoldKetsuite(name, dir)) console.log(line)
   } else if (command === 'serve') {
-    if (flag('dev-admin')) {
+    if (flag('dev-admin') || flag('demo-data')) {
       const outcome = await ensureDevelopmentAdmin()
       console.warn(
         `WARNING: insecure development account admin/admin ${
           outcome === 'created' ? 'was created' : 'is enabled'
         }; never expose this server or database.`,
       )
+    }
+    if (flag('demo-data')) {
+      const outcome = await seedDemoData()
+      console.warn(`demo dataset ${outcome === 'seeded' ? 'was seeded' : 'is already present'}.`)
     }
     await serveDeployment(ketsuite)
   } else {

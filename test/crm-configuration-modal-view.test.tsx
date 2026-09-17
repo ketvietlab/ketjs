@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { RecordModalContext } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 import { RECORD_MODAL_LABELS } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 import {
@@ -10,6 +11,7 @@ import {
   scoreRuleChoice,
   scoreRuleDefinition,
   scoreRuleView,
+  stageDefinition,
   stageView,
   tagDefinition,
   teamDefinition,
@@ -27,6 +29,7 @@ type Options = {
   creating?: boolean
   state?: Record<string, string>
   drafts?: Record<string, string>
+  draftChecks?: Record<string, boolean>
   dialog?: { name: string; params: Record<string, string> } | null
 }
 
@@ -39,6 +42,8 @@ const contextOf = <Data,>(kind: string, data: Data, options: Options = {}): Reco
   t: (key, params) => (key === 'crm_backend.value.archivedTeam' ? `${String(params?.name)} (archived)` : key),
   fieldError: () => null,
   draft: (name, fallback = '') => options.drafts?.[name] ?? fallback,
+  draftChecked: (name, value = '1', fallback = false) =>
+    options.draftChecks?.[`${name}\u0000${value}`] ?? fallback,
   busy: false,
   dialog: options.dialog ?? null,
   href: () => '',
@@ -261,4 +266,31 @@ test('crm configuration modal: runtime labels exist in both languages', () => {
     for (const key of Object.keys(RECORD_MODAL_LABELS))
       assert.ok(CRM_RECORD_MODAL_LABELS[lang][key], `${lang} ${key}`)
   assert.equal(teamDefinition.labels !== undefined, true)
+})
+
+test('crm configuration modal: every catalogue shows its state beside the title', () => {
+  // The badge belongs to the heading, not to the body: `header` would put it
+  // above the form, where it reads as the first thing in the record.
+  for (const definition of [
+    teamDefinition,
+    stageDefinition,
+    tagDefinition,
+    assignmentRuleDefinition,
+    scoreRuleDefinition,
+  ]) {
+    assert.equal(typeof definition.status, 'function', `${definition.kind} has a status`)
+    assert.equal(definition.header, undefined, `${definition.kind} keeps nothing in the body header`)
+  }
+  const stage = (record: Record<string, unknown>, creating = false) =>
+    contextOf(
+      'crm.stage',
+      { record, permissions: { save: true }, lang: 'vi', teams: [], kinds: [], terminalStates: [] },
+      { creating },
+    )
+  assert.match(
+    renderToString(stageDefinition.status!(stage({ name: 'Qualified', active: false })) as TemplateResult),
+    /data-ui="badge"/u,
+  )
+  // Nothing to report while the record is still being made.
+  assert.equal(stageDefinition.status!(stage({}, true)), '')
 })

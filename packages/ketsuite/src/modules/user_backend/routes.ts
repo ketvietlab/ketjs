@@ -19,6 +19,7 @@ import type {
   UserFormValues,
   UserRow,
 } from './screens/index.ts'
+import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -287,8 +288,11 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      if ((await ctx.live(req)).routes['/admin/users/directory'])
-        return seeOther(`/admin/users/directory${url.search}`)
+      const live = await ctx.live(req)
+      if (live.routes['/admin/users/directory']) return seeOther(`/admin/users/directory${url.search}`)
+      // An identity adapter that owns account creation keeps its own page; only the
+      // deployments without one open the create action in the record modal.
+      const deploymentCreatesAccounts = !!live.routes[accountCreationRoute]
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
       const search = searchOf(url) ?? ''
@@ -331,10 +335,17 @@ export const routes: Record<string, RouteEntry> = {
           return usersScreen(_, frame, {
             rows: rows.map((row) => ({
               ...row,
-              detailHref: userDetailPath(url, row.id, returnTo),
+              // A row opens the person in the record modal; the collection behind it
+              // keeps its search, page and archive state.
+              detailHref: recordModalHref(`${url.pathname}${url.search}`, {
+                kind: 'user.user',
+                id: row.id,
+              }),
             })),
             total: matching.length,
-            createHref: withUserReturnTo(url, '/admin/users/new', returnTo),
+            createHref: deploymentCreatesAccounts
+              ? withUserReturnTo(url, '/admin/users/new', returnTo)
+              : recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.user' }),
             toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
             includeArchived,
           })

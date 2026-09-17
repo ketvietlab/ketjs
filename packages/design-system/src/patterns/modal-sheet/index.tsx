@@ -6,6 +6,7 @@ export const HOOKS = [
   'modal-sheet',
   'modal-head',
   'modal-heading',
+  'modal-title-row',
   'modal-title',
   'modal-description',
   'modal-close',
@@ -21,6 +22,12 @@ export const ModalSheet = (props: {
   closeHref?: string
   closeLabel: string
   description?: string | null
+  /**
+   * What state the thing in this dialog is in, beside its title — a badge, not a
+   * sentence. It belongs to the heading, so it stays put when the body scrolls
+   * and is read out with the title rather than after it.
+   */
+  status?: JSXChild
   actions?: JSXChild
   presentation?: 'sheet' | 'dialog'
   size?: 'default' | 'large'
@@ -30,6 +37,16 @@ export const ModalSheet = (props: {
    * resize it; the body scrolls inside while the head stays put.
    */
   height?: 'content' | 'fixed'
+  /**
+   * Overrides `fixed`'s height (default: the viewport cap, `100dvh` minus a margin —
+   * tall on most screens). A CSS length or `calc()`/`min()` expression, for a dialog
+   * whose own content is shorter than the viewport and would otherwise sit in a mostly
+   * empty frame. Set inline with `!important`, not as a plain CSS rule: a legacy
+   * admin stylesheet (`packages/ketsuite/src/modules/backend/design/forms.css`)
+   * still targets these same `data-ui` hooks at equal specificity and would
+   * otherwise win the cascade by loading later. Ignored when `height` isn't `fixed`.
+   */
+  fixedHeight?: string
   /**
    * `overlay` is URL-owned: its close controls are links the route runtime
    * follows. `client` belongs to a modal island that opens and closes it in the
@@ -64,6 +81,7 @@ export const ModalSheet = (props: {
         data-ui="modal-sheet"
         data-size={props.size ?? 'default'}
         data-height={props.height === 'fixed' ? 'fixed' : null}
+        style={props.height === 'fixed' && props.fixedHeight ? `height: ${props.fixedHeight} !important` : ''}
         role="dialog"
         aria-modal={embedded ? 'false' : 'true'}
         aria-labelledby={`${props.id}-title`}
@@ -72,9 +90,12 @@ export const ModalSheet = (props: {
       >
         <header data-ui="modal-head">
           <div data-ui="modal-heading">
-            <h2 data-ui="modal-title" id={`${props.id}-title`}>
-              {props.title}
-            </h2>
+            <div data-ui="modal-title-row">
+              <h2 data-ui="modal-title" id={`${props.id}-title`}>
+                {props.title}
+              </h2>
+              {props.status !== undefined && props.status}
+            </div>
             {!!props.description && (
               <p data-ui="modal-description" id={`${props.id}-description`}>
                 {props.description}

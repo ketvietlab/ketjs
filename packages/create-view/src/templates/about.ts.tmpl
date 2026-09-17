@@ -1,0 +1,24 @@
+import { html } from '@ketvietlab/ketjs-view'
+import { definePage } from '@ketvietlab/ketjs-view-tools'
+
+export default definePage({
+  head: {
+    title: 'About · __NAME__',
+    description: 'A fully static page with no hydration markers or client JavaScript of its own.',
+    lang: 'en',
+  },
+  view: () => html`
+    <header class="site-header">
+      <a class="brand" href="../">__NAME__</a>
+      <nav aria-label="Main navigation"><a aria-current="page" href="./">About</a></nav>
+    </header>
+    <main>
+      <article class="prose">
+        <p class="eyebrow">A plain static route</p>
+        <h1>Nothing to hydrate here.</h1>
+        <p>This file becomes <code>dist/about/index.html</code> with its shared, hashed stylesheet.</p>
+        <p><a href="../">Back home</a></p>
+      </article>
+    </main>
+  `,
+})
