@@ -352,6 +352,9 @@ type DraftScope = 'record' | 'dialog'
 const emptyDraftState = (): DraftState => ({ values: {}, checks: {} })
 const draftCheckKey = (name: string, value: string): string => `${name}\u0000${value}`
 
+/** Name prefix of a checkbox that ticks every checkbox of its form sharing the rest of its name. */
+export const CHECK_ALL = '__all:'
+
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
 /**
@@ -1161,6 +1164,27 @@ export const createRecordModal =
           (event) => {
             const control = event.target instanceof Element ? event.target : null
             if (!control || !root?.contains(control)) return
+            // A checkbox named `__all:<prefix>` ticks or clears every checkbox of its
+            // form whose name starts with that prefix, so one control stands for a
+            // row or a whole section. Any tick in such a form is kept as a draft, so
+            // the view re-renders and each "all" box reads whether it is now full.
+            if (control instanceof HTMLInputElement && control.type === 'checkbox' && control.form) {
+              const form = control.form
+              if (form.querySelector(`input[type="checkbox"][name^="${CHECK_ALL}"]`)) {
+                if (control.name.startsWith(CHECK_ALL)) {
+                  const prefix = control.name.slice(CHECK_ALL.length)
+                  for (const target of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+                    if (
+                      !target.disabled &&
+                      !target.name.startsWith(CHECK_ALL) &&
+                      target.name.startsWith(prefix)
+                    )
+                      target.checked = control.checked
+                }
+                keepAllDrafts()
+                return
+              }
+            }
             if (
               (control instanceof HTMLSelectElement || control instanceof HTMLInputElement) &&
               control.hasAttribute('data-record-state')

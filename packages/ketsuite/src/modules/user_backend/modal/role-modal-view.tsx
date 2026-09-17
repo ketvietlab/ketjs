@@ -23,7 +23,7 @@ import {
 } from '@ketvietlab/design-system'
 import type { FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import { createRecordModal } from '../../../ui/client/record-modal.tsx'
+import { CHECK_ALL, createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import { RecordModalForm } from '../../../ui/client/record-modal-form.tsx'
 
@@ -45,6 +45,7 @@ export type RoleModalData = {
   record: RoleRecord
   sources: AnyRow[]
   bundles: AnyRow[]
+  groups: Array<{ id: string; label: string }>
   holders: AnyRow[]
   revision: number
   permissions: Record<string, boolean>
@@ -79,7 +80,11 @@ const field = (c: Context, props: Omit<FieldProps, 'id'>, writable = canWrite(c)
     props.type === 'checkbox-group'
       ? props.options?.map((option) => ({
           ...option,
-          checked: c.draftChecked(option.name ?? `${props.name}[]`, option.value, option.checked === true),
+          // An "all" box is worked out from the boxes it stands for. What it last
+          // showed is stale the moment another "all" box or a single tick moves them.
+          checked: option.name?.startsWith(CHECK_ALL)
+            ? option.checked === true
+            : c.draftChecked(option.name ?? `${props.name}[]`, option.value, option.checked === true),
         }))
       : props.options,
   error: c.fieldError(props.name),
@@ -239,40 +244,128 @@ const sourcesTab = (c: Context): JSXChild =>
       })
     : Notice({ tone: 'info', title: t(c, 'roles.noSources'), message: '' })
 
-/** The areas a custom role may hold, one checkbox per area, grouped by module. */
+const TONE_MARK: Record<string, string> = { admin: ' ⚙', sensitive: ' ⚠' }
+
+/**
+ * Everything a custom role may hold, on one form saved once. Business groups are
+ * open sections, each area is one row, and what the area hands out lies across
+ * that row under a short name — the row already says which area. Opening areas
+ * one at a time was one more step for every area a person wanted to touch.
+ */
 const permissionsTab = (c: Context): JSXChild => {
   if (!c.data.permissions.grant)
     return Notice({ tone: 'info', title: t(c, 'users.readOnlyTitle'), message: t(c, 'roles.grantReadOnly') })
-  const modules = [...new Set(c.data.bundles.map((bundle) => String(bundle.module)))]
-  return Section({
-    title: t(c, 'roles.permissionsTitle'),
-    description: t(c, 'roles.permissionsHint'),
-    body: RecordModalForm({
-      kind: c.kind,
-      fields: modules.map((module) =>
-        field(c, {
-          name: `module_${module}`,
-          label: module,
-          type: 'checkbox-group',
-          span: 'full',
-          optionsOrientation: 'vertical',
-          options: c.data.bundles
-            .filter((bundle) => String(bundle.module) === module)
-            .map((bundle) => ({
-              name: bundleFieldName(String(bundle.key)),
-              value: '1',
-              label: String(bundle.label),
-              checked: bundle.held === true,
-            })),
+  const bundles = c.data.bundles
+  const ticked = (bundle: AnyRow): boolean =>
+    c.draftChecked(bundleFieldName(bundle), '1', bundle.held === true)
+  const held = bundles.filter(ticked)
+  /** One box that stands for every bundle under a name prefix, ticked when all of them are. */
+  const allOf = (prefix: string, members: AnyRow[], label: string) => ({
+    name: `${CHECK_ALL}${prefix}`,
+    value: '1',
+    label,
+    checked: members.length > 0 && members.every(ticked),
+  })
+  const sensitive = held.filter((bundle) => bundle.tone === 'sensitive').length
+  const groups = c.data.groups
+    .map((group) => ({
+      ...group,
+      modules: [
+        ...new Set(
+          bundles.filter((bundle) => bundle.group === group.id).map((bundle) => String(bundle.module)),
+        ),
+      ],
+    }))
+    .filter((group) => group.modules.length)
+  return Stack({
+    gap: 'default',
+    items: [
+      Section({
+        title: t(c, 'roles.permissionsSummary'),
+        body: DescriptionList({
+          columns: 3,
+          items: [
+            {
+              id: 'areas',
+              label: t(c, 'roles.areasHeld'),
+              value: String(new Set(held.map((bundle) => String(bundle.module))).size),
+            },
+            { id: 'bundles', label: t(c, 'roles.bundlesHeld'), value: String(held.length) },
+            {
+              id: 'sensitive',
+              label: t(c, 'roles.sensitiveHeld'),
+              value: Badge({
+                label: sensitive ? String(sensitive) : t(c, 'roles.sensitiveNone'),
+                tone: sensitive ? 'danger' : 'positive',
+              }),
+            },
+          ],
         }),
-      ),
-      command: 'setBundles',
-      actions: [Button({ label: t(c, 'action.savePermissions'), variant: 'primary', type: 'submit' })],
-    }),
+      }),
+      Section({
+        title: t(c, 'roles.permissionsTitle'),
+        description: t(c, 'roles.permissionsHint'),
+        body: RecordModalForm({
+          kind: c.kind,
+          fields: [
+            ...groups.map(
+              (group): FieldProps => ({
+                id: `user-role-group-${String(group.id)}`,
+                name: `group_${String(group.id)}`,
+                label: String(group.label),
+                // Open from the start: folding a group is the reader's choice, never a step.
+                open: true,
+                fields: [
+                  // The whole section at once, before its rows.
+                  field(c, {
+                    name: `group_all_${String(group.id)}`,
+                    label: t(c, 'roles.selectGroup'),
+                    type: 'checkbox-group',
+                    span: 'full',
+                    options: [
+                      allOf(
+                        `bundle:${String(group.id)}:`,
+                        bundles.filter((bundle) => bundle.group === group.id),
+                        t(c, 'roles.selectAll'),
+                      ),
+                    ],
+                  }),
+                  ...group.modules.map((module) => {
+                    const own = bundles.filter((bundle) => String(bundle.module) === module)
+                    return field(c, {
+                      name: `module_${module}`,
+                      label: String(own[0]?.area ?? module),
+                      type: 'checkbox-group',
+                      span: 'full',
+                      options: [
+                        // The whole row at once, leading the row it stands for.
+                        allOf(`bundle:${String(group.id)}:${module}:`, own, t(c, 'roles.selectAll')),
+                        ...own.map((bundle) => ({
+                          name: bundleFieldName(bundle),
+                          value: '1',
+                          label: `${String(bundle.short)}${TONE_MARK[String(bundle.tone)] ?? ''}`,
+                          checked: bundle.held === true,
+                        })),
+                      ],
+                    })
+                  }),
+                ],
+              }),
+            ),
+            field(c, { name: 'reason', label: t(c, 'field.reason'), type: 'textarea', span: 'full' }),
+          ],
+          command: 'setBundles',
+          actions: [Button({ label: t(c, 'action.savePermissions'), variant: 'primary', type: 'submit' })],
+        }),
+      }),
+    ],
   })
 }
 
-const bundleFieldName = (key: string): string => `bundle_${key.replaceAll('.', '_')}`
+// Group and module lead the name so an "all" box selects a section or a row by
+// prefix; the colon ends each part, so `stock:` never reaches `stock_staff_channel:`.
+const bundleFieldName = (bundle: AnyRow): string =>
+  `bundle:${String(bundle.group)}:${String(bundle.module)}:${String(bundle.key)}`
 
 /** Who holds this role, wherever they hold it. */
 const holdersTab = (c: Context): JSXChild =>
@@ -379,8 +472,8 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
       input: (form, c) => ({
         roleId: c.id,
         bundleKeys: c.data.bundles
-          .map((bundle) => String(bundle.key))
-          .filter((key) => ['1', 'on', 'true'].includes(String(form.get(bundleFieldName(key)) ?? ''))),
+          .filter((bundle) => ['1', 'on', 'true'].includes(String(form.get(bundleFieldName(bundle)) ?? '')))
+          .map((bundle) => String(bundle.key)),
         reason: text(form, 'reason') || t(c, 'roles.permissionsTitle'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),

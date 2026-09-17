@@ -12,6 +12,12 @@ import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { AUTHORIZATION_EFFECTS, effectiveFunctionKeys, managedRoleHealthIssues } from './authorization.ts'
 import { authorizationRevisionOf } from './authorization.ts'
+import {
+  capabilityTone,
+  permissionArea,
+  permissionGroupLabels,
+  permissionGroupOrder,
+} from './permission-areas.ts'
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
@@ -86,17 +92,34 @@ const bundleChoices = async (ctx: Ctx, roleId: string, lang: Lang): Promise<Row[
     .map(([key, bundle]) => {
       const declared = bundle as { labels?: Record<string, string>; functions?: string[] }
       const functions = declared.functions ?? []
+      const dot = key.indexOf('.')
+      const module = dot === -1 ? key : key.slice(0, dot)
+      const capability = dot === -1 ? key : key.slice(dot + 1)
+      const label = declared.labels?.[lang] ?? key
+      const area = permissionArea(module, lang)
       return {
         key,
-        label: declared.labels?.[lang] ?? key,
-        // The owning module, so the form reads as one section per module.
-        module: key.includes('.') ? key.slice(0, key.indexOf('.')) : key,
+        label,
+        // The row already names the area, so the checkbox says only what it hands out.
+        short: label.split(' · ')[0] ?? label,
+        module,
+        area: area.label,
+        group: area.group,
+        tone: capabilityTone(capability),
         total: functions.length,
         covered: functions.filter((fn) => granted.has(fn)).length,
         held: functions.length > 0 && functions.every((fn) => granted.has(fn)),
       }
     })
-    .sort((a, b) => a.module.localeCompare(b.module) || a.label.localeCompare(b.label))
+    .sort(
+      (a, b) =>
+        permissionGroupOrder.indexOf(a.group) - permissionGroupOrder.indexOf(b.group) ||
+        a.area.localeCompare(b.area, lang) ||
+        a.module.localeCompare(b.module) ||
+        // Seeing and doing first; running the place and private data last.
+        Number(a.tone !== null) - Number(b.tone !== null) ||
+        a.short.localeCompare(b.short, lang),
+    )
 }
 
 /** Who holds this role, wherever they hold it. */
@@ -187,6 +210,7 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
           },
           sources: creating || !managed ? [] : await grantSources(ctx, roleId, lang),
           bundles: creating || managed ? [] : await bundleChoices(ctx, roleId, lang),
+          groups: permissionGroupOrder.map((id) => ({ id, label: permissionGroupLabels[id][lang] })),
           holders: creating || !permissions.holders ? [] : await holders(ctx, roleId),
           revision: await authorizationRevisionOf(ctx),
           permissions,
