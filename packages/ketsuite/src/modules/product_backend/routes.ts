@@ -989,7 +989,9 @@ export const routes: Record<string, RouteEntry> = {
           brands: [],
           taxes: [],
           variantAttributes: [],
-          variants,
+          // The media panel renders exactly the `variants` it is given — the
+          // caller does the paging, unlike the variants tab's own table.
+          variants: visibleMediaVariants,
           attributeLines: [],
           variantMedia,
           variantMediaPage: {
