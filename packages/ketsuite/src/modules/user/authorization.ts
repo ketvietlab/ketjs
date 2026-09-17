@@ -807,6 +807,85 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Bring every role template this deployment declares into the tenant as a
+   * managed role, and bring stale ones up to date.
+   *
+   * Without this a template is a declaration nobody can use: assignment accepts
+   * only managed roles, a managed role exists only once a template is applied, and
+   * nothing applied one. A fresh install therefore had no role to give, and every
+   * template change silently stripped its holders (`stale-managed-role`) until an
+   * operator re-applied it by hand. `ketsuite serve` runs this before it listens,
+   * so both a new and an upgraded install are complete.
+   *
+   * A role a template already backs is kept at its id; a new one takes the
+   * template key as its id. A role at a newer version than the code is left
+   * alone, and so is a custom role, whatever its id.
+   */
+  syncRoleTemplates: defineFn({
+    exposure: 'internal',
+    input: {},
+    output: { ok: 'bool', applied: 'json?', errors: 'json?' },
+    effects: AUTHORIZATION_EFFECTS,
+    handler: async (ctx: Ctx) => {
+      if (!String(ctx.actor ?? '').startsWith('system:'))
+        return invalid([issue('actor', 'user.error.provisionActor')])
+      const applied: string[] = []
+      const skipped: Array<{ roleId: string; errors: unknown }> = []
+      const R = ctx.table('user.Role')
+      const templates = Object.values(ctx.manifest.permissions.roleTemplates).sort((a, b) =>
+        a.key.localeCompare(b.key),
+      )
+      for (const template of templates) {
+        const backing = (await ctx.db.all(from(R).where(eq(R.templateKey, template.key)))).filter(
+          (role) => String(role.mode ?? 'custom') === 'managed',
+        )
+        const targets = backing.length ? backing : [null]
+        for (const role of targets) {
+          const roleId = role ? String(role.id) : template.key
+          if (!role) {
+            const taken = await ctx.db.one(from(R).where(eq(R.id, roleId)))
+            // A custom role already holds the key as its id: never overwrite a local decision.
+            if (taken) continue
+          } else {
+            if (Number(role.templateVersion ?? 0) > template.version) continue
+            const G = ctx.table('user.Grant')
+            const S = ctx.table('user.GrantSource')
+            const current =
+              Number(role.templateVersion) === template.version &&
+              role.templateDigest === template.digest &&
+              managedRoleHealthIssues(
+                ctx.manifest,
+                role,
+                await ctx.db.all(from(G).where(eq(G.roleId, roleId))),
+                await ctx.db.all(from(S).where(eq(S.roleId, roleId))),
+              ).length === 0
+            if (current) continue
+          }
+          const expectedRoleRevision = Number(role?.revision ?? 0)
+          const expectedAuthorizationRevision = await authorizationRevisionOf(ctx)
+          const result = (await authorizationFunctions.applyRoleTemplate!.handler(ctx, {
+            roleId,
+            templateKey: template.key,
+            expectedRoleRevision,
+            expectedAuthorizationRevision,
+            // Keyed on the state being repaired, not only the template: a role that
+            // drifts again after a sync must be applied again, not answered with the
+            // earlier replay. The authorization revision moves with every write.
+            idempotencyKey: `sync:${roleId}:${template.version}:${template.digest}:${expectedRoleRevision}:${expectedAuthorizationRevision}`,
+            reason: 'Áp dụng mẫu vai trò của hệ thống',
+          })) as { ok?: boolean; errors?: unknown }
+          // One template that cannot land — a local role already carries its name, say —
+          // must not keep every other job out of the tenant, nor keep the server down.
+          // It is reported, and the rest are applied.
+          if (result?.ok !== true) skipped.push({ roleId, errors: result?.errors ?? result })
+          else applied.push(roleId)
+        }
+      }
+      return skipped.length ? { ok: true, applied, errors: skipped } : { ok: true, applied }
+    },
+  }),
+
   assignScopedRole: defineFn({
     input: {
       id: 'id',
@@ -1577,14 +1656,17 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
         })
         if (!('dryRun' in inserted) && !inserted.inserted) required('login', 'user.error.loginUnique')
 
+        // A person may be created before any role exists for them. They hold their
+        // workplace and nothing else — no role means no function — until one is
+        // assigned on the access tab. Requiring a role here made hiring impossible
+        // wherever no role template had been applied yet.
         const selection = parseSelection({ ...args, userId, addMembership: true })
-        if (!selection.roleIds.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
         const added = await addSelectedRoles(tx, selection)
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
           required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
         await recordAuthorizationAudit(tx, {
-          event: 'authorization.assignment.created',
+          event: selection.roleIds.length ? 'authorization.assignment.created' : 'authorization.user.created',
           targetKind: 'user',
           targetId: userId,
           userId,

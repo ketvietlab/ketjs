@@ -1,1 +1,4 @@
-export { deployments } from '@ketvietlab/ketsuite/deployment'
+// One product: `ket` commands (provision, migrate) and `ketsuite serve` act on the same deployment.
+import { __DEPLOYMENT__ } from '@ketvietlab/ketsuite/deployment'
+
+export const deployments = [__DEPLOYMENT__]

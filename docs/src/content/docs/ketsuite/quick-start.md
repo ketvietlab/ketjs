@@ -26,9 +26,9 @@ Start the composed repository application with file watching:
 npm run dev
 ```
 
-The workspace entry is `ket.workspace.ts`; it exports the KetSuite deployment used by the CLI. Development
-serves on `127.0.0.1:3000` unless `HOST` or `PORT` overrides it. The packaged SQLite default is
-`.ket/ketsuite.db`.
+The workspace entry is `ket.workspace.ts`; it exports the `ketsuite` development deployment, which composes
+every public module. Development serves on `127.0.0.1:3000` unless `HOST` or `PORT` overrides it. The
+packaged SQLite default is `.ket/ketsuite.db`.
 
 Run a focused test after the first build:
 
@@ -41,16 +41,26 @@ See [Testing KetSuite](/ketsuite/testing/) before running the full verification 
 
 ## Inspect the packaged deployment
 
-The public deployment entry exposes the same composition used by the KetSuite CLI:
+KetSuite ships three products, cut the way Két Việt's own deployments are: each has its own modules,
+datastore and job roles, so one can be released or stopped without the others.
+
+| Deployment | For | SQLite default |
+| --- | --- | --- |
+| `commerce` | Selling, the counter, purchasing, stock, manufacturing and accounting | `.ket/commerce.db` |
+| `hospitality` | Reservations, stays, housekeeping, folios and night audit | `.ket/hospitality.db` |
+| `office` | CRM, projects, purchasing and accounting for a services back office | `.ket/office.db` |
+| `ketsuite` (`dev`) | Every public module in one process; development and tests, never a product | `.ket/ketsuite.db` |
 
 ```ts
 // File: ket.workspace.ts
-import { createKetsuiteDeployment, ketsuite } from '@ketvietlab/ketsuite/deployment'
+import { commerce, createCommerceDeployment, ketsuite } from '@ketvietlab/ketsuite/deployment'
 ```
 
-Use `ketsuite` when the packaged SQLite policy is correct. Use `createKetsuiteDeployment(openStore)` when a
-deployment supplies another KetJS datastore while retaining KetSuite's module graph,
-sessions, queues, and pages.
+Use the exported deployment when the packaged SQLite policy is correct, or its `create…Deployment(openStore)`
+factory when a deployment supplies another KetJS datastore while keeping the product's module graph,
+roles, sessions, queues and pages. `ketsuite serve --deployment NAME` serves one of them (`commerce` by
+default). Before it listens it applies that product's role templates, so a new install already has
+roles to assign and a changed template is brought up to date.
 
 ## Create an extension workspace
 
@@ -58,18 +68,20 @@ To test KetSuite as a package consumer rather than modify the monorepo, scaffold
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketsuite@latest new my_suite
+npx -y @ketvietlab/ketsuite@latest new my_suite --deployment commerce
 cd my_suite
 npm install
 npm run dev
 ```
 
-The generated workspace re-exports `@ketvietlab/ketsuite/deployment`; it deliberately does not copy the module
-list. Add private modules by creating your own deployment composition instead of editing generated package code.
+A generated app is one product: its workspace imports that deployment from `@ketvietlab/ketsuite/deployment`
+and its scripts pass the same `--deployment`, so `ket` and `ketsuite serve` reach the same database. It
+deliberately does not copy the module list. Add private modules by creating your own deployment composition
+instead of editing generated package code.
 
 For local-only inspection, open `http://127.0.0.1:3000/admin/login` and sign in with `admin` / `admin`.
 
-The generated `dev` script explicitly runs `ketsuite serve --dev-admin`. On an empty SQLite database,
+The generated `dev` script explicitly runs `ketsuite serve --deployment <product> --dev-admin`. On an empty SQLite database,
 this creates the development company and the `admin` superuser. Repeated starts are idempotent. The
 password is intentionally insecure: keep the server on its default loopback host, do not share the
 database, and never expose this development credential to another machine.
