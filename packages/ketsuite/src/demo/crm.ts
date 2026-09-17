@@ -33,7 +33,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-01',
     kind: 'lead',
-    name: 'Hỏi báo giá đồng phục vận hành 200 bộ',
+    name: 'Hỏi báo giá đồng phục 200 bộ – Đại Phát',
     partnerId: 'demo-partner-dai-phat',
     stageId: STAGE.new,
     priority: '1',
@@ -42,7 +42,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-02',
     kind: 'lead',
-    name: 'Tư vấn giải pháp bảo hộ lao động cho xưởng dệt',
+    name: 'PPE xưởng dệt theo quý – Sông Hồng',
     partnerId: 'demo-partner-song-hong',
     stageId: STAGE.qualified,
     priority: '2',
@@ -51,7 +51,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-03',
     kind: 'lead',
-    name: 'Đăng ký nhận catalogue quà tặng doanh nghiệp',
+    name: 'Catalogue quà tặng – Biển Xanh',
     partnerId: 'demo-partner-bien-xanh',
     stageId: STAGE.new,
     priority: '0',
@@ -60,7 +60,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-04',
     kind: 'lead',
-    name: 'Cần báo giá mũ bảo hộ cho công trường mới khởi công',
+    name: 'Mũ bảo hộ công trường mới – Việt Nhật',
     partnerId: 'demo-partner-viet-nhat',
     stageId: STAGE.qualified,
     priority: '2',
@@ -69,7 +69,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-05',
     kind: 'lead',
-    name: 'Hỏi mẫu áo mưa công trường cho đội thi công ngoài trời',
+    name: 'Áo mưa công trường – Hồng Hà',
     partnerId: 'demo-partner-hong-ha',
     stageId: STAGE.new,
     priority: '1',
@@ -78,7 +78,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-06',
     kind: 'lead',
-    name: 'Tìm nhà cung cấp thẻ nhân viên cho chi nhánh mới',
+    name: 'Thẻ nhân viên chi nhánh mới – Thái Sơn',
     partnerId: 'demo-partner-thai-son',
     stageId: STAGE.new,
     priority: '0',
@@ -87,7 +87,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-07',
     kind: 'lead',
-    name: 'Yêu cầu demo dây đai an toàn làm việc trên cao',
+    name: 'Demo dây đai an toàn – Tây Bắc',
     partnerId: 'demo-partner-tay-bac',
     stageId: STAGE.qualified,
     priority: '2',
@@ -96,7 +96,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-08',
     kind: 'lead',
-    name: 'Hỏi giá sỉ bình nước giữ nhiệt in logo',
+    name: 'Bình giữ nhiệt in logo – Mặt Trời Việt',
     partnerId: 'demo-partner-mat-troi-viet',
     stageId: STAGE.new,
     priority: '0',
@@ -105,7 +105,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-09',
     kind: 'lead',
-    name: 'Cần tư vấn bộ đồng phục lễ tân cho khách sạn mới',
+    name: 'Đồng phục lễ tân khách sạn – Biển Xanh',
     partnerId: 'demo-partner-bien-xanh',
     stageId: STAGE.qualified,
     priority: '1',
@@ -114,7 +114,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-10',
     kind: 'lead',
-    name: 'Yêu cầu báo giá khẩu trang than hoạt tính số lượng lớn',
+    name: 'Khẩu trang số lượng lớn – An Bình',
     partnerId: 'demo-partner-an-binh',
     stageId: STAGE.new,
     priority: '1',
@@ -123,7 +123,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-11',
     kind: 'lead',
-    name: 'Hỏi thời gian giao hàng ủng bảo hộ mũi thép',
+    name: 'Ủng mũi thép – Thép Việt',
     partnerId: 'demo-partner-thep-viet',
     stageId: STAGE.new,
     priority: '1',
@@ -132,7 +132,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-12',
     kind: 'lead',
-    name: 'Tìm hiểu dịch vụ in logo lên balo dụng cụ',
+    name: 'In logo lên balo – Minh Đức',
     partnerId: 'demo-partner-minh-duc',
     stageId: STAGE.qualified,
     priority: '0',
@@ -141,7 +141,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-13',
     kind: 'lead',
-    name: 'Đề nghị báo giá bộ sơ cứu cho các tổ đội thi công',
+    name: 'Bộ sơ cứu cho tổ đội – Hòa Bình',
     partnerId: 'demo-partner-hoa-binh',
     stageId: STAGE.new,
     priority: '2',
@@ -150,7 +150,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-14',
     kind: 'lead',
-    name: 'Hỏi mẫu vải áo khoác vận hành trước khi đặt số lượng lớn',
+    name: 'Mẫu vải áo khoác vận hành – Phương Nam',
     partnerId: 'demo-partner-phuong-nam',
     stageId: STAGE.new,
     priority: '1',
@@ -160,7 +160,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-15',
     kind: 'opportunity',
-    name: 'Trang bị đồng phục toàn bộ công trường Đại Phát giai đoạn 1',
+    name: 'Đồng phục công trường GĐ1 – Đại Phát',
     partnerId: 'demo-partner-dai-phat',
     stageId: STAGE.proposition,
     priority: '3',
@@ -170,7 +170,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-16',
     kind: 'opportunity',
-    name: 'Hợp đồng cung cấp PPE định kỳ quý cho Sông Hồng',
+    name: 'Hợp đồng PPE theo quý – Sông Hồng',
     partnerId: 'demo-partner-song-hong',
     stageId: STAGE.qualified,
     priority: '2',
@@ -180,7 +180,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-17',
     kind: 'opportunity',
-    name: 'Gói quà tặng cuối năm cho đối tác của Biển Xanh',
+    name: 'Quà tặng cuối năm – Biển Xanh',
     partnerId: 'demo-partner-bien-xanh',
     stageId: STAGE.proposition,
     priority: '1',
@@ -191,7 +191,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-18',
     kind: 'opportunity',
-    name: 'Đơn hàng mũ bảo hộ và kính chống bụi cho Việt Nhật',
+    name: 'Mũ bảo hộ & kính bụi – Việt Nhật',
     partnerId: 'demo-partner-viet-nhat',
     stageId: STAGE.proposition,
     priority: '2',
@@ -201,7 +201,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-19',
     kind: 'opportunity',
-    name: 'Trang bị áo mưa và ủng cho đội thi công Hồng Hà',
+    name: 'Áo mưa & ủng thi công – Hồng Hà',
     partnerId: 'demo-partner-hong-ha',
     stageId: STAGE.qualified,
     priority: '1',
@@ -211,7 +211,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-20',
     kind: 'opportunity',
-    name: 'Hệ thống thẻ nhân viên toàn hệ thống Thái Sơn',
+    name: 'Thẻ nhân viên toàn hệ thống – Thái Sơn',
     partnerId: 'demo-partner-thai-son',
     stageId: STAGE.proposition,
     priority: '1',
@@ -223,7 +223,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-21',
     kind: 'opportunity',
-    name: 'Dây đai an toàn cho toàn bộ đội khai thác Tây Bắc',
+    name: 'Dây đai an toàn đội khai thác – Tây Bắc',
     partnerId: 'demo-partner-tay-bac',
     stageId: STAGE.proposition,
     priority: '3',
@@ -234,7 +234,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-22',
     kind: 'opportunity',
-    name: 'Bình nước và ô cầm tay cho dự án điện mặt trời',
+    name: 'Bình nước & ô cầm tay – Mặt Trời Việt',
     partnerId: 'demo-partner-mat-troi-viet',
     stageId: STAGE.new,
     priority: '1',
@@ -244,7 +244,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-23',
     kind: 'opportunity',
-    name: 'Đồng phục lễ tân và sơ mi văn phòng cho khách sạn mới',
+    name: 'Đồng phục lễ tân khách sạn mới – Biển Xanh',
     partnerId: 'demo-partner-bien-xanh',
     stageId: STAGE.proposition,
     priority: '2',
@@ -254,7 +254,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-24',
     kind: 'opportunity',
-    name: 'Khẩu trang và nút tai chống ồn theo hợp đồng năm',
+    name: 'Khẩu trang & nút tai theo năm – An Bình',
     partnerId: 'demo-partner-an-binh',
     stageId: STAGE.qualified,
     priority: '2',
@@ -264,7 +264,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-25',
     kind: 'opportunity',
-    name: 'Ủng bảo hộ mũi thép cho ca sản xuất mới của Thép Việt',
+    name: 'Ủng mũi thép ca mới – Thép Việt',
     partnerId: 'demo-partner-thep-viet',
     stageId: STAGE.proposition,
     priority: '2',
@@ -275,7 +275,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-26',
     kind: 'opportunity',
-    name: 'Balo và túi dụng cụ đồng bộ cho đội kỹ thuật Minh Đức',
+    name: 'Balo & túi dụng cụ – Minh Đức',
     partnerId: 'demo-partner-minh-duc',
     stageId: STAGE.proposition,
     priority: '1',
@@ -285,7 +285,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-27',
     kind: 'opportunity',
-    name: 'Bộ sơ cứu và PPE cơ bản cho các công trường Hòa Bình',
+    name: 'PPE công trường – Hòa Bình',
     partnerId: 'demo-partner-hoa-binh',
     stageId: STAGE.qualified,
     priority: '2',
@@ -295,7 +295,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-28',
     kind: 'opportunity',
-    name: 'Nội thất và đồng phục khai trương văn phòng Phương Nam',
+    name: 'Nội thất & đồng phục khai trương – Phương Nam',
     partnerId: 'demo-partner-phuong-nam',
     stageId: STAGE.proposition,
     priority: '1',
@@ -307,7 +307,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-29',
     kind: 'opportunity',
-    name: 'Găng tay cách điện cho đội bảo trì điện hạ thế',
+    name: 'Găng tay cách điện – Hoàng Long',
     partnerId: 'demo-partner-hoang-long',
     stageId: STAGE.proposition,
     priority: '2',
@@ -318,7 +318,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-30',
     kind: 'opportunity',
-    name: 'Đồng phục sự kiện hội chợ thương mại Hoàng Long',
+    name: 'Đồng phục sự kiện hội chợ – Hoàng Long',
     partnerId: 'demo-partner-hoang-long',
     stageId: STAGE.new,
     priority: '0',
@@ -328,7 +328,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-31',
     kind: 'opportunity',
-    name: 'Trang bị PPE cho xưởng cơ khí mới của Việt Nhật',
+    name: 'PPE xưởng cơ khí mới – Việt Nhật',
     partnerId: 'demo-partner-viet-nhat',
     stageId: STAGE.qualified,
     priority: '2',
@@ -338,7 +338,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-32',
     kind: 'opportunity',
-    name: 'Yếm phản quang cho đội điều tiết giao thông công trình',
+    name: 'Yếm phản quang giao thông – Đại Phát',
     partnerId: 'demo-partner-dai-phat',
     stageId: STAGE.proposition,
     priority: '1',
@@ -349,7 +349,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-33',
     kind: 'opportunity',
-    name: 'Nón bảo hiểm công trường cho đội vận hành xe nâng',
+    name: 'Nón bảo hiểm xe nâng – Sông Hồng',
     partnerId: 'demo-partner-song-hong',
     stageId: STAGE.proposition,
     priority: '1',
@@ -359,7 +359,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-34',
     kind: 'opportunity',
-    name: 'Đèn pin đội đầu và máy đo nhiệt cho tổ bảo trì',
+    name: 'Đèn pin & nhiệt kế – Thái Sơn',
     partnerId: 'demo-partner-thai-son',
     stageId: STAGE.proposition,
     priority: '0',
@@ -371,7 +371,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-35',
     kind: 'opportunity',
-    name: 'Áo khoác vận hành đồng bộ cho toàn bộ đội logistics',
+    name: 'Áo khoác vận hành đồng bộ – Miền Trung',
     partnerId: 'demo-partner-mien-trung',
     stageId: STAGE.qualified,
     priority: '2',
@@ -381,7 +381,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-36',
     kind: 'opportunity',
-    name: 'Găng tay hàn và tạp dề da cho xưởng cơ khí Cơ khí Chính xác',
+    name: 'Găng tay hàn & tạp dề – Việt Nhật',
     partnerId: 'demo-partner-viet-nhat',
     stageId: STAGE.new,
     priority: '1',
@@ -391,7 +391,7 @@ const CASES: CaseSeed[] = [
   {
     id: 'demo-case-37',
     kind: 'opportunity',
-    name: 'Đồng phục và quà tặng khai trương chi nhánh Điện lạnh Thái Sơn',
+    name: 'Đồng phục khai trương chi nhánh – Thái Sơn',
     partnerId: 'demo-partner-thai-son',
     stageId: STAGE.proposition,
     priority: '2',
