@@ -16,8 +16,7 @@
   }
 
   /* One fused box — the search field and the single caret toggle share one
-     border, the way Odoo's search bar and its dropdown toggler sit as one
-     Bootstrap input-group. */
+     border, like a single input-group rather than two adjacent controls. */
   :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
     display: flex;
     align-items: stretch;
@@ -56,8 +55,8 @@
     color: var(--kv-accent-active);
     font-size: var(--kv-text-sm);
   }
-  /* Odoo's own FACET_COLORS split: filter/field stay the accent tone above,
-     group-by reads as info (a distinct, cooler tone), favorite as warning. */
+  /* filter/field stay the accent tone above; group-by reads as info (a
+     distinct, cooler tone), favorite as warning — one tone per facet kind. */
   :where([data-kv-design-system]) [data-ui="search-filter-facet"][data-type="groupBy"] {
     border-color: var(--kv-info-border);
     background: var(--kv-info-bg);
@@ -198,14 +197,14 @@
     color: var(--kv-accent-active);
   }
 
-  /* Odoo's SearchBarMenu panel: 3 columns side by side — but only past a width
-     the panel can actually afford. A `right: 0` panel is anchored to the toggle,
-     not the viewport (same as every other [data-ui="menu-panel"] here), so a
-     panel wide enough for 3 columns would push past the left edge of the window
-     on anything narrower than a very wide, very-right-anchored trigger. Odoo
-     itself only goes side-by-side at its `lg` breakpoint (`w-100 w-lg-auto`) and
-     stacks full-width below it; this does the same with a plain media query in
-     place of Bootstrap's grid classes. */
+  /* The Filters/Group By/Favorites panel: 3 columns side by side — but only
+     past a width the panel can actually afford. A `right: 0` panel is
+     anchored to the toggle, not the viewport (same as every other
+     [data-ui="menu-panel"] here), so a panel wide enough for 3 columns would
+     push past the left edge of the window on anything narrower than a very
+     wide, very-right-anchored trigger. This goes side-by-side only past a
+     wide breakpoint and stacks full-width below it, via a plain media
+     query. */
   :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
     display: grid;
     gap: var(--kv-space-3);

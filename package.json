@@ -11,6 +11,7 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "build": "node tools/build.mjs",
     "build:watch": "tsx tools/watch-build.ts",
     "check": "tsc -p tsconfig.json",
