@@ -140,6 +140,10 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
   return (
     <div
       data-ui="table-scroll"
+      // The design system's data-table rules are all scoped to this pattern, so
+      // without it the application table drew none of them: the row link kept the
+      // browser's default underline because nothing set `text-decoration`.
+      data-pattern="data-table"
       data-gutter={table.gutter ?? null}
       data-responsive={table.responsive ?? 'scroll'}
     >

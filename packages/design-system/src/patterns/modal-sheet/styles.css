@@ -122,6 +122,14 @@
     gap: var(--kv-space-1);
   }
 
+  /* The title and what state its record is in read as one line. */
+  :where([data-kv-design-system]) [data-ui="modal-title-row"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
   :where([data-kv-design-system]) [data-ui="modal-title"] {
     min-width: 0;
     margin: 0;
@@ -148,11 +156,15 @@
     width: 2rem;
     height: 2rem;
     place-items: center;
+    appearance: none;
+    border: none;
     border-radius: 50%;
+    background: none;
     color: var(--kv-color-ink-muted);
     font-size: 1.4rem;
     line-height: 1;
     text-decoration: none;
+    cursor: pointer;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-close"]:hover {
@@ -165,6 +177,12 @@
     overflow: auto;
     padding: var(--kv-space-5);
     overscroll-behavior: contain;
+  }
+
+  /* TabbedView owns the scroll container so its navigation stays visible. */
+  :where([data-kv-design-system]) [data-ui="modal-body"]:has(> [data-ui="tabbed-view"]) {
+    min-height: 0;
+    overflow: hidden;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-actions"] {
