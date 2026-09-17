@@ -38,6 +38,15 @@
 
   :where([data-kv-design-system])
     [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="list-filter-menus"] {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
     [data-ui="list-chrome-row"][data-row="tail"] {
     flex: 0 1 auto;
     flex-wrap: nowrap;
