@@ -1,5 +1,6 @@
 import { asc, defineFn, deleteFrom, desc, eq, from, like, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { sharedCache } from '../../cache.ts'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
 import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
 
@@ -21,22 +22,21 @@ const changeIssues = (errors: Array<{ field: string }>): Issue[] =>
  * A count that stale-for-an-hour is fine for a partner directory, so cache
  * it here rather than recomputing on every request.
  *
- * This is a plain in-process map, not a per-tenant store: correct for how
- * every `ketsuite` deployment in this repo actually runs today (one process,
- * one datastore), but a tenant-fleet deployment sharing this process across
- * tenants would need this moved into a per-tenant cache instead.
+ * Goes through `sharedCache()` — Redis when `REDIS_URL` is set, so every
+ * process/pod sees the same cache and the same invalidation, an in-process
+ * Map otherwise. See `../../cache.ts`.
  */
 const COUNT_CACHE_TTL_MS = 60 * 60 * 1000
-const partnerCountCache = new Map<string, { count: number; expiresAt: number }>()
+const COUNT_CACHE_PREFIX = 'partner:count:'
 /**
  * Every write that could change any cached count's answer — a partner's
- * kind/active state, or its role membership — clears the whole cache rather
- * than trying to work out which of the cached filter combinations it
+ * kind/active state, or its role membership — clears the whole namespace
+ * rather than trying to work out which of the cached filter combinations it
  * affects. Writes are rare next to reads here, so this keeps the cache
  * exactly as fresh as "no cache" between them, while the TTL above is only
  * the fallback for whatever this list misses.
  */
-const invalidatePartnerCountCache = (): void => partnerCountCache.clear()
+const invalidatePartnerCountCache = (): Promise<void> => sharedCache().clear(COUNT_CACHE_PREFIX)
 
 type AddressArgs = Record<string, unknown>
 const normalizedEmail = (value: unknown): string | null => {
@@ -291,15 +291,12 @@ export const functions: Record<string, FnSpec> = {
     output: { count: 'int' },
     effects: ['read:partner.Partner', 'read:partner.Role'],
     handler: async (ctx: Ctx, a) => {
-      const cacheKey = JSON.stringify([
-        a.role ?? null,
-        a.kind ?? null,
-        a.search ?? null,
-        a.includeArchived === true,
-      ])
-      const now = Date.now()
-      const cached = partnerCountCache.get(cacheKey)
-      if (cached && cached.expiresAt > now) return { count: cached.count }
+      const cache = sharedCache()
+      const cacheKey =
+        COUNT_CACHE_PREFIX +
+        JSON.stringify([a.role ?? null, a.kind ?? null, a.search ?? null, a.includeArchived === true])
+      const cached = await cache.get(cacheKey)
+      if (cached !== null) return { count: Number(cached) }
 
       const P = ctx.table('partner.Partner')
       let q = from(P).select(P.id)
@@ -319,7 +316,7 @@ export const functions: Record<string, FnSpec> = {
         )
         count = rows.filter((row) => holders.has(row.id)).length
       }
-      partnerCountCache.set(cacheKey, { count, expiresAt: now + COUNT_CACHE_TTL_MS })
+      await cache.set(cacheKey, String(count), COUNT_CACHE_TTL_MS)
       return { count }
     },
   }),
@@ -472,7 +469,7 @@ export const functions: Record<string, FnSpec> = {
       if (!existing) cs = cs.put('active', true)
       if (!cs.valid) return invalid(changeIssues(cs.errors))
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
-      invalidatePartnerCountCache()
+      await invalidatePartnerCountCache()
       return { ok: true, id: a.id }
     },
   }),
@@ -485,7 +482,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       await ctx.db.update('partner.Partner', { id: a.id }, { active: a.active } as Row)
-      invalidatePartnerCountCache()
+      await invalidatePartnerCountCache()
       return { id: a.id, active: a.active }
     },
   }),
@@ -509,7 +506,7 @@ export const functions: Record<string, FnSpec> = {
       const rows = await ctx.db.all(from(P).select(P.id).where(inArray(P.id, ids)))
       for (const row of rows)
         await ctx.db.update('partner.Partner', { id: row.id }, { active: a.active } as Row)
-      if (rows.length) invalidatePartnerCountCache()
+      if (rows.length) await invalidatePartnerCountCache()
       return { ok: true, updated: rows.length }
     },
   }),
@@ -663,7 +660,7 @@ export const functions: Record<string, FnSpec> = {
       })
       if ('dryRun' in inserted) return { ok: true, id: a.id }
       if (inserted.inserted) {
-        invalidatePartnerCountCache()
+        await invalidatePartnerCountCache()
         return { ok: true, id: a.id }
       }
       return { ok: true }
@@ -681,7 +678,7 @@ export const functions: Record<string, FnSpec> = {
       const { changes } = await ctx.db.del(
         deleteFrom(R).where(eq(R.partnerId, a.partnerId), eq(R.role, a.role)),
       )
-      if (changes) invalidatePartnerCountCache()
+      if (changes) await invalidatePartnerCountCache()
       return { ok: true, removed: changes }
     },
   }),
