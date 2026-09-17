@@ -3,7 +3,7 @@
 import { buildProject, checkProject } from './project.ts'
 import { serveProject } from './server.ts'
 
-const VERSION = '0.1.5'
+const VERSION = '0.1.23'
 const HELP = `Ket view tools ${VERSION}
 
 Usage:
