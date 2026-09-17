@@ -114,7 +114,10 @@ test('record modal: a record with several tabs keeps one height while tabs switc
   // The record layer asks for a fixed dialog only when there is more than one tab to switch between.
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
-  assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
+  assert.match(
+    call,
+    /height:\s*\(definition\.tabs\?\.length \?\? 0\) \+ \(definition\.extensionTabs \? 1 : 0\) > 1 \? 'fixed' : 'content'/u,
+  )
   assert.match(call, /fixedHeight: definition\.fixedHeight/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
@@ -178,6 +181,18 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: tabs another module adds follow the declared ones through the same filter', () => {
+  const visible = runtime.slice(
+    runtime.indexOf('const visibleTabs = '),
+    runtime.indexOf('const contextFor = '),
+  )
+  assert.match(
+    visible,
+    /\[\.\.\.\(definition\.tabs \?\? \[\]\), \.\.\.\(definition\.extensionTabs\?\.\(context\) \?\? \[\]\)\]/u,
+  )
+  assert.match(visible, /tab\.visible\?\.\(context\) \?\? true/u)
 })
 
 test('record modal: tab layout is owned by the runtime instead of module views', () => {
