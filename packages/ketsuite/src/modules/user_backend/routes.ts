@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { profileScreen, rolesScreen, usersScreen } from './screens/index.ts'
+import { profileScreen, usersScreen } from './screens/index.ts'
 import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import type { TailMenu } from '../../ui/index.ts'
@@ -243,30 +243,11 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-  '/admin/roles':
-    (ctx: ServeContext): Route =>
-    async (url, req) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
-      return adminPage(ctx, url, req, {
-        title: 'user_backend.roles.title',
-        active: '/admin/roles',
-        body: async (_, frame) =>
-          rolesScreen(_, frame, {
-            // A row and the create action open the same record modal over this
-            // collection, which is what the design system asks of a collection.
-            rows: (await rolesOf(ctx, url, req)).map((row) => ({
-              ...row,
-              detailHref: recordModalHref(`${url.pathname}${url.search}`, {
-                kind: 'user.role',
-                id: row.id,
-                tab: 'info',
-              }),
-            })),
-            createHref: recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.role' }),
-          }),
-      })
-    },
+  // No `/admin/roles`. Assignment only accepts managed roles (`assertAssignableRoles`),
+  // so a custom role made on that screen could never be given to anyone. Roles come
+  // from role templates until custom roles are assignable; the screen, its record
+  // modal (`modal/role-modal-view.tsx`) and `user.roleModalContext` stay in source,
+  // unregistered, for when they are.
 
   '/admin/profile':
     (ctx: ServeContext): Route =>

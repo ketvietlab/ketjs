@@ -8,11 +8,5 @@ export const menus: Record<string, MenuDef> = {
     needs: 'user.listUsers',
     sequence: 25,
   },
-  'admin.roles': {
-    parent: 'admin.config',
-    label: 'menu.roles',
-    path: '/admin/roles',
-    needs: 'user.listRoles',
-    sequence: 26,
-  },
+  // `admin.roles` is off with its route: see the note in routes.ts.
 }

@@ -4,7 +4,9 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
-test('roles HTTP list preserves locale, encoded identity and GET-only semantics', async (t: TestContext) => {
+// The roles screen is off: assignment accepts only managed roles, so a custom role
+// made there could never be given to anyone. Nothing may reach it by URL or menu.
+test('the roles screen is not served and not offered in the menu', async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
@@ -20,17 +22,14 @@ test('roles HTTP list preserves locale, encoded identity and GET-only semantics'
     superuser: true,
   })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
-  await fixture('user.saveRole', { id: 'manager/a', name: 'Manager', description: 'Operational manager' })
   await app.client.login({ login: 'admin', password: 'correct horse' })
 
-  const response = await app.client.get('/admin/roles?lang=en')
-  const html = await response.text()
-  assert.equal(response.status, 200)
-  assert.match(html, /data-ui="list-page"/)
-  // A row and the create action open the role over its own collection, keeping the
-  // list's query, rather than navigating to a record page.
-  assert.match(html, /data-row-href="[^"]*record=user\.role%3Amanager%2Fa[^"]*tab=info"/)
-  assert.match(html, /href="[^"]*record=user\.role%3Anew"/)
-  assert.doesNotMatch(html, /href="\/admin\/roles\/new/)
-  assert.equal((await app.client.request('/admin/roles?lang=en', { method: 'POST' })).status, 405)
+  const roles = await (await app.client.get('/admin/roles?lang=en')).text()
+  assert.doesNotMatch(roles, /data-ui="list-page"/)
+  const users = await (await app.client.get('/admin/users?lang=en')).text()
+  assert.match(users, /data-ui="list-page"/)
+  assert.doesNotMatch(users, /href="\/admin\/roles/)
+  // No role modal host is placed, so a hand-typed `record=user.role:…` opens nothing.
+  assert.doesNotMatch(users, /data-record-kind="user\.role"/)
+  assert.match(users, /data-record-kind="user\.user"/)
 })

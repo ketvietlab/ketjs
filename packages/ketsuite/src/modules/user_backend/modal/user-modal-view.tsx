@@ -190,22 +190,28 @@ const createFields = (c: Context): FieldProps[] => {
           }),
         ]
       : []),
-    field(c, {
-      name: 'roleIds',
-      label: t(c, 'field.jobRoles'),
-      type: 'checkbox-group',
-      required: true,
-      span: 'full',
-      // One role per line: a person can hold several, and a row of boxes hides that.
-      optionsOrientation: 'vertical',
-      options: c.data.roles.map((role) => ({
-        name: roleFieldName(String(role.id)),
-        value: '1',
-        label: String(role.name),
-        // What was ticked before a refusal comes back ticked.
-        checked: c.draftChecked(roleFieldName(String(role.id))),
-      })),
-    }),
+    // Roles are optional: someone created without one holds no function until a
+    // role is assigned, and there may be none to offer yet.
+    ...(c.data.roles.length
+      ? [
+          field(c, {
+            name: 'roleIds',
+            label: t(c, 'field.jobRoles'),
+            type: 'checkbox-group',
+            span: 'full',
+            help: t(c, 'users.rolesOptionalHint'),
+            // One role per line: a person can hold several, and a row of boxes hides that.
+            optionsOrientation: 'vertical',
+            options: c.data.roles.map((role) => ({
+              name: roleFieldName(String(role.id)),
+              value: '1',
+              label: String(role.name),
+              // What was ticked before a refusal comes back ticked.
+              checked: c.draftChecked(roleFieldName(String(role.id))),
+            })),
+          }),
+        ]
+      : []),
     field(c, {
       name: 'reason',
       label: t(c, 'field.reason'),
@@ -217,14 +223,21 @@ const createFields = (c: Context): FieldProps[] => {
 }
 
 const createView = (c: Context): JSXChild =>
-  !c.data.roles.length
-    ? // Hiring asks for at least one role, so without one the form cannot succeed.
-      Notice({
-        tone: 'warning',
-        title: t(c, 'access.noAssignableRoles'),
-        message: t(c, 'access.noAssignableRolesHint'),
-      })
-    : Section({
+  Stack({
+    gap: 'default',
+    items: [
+      // No role to offer does not stop the hire; it says why the person will start
+      // with no access.
+      ...(c.data.roles.length
+        ? []
+        : [
+            Notice({
+              tone: 'info',
+              title: t(c, 'access.noAssignableRoles'),
+              message: t(c, 'users.createWithoutRolesHint'),
+            }),
+          ]),
+      Section({
         title: t(c, 'users.newTitle'),
         body: RecordModalForm({
           kind: c.kind,
@@ -232,7 +245,9 @@ const createView = (c: Context): JSXChild =>
           command: 'create',
           actions: [Button({ label: t(c, 'action.createUser'), variant: 'primary', type: 'submit' })],
         }),
-      })
+      }),
+    ],
+  })
 
 const profileFields = (c: Context): FieldProps[] => [
   field(c, { name: 'name', label: t(c, 'field.name'), value: c.data.record.name, required: true }),
