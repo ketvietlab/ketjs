@@ -62,7 +62,7 @@ test('refuses an invalid stock/tracking combination without touching the name', 
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Theo dõi tồn kho').uncheck()
   await dialog.getByLabel('Truy xuất').selectOption('serial')
-  await dialog.getByRole('button', { name: 'Lưu theo dõi tồn kho' }).click()
+  await dialog.getByRole('button', { name: 'Lưu', exact: true }).click()
   await expect(dialog.locator('select[name="tracking"]')).toHaveAttribute('aria-invalid', 'true')
   await expect(dialog.locator('#product-template-tracking-error')).toContainText(
     'sản phẩm không lưu kho phải dùng tracking none',
@@ -72,15 +72,19 @@ test('refuses an invalid stock/tracking combination without touching the name', 
   await expect(dialog.getByLabel('Theo dõi tồn kho')).toBeChecked()
 })
 
-test('archives and restores from the record header', async ({ page }) => {
+test('archives and restores from the footer menu', async ({ page }) => {
   await page.goto('/admin/product/templates?record=product.template:tpl-review&tab=general&lang=vi')
   const dialog = page.getByRole('dialog')
+  // Archive and restore live in the footer's More menu.
+  const more = dialog.locator('[data-ui="menu-trigger"]', { hasText: 'Thêm' })
   await expect(dialog.getByText('Đang hoạt động')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Lưu trữ' }).click()
-  await expect(dialog.getByRole('button', { name: 'Khôi phục' })).toBeVisible()
+  await more.click()
+  await dialog.getByRole('menuitem', { name: 'Lưu trữ' }).click()
+  await expect(dialog.getByText('Đã lưu trữ')).toBeVisible()
 
-  await dialog.getByRole('button', { name: 'Khôi phục' }).click()
-  await expect(dialog.getByRole('button', { name: 'Lưu trữ' })).toBeVisible()
+  await more.click()
+  await dialog.getByRole('menuitem', { name: 'Khôi phục' }).click()
+  await expect(dialog.getByText('Đang hoạt động')).toBeVisible()
 })
 
 test('builds attributes and variants in one editor and saves them together', async ({ page }) => {
@@ -111,7 +115,8 @@ test('builds attributes and variants in one editor and saves them together', asy
   await editor.getByRole('button', { name: 'Thêm biến thể' }).click()
   await rows.nth(2).getByLabel('Màu sắc').selectOption('color-blue')
   await expect(rows.nth(2)).toContainText('Trùng với #1')
-  const save = editor.getByRole('button', { name: 'Lưu thuộc tính & biến thể' })
+  // Save sits in the modal footer, outside the editor island.
+  const save = dialog.getByRole('button', { name: 'Lưu', exact: true })
   await expect(save).toBeDisabled()
   await rows.nth(2).getByRole('button', { name: 'Bỏ' }).click()
 

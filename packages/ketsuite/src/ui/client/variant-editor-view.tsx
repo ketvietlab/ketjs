@@ -10,7 +10,7 @@
 // It lives in the kit because it writes markup (tools/ui-audit.ts); the product
 // module only supplies the setup, the labels and whether the viewer may save.
 
-import { each, signal } from '@ketvietlab/ketjs-view'
+import { each, effect, signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, IslandProps, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Badge, createLightbox, LightboxThumb, Notice } from '@ketvietlab/design-system'
 import type { LightboxLabels } from '@ketvietlab/design-system'
@@ -950,21 +950,17 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
             >
               {t('reset')}
             </button>
-            <button
-              type="button"
-              data-ui="action"
-              data-variant="primary"
-              disabled={blocked()}
-              aria-busy={saving() ? 'true' : null}
-              onClick={() => void save()}
-            >
-              {t('save')}
-            </button>
           </div>
         ) : null}
       </footer>
     )
   }
+
+  // Save lives in the modal footer, outside this island: it submits this empty form,
+  // and the island keeps that button's disabled and busy state in step with its own.
+  const saveForm = variantEditorSaveForm(props.id)
+  const saveButton = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>(`button[form="${saveForm}"]`)
 
   return {
     view: () => (
@@ -974,11 +970,31 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
         {attributesView()}
         {variantsView()}
         {footerView()}
+        <form id={saveForm} hidden />
         {viewer.layer()}
       </div>
     ),
     mount: ({ lifetime }) => {
       viewer.attach(lifetime)
+      // Capture phase, so the record modal's own submit handler never sees this form.
+      document.addEventListener(
+        'submit',
+        (event) => {
+          if (!(event.target instanceof HTMLFormElement) || event.target.id !== saveForm) return
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          if (!blocked()) void save()
+        },
+        { signal: lifetime, capture: true },
+      )
+      const stop = effect(() => {
+        const button = saveButton()
+        if (!button) return
+        button.disabled = blocked()
+        if (saving()) button.setAttribute('aria-busy', 'true')
+        else button.removeAttribute('aria-busy')
+      })
+      lifetime.addEventListener('abort', stop)
       document.addEventListener(
         'click',
         (event) => {
@@ -997,6 +1013,9 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
     },
   }
 }
+
+/** The id of the form a Save button outside the island submits to save this editor. */
+export const variantEditorSaveForm = (id: string): string => `${id}-save`
 
 export const variantEditor = (props: IslandProps): IslandController =>
   createVariantEditorView(props as unknown as VariantEditorProps)

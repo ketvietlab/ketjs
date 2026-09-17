@@ -487,10 +487,12 @@ const VARIANT_EDITOR_LABELS = [
  * setup is read by the modal's own context, so opening the tab costs no second
  * request; the island keeps its edits until its own Save or Reset.
  */
+const variantEditorId = (c: Context): string => `product-variant-editor-${c.id}`
+
 const variantsTab = (c: Context): JSXChild =>
   c.data.variantSetup
     ? recordIsland('product.variant-editor', {
-        id: `product-variant-editor-${c.id}`,
+        id: variantEditorId(c),
         kind: c.kind,
         setup: c.data.variantSetup,
         editable: c.data.permissions.saveVariantSetup === true,
@@ -564,21 +566,34 @@ const actions = (c: Context): JSXChild | undefined => {
       RecordActions({
         label: t(c, 'action.more'),
         actions: [
-          editable
-            ? Button({
-                type: 'submit',
-                name: COMMAND_FIELD,
-                value: 'save',
-                label: t(c, 'action.save'),
-                variant: 'primary',
-                loading: c.busy,
-                form: GENERAL_FORM_ID,
-                // The General tab's form only exists in the DOM while that tab is
-                // active (the other tab's content isn't mounted) — disabled rather
-                // than silently doing nothing when there is no form to submit.
-                disabled: c.tab !== 'general',
-              })
-            : '',
+          c.tab === 'variants'
+            ? c.data.variantSetup && c.data.permissions.saveVariantSetup === true
+              ? // The variant editor island owns this save: the button submits the
+                // island's own form, and the island enables it once there is a
+                // valid change to send.
+                Button({
+                  type: 'submit',
+                  label: t(c, 'action.save'),
+                  variant: 'primary',
+                  // Same id as `variantEditorSaveForm` in the island, not imported so this bundle
+                  // does not pull in the whole editor.
+                  form: `${variantEditorId(c)}-save`,
+                  disabled: true,
+                })
+              : ''
+            : editable
+              ? Button({
+                  type: 'submit',
+                  name: COMMAND_FIELD,
+                  value: 'save',
+                  label: t(c, 'action.save'),
+                  variant: 'primary',
+                  loading: c.busy,
+                  form: GENERAL_FORM_ID,
+                  // The General tab's form only exists in the DOM while that tab is active.
+                  disabled: c.tab !== 'general',
+                })
+              : '',
           closeButton(c),
           menuItems.length
             ? ActionMenu({
