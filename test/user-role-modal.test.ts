@@ -9,6 +9,8 @@ import { test } from 'node:test'
 import { bootDeployment, callFn, defineDeployment, defineModule } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { capabilityTone, permissionArea } from '../packages/ketsuite/src/modules/user/permission-areas.ts'
+import { ketsuitePermissionModules } from '../packages/ketsuite/src/permission-catalogue.ts'
 
 const probe = defineModule({
   name: 'permission_probe',
@@ -135,6 +137,45 @@ test('a custom role is read as the areas it may hold', async (t) => {
       ['Xem', 'permission_probe.view', false],
     ],
   )
+})
+
+test('the areas form reads as named business groups, one short label per checkbox', async (t) => {
+  const { run } = await boot(t)
+  const context = await run<RoleContext>('user.roleModalContext', { id: 'local' })
+  assert.ok(context)
+  type Laid = { key: string; short: string; area: string; group: string; tone: string | null }
+  const rows = context.data.bundles as unknown as Laid[]
+
+  // A module nobody has named still shows, under "Khác" with its code tidied, so a
+  // new module is never silently ungrantable.
+  const view = rows.find((row) => row.key === 'permission_probe.view')
+  assert.deepEqual(view && [view.area, view.group, view.short, view.tone], [
+    'permission probe',
+    'other',
+    'Xem',
+    null,
+  ])
+  const groups = (context.data as unknown as { groups: Array<{ id: string; label: string }> }).groups
+  assert.equal(groups.at(-1)?.label, 'Khác')
+})
+
+test('a catalogued module is named, grouped and marked without its code', () => {
+  assert.deepEqual(permissionArea('pos', 'vi'), { group: 'store', label: 'POS' })
+  assert.deepEqual(permissionArea('account_staff_channel', 'vi'), {
+    group: 'finance',
+    label: 'Kế toán · Ứng dụng nhân viên',
+  })
+  assert.equal(capabilityTone('configure'), 'admin')
+  assert.equal(capabilityTone('security'), 'admin')
+  assert.equal(capabilityTone('sensitive'), 'sensitive')
+  assert.equal(capabilityTone('cash-control'), 'sensitive')
+  assert.equal(capabilityTone('tender'), null)
+  // Every module the shipped catalogue gives bundles to has a name, so none falls into "Khác".
+  const unnamed = Object.entries(ketsuitePermissionModules)
+    .filter(([, def]) => Object.keys(def.bundles ?? {}).length)
+    .map(([module]) => module)
+    .filter((module) => permissionArea(module, 'vi').group === 'other')
+  assert.deepEqual(unnamed, [])
 })
 
 test('the areas form is the whole answer: what is dropped goes with its grants', async (t) => {
