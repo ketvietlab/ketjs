@@ -1,10 +1,17 @@
 @layer ket.app {
+  /*
+   * One line by default — an icon, then title and message flowing together as
+   * a single sentence ("Saved: the change is in."), not a heading over a
+   * paragraph. `notice-copy` wraps on its own when a message is genuinely too
+   * long for the width available, so nothing is lost for a longer error list;
+   * it just stops reading as "one line" for that one case.
+   */
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: var(--kv-space-3);
-    align-items: start;
-    padding: var(--kv-space-3) var(--kv-space-4);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-1) var(--kv-space-2);
+    padding: var(--kv-space-2) var(--kv-space-3);
     border: 1px solid var(--kv-color-line);
     border-left: 3px solid var(--kv-color-info);
     border-radius: var(--kv-radius-sm);
@@ -28,15 +35,16 @@
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] {
     display: inline-flex;
-    width: 1.25rem;
-    height: calc(var(--kv-text-base) * var(--kv-leading-normal));
+    flex: none;
+    width: 1rem;
+    height: 1rem;
     align-items: center;
     color: var(--kv-color-info);
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1rem;
+    height: 1rem;
   }
 
   :where([data-kv-design-system])
@@ -58,24 +66,36 @@
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-copy"] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.3em;
     min-width: 0;
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"] {
-    margin-bottom: var(--kv-space-1);
-    font-size: var(--kv-text-base);
+    margin: 0;
+    color: var(--kv-color-ink);
+    font-size: var(--kv-text-sm);
     font-weight: var(--kv-weight-semibold);
     line-height: var(--kv-leading-normal);
   }
 
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"]::after {
+    content: ":";
+  }
+
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-message"] {
-    margin-bottom: 0;
+    margin: 0;
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
-    align-self: center;
+    flex: none;
+    margin-left: auto;
   }
 
   :where([data-kv-design-system]) [data-ui="empty"] {
@@ -131,12 +151,11 @@
   }
 
   @media (max-width: 42rem) {
-    :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
-      grid-template-columns: auto minmax(0, 1fr);
-    }
-
+    /* Flex-wrap already reflows icon/copy/actions onto their own lines as
+       needed; only the auto margin — meant to pin actions to the far end of
+       a shared row — needs to give way once actions wrap onto a row alone. */
     :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
-      grid-column: 1 / -1;
+      margin-left: 0;
     }
   }
 }

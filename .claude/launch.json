@@ -20,6 +20,12 @@
         "--dev-admin"
       ],
       "port": 4100
+    },
+    {
+      "name": "product-e2e",
+      "runtimeExecutable": "/Users/kieuduy/.nvm/versions/node/v26.7.0/bin/node",
+      "runtimeArgs": ["e2e/product_backend/fixtures/server.mjs"],
+      "port": 4173
     }
   ]
 }
