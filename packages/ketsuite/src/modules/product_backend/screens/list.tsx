@@ -19,7 +19,6 @@ import {
   thumbnail,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
-import { localized } from '../../backend/screen.ts'
 
 export type TemplateRow = {
   id: string
@@ -134,7 +133,11 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   },
 ]
 
-const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): TemplateResult => (
+const kanban = (
+  _: Translator,
+  rows: readonly TemplateRow[],
+  recordHref: (id: string) => string,
+): TemplateResult => (
   <KanbanGrid
     rows={rows}
     id={(r) => r.id}
@@ -142,7 +145,7 @@ const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): Te
       <KanbanCard
         key={r.id}
         title={r.name}
-        href={localized(`/admin/product/templates/${r.id}`, locale)}
+        href={recordHref(r.id)}
         media={
           r.image
             ? thumbnail({ src: r.image.src, alt: r.image.alt, size: 'card' })
@@ -170,9 +173,10 @@ export const productsScreen = (
   _: Translator,
   rows: TemplateRow[],
   view: View,
+  /** A row (and a kanban card) open their template through the record-modal contract. */
+  recordHref: (id: string) => string,
   frame: Frame = {},
   table: Partial<DataTable<TemplateRow>> = {},
-  locale = '',
   total = rows.length,
   extensionActions?: JSXChild,
 ): TemplateResult =>
@@ -232,12 +236,12 @@ export const productsScreen = (
         rows.length === 0 && !table.groups?.length
           ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
           : view === 'kanban'
-            ? kanban(_, rows, locale)
+            ? kanban(_, rows, recordHref)
             : dataTable(_, {
                 columns: templateColumns(_),
                 rows,
                 id: (r) => r.id,
-                rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
+                rowHref: (r) => recordHref(r.id),
                 ...table,
               })
       }

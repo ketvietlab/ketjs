@@ -12,6 +12,7 @@ const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
 const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
 const CRM_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/crm_backend')
 const USER_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/user_backend')
+const PRODUCT_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/product_backend')
 const entries = [
   {
     source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
@@ -34,6 +35,11 @@ const entries = [
   {
     source: join(USER_BACKEND_DIR, 'modal/user-modal-view.tsx'),
     output: join(USER_BACKEND_DIR, 'client/user-modal.mjs'),
+  },
+  // The product template record modal, including the catalogue's create action.
+  {
+    source: join(PRODUCT_BACKEND_DIR, 'modal/product-modal-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/product-modal.mjs'),
   },
 ]
 

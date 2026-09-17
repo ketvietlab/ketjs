@@ -43,6 +43,8 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
+const recordHref = (id: string) => `/admin/product/templates?record=product.template:${id}&lang=vi`
+
 const rows = [
   {
     id: 'ao-khoac-gio',
@@ -65,6 +67,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
       translate,
       rows,
       'list',
+      recordHref,
       {
         viewer: {
           name: 'Nguyễn Quản Trị',
@@ -93,7 +96,6 @@ test('product list: follows the design-system list hierarchy without a duplicate
         },
       },
       {},
-      '?lang=vi',
       24,
     ),
   )
@@ -129,20 +131,23 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
   assert.match(html, /data-col="name"[\s\S]*?data-ui="thumbnail"[\s\S]*?Áo khoác gió vận hành/)
   assert.match(html, /data-col="listPrice"[^>]*data-priority="primary"/)
-  assert.match(html, /href="\/admin\/product\/templates\/ao-khoac-gio\?lang=vi"/)
+  assert.match(html, /href="\/admin\/product\/templates\?record=product\.template:ao-khoac-gio&amp;lang=vi"/)
 })
 
 test('product list: keeps empty and kanban states inside the same page baseline', () => {
-  const empty = renderToString(productsScreen(translate, [], 'list', {}, {}, '?lang=vi', 0))
+  const empty = renderToString(productsScreen(translate, [], 'list', recordHref, {}, {}, 0))
   assert.match(empty, /data-ui="list-page"/)
   assert.match(empty, /data-ui="empty"/)
   assert.match(empty, /Chưa có sản phẩm nào/)
   assert.match(empty, /0 sản phẩm/)
 
-  const kanban = renderToString(productsScreen(translate, rows, 'kanban', {}, {}, '?lang=vi', 1))
+  const kanban = renderToString(productsScreen(translate, rows, 'kanban', recordHref, {}, {}, 1))
   assert.match(kanban, /data-ui="kanban"/)
   assert.match(kanban, /data-ui="list-page-body"/)
-  assert.match(kanban, /href="\/admin\/product\/templates\/ao-khoac-gio\?lang=vi"/)
+  assert.match(
+    kanban,
+    /href="\/admin\/product\/templates\?record=product\.template:ao-khoac-gio&amp;lang=vi"/,
+  )
 })
 
 test('product list: renders contributed catalogue actions beside native actions', () => {
@@ -151,9 +156,9 @@ test('product list: renders contributed catalogue actions beside native actions'
       translate,
       rows,
       'list',
+      recordHref,
       {},
       {},
-      '?lang=vi',
       1,
       html`<a data-ui="action" href="/admin/channels/products">Kênh bán</a>`,
     ),
