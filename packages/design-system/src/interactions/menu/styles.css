@@ -110,6 +110,11 @@
     left: auto;
   }
 
+  :where([data-kv-design-system]) [data-ui="menu"][data-placement="top"] [data-ui="menu-panel"] {
+    top: auto;
+    bottom: calc(100% + var(--kv-space-1));
+  }
+
   :where([data-kv-design-system]) [data-ui="menu-item"] {
     display: flex;
     width: 100%;
