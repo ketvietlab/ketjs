@@ -38,6 +38,10 @@ import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
 import { ToastRegion } from '../interactions/toast/index.tsx'
 import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
+import { createSearchFilterView } from '../interactions/search-filter/index.tsx'
+import { searchFilterDemoConfig } from '../interactions/search-filter/demo.ts'
+import { createKetTableView } from '../interactions/ket-table/index.tsx'
+import { ketTableDemoConfig, ketTableGroupedDemoConfig } from '../interactions/ket-table/demo.ts'
 import {
   Checkbox,
   CheckboxGroup,
@@ -1639,6 +1643,28 @@ export const componentGroups: readonly ComponentGroup[] = [
                   },
                 ]}
               />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'search-filter',
+        name: 'Search filter',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. Mirrors Odoo\'s own search bar: one caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+        render: () =>
+          createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
+      },
+      {
+        id: 'ket-table',
+        name: 'Ket table',
+        description:
+          "Also a ketjs-view island, meant to pair with search-filter above: rows, sort and pagination come from a manager RPC, and grouping mirrors the same server-side contract ketsuite's SSR grouped tables already use, just fetched from the client instead of navigated. Shown flat (sortable columns, selectable rows) and grouped by kind — both manager-less here, so the grouped tree is pre-populated and the flat table's sort/pager stay visible but inert.",
+        render: () => (
+          <Stack
+            items={[
+              createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
             ]}
           />
         ),

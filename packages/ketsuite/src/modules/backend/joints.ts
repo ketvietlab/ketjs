@@ -22,6 +22,12 @@ export const joints: Record<string, JointDef> = {
    */
   'screen.chart': { props: { id: 'id', config: 'json' } },
   /**
+   * A `KetTable` island (`@ketvietlab/design-system`) — sortable/paginated/
+   * selectable, and grouped when its config's `groupBy` is non-empty. Like
+   * `screen.chart`, the config is already computed, translated and formatted.
+   */
+  'table.grid': { props: { id: 'id', config: 'json' } },
+  /**
    * Sidebar entries, after the ones backend owns.
    *
    * `active` is the screen currently shown, so a fill can mark itself. It is a

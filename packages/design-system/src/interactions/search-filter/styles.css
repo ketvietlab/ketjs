@@ -1,0 +1,382 @@
+@layer ket.app {
+  /* The single Filters/Group By/Favorites trigger reuses [data-ui="menu"] and its
+     [data-ui="menu-panel"]/[data-ui="menu-item"]/… descendants from
+     ../menu/styles.css (widened below for its 3-column content) — only the hooks
+     unique to this island get rules here. */
+  :where([data-kv-design-system]) [data-ui="search-filter"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter"][data-busy="true"] {
+    opacity: 0.75;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter"] > [data-ui="notice"] {
+    inline-size: 100%;
+  }
+
+  /* One fused box — the search field and the single caret toggle share one
+     border, the way Odoo's search bar and its dropdown toggler sit as one
+     Bootstrap input-group. */
+  :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
+    display: flex;
+    align-items: stretch;
+    inline-size: 100%;
+    border: 1px solid var(--kv-border-strong);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-field"] {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-1);
+    min-inline-size: 0;
+    padding: 0.25rem 0.5rem;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facets"] {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    gap: var(--kv-space-1);
+    list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet"] {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    gap: 0.25rem;
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border: 1px solid var(--kv-accent-border);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-accent-subtle);
+    color: var(--kv-accent-active);
+    font-size: var(--kv-text-sm);
+  }
+  /* Odoo's own FACET_COLORS split: filter/field stay the accent tone above,
+     group-by reads as info (a distinct, cooler tone), favorite as warning. */
+  :where([data-kv-design-system]) [data-ui="search-filter-facet"][data-type="groupBy"] {
+    border-color: var(--kv-info-border);
+    background: var(--kv-info-bg);
+    color: var(--kv-info);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet"][data-type="favorite"] {
+    border-color: var(--kv-warning-border);
+    background: var(--kv-warning-bg);
+    color: var(--kv-warning);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet"] > span {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet-remove"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    flex: none;
+    padding: 0;
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.7;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet-remove"]:is(:hover, :focus-visible) {
+    opacity: 1;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-facet-remove"]:focus-visible {
+    outline: 2px solid var(--kv-focus-border);
+    outline-offset: 1px;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-input"] {
+    flex: 1 1 8rem;
+    min-inline-size: 6rem;
+    min-block-size: var(--kv-control-height);
+    border: 0;
+    background: transparent;
+    color: var(--kv-text-main);
+    font: inherit;
+  }
+  /* The reset (../../foundations/reset.css) puts a box-shadow ring on every
+     `:focus-visible` form control, `<input>` included — override both
+     properties it sets, not just `outline`, or the ring still shows. */
+  :where([data-kv-design-system]) [data-ui="search-filter-input"]:focus,
+  :where([data-kv-design-system]) [data-ui="search-filter-input"]:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* The search-as-you-type autocomplete — "Search for: …" / "Search <field> for: …" —
+     positioned against [data-ui="search-filter-field"], which is its nearest
+     `position: relative` ancestor. */
+  :where([data-kv-design-system]) [data-ui="search-filter-suggestions"] {
+    position: absolute;
+    z-index: var(--kv-layer-menu);
+    top: calc(100% + var(--kv-space-1));
+    left: 0;
+    display: grid;
+    min-inline-size: 16rem;
+    width: max-content;
+    max-inline-size: min(28rem, calc(100vw - var(--kv-space-8)));
+    max-block-size: 16rem;
+    overflow-y: auto;
+    padding: var(--kv-space-1);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-suggestion"] {
+    display: flex;
+    min-block-size: var(--kv-control-height);
+    align-items: center;
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: var(--kv-text-main);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-suggestion"]:is(:hover, :focus-visible) {
+    background: var(--kv-interactive-hover);
+    outline: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-suggestion"] b {
+    margin-inline: 0.25rem;
+    font-weight: 600;
+  }
+
+  /* The single caret trigger, fused flush against the field box above — no
+     border of its own on the shared edge, just a divider. Its `<details>`
+     parent is already stretched to the field box's height as a flex item of
+     [data-ui="search-filter-bar"] (default `align-items: stretch` — giving
+     an `inline-block` element like `[data-ui="menu"]` an explicit height
+     here, even one that resolves to `auto`, would turn that stretch off;
+     leave it alone). The `<summary>` itself does need `block-size: 100%`,
+     though — it only sizes to its own content by default. It DOES need its
+     own outer-corner radius matching the bar's: its opaque background is a
+     plain rectangle sitting right at the bar's rounded right edge, and
+     without a matching radius here that rectangle squares off over the
+     bar's own curve. */
+  :where([data-kv-design-system]) [data-ui="search-filter-toggle"] {
+    display: flex;
+    block-size: 100%;
+    min-inline-size: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kv-space-1);
+    padding: 0 var(--kv-space-2);
+    border: 0;
+    border-inline-start: 1px solid var(--kv-border-default);
+    border-start-end-radius: var(--kv-radius-sm);
+    border-end-end-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg-subtle);
+    color: var(--kv-text-secondary);
+    cursor: pointer;
+    list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-toggle"]::-webkit-details-marker {
+    display: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-toggle"]:hover {
+    background: var(--kv-surface-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="menu"][data-active="true"] [data-ui="search-filter-toggle"] {
+    background: var(--kv-accent-subtle);
+    color: var(--kv-accent-active);
+  }
+
+  /* Odoo's SearchBarMenu panel: 3 columns side by side — but only past a width
+     the panel can actually afford. A `right: 0` panel is anchored to the toggle,
+     not the viewport (same as every other [data-ui="menu-panel"] here), so a
+     panel wide enough for 3 columns would push past the left edge of the window
+     on anything narrower than a very wide, very-right-anchored trigger. Odoo
+     itself only goes side-by-side at its `lg` breakpoint (`w-100 w-lg-auto`) and
+     stacks full-width below it; this does the same with a plain media query in
+     place of Bootstrap's grid classes. */
+  :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
+    display: grid;
+    gap: var(--kv-space-3);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-column"] {
+    display: grid;
+    align-content: start;
+    gap: 0.125rem;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
+    padding-block-start: var(--kv-space-2);
+    border-block-start: 1px solid var(--kv-border-default);
+  }
+  @media (min-width: 60rem) {
+    :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] [data-ui="menu-panel"] {
+      width: max-content;
+      max-width: min(52rem, calc(100vw - var(--kv-space-8)));
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter-column"] {
+      flex: 1 1 12rem;
+      min-inline-size: 11rem;
+      padding-inline-end: var(--kv-space-3);
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
+      padding-block-start: 0;
+      border-block-start: 0;
+      border-inline-start: 1px solid var(--kv-border-default);
+      padding-inline-start: var(--kv-space-3);
+    }
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-column-title"] {
+    margin: 0 0 var(--kv-space-1);
+    padding: 0 var(--kv-space-1);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-bold);
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter-column"][data-facet-type="filter"]
+    [data-ui="search-filter-column-title"] {
+    color: var(--kv-accent-active);
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter-column"][data-facet-type="groupBy"]
+    [data-ui="search-filter-column-title"] {
+    color: var(--kv-info);
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter-column"][data-facet-type="favorite"]
+    [data-ui="search-filter-column-title"] {
+    color: var(--kv-warning);
+  }
+
+  :where([data-kv-design-system]) [data-ui="custom-filter"] {
+    display: grid;
+    gap: var(--kv-space-2);
+    margin: var(--kv-space-2) 0;
+    padding: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="custom-filter-row"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-1);
+  }
+  :where([data-kv-design-system]) [data-ui="custom-filter-row"] > select,
+  :where([data-kv-design-system]) [data-ui="custom-filter-row"] > input,
+  :where([data-kv-design-system]) [data-ui="custom-group-by"] {
+    min-inline-size: 0;
+    flex: 1 1 8rem;
+    min-block-size: var(--kv-control-height);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    font: inherit;
+    font-size: 0.875rem;
+  }
+  :where([data-kv-design-system]) [data-ui="custom-group-by"] {
+    inline-size: calc(100% - var(--kv-space-2) * 2);
+    margin: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="custom-filter-add"] {
+    justify-self: start;
+    min-block-size: var(--kv-control-height);
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--kv-border-strong);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    font: inherit;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="custom-filter-add"]:is(:hover, :focus-visible) {
+    background: var(--kv-surface-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="custom-filter-add"]:disabled {
+    color: var(--kv-text-disabled);
+    cursor: not-allowed;
+  }
+
+  :where([data-kv-design-system]) [data-ui="favorite-save"] {
+    display: grid;
+    gap: var(--kv-space-2);
+    margin: var(--kv-space-2) 0;
+    padding-block-end: var(--kv-space-2);
+    border-block-end: 1px solid var(--kv-border-default);
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-save-row"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-save-row"] > input[type="text"] {
+    flex: 1 1 10rem;
+    min-inline-size: 0;
+    min-block-size: var(--kv-control-height);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    font: inherit;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-save-row"] label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    white-space: nowrap;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-list"] {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-item"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-item"][data-active="true"] [data-ui="menu-item-copy"] {
+    font-weight: 600;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-item-default"],
+  :where([data-kv-design-system]) [data-ui="favorite-item-remove"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex: none;
+    margin-inline-end: var(--kv-space-1);
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: var(--kv-text-muted);
+    line-height: 1;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-item-default"][data-default="true"] {
+    color: var(--kv-warning);
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-item-default"]:is(:hover, :focus-visible),
+  :where([data-kv-design-system]) [data-ui="favorite-item-remove"]:is(:hover, :focus-visible) {
+    color: var(--kv-text-main);
+  }
+}
