@@ -67,6 +67,13 @@ export type MenuProps = {
   /** How many choices are in effect, shown on the trigger. Zero shows nothing. */
   count?: number
   search?: MenuSearch
+  /**
+   * `bottom` (default) opens below the trigger. `top` opens above it, for a
+   * trigger near the bottom of a container that clips overflow — a fixed
+   * modal footer, say — where the panel would otherwise render past the
+   * container's edge and be cut off rather than merely overlapping content.
+   */
+  placement?: 'top' | 'bottom'
 }
 
 export const Menu = (props: MenuProps): TemplateResult => (
@@ -75,6 +82,7 @@ export const Menu = (props: MenuProps): TemplateResult => (
     data-align={props.align ?? 'start'}
     data-size={props.size === 'compact' ? 'compact' : null}
     data-active={props.count ? 'true' : null}
+    data-placement={props.placement ?? 'bottom'}
     open={props.open === true ? true : undefined}
   >
     {/* `details` exposes the open state natively; the runtime mirrors it into aria-expanded on toggle. */}

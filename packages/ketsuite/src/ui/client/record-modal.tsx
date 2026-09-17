@@ -136,6 +136,18 @@ export type RecordModalContext<Data> = {
 /** Attachments a command uploaded before its function ran, by form field. */
 export type RecordUploads = Record<string, { id: string; name: string | null }>
 
+/** One extra call of a multi-step command — see `RecordModalCommand.also`. */
+export type RecordModalCommandStep<Data> = {
+  fn: string
+  input: (
+    form: FormData,
+    context: RecordModalContext<Data>,
+    uploads: RecordUploads,
+  ) => Record<string, unknown>
+  /** Skip this step — a module not installed, a permission the viewer lacks. */
+  when?: (context: RecordModalContext<Data>) => boolean
+}
+
 export type RecordModalCommand<Data> = {
   fn: string
   /** Map the submitted form to the function's input. */
@@ -145,11 +157,22 @@ export type RecordModalCommand<Data> = {
     uploads: RecordUploads,
   ) => Record<string, unknown>
   /**
+   * Further calls made right after `fn`/`input` succeeds, in order, as part of
+   * the same user-facing action — one busy state, one success notice, one set
+   * of field refusals — stopping at the first one that fails. For an edit that
+   * spans functions in different modules that cannot call one another (a
+   * single `product.saveTemplate` cannot also configure stock tracking or
+   * tax), this is what lets one "Save" button still read as one save.
+   */
+  also?: readonly RecordModalCommandStep<Data>[]
+  /**
    * File fields stored through `/files` before the function runs, each mapped to
    * the attachment's metadata (`resModel`, `resId`, `resField`, `public`). The
    * stored attachment ids reach `input` as its third argument.
    */
   upload?: Record<string, (form: FormData, context: RecordModalContext<Data>) => Record<string, string>>
+  /** A destructive command asks first; declining leaves the record untouched. */
+  confirm?: (context: RecordModalContext<Data>) => string | null
   /**
    * What happens after success. Defaults to `close`. `reload` reads the record
    * again behind a loading state and closes a dialog; `refresh` reads it again in
@@ -182,6 +205,13 @@ export type RecordModalDefinition<Data> = {
   kind: string
   size?: 'default' | 'large'
   /**
+   * Caps a tabbed record's fixed height (a CSS length or `min()`/`calc()`
+   * expression) below the viewport-filling default, for a record whose own
+   * content is shorter than that — see `ModalSheet.fixedHeight`. Ignored for a
+   * record with one tab or none, since those never turn on `height: 'fixed'`.
+   */
+  fixedHeight?: string
+  /**
    * A permission-checked read returning `{ data, messages }`. For a create action
    * the default input is `{}` (no id): the read returns the empty record's defaults,
    * the choices its form needs and the viewer's permissions.
@@ -197,6 +227,14 @@ export type RecordModalDefinition<Data> = {
   status?: (context: RecordModalContext<Data>) => JSXChild
   /** A strip above the body — a customer, a summary — for what a badge cannot hold. */
   header?: (context: RecordModalContext<Data>) => JSXChild
+  /**
+   * A footer strip below the body, outside the scrolling area and the same on
+   * every tab — the natural home for a record's primary actions (save, close,
+   * more) so they stay reachable without hunting through the tab that happens
+   * to hold the save button. Return `undefined` (not `''`) to render no footer
+   * at all, e.g. while creating, when the create form owns its own submit.
+   */
+  actions?: (context: RecordModalContext<Data>) => JSXChild | undefined
   tabs?: readonly RecordModalTab<Data>[]
   /** The body of a record without tabs. */
   body?: (context: RecordModalContext<Data>) => JSXChild
@@ -625,6 +663,15 @@ export const createRecordModal =
       open.set({ id, tab: nextTab })
       const href = recordModalHref(location.href, { kind: definition.kind, id, tab: nextTab || null })
       if (how === 'push') {
+        // The shell's own navigation snapshots scroll onto the entry it leaves
+        // before pushing (`saveScroll` in packages/ketjs/src/server/http.ts) so
+        // going back restores it; this push must do the same, or closing the
+        // modal later restores no scroll and the page it sits over jumps to top.
+        history.replaceState(
+          { ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] },
+          '',
+          location.href,
+        )
         history.pushState({ ...(history.state ?? {}), __ketRecordModal: definition.kind }, '', href)
         pushed = true
       } else if (how === 'replace') history.replaceState(history.state ?? {}, '', href)
@@ -683,6 +730,10 @@ export const createRecordModal =
       const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
       keepDrafts(currentLayer, scope)
       const context = contextFor(current, data, scope)
+      if (command.confirm) {
+        const message = command.confirm(context)
+        if (message && !globalThis.confirm(message)) return
+      }
       setRunning(true)
       issues.set([])
       try {
@@ -715,9 +766,17 @@ export const createRecordModal =
             name: typeof stored.name === 'string' ? stored.name : null,
           }
         }
-        const result = await callRecordFunction(command.fn, command.input(formData, context, uploads), {
-          idempotencyKey: uuid(),
-        })
+        const invoke = (fn: string, input: Record<string, unknown>) =>
+          callRecordFunction(fn, input, { idempotencyKey: uuid() })
+        let result = await invoke(command.fn, command.input(formData, context, uploads))
+        // Further calls run only once the first succeeds, and stop at the first
+        // one that does not — a later step's success never papers over an
+        // earlier failure.
+        for (const step of result.ok ? (command.also ?? []) : []) {
+          if (step.when && !step.when(context)) continue
+          result = await invoke(step.fn, step.input(formData, context, uploads))
+          if (!result.ok) break
+        }
         if (!result.ok) {
           // The layer was snapshotted before the busy state rendered, including unchecked controls.
           issues.set(
@@ -911,9 +970,11 @@ export const createRecordModal =
               // Tabs have different heights; a fixed dialog does not jump when the reader switches
               // tabs, nor when the loading state gives way to the record.
               height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
+              fixedHeight: definition.fixedHeight,
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               status: context ? definition.status?.(context) : undefined,
+              actions: context ? definition.actions?.(context) : undefined,
               closeLabel: t('recordModal.close'),
               body: recordBody(),
             })}
@@ -941,7 +1002,13 @@ export const createRecordModal =
             const element = event.target instanceof Element ? event.target : null
             const inModal = element?.closest('[data-ui="modal-layer"][data-client-modal="true"]')
             if (inModal && root?.contains(inModal)) {
-              if (element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"]')) {
+              // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
+              // marks a module's own labeled close button placed elsewhere in the body
+              // (the two can't share one attribute — a labeled button needs `data-ui="action"`
+              // for its styling, not the icon-only close control's).
+              if (
+                element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"], [data-record-close]')
+              ) {
                 event.preventDefault()
                 close()
                 return

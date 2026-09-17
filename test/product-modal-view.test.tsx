@@ -14,6 +14,7 @@ type Options = {
   creating?: boolean
   state?: Record<string, string>
   dialog?: { name: string; params: Record<string, string> } | null
+  tab?: string
 }
 
 const contextOf = (
@@ -23,7 +24,7 @@ const contextOf = (
   kind: 'product.template',
   id: options.creating ? 'new' : data.record.id,
   creating: options.creating === true,
-  tab: '',
+  tab: options.tab ?? '',
   data,
   t: (key) => key,
   fieldError: () => null,
@@ -73,6 +74,7 @@ const templateData = (overrides: Partial<TemplateModalData> = {}): TemplateModal
   permissions: {
     save: true,
     archive: true,
+    delete: true,
     generateVariants: true,
     saveAttributeLine: true,
     removeAttributeLine: true,
@@ -91,17 +93,14 @@ const commands = templateModalDefinition.commands!
 
 const render = (child: JSXChild): string => renderToString(child as TemplateResult)
 
-test('product modal: General offers a save button plus tracking/tax buttons only when installed and permitted', () => {
+test('product modal: General has no submit button of its own — the header submits its form by id, with tracking/tax fields only when installed', () => {
   const full = render(generalTab(contextOf(templateData())))
-  assert.match(full, /name="__command" value="save"/)
-  assert.match(full, /name="__command" value="configureStock"/)
-  assert.match(full, /name="__command" value="setTax"/)
+  assert.doesNotMatch(full, /type="submit"/, 'the header owns the one Save button, not the tab body')
+  assert.match(full, /id="product-template-general-form"/)
   assert.match(full, /name="isStorable"/)
   assert.match(full, /name="taxId"/)
 
   const bare = render(generalTab(contextOf(templateData({ stockEnabled: false, taxEnabled: false }))))
-  assert.doesNotMatch(bare, /name="__command" value="configureStock"/)
-  assert.doesNotMatch(bare, /name="__command" value="setTax"/)
   assert.doesNotMatch(bare, /name="isStorable"/)
   assert.doesNotMatch(bare, /name="taxId"/)
 })
@@ -178,25 +177,84 @@ test('product modal: the variant dialog edits the variant named by the dialog pa
   assert.doesNotMatch(missing, /name="__command"/)
 })
 
-test("product modal: header names archive vs restore by the record's state, and stays empty while creating", () => {
-  const active = render(templateModalDefinition.header!(contextOf(templateData())))
+test("product modal: the footer's More menu names archive vs restore by the record's state, and stays empty while creating", () => {
+  const active = render(templateModalDefinition.actions!(contextOf(templateData())) as JSXChild)
   assert.match(active, /name="__command" value="archive"/)
   assert.match(active, /product_backend\.archive\.action/)
   assert.doesNotMatch(active, /product_backend\.archive\.restore/)
+  // Delete lives in the same menu, gated by its own permission.
+  assert.match(active, /name="__command" value="delete"/)
+  // Its label is shortened for the footer row — the menu's own aria-label stays the fuller phrase.
+  assert.match(active, /product_backend\.action\.moreShort/)
+  // The trigger sits at the sheet's bottom edge, which clips overflow — opening
+  // downward like the design system's default would run the panel past it.
+  assert.match(active, /data-ui="menu"[^>]*data-placement="top"/)
 
   const archived = render(
-    templateModalDefinition.header!(contextOf(templateData({ record: record({ active: false }) }))),
+    templateModalDefinition.actions!(
+      contextOf(templateData({ record: record({ active: false }) })),
+    ) as JSXChild,
   )
   assert.match(archived, /product_backend\.archive\.restore/)
 
-  const noPermission = render(
-    templateModalDefinition.header!(
-      contextOf(templateData({ permissions: { ...templateData().permissions, archive: false } })),
-    ),
+  const archiveOnly = render(
+    templateModalDefinition.actions!(
+      contextOf(templateData({ permissions: { ...templateData().permissions, delete: false } })),
+    ) as JSXChild,
   )
-  assert.doesNotMatch(noPermission, /name="__command"/)
+  assert.match(archiveOnly, /name="__command" value="archive"/)
+  assert.doesNotMatch(archiveOnly, /name="__command" value="delete"/)
 
-  assert.equal(templateModalDefinition.header!(contextOf(templateData(), { creating: true })), '')
+  const noPermission = render(
+    templateModalDefinition.actions!(
+      contextOf(
+        templateData({ permissions: { ...templateData().permissions, archive: false, delete: false } }),
+      ),
+    ) as JSXChild,
+  )
+  // Save and Close still show — only the More menu itself has nothing left to offer.
+  assert.doesNotMatch(noPermission, /name="__command" value="archive"|name="__command" value="delete"/)
+  assert.doesNotMatch(noPermission, /product_backend\.action\.moreShort/)
+  // No second title line — the record's own name and state already sit in the modal's chrome.
+  assert.doesNotMatch(active, /data-ui="record-summary"/)
+  assert.doesNotMatch(active, /product_backend\.type\.goods/)
+
+  // Creating has no footer at all — ModalSheet renders none when `actions` is undefined,
+  // not an empty bar — and the create form owns its own submit button in the body.
+  assert.equal(templateModalDefinition.actions!(contextOf(templateData(), { creating: true })), undefined)
+})
+
+test('product modal: the footer carries Save (targeting the General form by id) and Close beside More, outside the scrolling body', () => {
+  const onGeneral = render(
+    templateModalDefinition.actions!(contextOf(templateData(), { tab: 'general' })) as JSXChild,
+  )
+  assert.match(onGeneral, /name="__command" value="save"/)
+  assert.match(onGeneral, /form="product-template-general-form"/)
+  assert.doesNotMatch(onGeneral.match(/name="__command" value="save"[^>]*/)?.[0] ?? '', /disabled/)
+  assert.match(onGeneral, /data-record-close="true"/)
+  assert.match(onGeneral, /product_backend\.action\.close/)
+
+  // The General form isn't mounted on another tab, so Save is disabled rather than a dead click.
+  const onVariants = render(
+    templateModalDefinition.actions!(contextOf(templateData(), { tab: 'variants' })) as JSXChild,
+  )
+  assert.match(onVariants.match(/name="__command" value="save"[^>]*/)?.[0] ?? '', /disabled/)
+
+  const readOnly = render(
+    templateModalDefinition.actions!(
+      contextOf(templateData({ permissions: { ...templateData().permissions, save: false } }), {
+        tab: 'general',
+      }),
+    ) as JSXChild,
+  )
+  assert.doesNotMatch(readOnly, /name="__command" value="save"/)
+  assert.match(readOnly, /data-record-close="true"/, 'Close still shows without save permission')
+})
+
+test("product modal: the modal's own chrome carries the active/archived badge, not a body line", () => {
+  const badge = render(templateModalDefinition.status!(contextOf(templateData())))
+  assert.match(badge, /product_backend\.state\.active/)
+  assert.equal(templateModalDefinition.status!(contextOf(templateData(), { creating: true })), '')
 })
 
 test('product modal: creating renders the create form; an existing record has no body of its own', () => {
@@ -246,23 +304,38 @@ test('product modal commands: save carries defaultCode/barcode only for a single
   assert.equal(commands.save!.after, 'refresh')
 })
 
-test('product modal commands: stock config, tax, archive and generate carry the record id with no extra form fields', () => {
-  const stockForm = new FormData()
-  stockForm.set('isStorable', '1')
-  stockForm.set('tracking', 'lot')
-  assert.deepEqual(commands.configureStock!.input(stockForm, contextOf(templateData()), {}), {
+test('product modal commands: save runs template, stock and tax in sequence, each side call gated by its own condition', () => {
+  assert.equal(commands.save!.fn, 'product.saveTemplate')
+  const also = commands.save!.also!
+  assert.equal(also.length, 2)
+  assert.equal(also[0]!.fn, 'stock.configureProduct')
+  assert.equal(also[1]!.fn, 'account.setProductTax')
+
+  const form = new FormData()
+  form.set('isStorable', '1')
+  form.set('tracking', 'lot')
+  form.set('taxId', 'vat-10')
+  const ctx = contextOf(templateData())
+  assert.deepEqual(also[0]!.input(form, ctx, {}), {
     templateId: 'tpl-1',
     isStorable: true,
     tracking: 'lot',
   })
+  assert.deepEqual(also[1]!.input(form, ctx, {}), { templateId: 'tpl-1', taxId: 'vat-10' })
 
-  const taxForm = new FormData()
-  taxForm.set('taxId', 'vat-10')
-  assert.deepEqual(commands.setTax!.input(taxForm, contextOf(templateData()), {}), {
-    templateId: 'tpl-1',
-    taxId: 'vat-10',
-  })
+  // Neither side call runs without its module installed and its own permission.
+  assert.equal(also[0]!.when!(ctx), true)
+  assert.equal(also[1]!.when!(ctx), true)
+  const noStock = contextOf(templateData({ stockEnabled: false }))
+  const noPermission = contextOf(
+    templateData({ permissions: { ...templateData().permissions, configureStock: false, setTax: false } }),
+  )
+  assert.equal(also[0]!.when!(noStock), false)
+  assert.equal(also[0]!.when!(noPermission), false)
+  assert.equal(also[1]!.when!(noPermission), false)
+})
 
+test('product modal commands: archive and generate carry the record id with no extra form fields', () => {
   assert.deepEqual(commands.archive!.input(new FormData(), contextOf(templateData()), {}), {
     id: 'tpl-1',
     active: false,
@@ -278,6 +351,13 @@ test('product modal commands: stock config, tax, archive and generate carry the 
   assert.deepEqual(commands.generateVariants!.input(new FormData(), contextOf(templateData()), {}), {
     templateId: 'tpl-1',
   })
+})
+
+test('product modal commands: delete removes only this template and asks before running', () => {
+  assert.deepEqual(commands.delete!.input(new FormData(), contextOf(templateData()), {}), { ids: ['tpl-1'] })
+  assert.equal(commands.delete!.after, 'close')
+  assert.equal(typeof commands.delete!.confirm, 'function')
+  assert.match(commands.delete!.confirm!(contextOf(templateData()))!, /archive\.deleteConfirm/)
 })
 
 test('product modal commands: an attribute line saves only the checked values of its own attribute', () => {

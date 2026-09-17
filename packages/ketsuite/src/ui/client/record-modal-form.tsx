@@ -20,8 +20,10 @@ export const RecordModalForm = (props: {
   fields: readonly FieldProps[]
   actions?: readonly JSXChild[]
   command?: string | null
+  /** Lets a button outside this form submit it via the HTML `form` attribute. */
+  id?: string
 }): TemplateResult => (
-  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind}>
+  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind} id={props.id}>
     {props.command ? (
       // autocomplete="off" like every other input the kit writes: the ui contract
       // holds for a hidden field too, and a browser restoring one would submit a
