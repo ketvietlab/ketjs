@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/create-view",
-  "version": "0.1.5",
+  "version": "0.1.23",
   "description": "Create a static HTML project powered by Ket view.",
   "type": "module",
   "license": "MIT",
