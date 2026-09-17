@@ -18,6 +18,10 @@ const entries = [
     output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
   },
   {
+    source: join(UI_CLIENT_DIR, 'ket-table-view.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'ket-table.mjs'),
+  },
+  {
     source: join(UI_CLIENT_DIR, 'table-selection-view.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'backend-shell.mjs'),
   },

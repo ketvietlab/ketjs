@@ -1,0 +1,185 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="ket-table"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="ket-table"][data-busy="true"] {
+    opacity: 0.75;
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-scroll"] {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-table-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-grid"] {
+    width: 100%;
+    min-width: 38rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: transparent;
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-col"] {
+    height: var(--kv-table-header-height);
+    padding: 0 var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-header-bg);
+    color: var(--kv-table-header-text);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  /* Badge deliberately shrinks-and-breaks (`overflow-wrap: anywhere`) for tight
+     spaces elsewhere in the system; inside a table cell that reads as one
+     character per line once the column gets squeezed. `nowrap` on the cell
+     alone doesn't stop it — Badge's own rule re-declares `white-space: normal`
+     on itself, which wins for its own text — so it needs overriding directly. */
+  :where([data-kv-design-system]) [data-ui="kt-cell"] [data-ui="badge"] {
+    white-space: nowrap;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-col"][data-align="end"] {
+    text-align: right;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-sort-button"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-sort-icon"] {
+    font-size: var(--kv-text-xs);
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-select-col"],
+  :where([data-kv-design-system]) [data-ui="kt-select-cell"] {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-select-col"] {
+    height: var(--kv-table-header-height);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-header-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-select-cell"] {
+    height: var(--kv-row-height);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-row-bg);
+    vertical-align: middle;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-select-all"],
+  :where([data-kv-design-system]) [data-ui="kt-row-select"] {
+    width: 0.875rem;
+    height: 0.875rem;
+    margin: 0;
+    accent-color: var(--kv-color-accent);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-select-persisted"] {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-row"] {
+    background: var(--kv-table-row-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-row"]:hover {
+    background: var(--kv-surface-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-row"][data-selected="true"] {
+    background: var(--kv-accent-subtle);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-cell"] {
+    height: var(--kv-row-height);
+    padding: 0.4375rem var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-cell"][data-align="end"] {
+    text-align: right;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-row-link"] {
+    color: inherit;
+    text-decoration: none;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-person"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-group-row"] [data-ui="kt-group-cell"] {
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-header-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-group-toggle"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--kv-weight-semibold);
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-group-indent"] {
+    display: inline-block;
+    inline-size: calc(var(--kt-group-depth, 0) * var(--kv-space-4));
+  }
+  :where([data-kv-design-system]) [data-ui="kt-group-count"] {
+    padding: 0 0.375rem;
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg-subtle);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  :where([data-kv-design-system]) [data-ui="kt-pager"] {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-pager-label"] {
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-pager-button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-pager-button"]:is(:hover, :focus-visible):not(:disabled) {
+    background: var(--kv-surface-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="kt-pager-button"]:disabled {
+    color: var(--kv-text-disabled);
+    cursor: not-allowed;
+  }
+}

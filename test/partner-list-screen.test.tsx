@@ -62,21 +62,17 @@ const selection = {
   actions: [{ id: 'archive', label: 'Lưu trữ đã chọn' }],
 }
 
+// `partnersScreen` now takes the table already rendered — real row/checkbox
+// markup comes from the `KetTable` island (`ctx.joint` at the route, see
+// `backend/ket-table.ts`), which needs a live serve context this unit test
+// doesn't have. So these tests only cover what `partnersScreen` itself still
+// controls: the surrounding ListPage/tabs/actions structure, with a plain
+// marker standing in for whatever the route handed it.
+
 test('partner list: follows the shared ListPage hierarchy and keeps directory tabs', () => {
   const html = renderToString(
     partnersScreen(
       translate,
-      [
-        {
-          id: 'minh-an',
-          kind: 'company',
-          name: 'Công ty Minh An',
-          ref: 'KH-0018',
-          email: 'hello@minhan.example',
-          phone: '024 3765 4321',
-          active: true,
-        },
-      ],
       {
         chrome: {
           create: { label: 'Tạo đối tác', path: '/admin/partner/partners/new' },
@@ -85,7 +81,7 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
           pager: { from: 1, to: 1, total: 24 },
         },
       },
-      { selection },
+      <div data-ui="ket-table-test-marker">Công ty Minh An</div>,
       '?lang=vi',
       summary,
       24,
@@ -107,9 +103,7 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
     /data-ui="list-page-controls"[\s\S]*?data-layout="command"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?24 đối tác/,
   )
   assert.match(html, /data-ui="tabs"[\s\S]*?Khách hàng[\s\S]*?18/)
-  assert.match(html, /data-ui="person"[\s\S]*?Công ty Minh An/)
-  assert.match(html, /data-ui="select-all"/)
-  assert.match(html, /data-ui="row-select"[^>]*form="partner-directory-bulk"/)
+  assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="ket-table-test-marker"[\s\S]*?Công ty Minh An/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
     html.indexOf('data-ui="list-page-body"'),
@@ -119,7 +113,9 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
 })
 
 test('partner list: keeps tabs available when a filtered result is empty', () => {
-  const html = renderToString(partnersScreen(translate, [], {}, {}, '?lang=vi', summary, 0))
+  const html = renderToString(
+    partnersScreen(translate, {}, <div data-ui="empty">Chưa có đối tác nào</div>, '?lang=vi', summary, 0),
+  )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-ui="tabs"/)
   assert.match(html, /data-ui="empty"/)
