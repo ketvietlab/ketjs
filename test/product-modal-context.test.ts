@@ -99,6 +99,7 @@ test('product modal context: the create form offers defaults and every choice a 
   assert.equal(context.stockEnabled, true, 'the stock module is part of this deployment')
   assert.equal(context.permissions.save, true)
   assert.equal(context.permissions.archive, true)
+  assert.equal(context.permissions.delete, true)
   assert.equal(context.permissions.configureStock, true)
 })
 
@@ -171,4 +172,5 @@ test('product modal context: a reader without save rights still opens the record
   assert.equal(result.data.record.name, 'Áo thun')
   assert.equal(result.data.permissions.save, false)
   assert.equal(result.data.permissions.archive, false)
+  assert.equal(result.data.permissions.delete, false)
 })

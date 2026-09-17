@@ -91,6 +91,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
       const permissions = {
         save: can('product.saveTemplate'),
         archive: can('product.archiveTemplate'),
+        delete: can('product.deleteTemplates'),
         generateVariants: can('product.generateVariants'),
         saveAttributeLine: can('product.saveAttributeLine'),
         removeAttributeLine: can('product.removeAttributeLine'),

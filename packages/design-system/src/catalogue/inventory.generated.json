@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 99,
     "cssFiles": 72,
-    "cssLines": 13830
+    "cssLines": 13802
   },
   "rows": [
     {
@@ -2407,7 +2407,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx", "test/ui-record-modal.test.tsx"],
+      "testFiles": [
+        "test/design-system.test.tsx",
+        "test/product-modal-view.test.tsx",
+        "test/ui-record-modal.test.tsx"
+      ],
       "gapTask": "DS-015"
     },
     {
@@ -5673,7 +5677,11 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx", "test/ui-record-modal.test.tsx"],
+      "testFiles": [
+        "test/design-system.test.tsx",
+        "test/product-modal-view.test.tsx",
+        "test/ui-record-modal.test.tsx"
+      ],
       "gapTask": "DS-015"
     },
     {
@@ -7396,6 +7404,7 @@
         "test/manufacturing-orders-screen.test.tsx",
         "test/manufacturing-work-centers-http.test.ts",
         "test/manufacturing-work-centers-screen.test.tsx",
+        "test/product-modal-view.test.tsx",
         "test/product-stock-e2e.test.ts",
         "test/table.test.ts",
         "test/theme.test.ts"
@@ -10002,7 +10011,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/menu/styles.css",
-      "lines": 168,
+      "lines": 126,
       "hooks": [
         "menu",
         "menu-item",
@@ -10012,11 +10021,8 @@
         "menu-item-shortcut",
         "menu-label",
         "menu-panel",
-        "menu-search",
-        "menu-search-input",
         "menu-separator",
-        "menu-trigger",
-        "menu-trigger-count"
+        "menu-trigger"
       ]
     },
     {
@@ -10344,7 +10350,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-chrome/styles.css",
-      "lines": 359,
+      "lines": 350,
       "hooks": [
         "bulk-action-list",
         "bulk-actions",
@@ -10356,7 +10362,6 @@
         "list-facet",
         "list-facet-count",
         "list-facets",
-        "list-filter-menus",
         "list-search",
         "list-search-input",
         "list-search-label",
@@ -10431,7 +10436,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 240,
+      "lines": 244,
       "hooks": [
         "action",
         "modal-actions",
@@ -10541,7 +10546,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/feedback/styles.css",
-      "lines": 142,
+      "lines": 161,
       "hooks": [
         "empty",
         "empty-actions",

@@ -8,14 +8,24 @@
 //
 // `product.saveTemplate` does not touch stock tracking or tax — those are separate
 // modules' functions (`stock.configureProduct`, `account.setProductTax`), and a
-// function handler cannot call another function. So the general form carries up to
-// three submit buttons, each naming its own command over the same field values; a
-// reader who never sees the stock or tax button (module not installed) sees one.
+// function handler cannot call another function. So the one "save" command the
+// General tab offers runs all three in sequence (`RecordModalCommand.also`),
+// skipping whichever module is not installed or not permitted — one button, one
+// busy state, one success notice, even though three calls happen underneath.
 //
 // Bundled by tools/build-backend-client.mjs into product_backend/client/.
 
-import { Badge, Button, DataTable, Notice, RecordSummary, Section, Stack } from '@ketvietlab/design-system'
-import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
+import {
+  ActionMenu,
+  Badge,
+  Button,
+  DataTable,
+  Notice,
+  RecordActions,
+  Section,
+  Stack,
+} from '@ketvietlab/design-system'
+import type { FieldOption, FieldProps, MenuEntry } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
@@ -147,15 +157,40 @@ const submitButton = (
   variant: 'primary' | 'secondary' = 'primary',
 ) => Button({ type: 'submit', name: COMMAND_FIELD, value: command, label, variant, loading: c.busy })
 
-/** A bare form for an action that names no field of its own — generate, remove. */
+/**
+ * A bare form for an action that names no field of its own — generate, remove.
+ * `data-layout="actions"` opts the form out of the record-form grid (built for a
+ * field/label pair), which would otherwise stretch this lone button to fill it.
+ */
 const actionForm = (c: Context, command: string, hidden: Record<string, string>, label: string): JSXChild => (
-  <form data-ui="record-form" method="post" action="" data-record-kind={c.kind}>
+  <form data-ui="record-form" data-layout="actions" method="post" action="" data-record-kind={c.kind}>
     <input type="hidden" name={COMMAND_FIELD} value={command} autocomplete="off" />
     {Object.entries(hidden).map(([name, value]) => (
       <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
     {Button({ type: 'submit', label, variant: 'secondary', size: 'compact', loading: c.busy })}
   </form>
+)
+
+const MORE_FORM_ID = 'product-template-more-form'
+const GENERAL_FORM_ID = 'product-template-general-form'
+
+/**
+ * A form with no button of its own: every item in the header's "More" menu
+ * submits it through the HTML `form` attribute, naming its own command on
+ * itself (name/value), so one empty form serves the whole menu.
+ */
+const menuForm = (c: Context, id: string): JSXChild => (
+  <form id={id} data-record-kind={c.kind} method="post" action="" hidden />
+)
+
+/**
+ * A labeled Close button placed in the header, next to Save and More.
+ * `data-record-close` (not `data-ui="modal-close"`, the icon-only corner
+ * control's own attribute) is what the runtime's click handler recognizes.
+ */
+const closeButton = (c: Context): JSXChild => (
+  <span data-record-close="true">{Button({ label: t(c, 'action.close'), variant: 'secondary' })}</span>
 )
 
 // ── General tab ─────────────────────────────────────────────────────────────
@@ -251,11 +286,6 @@ const taxFields = (c: Context): FieldProps[] => [
   }),
 ]
 
-/**
- * One `<form>`, up to three submit buttons: the core template fields save through
- * `product.saveTemplate`; stock tracking and tax are separate modules' functions,
- * so each carries its own command even though every field lives in the same form.
- */
 const generalTab = (c: Context): JSXChild => {
   const editable = canSave(c)
   return Section({
@@ -265,23 +295,16 @@ const generalTab = (c: Context): JSXChild => {
       items: [
         editable ? '' : Notice({ title: t(c, 'readOnly.title'), message: t(c, 'readOnly.message') }),
         RecordModalForm({
+          // No button of its own: the header's "Lưu" button submits this form by
+          // id (see `GENERAL_FORM_ID`), so it reads as one save action next to
+          // Close and More rather than a fourth button buried in the tab body.
+          id: GENERAL_FORM_ID,
           kind: c.kind,
           fields: [
             ...generalFields(c),
             ...(c.data.stockEnabled ? trackingFields(c) : []),
             ...(c.data.taxEnabled ? taxFields(c) : []),
           ],
-          actions: editable
-            ? [
-                submitButton(c, 'save', t(c, 'action.save'), 'primary'),
-                ...(c.data.stockEnabled && c.data.permissions.configureStock
-                  ? [submitButton(c, 'configureStock', t(c, 'action.saveTracking'), 'secondary')]
-                  : []),
-                ...(c.data.taxEnabled && c.data.permissions.setTax
-                  ? [submitButton(c, 'setTax', t(c, 'action.saveTax'), 'secondary')]
-                  : []),
-              ]
-            : [],
         }),
       ],
     }),
@@ -358,12 +381,26 @@ const variantRows = (c: Context): JSXChild =>
     ? DataTable<AnyRow>({
         rows: c.data.variants,
         id: (row) => String(row.id),
+        // No dedicated actions column — narrower than General, it was the one
+        // that clipped at a normal modal width. The code cell itself opens the
+        // edit dialog, a tertiary button rather than a bordered secondary one so
+        // it reads as the row's own identity, not a fifth column competing for
+        // the same cramped space.
         columns: [
           {
             key: 'code',
             label: t(c, 'variants.code'),
             priority: 'primary',
-            cell: (row) => String(row.defaultCode || row.name || row.id),
+            cell: (row) =>
+              RecordDialogTrigger({
+                dialog: 'variant',
+                id: String(row.id),
+                children: Button({
+                  label: String(row.defaultCode || row.name || row.id),
+                  variant: 'tertiary',
+                  size: 'compact',
+                }),
+              }),
           },
           {
             key: 'values',
@@ -383,16 +420,6 @@ const variantRows = (c: Context): JSXChild =>
                 tone: row.active === false ? 'neutral' : 'positive',
               }),
           },
-          {
-            key: 'actions',
-            label: t(c, 'variants.actions'),
-            cell: (row) =>
-              RecordDialogTrigger({
-                dialog: 'variant',
-                id: String(row.id),
-                children: Button({ label: t(c, 'variants.edit'), variant: 'secondary', size: 'compact' }),
-              }),
-          },
         ],
       })
     : Notice({ title: t(c, 'variants.empty'), message: t(c, 'variants.panelHint') })
@@ -409,15 +436,10 @@ const variantsTab = (c: Context): JSXChild =>
       Section({
         title: t(c, 'variants.title'),
         description: t(c, 'variants.panelHint'),
-        body: Stack({
-          gap: 'compact',
-          items: [
-            c.data.permissions.generateVariants
-              ? actionForm(c, 'generateVariants', {}, t(c, 'variants.generate'))
-              : '',
-            variantRows(c),
-          ],
-        }),
+        actions: c.data.permissions.generateVariants
+          ? actionForm(c, 'generateVariants', {}, t(c, 'variants.generate'))
+          : undefined,
+        body: variantRows(c),
       }),
     ],
   })
@@ -444,32 +466,97 @@ const variantDialogView = (c: Context): JSXChild => {
 
 // ── Header / create ──────────────────────────────────────────────────────────
 
-const header = (c: Context): JSXChild =>
+/**
+ * Archive and delete share one "More" menu instead of sitting in the header as
+ * their own buttons — archive toggles by submitting the hidden `menuForm` above
+ * through its HTML `form` attribute; delete carries no form of its own; `run()`
+ * routes it to `commands.delete`, whose `confirm` gate asks before anything runs.
+ */
+const moreMenuItems = (c: Context): MenuEntry[] => {
+  const items: MenuEntry[] = []
+  if (c.data.permissions.archive)
+    items.push({
+      id: 'archive',
+      label: c.data.record.active ? t(c, 'archive.action') : t(c, 'archive.restore'),
+      name: COMMAND_FIELD,
+      value: 'archive',
+      form: MORE_FORM_ID,
+    })
+  if (c.data.permissions.delete)
+    items.push({
+      id: 'delete',
+      label: t(c, 'action.delete'),
+      name: COMMAND_FIELD,
+      value: 'delete',
+      form: MORE_FORM_ID,
+      destructive: true,
+    })
+  return items
+}
+
+/** The record's active/archived state, beside the modal's own title — not a second line. */
+const statusBadge = (c: Context): JSXChild =>
   c.creating
     ? ''
-    : Stack({
-        gap: 'compact',
-        items: [
-          RecordSummary({
-            title: c.data.record.name,
-            subtitle: `${t(c, `type.${c.data.record.type}`)} · ${money(c.data.record.listPrice)}`,
-            status: {
-              label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
-              tone: c.data.record.active ? 'positive' : 'neutral',
-            },
-          }),
-          // Its own form, independent of the General tab's fields: archiving must
-          // not carry — or silently discard — whatever a reader half-typed there.
-          c.data.permissions.archive
-            ? actionForm(
-                c,
-                'archive',
-                {},
-                c.data.record.active ? t(c, 'archive.action') : t(c, 'archive.restore'),
-              )
+    : Badge({
+        label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
+        tone: c.data.record.active ? 'positive' : 'neutral',
+      })
+
+/**
+ * The footer carries the action row — Save, Close, then More — outside the
+ * scrolling body and the same on every tab, so it reads as one fixed place to
+ * finish with the record instead of a button buried in whichever tab happens
+ * to hold it. The title and its state already sit in the modal's own chrome
+ * (`templateModalDefinition.status`); repeating the name here would just be a
+ * second line saying the same thing.
+ */
+const actions = (c: Context): JSXChild | undefined => {
+  if (c.creating) return undefined
+  const editable = canSave(c)
+  const menuItems = moreMenuItems(c)
+  return Stack({
+    gap: 'compact',
+    items: [
+      // Its own form, independent of the General tab's fields: archiving or
+      // deleting must not carry — or silently discard — a half-typed edit.
+      menuItems.length ? menuForm(c, MORE_FORM_ID) : '',
+      RecordActions({
+        label: t(c, 'action.more'),
+        actions: [
+          editable
+            ? Button({
+                type: 'submit',
+                name: COMMAND_FIELD,
+                value: 'save',
+                label: t(c, 'action.save'),
+                variant: 'primary',
+                loading: c.busy,
+                form: GENERAL_FORM_ID,
+                // The General tab's form only exists in the DOM while that tab is
+                // active (the other tab's content isn't mounted) — disabled rather
+                // than silently doing nothing when there is no form to submit.
+                disabled: c.tab !== 'general',
+              })
+            : '',
+          closeButton(c),
+          menuItems.length
+            ? ActionMenu({
+                id: 'product-template-more',
+                label: t(c, 'action.more'),
+                triggerLabel: t(c, 'action.moreShort'),
+                items: menuItems,
+                // The trigger sits in the footer, at the sheet's bottom edge — opening
+                // downward like the default would run past it and be clipped, since
+                // the sheet itself clips overflow.
+                placement: 'top',
+              })
             : '',
         ],
-      })
+      }),
+    ],
+  })
+}
 
 const createView = (c: Context): JSXChild =>
   Section({
@@ -512,12 +599,16 @@ const createView = (c: Context): JSXChild =>
 export const templateModalDefinition: RecordModalDefinition<TemplateModalData> = {
   kind: 'product.template',
   size: 'large',
+  // General's own fields fit well inside this; a shorter screen still shrinks it
+  // instead of overflowing (see `ModalSheet.fixedHeight`).
+  fixedHeight: 'min(48rem, calc(100dvh - var(--kv-space-12)))',
   context: {
     fn: 'product.templateModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'create.title') : c.data.record.name),
-  header,
+  status: statusBadge,
+  actions,
   body: (c) => (c.creating ? createView(c) : ''),
   tabs: [
     { id: 'general', label: (c) => t(c, 'tabs.general'), visible: (c) => !c.creating, view: generalTab },
@@ -545,6 +636,10 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
         return typeof row.id === 'string' ? row.id : null
       },
     },
+    // One button, three calls in sequence: the core template fields always save;
+    // stock tracking and tax each run only when their module is installed and the
+    // viewer may configure it — the same gating the three separate buttons used
+    // to carry individually.
     save: {
       fn: 'product.saveTemplate',
       input: (form, c) => ({
@@ -563,26 +658,34 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
           ? {}
           : { defaultCode: text(form, 'defaultCode') || null, barcode: text(form, 'barcode') || null }),
       }),
-      after: 'refresh',
-    },
-    configureStock: {
-      fn: 'stock.configureProduct',
-      input: (form, c) => ({
-        templateId: c.id,
-        isStorable: checked(form, 'isStorable'),
-        tracking: text(form, 'tracking') || 'none',
-      }),
-      after: 'refresh',
-    },
-    setTax: {
-      fn: 'account.setProductTax',
-      input: (form, c) => ({ templateId: c.id, taxId: text(form, 'taxId') || null }),
+      also: [
+        {
+          fn: 'stock.configureProduct',
+          when: (c) => c.data.stockEnabled && c.data.permissions.configureStock,
+          input: (form, c) => ({
+            templateId: c.id,
+            isStorable: checked(form, 'isStorable'),
+            tracking: text(form, 'tracking') || 'none',
+          }),
+        },
+        {
+          fn: 'account.setProductTax',
+          when: (c) => c.data.taxEnabled && c.data.permissions.setTax,
+          input: (form, c) => ({ templateId: c.id, taxId: text(form, 'taxId') || null }),
+        },
+      ],
       after: 'refresh',
     },
     archive: {
       fn: 'product.archiveTemplate',
       input: (_form, c) => ({ id: c.id, active: !c.data.record.active }),
       after: 'refresh',
+    },
+    delete: {
+      fn: 'product.deleteTemplates',
+      input: (_form, c) => ({ ids: [c.id] }),
+      confirm: (c) => t(c, 'archive.deleteConfirm', { name: c.data.record.name }),
+      after: 'close',
     },
     generateVariants: {
       fn: 'product.generateVariants',
