@@ -124,7 +124,13 @@ export const models: Record<string, ModelDef> = {
 
   TemplateAttributeValue: {
     scope: 'shared',
-    fields: { id: 'id', lineId: 'ref:product.TemplateAttributeLine', valueId: 'ref:product.AttributeValue' },
+    fields: {
+      id: 'id',
+      lineId: 'ref:product.TemplateAttributeLine',
+      valueId: 'ref:product.AttributeValue',
+      // Added to the template's list price when a variant carries this value.
+      priceExtra: 'decimal?',
+    },
     indexes: {
       line_value: { fields: ['lineId', 'valueId'], unique: true },
       value: { fields: ['valueId'] },

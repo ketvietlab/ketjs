@@ -1,9 +1,15 @@
 import { defineIsland } from '@ketvietlab/ketjs-view'
+import {
+  createLightboxView,
+  createRelationSelectView,
+  type LightboxConfig,
+  type RelationSelectConfig,
+} from '@ketvietlab/design-system'
 import { createChartView, type ChartSpec } from '../../ui/client/chart-view.tsx'
-import { createRelationSelectView, type RelationSelectConfig } from '../../ui/client/relation-select-view.tsx'
 
 type ChartProps = { id: string; config: ChartSpec }
 type RelationSelectProps = { id: string; config: RelationSelectConfig }
+type LightboxProps = { id: string; config: LightboxConfig }
 
 export const islands = {
   /**
@@ -24,5 +30,13 @@ export const islands = {
     client: 'client/relation-select.mjs',
     export: 'relationSelect',
     view: (props) => createRelationSelectView(props),
+  }),
+  /** The design-system image viewer: a thumbnail that opens zoom, pan and pinch over a set of images. */
+  'backend.lightbox': defineIsland<LightboxProps>()({
+    props: { id: 'id', config: 'json' },
+    key: ['id'],
+    client: 'client/lightbox.mjs',
+    export: 'lightbox',
+    view: (props) => createLightboxView(props),
   }),
 }

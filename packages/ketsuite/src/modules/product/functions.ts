@@ -14,6 +14,7 @@ import {
 import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
 import { PRODUCT_TYPES } from './types.ts'
 import { productModalContextFunctions } from './product-modal-context.ts'
+import { variantSetupFunctions } from './variant-setup.ts'
 import { emptyProductListState, productListSearch } from './search.ts'
 
 /**
@@ -1369,4 +1370,5 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   ...productModalContextFunctions,
+  ...variantSetupFunctions,
 }

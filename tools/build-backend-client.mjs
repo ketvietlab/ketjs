@@ -10,13 +10,18 @@ import * as esbuild from 'esbuild'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
 const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
+const DESIGN_SYSTEM_DIR = join(ROOT, 'packages/design-system/src')
 const CRM_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/crm_backend')
 const USER_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/user_backend')
 const PRODUCT_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/product_backend')
 const entries = [
   {
-    source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
+    source: join(DESIGN_SYSTEM_DIR, 'interactions/relation-select/index.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
+  },
+  {
+    source: join(DESIGN_SYSTEM_DIR, 'interactions/lightbox/index.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'lightbox.mjs'),
   },
   {
     source: join(UI_CLIENT_DIR, 'table-selection-view.tsx'),
@@ -40,6 +45,11 @@ const entries = [
   {
     source: join(PRODUCT_BACKEND_DIR, 'modal/product-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/product-modal.mjs'),
+  },
+  // The template modal's attributes-and-variants editor island.
+  {
+    source: join(UI_CLIENT_DIR, 'variant-editor-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/variant-editor.mjs'),
   },
 ]
 

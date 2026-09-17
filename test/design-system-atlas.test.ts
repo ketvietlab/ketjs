@@ -33,12 +33,27 @@ test('design system: KetAtlas materialization is complete and reproducible', () 
     assert.match(runtime, /window\["ATLAS_DESIGN_SYSTEM"\]\["attach"\] = attachDesignSystemInteractions/u)
     assert.match(contracts, /__ATLAS_SLOT_TITLE__/u)
     assert.doesNotMatch(runtime, /\bexport\s/u)
-    for (const contract of ['list', 'record', 'record-solo', 'flow', 'canvas', 'shell', 'section', 'metric'])
+    for (const contract of [
+      'list',
+      'record',
+      'record-solo',
+      'flow',
+      'canvas',
+      'shell',
+      'section',
+      'metric',
+      'relation-select',
+    ])
       assert.match(contracts, new RegExp(`"${contract}"`, 'u'))
+    // `contracts` is JS source whose HTML payload is itself JSON-encoded, so a
+    // literal quote here is an escaped \" in the source text.
+    assert.match(contracts, /data-island=.{0,2}design-system\.relation-select/u)
+    assert.match(runtime, /design-system\.relation-select/u)
+    assert.doesNotMatch(runtime, /\bimport\s/u)
     assert.equal(lock.schemaVersion, 'ketatlas.design-system-lock.v1')
     assert.equal(lock.adapterSchemaVersion, 'ketatlas.design-system-adapter.v1')
     assert.equal(lock.adapter, '@ketvietlab/design-system')
-    assert.equal(lock.registeredComponents, 115)
+    assert.equal(lock.registeredComponents, 121)
     assert.deepEqual(
       lock.files.map((file) => file.path),
       [

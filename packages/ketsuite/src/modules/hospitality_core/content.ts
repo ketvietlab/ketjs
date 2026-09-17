@@ -335,6 +335,7 @@ export const content: Record<string, FnSpec> = {
       'write:hospitality_core.ContentImage',
       'write:hospitality_core.ContentChange',
       'write:storage.Attachment',
+      'write:storage.AttachmentRendition',
       'enqueue:storage.sweep',
     ],
     idempotent: true,
@@ -348,6 +349,8 @@ export const content: Record<string, FnSpec> = {
         const Image = tx.table('hospitality_core.ContentImage')
         const Attachment = tx.table('storage.Attachment')
         await tx.db.del(deleteFrom(Image).where(eq(Image.id, args.id)))
+        const Rendition = tx.table('storage.AttachmentRendition')
+        await tx.db.del(deleteFrom(Rendition).where(eq(Rendition.attachmentId, image.attachmentId)))
         await tx.db.del(deleteFrom(Attachment).where(eq(Attachment.id, image.attachmentId)))
         if (image.primary === true) {
           const next = rows.find((candidate) => candidate.id !== args.id)
