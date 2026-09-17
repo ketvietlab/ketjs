@@ -1340,6 +1340,10 @@ const sources = {
       issueAuthToken: ['internal-route', 'user.trusted-route-worker-or-service'],
       prepareContext: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       provisionAdmin: ['bootstrap-only', 'operator-provisioning-boundary'],
+      // Run by `ketsuite serve` as `system:role-templates` before any request, and
+      // refused for any other actor: it brings the deployment's own role templates
+      // into the tenant, so there is no user to hold a permission for it yet.
+      syncRoleTemplates: ['bootstrap-only', 'operator-provisioning-boundary'],
       recordSecurityEvent: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       resolveSessionContext: ['internal-route', 'user.trusted-route-worker-or-service'],
       setPassword: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
