@@ -236,6 +236,12 @@ export type RecordModalDefinition<Data> = {
    */
   actions?: (context: RecordModalContext<Data>) => JSXChild | undefined
   tabs?: readonly RecordModalTab<Data>[]
+  /**
+   * Tabs other modules add to this record, read from its context: they follow the
+   * declared tabs, in composition order, and render through the same TabbedView.
+   * A module that owns the record cannot know them when it is built.
+   */
+  extensionTabs?: (context: RecordModalContext<Data>) => readonly RecordModalTab<Data>[]
   /** The body of a record without tabs. */
   body?: (context: RecordModalContext<Data>) => JSXChild
   dialogs?: Record<string, RecordModalDialog<Data>>
@@ -500,7 +506,9 @@ export const createRecordModal =
         params,
       )
     const visibleTabs = (context: RecordModalContext<Data>) =>
-      (definition.tabs ?? []).filter((tab) => tab.visible?.(context) ?? true)
+      [...(definition.tabs ?? []), ...(definition.extensionTabs?.(context) ?? [])].filter(
+        (tab) => tab.visible?.(context) ?? true,
+      )
 
     const contextFor = (
       current: { id: string; tab: string },
@@ -969,7 +977,10 @@ export const createRecordModal =
               size: definition.size ?? 'default',
               // Tabs have different heights; a fixed dialog does not jump when the reader switches
               // tabs, nor when the loading state gives way to the record.
-              height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
+              // A definition that takes extension tabs may gain one at any time, so it
+              // keeps the fixed height its declared tabs would otherwise earn.
+              height:
+                (definition.tabs?.length ?? 0) + (definition.extensionTabs ? 1 : 0) > 1 ? 'fixed' : 'content',
               fixedHeight: definition.fixedHeight,
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,

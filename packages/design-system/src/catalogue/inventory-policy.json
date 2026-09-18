@@ -119,19 +119,33 @@
       "wave": 2,
       "gapTask": "DS-014"
     },
-    "./interactions/lightbox/index.tsx": {
-      "owner": "Overlays",
-      "maturity": "stable",
-      "decision": "keep",
-      "wave": 2,
-      "gapTask": "DS-046"
-    },
     "./interactions/relation-select/index.tsx": {
       "owner": "Forms",
       "maturity": "stable",
       "decision": "keep",
       "wave": 2,
+      "gapTask": "DS-044"
+    },
+    "./interactions/lightbox/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-047"
+    },
+    "./interactions/search-filter/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
       "gapTask": "DS-045"
+    },
+    "./interactions/ket-table/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-046"
     },
     "./interactions/skeleton/index.tsx": {
       "owner": "Feedback",

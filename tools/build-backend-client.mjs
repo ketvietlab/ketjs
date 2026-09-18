@@ -20,6 +20,10 @@ const entries = [
     output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
   },
   {
+    source: join(UI_CLIENT_DIR, 'ket-table-view.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'ket-table.mjs'),
+  },
+  {
     source: join(DESIGN_SYSTEM_DIR, 'interactions/lightbox/index.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'lightbox.mjs'),
   },
@@ -45,11 +49,6 @@ const entries = [
   {
     source: join(PRODUCT_BACKEND_DIR, 'modal/product-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/product-modal.mjs'),
-  },
-  // The template modal's attributes-and-variants editor island.
-  {
-    source: join(UI_CLIENT_DIR, 'variant-editor-view.tsx'),
-    output: join(PRODUCT_BACKEND_DIR, 'client/variant-editor.mjs'),
   },
 ]
 

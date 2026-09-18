@@ -295,6 +295,25 @@ test('product modal: the footer carries Save (the General form, or the variant e
   assert.match(readOnly, /data-record-close="true"/, 'Close still shows without save permission')
 })
 
+test('product modal: a tab another module adds renders its island with the template, and none while creating', () => {
+  const data = templateData({
+    extensionTabs: [
+      { id: 'cosmetic_usage_care', label: 'Chu kỳ sử dụng', island: 'cosmetic-care.product-cycle-record' },
+    ],
+  })
+  const [tab] = templateModalDefinition.extensionTabs!(contextOf(data))
+  assert.equal(tab?.id, 'cosmetic_usage_care')
+  assert.equal(tab?.label(contextOf(data)), 'Chu kỳ sử dụng')
+  const html = render(tab!.view(contextOf(data)))
+  assert.match(html, /<ket-island data-island="cosmetic-care\.product-cycle-record"/u)
+  assert.match(
+    html,
+    /data-props="\{&quot;templateId&quot;:&quot;tpl-1&quot;,&quot;locale&quot;:&quot;vi&quot;\}"/u,
+  )
+  assert.deepEqual(templateModalDefinition.extensionTabs!(contextOf(data, { creating: true })), [])
+  assert.deepEqual(templateModalDefinition.extensionTabs!(contextOf(templateData())), [])
+})
+
 test("product modal: the modal's own chrome carries the active/archived badge, not a body line", () => {
   const badge = render(templateModalDefinition.status!(contextOf(templateData())))
   assert.match(badge, /product_backend\.state\.active/)

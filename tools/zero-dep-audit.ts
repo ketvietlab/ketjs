@@ -38,16 +38,20 @@ const RULES: Record<string, Rule> = {
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
   'design-system': { allow: ['@ketvietlab/ketjs-view'] },
-  // yjs and chart.js are the accepted breaches of ketsuite's own allowance,
-  // mirroring how ketjs-postgres is the framework's one accepted breach of rule
-  // 1: named, narrow exceptions rather than an open door. yjs backs the Flow
-  // collaborative editor's CRDT merge, in the browser bundle and on the server
-  // that flattens the document; chart.js draws the analytical screens, in the
-  // browser bundle only. Neither is ever reached by ketjs/ketjs-view — so the
-  // framework core stays untouched, and a deployment that installs the
-  // framework alone still installs nothing else.
+  // yjs, chart.js and ioredis are the accepted breaches of ketsuite's own
+  // allowance, mirroring how ketjs-postgres is the framework's one accepted
+  // breach of rule 1: named, narrow exceptions rather than an open door. yjs
+  // backs the Flow collaborative editor's CRDT merge, in the browser bundle
+  // and on the server that flattens the document; chart.js draws the
+  // analytical screens, in the browser bundle only; ioredis backs
+  // `cache.ts`'s shared cache when `REDIS_URL` is set, on the server only —
+  // unset, it is installed but never connected to, and ketsuite behaves
+  // exactly as it did before this entry existed. None of the three is ever
+  // reached by ketjs/ketjs-view — so the framework core stays untouched, and
+  // a deployment that installs the framework alone still installs nothing
+  // else.
   //
-  // sharp is the third: storage's rendition job resizes uploaded images to WebP
+  // sharp is the fourth: storage's rendition job resizes uploaded images to WebP
   // through it, on the worker only — Node ships no image codec, and a hand-written
   // JPEG decoder is not a fence worth keeping. Since 0.33 it installs prebuilt
   // libvips from npm (@img/*) with no install script or source build; the lockfile
@@ -65,6 +69,7 @@ const RULES: Record<string, Rule> = {
       'chart.js',
       'sharp',
       'yjs',
+      'ioredis',
     ],
     publicOnly: true,
   },

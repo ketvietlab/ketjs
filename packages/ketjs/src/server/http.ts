@@ -335,9 +335,12 @@ const loadFactory = async (name) => {
   try { return await pending } finally { loading.delete(name) }
 }
 const loadPlaced = async (root, requireKnown = false) => {
-  // The root itself may be the island host — a client view that swaps in a bare
-  // island — and the manager starts it, so its factory must be loaded too.
-  const placed = [...(root.matches?.(ISLAND_SELECTOR) ? [root] : []), ...root.querySelectorAll(ISLAND_SELECTOR)]
+  // A client view may add the island host itself as the root, and querySelectorAll
+  // never matches the element it is called on: without this the island's module
+  // was not loaded, the manager skipped the unknown island, and the host stayed
+  // empty until something else happened to load the same module.
+  const placed = Array.from(root.querySelectorAll(ISLAND_SELECTOR))
+  if (root.matches?.(ISLAND_SELECTOR)) placed.push(root)
   const names = new Set(placed.map((element) => element.getAttribute('data-island')).filter(Boolean))
   if (requireKnown) {
     const unknown = Array.from(names).find((name) => !knownIslands.has(name))

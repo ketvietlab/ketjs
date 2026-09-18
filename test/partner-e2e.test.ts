@@ -132,17 +132,29 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     /data-ui="list-page-controls"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?2 đối tác/,
   )
   assert.match(partnerList, /data-ui="search-menu"/)
-  assert.match(partnerList, /data-ui="select-all"/)
-  assert.match(partnerList, /data-ui="row-select"[^>]*form="partner-directory-bulk"/)
+  assert.match(partnerList, /data-ui="kt-select-all"/)
+  // KetTable's visible row checkbox only toggles client selection state — it
+  // mirrors into `data-ui="kt-select-persisted"`'s hidden, form-associated
+  // inputs (see `interactions/ket-table/index.tsx`), so selecting rows and
+  // submitting the bulk form needs the island hydrated, unlike ketsuite's
+  // old `table.tsx` checkboxes which carried `form=` directly. That flow is
+  // covered by the design-system-level "operational tables expose sort,
+  // selection, grouping and row navigation" test, and by a live browser
+  // check, not by this SSR-only fetch.
+  assert.match(partnerList, /data-ui="kt-row-select"[^>]*aria-label="Chọn dòng: customer"/)
+  assert.match(partnerList, /data-ui="kt-select-persisted"/)
   assert.match(
     partnerList,
     /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"[\s\S]*?data-ui="list-page-toolbar"/,
   )
-  assert.match(partnerList, /data-row-href="\/admin\/partner\/partners\/customer"/)
+  assert.match(
+    partnerList,
+    /data-ui="kt-row-link"[^>]*href="\/admin\/partner\/partners\/customer"/,
+    "the partner name cell links to its record, via KetTable's row-href template",
+  )
   assert.match(partnerList, /data-ui="tabs"[\s\S]*?data-ui="tab-count"/)
   assert.doesNotMatch(partnerList, /data-ui="partner-list-layout"/)
   assert.doesNotMatch(partnerList, /data-ui="partner-stat-grid"/)
-  assert.doesNotMatch(partnerList, /data-ui="row-link"/, 'the partner name cell is plain text')
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
   const partnerControls = partnerList.slice(
     partnerList.indexOf('data-ui="list-page-controls"'),

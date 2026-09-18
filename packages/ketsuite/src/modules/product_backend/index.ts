@@ -40,10 +40,19 @@ export default defineModule({
     /** Presentation-only entries owned by modules that add product operations. */
     'catalogue.actions': { props: { locale: 'text?' }, multiple: true },
     'template.actions': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
+    /**
+     * A tab another module adds to the template record modal. Fill it with one
+     * island placement; the island renders the tab's panel with `{ templateId,
+     * locale }`. The tab is labelled by the filling module's
+     * `<module>.productTemplateTab` message and addressed as `tab=<module>`.
+     */
+    'template.recordTabs': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
+    /** Server detail page only; the record modal reads `template.recordTabs`. */
     'template.tabs': {
       props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
       multiple: true,
     },
+    /** Server detail page only; the record modal reads `template.recordTabs`. */
     'template.panel': {
       props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
       multiple: true,
