@@ -120,6 +120,8 @@ export type SearchFavorite = { id: string; label: string; isDefault: boolean; ac
 export type SearchFilterManager = {
   applyFunction: string
   bodyId: string
+  /** Static, screen-owned input kept with every apply request (for example the active locale). */
+  applyInput?: Record<string, unknown>
   saveFavoriteFunction?: string
   deleteFavoriteFunction?: string
   setDefaultFavoriteFunction?: string
@@ -226,6 +228,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   }
 
   const applyPayload = () => ({
+    ...(manager?.applyInput ?? {}),
     query: query(),
     facets: facets(),
     filters: facets()
@@ -248,6 +251,16 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         | undefined
       const body = document.getElementById(manager.bodyId)
       if (body && typeof value?.html === 'string') body.innerHTML = value.html
+      // A bare `pushState` only edits the address bar — nothing reads the URL back
+      // out and re-renders, so a function that answers with an `href` alone (no
+      // `html`) would otherwise apply nothing. Real navigation is what a filter
+      // whose backend can only recompute an href, not build the body itself
+      // (its RPC transport has no page-rendering context — see `applyFunction`'s
+      // own contract), needs in order to take effect at all.
+      if (typeof value?.href === 'string' && typeof value.html !== 'string') {
+        window.location.assign(value.href)
+        return
+      }
       if (typeof value?.href === 'string') history.pushState(null, '', value.href)
     } catch (caught) {
       error.set(caught instanceof Error ? caught.message : labels.applyError)

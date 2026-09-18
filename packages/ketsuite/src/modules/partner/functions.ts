@@ -220,6 +220,12 @@ export const functions: Record<string, FnSpec> = {
       sortDirection: 'text?',
       limit: 'int?',
       offset: 'int?',
+      // `KetTable`'s manager appends these two when fetching a group's rows —
+      // `groupBy: ['kind' | 'state']` naming which column, `groupPath: [value]`
+      // naming which value of it. Only a single level is ever sent today (the
+      // partner list groups by one field at a time), so only `[0]` is read.
+      groupBy: 'json?',
+      groupPath: 'json?',
     },
     output: {
       id: 'id',
@@ -248,8 +254,15 @@ export const functions: Record<string, FnSpec> = {
       let q = from(P)
         .select(P.id, P.kind, P.name, P.ref, P.email, P.phone, P.contactConsent, P.active)
         .orderBy(a.sortDirection === 'desc' ? desc(sortColumn) : asc(sortColumn))
-      if (a.includeArchived !== true) q = q.where(eq(P.active, true))
+      const groupField = Array.isArray(a.groupBy) ? a.groupBy[0] : undefined
+      const groupValue = Array.isArray(a.groupPath) ? a.groupPath[0] : undefined
+      if (groupField === 'state' && groupValue !== undefined) {
+        q = q.where(eq(P.active, groupValue === 'active'))
+      } else if (a.includeArchived !== true) {
+        q = q.where(eq(P.active, true))
+      }
       if (a.kind) q = q.where(eq(P.kind, a.kind))
+      else if (groupField === 'kind' && groupValue) q = q.where(eq(P.kind, String(groupValue)))
       if (a.search) {
         const search = String(a.search).normalize('NFKC').trim()
         const phone = normalizedPhone(search)
