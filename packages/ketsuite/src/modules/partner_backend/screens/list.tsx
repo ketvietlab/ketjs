@@ -1,29 +1,22 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  bulkActions,
-  CollectionTabs,
-  inline,
-  LinkButton,
-  ListPage,
-  listChrome,
-  shell,
-  stack,
-} from '../../../ui/index.ts'
+import { bulkActions, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
-import type { PartnerListSummary } from './types.ts'
 
 export const partnersScreen = (
   _: Translator,
   frame: Frame,
+  // Pre-rendered by the route via `backend/search-filter.ts`'s
+  // `searchFilterBar()` — replaces the old `listChrome` search/role/archived
+  // bar and the `CollectionTabs` summary strip with one filter surface that
+  // also carries Group By.
+  searchFilterBar: JSXChild,
   // Pre-rendered by the route via `backend/ket-table.ts`'s `tableGrid()` —
   // `partnersScreen` stays a pure, synchronous view function, and the island
   // only needs `ctx`/`url`/`req` (for its joint) at the one call site that
   // already has them. The island also owns its own empty state, so there is
   // no `rows.length ? … : emptyState(...)` branch left to keep here.
   tableGrid: JSXChild,
-  locale = '',
-  summary?: PartnerListSummary,
   total = 0,
 ): TemplateResult =>
   shell(
@@ -51,66 +44,9 @@ export const partnersScreen = (
             ])
           : undefined
       }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('partner_backend.screen.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      controls={searchFilterBar}
       status={_('partner_backend.screen.results', { count: total })}
-      body={
-        summary
-          ? stack(
-              [
-                <CollectionTabs
-                  label={_('partner_backend.list.summary')}
-                  items={[
-                    {
-                      id: 'all',
-                      label: _('partner_backend.list.all'),
-                      count: summary.total,
-                      href: summary.allHref,
-                      active: summary.active === 'all',
-                    },
-                    {
-                      id: 'customers',
-                      label: _('partner_backend.filter.customers'),
-                      count: summary.customers,
-                      href: summary.customersHref,
-                      active: summary.active === 'customers',
-                    },
-                    {
-                      id: 'suppliers',
-                      label: _('partner_backend.filter.suppliers'),
-                      count: summary.suppliers,
-                      href: summary.suppliersHref,
-                      active: summary.active === 'suppliers',
-                    },
-                    {
-                      id: 'archived',
-                      label: _('partner_backend.filter.includeArchived'),
-                      count: summary.archived,
-                      href: summary.archivedHref,
-                      active: summary.active === 'archived',
-                    },
-                  ]}
-                />,
-                tableGrid,
-              ],
-              'compact',
-            )
-          : tableGrid
-      }
+      body={tableGrid}
     />,
     { ...frame, chrome: null, topbar: false },
   )

@@ -33,6 +33,8 @@ packages/ketsuite/src/modules/backend/design/client/backend-shell.mjs
 packages/ketsuite/src/modules/backend/design/client/backend-shell.mjs.map
 packages/ketsuite/src/modules/backend/design/client/ket-table.mjs
 packages/ketsuite/src/modules/backend/design/client/ket-table.mjs.map
+packages/ketsuite/src/modules/backend/design/client/search-filter.mjs
+packages/ketsuite/src/modules/backend/design/client/search-filter.mjs.map
 # The public design-system entry is bundled into the backend asset root so
 # source-mode development and production serve the same fingerprinted bytes.
 packages/ketsuite/src/modules/backend/design/design-system.css

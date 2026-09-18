@@ -248,6 +248,16 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         | undefined
       const body = document.getElementById(manager.bodyId)
       if (body && typeof value?.html === 'string') body.innerHTML = value.html
+      // A bare `pushState` only edits the address bar — nothing reads the URL back
+      // out and re-renders, so a function that answers with an `href` alone (no
+      // `html`) would otherwise apply nothing. Real navigation is what a filter
+      // whose backend can only recompute an href, not build the body itself
+      // (its RPC transport has no page-rendering context — see `applyFunction`'s
+      // own contract), needs in order to take effect at all.
+      if (typeof value?.href === 'string' && typeof value.html !== 'string') {
+        window.location.assign(value.href)
+        return
+      }
       if (typeof value?.href === 'string') history.pushState(null, '', value.href)
     } catch (caught) {
       error.set(caught instanceof Error ? caught.message : labels.applyError)

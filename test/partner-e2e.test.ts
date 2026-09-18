@@ -114,7 +114,12 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     assert.equal(response.status, 200, path)
     const html = await response.text()
     assert.match(html, expected, path)
-    assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]/, path)
+    // Every real message key under these two modules is at least two segments
+    // deep (`screen.title`, `filter.customers`, …), so this only ever matches an
+    // unresolved `_('…')` call. A single segment doesn't leak translation text —
+    // it's `partner_backend.applyFilter`, `search-filter`'s own RPC identifier,
+    // legitimately serialized into the island's `data-props`.
+    assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]+\.[A-Za-z]/, path)
   }
 
   const partnerList = await (
@@ -131,7 +136,8 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     partnerList,
     /data-ui="list-page-controls"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?2 đối tác/,
   )
-  assert.match(partnerList, /data-ui="search-menu"/)
+  assert.match(partnerList, /data-island="backend\.search-filter"/)
+  assert.match(partnerList, /data-ui="search-filter"[\s\S]*?data-ui="search-filter-toggle"/)
   assert.match(partnerList, /data-ui="kt-select-all"/)
   // KetTable's visible row checkbox only toggles client selection state — it
   // mirrors into `data-ui="kt-select-persisted"`'s hidden, form-associated
@@ -152,7 +158,9 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     /data-ui="kt-row-link"[^>]*href="\/admin\/partner\/partners\/customer"/,
     "the partner name cell links to its record, via KetTable's row-href template",
   )
-  assert.match(partnerList, /data-ui="tabs"[\s\S]*?data-ui="tab-count"/)
+  // The old customers/suppliers/archived tab strip is gone — `search-filter`'s
+  // filter menu and facet chips (checked above) are the one surface now.
+  assert.doesNotMatch(partnerList, /data-ui="tabs"/)
   assert.doesNotMatch(partnerList, /data-ui="partner-list-layout"/)
   assert.doesNotMatch(partnerList, /data-ui="partner-stat-grid"/)
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
@@ -321,9 +329,12 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   const keptSearch = await (
     await e2e.client.get('/admin/partner/partners?role=customer&archived=1&lang=en')
   ).text()
-  assert.match(keptSearch, /name="role" value="customer"/)
-  assert.match(keptSearch, /name="archived" value="1"/)
-  assert.match(keptSearch, /name="lang" value="en"/)
+  // The old chrome kept `role`/`archived`/`lang` alive across a plain GET form
+  // via hidden `keep` inputs. `search-filter` carries the same state as its own
+  // active facet chips instead — there is no GET form left to keep anything in.
+  assert.match(keptSearch, /<html lang="en">/)
+  assert.match(keptSearch, /data-ui="search-filter-facet" data-type="filter"[\s\S]*?Customers/)
+  assert.match(keptSearch, /data-ui="search-filter-facet" data-type="filter"[\s\S]*?Include archived/)
 
   const english = await e2e.client.get('/admin/partner/partners?lang=en', {
     headers: { accept: 'text/html' },

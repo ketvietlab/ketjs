@@ -1,12 +1,14 @@
 import { defineIsland } from '@ketvietlab/ketjs-view'
-import type { KetTableConfig } from '@ketvietlab/design-system'
+import type { KetTableConfig, SearchFilterConfig } from '@ketvietlab/design-system'
 import { createChartView, type ChartSpec } from '../../ui/client/chart-view.tsx'
 import { createRelationSelectView, type RelationSelectConfig } from '../../ui/client/relation-select-view.tsx'
 import { ketTable } from '../../ui/client/ket-table-view.tsx'
+import { searchFilter } from '../../ui/client/search-filter-view.tsx'
 
 type ChartProps = { id: string; config: ChartSpec }
 type RelationSelectProps = { id: string; config: RelationSelectConfig }
 type KetTableProps = { id: string; config: KetTableConfig }
+type SearchFilterProps = { id: string; config: SearchFilterConfig }
 
 export const islands = {
   /**
@@ -34,5 +36,12 @@ export const islands = {
     client: 'client/ket-table.mjs',
     export: 'ketTable',
     view: (props) => ketTable(props),
+  }),
+  'backend.search-filter': defineIsland<SearchFilterProps>()({
+    props: { id: 'id', config: 'json' },
+    key: ['id'],
+    client: 'client/search-filter.mjs',
+    export: 'searchFilter',
+    view: (props) => searchFilter(props),
   }),
 }

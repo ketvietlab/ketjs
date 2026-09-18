@@ -59,6 +59,7 @@ export default defineModule({
     'backend:relation.select': `{% island "backend.relation-select" %}`,
     'backend:screen.chart': `{% island "backend.chart" %}`,
     'backend:table.grid': `{% island "backend.ket-table" %}`,
+    'backend:search.filter': `{% island "backend.search-filter" %}`,
   },
   messages,
 })

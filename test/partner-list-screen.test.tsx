@@ -11,11 +11,6 @@ const messages: Record<string, string> = {
   'partner_backend.screen.results': '{count} đối tác',
   'partner_backend.screen.empty': 'Chưa có đối tác nào',
   'partner_backend.screen.emptyHint': 'Tạo khách hàng, nhà cung cấp hoặc liên hệ đầu tiên.',
-  'partner_backend.list.summary': 'Tổng quan',
-  'partner_backend.list.all': 'Tất cả',
-  'partner_backend.filter.customers': 'Khách hàng',
-  'partner_backend.filter.suppliers': 'Nhà cung cấp',
-  'partner_backend.filter.includeArchived': 'Gồm đã lưu trữ',
   'partner_backend.field.name': 'Tên',
   'partner_backend.field.kind': 'Loại',
   'partner_backend.field.email': 'Email',
@@ -43,18 +38,6 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
-const summary = {
-  total: 24,
-  customers: 18,
-  suppliers: 7,
-  archived: 2,
-  allHref: '/admin/partner/partners',
-  customersHref: '/admin/partner/partners?role=customer',
-  suppliersHref: '/admin/partner/partners?role=supplier',
-  archivedHref: '/admin/partner/partners?archived=1',
-  active: 'all' as const,
-}
-
 const selection = {
   formId: 'partner-directory-bulk',
   action: '/admin/partner/partners/bulk',
@@ -62,14 +45,14 @@ const selection = {
   actions: [{ id: 'archive', label: 'Lưu trữ đã chọn' }],
 }
 
-// `partnersScreen` now takes the table already rendered — real row/checkbox
-// markup comes from the `KetTable` island (`ctx.joint` at the route, see
-// `backend/ket-table.ts`), which needs a live serve context this unit test
-// doesn't have. So these tests only cover what `partnersScreen` itself still
-// controls: the surrounding ListPage/tabs/actions structure, with a plain
-// marker standing in for whatever the route handed it.
+// `partnersScreen` now takes both the filter bar and the table already
+// rendered — real markup for either comes from an island (`search-filter`,
+// `KetTable`) via `ctx.joint` at the route, which needs a live serve context
+// this unit test doesn't have. So these tests only cover what `partnersScreen`
+// itself still controls: the surrounding ListPage/actions structure, with a
+// plain marker standing in for whatever the route handed it.
 
-test('partner list: follows the shared ListPage hierarchy and keeps directory tabs', () => {
+test('partner list: follows the shared ListPage hierarchy and places the filter bar and table', () => {
   const html = renderToString(
     partnersScreen(
       translate,
@@ -77,13 +60,10 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
         chrome: {
           create: { label: 'Tạo đối tác', path: '/admin/partner/partners/new' },
           selection,
-          search: { name: 'q', placeholder: 'Tìm theo tên đối tác…' },
-          pager: { from: 1, to: 1, total: 24 },
         },
       },
+      <div data-ui="search-filter-test-marker">Bộ lọc</div>,
       <div data-ui="ket-table-test-marker">Công ty Minh An</div>,
-      '?lang=vi',
-      summary,
       24,
     ),
   )
@@ -100,24 +80,30 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
   )
   assert.match(
     html,
-    /data-ui="list-page-controls"[\s\S]*?data-layout="command"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?24 đối tác/,
+    /data-ui="list-page-controls"[\s\S]*?search-filter-test-marker[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?24 đối tác/,
   )
-  assert.match(html, /data-ui="tabs"[\s\S]*?Khách hàng[\s\S]*?18/)
   assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="ket-table-test-marker"[\s\S]*?Công ty Minh An/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
     html.indexOf('data-ui="list-page-body"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
+  assert.doesNotMatch(html, /data-ui="tabs"/)
   assert.doesNotMatch(html, /data-ui="partner-list-rail"/)
 })
 
-test('partner list: keeps tabs available when a filtered result is empty', () => {
+test('partner list: still renders the filter bar and count when a filtered result is empty', () => {
   const html = renderToString(
-    partnersScreen(translate, {}, <div data-ui="empty">Chưa có đối tác nào</div>, '?lang=vi', summary, 0),
+    partnersScreen(
+      translate,
+      {},
+      <div data-ui="search-filter-test-marker">Bộ lọc</div>,
+      <div data-ui="empty">Chưa có đối tác nào</div>,
+      0,
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
-  assert.match(html, /data-ui="tabs"/)
+  assert.match(html, /data-ui="search-filter-test-marker"/)
   assert.match(html, /data-ui="empty"/)
   assert.match(html, /0 đối tác/)
 })
