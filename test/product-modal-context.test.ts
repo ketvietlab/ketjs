@@ -272,6 +272,47 @@ test('variant setup: a duplicate combination is refused on both rows and nothing
   assert.deepEqual(context!.data.variantSetup!.variants, [])
 })
 
+test('variant setup: the combination key follows the stored line ids, so generating after a save adds nothing', async (t) => {
+  const { run } = await boot(t)
+  await teeCatalogue(run)
+  // Two attributes on the same sequence: only the line id breaks the tie, and these
+  // ids are not the ones `saveVariantSetup` would mint, so it has to read them.
+  await run('product.saveAttribute', { id: 'color', name: 'Màu', sequence: 5 })
+  await run('product.saveAttribute', { id: 'size', name: 'Size', sequence: 5 })
+  await run('product.saveAttributeLine', {
+    id: 'legacy-9-color',
+    templateId: 'tee',
+    attributeId: 'color',
+    valueIds: ['red', 'black'],
+  })
+  await run('product.saveAttributeLine', {
+    id: 'legacy-1-size',
+    templateId: 'tee',
+    attributeId: 'size',
+    valueIds: ['s', 'l'],
+  })
+
+  const saved = await run<SaveResult>('product.saveVariantSetup', {
+    templateId: 'tee',
+    lines: teeLines,
+    variants: [variant('red', 's'), variant('black', 'l')],
+  })
+  assert.equal(saved.ok, true, JSON.stringify(saved.errors))
+
+  const generated = await run<{ ok: boolean; created?: number }>('product.generateVariants', {
+    templateId: 'tee',
+  })
+  assert.equal(generated.ok, true)
+  assert.equal(generated.created, 2, 'only the two combinations nobody saved yet')
+  const context = await run<Context>('product.templateModalContext', { id: 'tee' })
+  const rows = (context!.data.variantSetup!.variants ?? []) as Row[]
+  assert.equal(
+    rows.filter((row) => row.active).length,
+    4,
+    'the saved rows were found again, not archived and re-created',
+  )
+})
+
 test('variant setup: a variant left out is archived, never deleted, and the default variant sells again once none remain', async (t) => {
   const { run } = await boot(t)
   await teeCatalogue(run)

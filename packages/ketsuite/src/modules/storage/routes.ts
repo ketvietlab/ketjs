@@ -185,8 +185,10 @@ const download =
         return withHeaders(streamed(found.body, { type: 'image/webp' }), {
           'x-content-type-options': 'nosniff',
           'content-disposition': disposition(`${attachment.name.replace(/\.[^.]+$/u, '')}.webp`, true),
-          // Keyed by checksum and size, so the bytes behind this URL never change.
-          'cache-control': attachment.public ? 'public, max-age=86400' : 'private, max-age=86400',
+          // Keyed by checksum and size, so a public copy never changes behind this URL.
+          // A private one is not cached at all: the access check must run per request,
+          // exactly as it does for the original.
+          'cache-control': attachment.public ? 'public, max-age=86400' : 'private, no-store',
           'content-length': String(found.meta.size),
         })
     }

@@ -381,7 +381,12 @@ const imageField = (c: Context): JSXChild => {
           },
         })
       : null,
-    uploadCommand: c.data.permissions.uploadImage ? 'uploadImage' : null,
+    // Replacing runs attach and then remove, so it needs both permissions: offering
+    // it with only the first would attach the new image and leave the old one behind.
+    uploadCommand:
+      c.data.permissions.uploadImage && (!images.length || c.data.permissions.removeImage)
+        ? 'uploadImage'
+        : null,
     removeCommand: c.data.permissions.removeImage && images.length ? 'removeImage' : null,
     labels: {
       empty: t(c, 'image.empty'),

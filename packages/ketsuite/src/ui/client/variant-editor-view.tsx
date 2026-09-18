@@ -307,7 +307,9 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
   }
 
   const uploadImage = async (row: Row, file: File): Promise<void> => {
-    if (!row.id || !props.media.upload || imageBusy() || !file.type.startsWith('image/')) return
+    const replacing = row.images.length > 0
+    if (!row.id || !props.media.upload || (replacing && !props.media.remove)) return
+    if (imageBusy() || !file.type.startsWith('image/')) return
     imageBusy.set(row.key)
     problem.set(null)
     try {
@@ -399,7 +401,8 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
   }
 
   const imageBlock = (row: Row): JSXChild => {
-    const canUpload = editable && props.media.upload
+    // Replacing attaches then removes, so a row that already has an image needs both.
+    const canUpload = editable && props.media.upload && (!row.images.length || props.media.remove)
     const busy = imageBusy() === row.key
     return (
       <div
