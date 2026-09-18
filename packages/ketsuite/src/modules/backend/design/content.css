@@ -609,11 +609,6 @@
     :where([data-ui="action"], [data-control="action"])[data-size] {
       min-block-size: var(--admin-field-height);
     }
-    [data-ui="modal-layer"][data-presentation="dialog"]
-      [data-ui="relation-dialog-actions"]
-      [data-ui="action"][data-size="compact"] {
-      min-block-size: var(--admin-field-height);
-    }
     :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
       inline-size: var(--admin-field-height);
     }

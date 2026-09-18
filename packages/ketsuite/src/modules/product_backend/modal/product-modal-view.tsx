@@ -1,7 +1,7 @@
 // The product template record modal, client side (KetSuite record-modal contract).
 //
 // The catalogue collection opens a template here, and its create action opens the
-// same modal with an empty record. Only the General and Variants tabs are covered
+// same modal with an empty record. Only the General and Attributes & variants tabs are covered
 // — Media and the description's rich-text controller stay on the server-rendered
 // detail page (`/admin/product/templates/{id}?tab=media`) until a nested-island
 // composition path (`recordIsland`) for them is proven elsewhere first.
@@ -15,31 +15,26 @@
 //
 // Bundled by tools/build-backend-client.mjs into product_backend/client/.
 
-import {
-  ActionMenu,
-  Badge,
-  Button,
-  DataTable,
-  Notice,
-  RecordActions,
-  Section,
-  Stack,
+import { ActionMenu, Badge, Button, Notice, RecordActions, Section, Stack } from '@ketvietlab/design-system'
+import type {
+  FieldOption,
+  FieldProps,
+  MenuEntry,
+  RelationManager,
+  RelationSelectConfig,
+  RelationSelectLabels,
 } from '@ketvietlab/design-system'
-import type { FieldOption, FieldProps, MenuEntry } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal, recordIsland } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
+import type { VariantEditorSetup } from '../../../ui/client/variant-editor-view.tsx'
 import {
-  RecordActionForm,
   RecordCloseTrigger,
   RecordCommandForm,
-  RecordDialogTrigger,
+  RecordFormWithImage,
+  RecordImageField,
   RecordModalForm,
-  recordStateSelectControl,
 } from '../../../ui/client/record-modal-form.tsx'
-
-// biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by product.templateModalContext
-type AnyRow = Record<string, any>
 
 export type TemplateRecord = {
   id: string
@@ -61,13 +56,14 @@ export type TemplateRecord = {
   taxId: string | null
 }
 
+export type TemplateImage = { mediaId: string; attachmentId: string; alt: string | null; primary: boolean }
+
 export type TemplateModalData = {
   record: TemplateRecord
-  variants: AnyRow[]
+  /** Primary first; the thumbnail shows the first, the viewer pages through all. */
+  images: TemplateImage[]
   hasVariants: boolean
-  attributeLines: AnyRow[]
-  attributes: FieldOption[]
-  attributeValuesByAttribute: Record<string, FieldOption[]>
+  variantSetup: VariantEditorSetup | null
   types: string[]
   categories: FieldOption[]
   uoms: FieldOption[]
@@ -104,12 +100,33 @@ const decimal = (form: FormData, name: string, fallback = '0'): string => {
   const raw = text(form, name)
   return raw === '' ? fallback : raw
 }
-const money = (value: string | number): string => {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount.toLocaleString('vi-VN') : String(value)
-}
-
 const canSave = (c: Context): boolean => c.data.permissions.save === true
+
+/**
+ * `backend.relation-select`'s own labels, read straight off this modal's context —
+ * the shared `relationLabels` in `backend/relation-select.ts` takes a full
+ * `Translator`, which `c.t` (a plain `(key, params?) => string`) does not satisfy.
+ */
+const relationLabels = (c: Context, dialogTitle: string): RelationSelectLabels => ({
+  choose: c.t('backend.relation.choose'),
+  search: c.t('backend.relation.search'),
+  more: c.t('backend.relation.more'),
+  noRecords: c.t('backend.relation.noRecords'),
+  loading: c.t('backend.relation.loading'),
+  loadError: c.t('backend.relation.loadError'),
+  dialogTitle,
+  close: c.t('backend.relation.close'),
+  select: c.t('backend.relation.select'),
+  create: c.t('backend.relation.create'),
+  edit: c.t('backend.relation.edit'),
+  save: c.t('backend.relation.save'),
+  cancel: c.t('backend.relation.cancel'),
+  remove: c.t('backend.relation.remove'),
+  confirmRemove: c.t('backend.relation.confirmRemove'),
+  retry: c.t('backend.relation.retry'),
+  clear: c.t('backend.relation.clear'),
+  chosen: c.t('backend.relation.chosen'),
+})
 
 const fieldId = (name: string): string => `product-template-${name}`
 
@@ -134,26 +151,89 @@ const field = (c: Context, props: Omit<FieldProps, 'id'>): FieldProps => ({
   disabled: props.disabled === true || !canSave(c),
 })
 
-const stateSelect = (
+/**
+ * A relational field, as a search-and-create picker rather than a bare select —
+ * the same `backend.relation-select` island the server-rendered detail page used
+ * before General moved into this modal. Cold-mounted via `recordIsland`: nothing
+ * here needs a route, only the JSON config the island reads on the client.
+ */
+const relationField = (
   c: Context,
-  props: { name: string; label: string; value: string; options: FieldOption[]; required?: boolean },
+  props: {
+    name: string
+    label: string
+    value: string | null
+    options: FieldOption[]
+    dialogTitle: string
+    manager: RelationManager
+    required?: boolean
+  },
 ): FieldProps => {
-  const base = field(c, { name: props.name, label: props.label, type: 'select', required: props.required })
-  return {
-    ...base,
+  const base = field(c, {
+    name: props.name,
+    label: props.label,
+    type: 'select',
+    required: props.required,
+    value: props.value ?? '',
+  })
+  const config: RelationSelectConfig = {
+    name: props.name,
+    ariaLabel: props.label,
+    value: (base.value as string) || null,
+    required: props.required,
+    disabled: base.disabled === true,
     options: props.options,
-    control: recordStateSelectControl({
-      id: base.id,
-      name: props.name,
-      state: props.name,
-      value: props.value,
-      options: props.options,
-      required: props.required,
-      disabled: base.disabled === true,
-      invalid: !!base.error,
-    }),
+    labels: relationLabels(c, props.dialogTitle),
+    manager: props.manager,
   }
+  return { ...base, control: recordIsland('backend.relation-select', { id: base.id, config }) }
 }
+
+const categoryField = (c: Context): FieldProps =>
+  relationField(c, {
+    name: 'categoryId',
+    label: t(c, 'field.category'),
+    value: c.data.record.categoryId,
+    options: [{ value: '', label: '—' }, ...c.data.categories],
+    dialogTitle: t(c, 'relation.categories'),
+    manager: {
+      listFunction: 'product.listCategories',
+      descriptionField: 'path',
+      saveFunction: 'product.saveCategory',
+      fields: [{ name: 'name', label: t(c, 'field.category'), required: true }],
+    },
+  })
+
+const brandField = (c: Context): FieldProps =>
+  relationField(c, {
+    name: 'brandId',
+    label: t(c, 'field.brand'),
+    value: c.data.record.brandId,
+    options: [{ value: '', label: '—' }, ...c.data.brands],
+    dialogTitle: t(c, 'relation.brands'),
+    manager: {
+      listFunction: 'product.listBrands',
+      saveFunction: 'product.saveBrand',
+      fields: [{ name: 'name', label: t(c, 'field.brand'), required: true }],
+    },
+  })
+
+const uomField = (c: Context): FieldProps =>
+  relationField(c, {
+    name: 'uomId',
+    label: t(c, 'field.uom'),
+    value: c.data.record.uomId,
+    options: [{ value: '', label: '—' }, ...c.data.uoms],
+    dialogTitle: t(c, 'relation.units'),
+    manager: {
+      listFunction: 'uom.listUnits',
+      saveFunction: 'uom.saveUnit',
+      fields: [
+        { name: 'name', label: t(c, 'field.uom'), required: true },
+        { name: 'relativeFactor', label: t(c, 'relation.unitFactor'), required: true },
+      ],
+    },
+  })
 
 const submitButton = (
   c: Context,
@@ -161,19 +241,6 @@ const submitButton = (
   label: string,
   variant: 'primary' | 'secondary' = 'primary',
 ) => Button({ type: 'submit', name: COMMAND_FIELD, value: command, label, variant, loading: c.busy })
-
-/**
- * A bare form for an action that names no field of its own — generate, remove.
- * `data-layout="actions"` opts the form out of the record-form grid (built for a
- * field/label pair), which would otherwise stretch this lone button to fill it.
- */
-const actionForm = (c: Context, command: string, hidden: Record<string, string>, label: string): JSXChild =>
-  RecordActionForm({
-    kind: c.kind,
-    command,
-    hidden,
-    children: Button({ type: 'submit', label, variant: 'secondary', size: 'compact', loading: c.busy }),
-  })
 
 const MORE_FORM_ID = 'product-template-more-form'
 const GENERAL_FORM_ID = 'product-template-general-form'
@@ -221,21 +288,9 @@ const generalFields = (c: Context): FieldProps[] => {
       options: typeOptions(c),
     }),
     field(c, { name: 'name', label: t(c, 'field.name'), value: record.name, required: true, span: 'full' }),
-    field(c, {
-      name: 'uomId',
-      label: t(c, 'field.uom'),
-      type: 'select',
-      value: record.uomId ?? '',
-      options: [{ value: '', label: '—' }, ...c.data.uoms],
-    }),
+    uomField(c),
     field(c, { name: 'listPrice', label: t(c, 'field.listPrice'), type: 'decimal', value: record.listPrice }),
-    field(c, {
-      name: 'categoryId',
-      label: t(c, 'field.category'),
-      type: 'select',
-      value: record.categoryId ?? '',
-      options: [{ value: '', label: '—' }, ...c.data.categories],
-    }),
+    categoryField(c),
     field(c, {
       name: 'description',
       label: t(c, 'field.description'),
@@ -249,13 +304,7 @@ const generalFields = (c: Context): FieldProps[] => {
           field(c, { name: 'defaultCode', label: t(c, 'field.defaultCode'), value: record.defaultCode }),
           field(c, { name: 'barcode', label: t(c, 'field.barcode'), value: record.barcode }),
         ]),
-    field(c, {
-      name: 'brandId',
-      label: t(c, 'field.brand'),
-      type: 'select',
-      value: record.brandId ?? '',
-      options: [{ value: '', label: '—' }, ...c.data.brands],
-    }),
+    brandField(c),
     field(c, { name: 'origin', label: t(c, 'field.origin'), value: record.origin, span: 'full' }),
   ]
 }
@@ -286,6 +335,71 @@ const taxFields = (c: Context): FieldProps[] => [
   }),
 ]
 
+// ── Main image ───────────────────────────────────────────────────────────────
+
+/** The stored file at a rendition size; the file route serves the original until the job made one. */
+export const imageUrl = (attachmentId: string, size: 'thumb' | 'medium' | 'large'): string =>
+  `/files/${encodeURIComponent(attachmentId)}?size=${size}`
+
+/** `backend.lightbox`'s labels, off this modal's own messages. */
+export const lightboxLabels = (c: Context) => ({
+  open: t(c, 'image.open'),
+  close: t(c, 'image.close'),
+  previous: t(c, 'image.previous'),
+  next: t(c, 'image.next'),
+  zoomIn: t(c, 'image.zoomIn'),
+  zoomOut: t(c, 'image.zoomOut'),
+  counter: t(c, 'image.counter'),
+  empty: t(c, 'image.empty'),
+})
+
+const IMAGE_FORM_ID = 'product-template-image'
+
+/**
+ * The template's main image, at the right of its name and kind. Clicking it opens
+ * every template image in the viewer; dropping or choosing a file replaces it.
+ */
+const imageField = (c: Context): JSXChild => {
+  const images = c.data.images
+  const name = c.data.record.name
+  return RecordImageField({
+    kind: c.kind,
+    id: IMAGE_FORM_ID,
+    busy: c.busy,
+    // Keyed by the image set: a new upload is a different viewer, not a prop update.
+    viewer: images.length
+      ? recordIsland('backend.lightbox', {
+          id: `product-template-lightbox-${images.map((image) => image.mediaId).join('-')}`,
+          config: {
+            thumbnails: 'first',
+            size: 'large',
+            labels: lightboxLabels(c),
+            items: images.map((image) => ({
+              src: imageUrl(image.attachmentId, 'large'),
+              thumbnail: imageUrl(image.attachmentId, 'thumb'),
+              alt: image.alt || name,
+              caption: image.alt || null,
+            })),
+          },
+        })
+      : null,
+    // Replacing runs attach and then remove, so it needs both permissions: offering
+    // it with only the first would attach the new image and leave the old one behind.
+    uploadCommand:
+      c.data.permissions.uploadImage && (!images.length || c.data.permissions.removeImage)
+        ? 'uploadImage'
+        : null,
+    removeCommand: c.data.permissions.removeImage && images.length ? 'removeImage' : null,
+    labels: {
+      empty: t(c, 'image.empty'),
+      upload: t(c, 'image.upload'),
+      replace: t(c, 'image.replace'),
+      remove: t(c, 'image.remove'),
+      drop: t(c, 'image.drop'),
+    },
+  })
+}
+
 const generalTab = (c: Context): JSXChild => {
   const editable = canSave(c)
   return Section({
@@ -294,175 +408,110 @@ const generalTab = (c: Context): JSXChild => {
       gap: 'compact',
       items: [
         editable ? '' : Notice({ title: t(c, 'readOnly.title'), message: t(c, 'readOnly.message') }),
-        RecordModalForm({
-          // No button of its own: the header's "Lưu" button submits this form by
-          // id (see `GENERAL_FORM_ID`), so it reads as one save action next to
-          // Close and More rather than a fourth button buried in the tab body.
-          id: GENERAL_FORM_ID,
-          kind: c.kind,
-          fields: [
-            ...generalFields(c),
-            ...(c.data.stockEnabled ? trackingFields(c) : []),
-            ...(c.data.taxEnabled ? taxFields(c) : []),
-          ],
+        RecordFormWithImage({
+          form: RecordModalForm({
+            // No button of its own: the header's "Lưu" button submits this form by
+            // id (see `GENERAL_FORM_ID`), so it reads as one save action next to
+            // Close and More rather than a fourth button buried in the tab body.
+            id: GENERAL_FORM_ID,
+            kind: c.kind,
+            fields: [
+              ...generalFields(c),
+              ...(c.data.stockEnabled ? trackingFields(c) : []),
+              ...(c.data.taxEnabled ? taxFields(c) : []),
+            ],
+          }),
+          image: imageField(c),
         }),
       ],
     }),
   })
 }
 
-// ── Variants tab ─────────────────────────────────────────────────────────────
+// ── Attributes & variants tab ────────────────────────────────────────────────
 
-const attributeLineRows = (c: Context): JSXChild =>
-  c.data.attributeLines.length
-    ? DataTable<AnyRow>({
-        rows: c.data.attributeLines,
-        id: (row) => String(row.id),
-        columns: [
-          {
-            key: 'attribute',
-            label: t(c, 'attributes.nameColumn'),
-            priority: 'primary',
-            cell: (row) => String(row.attribute ?? row.attributeId),
-          },
-          {
-            key: 'values',
-            label: t(c, 'attributes.values'),
-            cell: (row) =>
-              (Array.isArray(row.values) ? row.values : [])
-                .map((value: AnyRow) => String(value.name))
-                .join(' · '),
-          },
-          {
-            key: 'actions',
-            label: t(c, 'attributes.actions'),
-            cell: (row) =>
-              c.data.permissions.removeAttributeLine
-                ? actionForm(c, 'removeAttributeLine', { id: String(row.id) }, t(c, 'attributes.removeLine'))
-                : '',
-          },
-        ],
-      })
-    : Notice({ title: t(c, 'attributes.linesEmpty'), message: t(c, 'attributes.linesEmptyHint') })
+/** Every label the editor island shows, read off this modal's own messages. */
+const VARIANT_EDITOR_LABELS = [
+  'attributesTitle',
+  'attributesHint',
+  'attributesEmpty',
+  'attributesEmptyHint',
+  'addAttribute',
+  'removeAttribute',
+  'addValue',
+  'removeValue',
+  'priceExtra',
+  'appliesTo',
+  'noVariant',
+  'done',
+  'variantsTitle',
+  'variantsCount',
+  'variantsEmpty',
+  'variantsEmptyHint',
+  'variantsNeedAttributes',
+  'generate',
+  'addVariant',
+  'activateAll',
+  'archiveAll',
+  'missing',
+  'choose',
+  'archived',
+  'duplicate',
+  'incomplete',
+  'new',
+  'edit',
+  'collapse',
+  'remove',
+  'archive',
+  'restore',
+  'defaultCode',
+  'barcode',
+  'weight',
+  'volume',
+  'listPrice',
+  'summaryCreate',
+  'summaryArchive',
+  'summaryChanged',
+  'summaryDuplicate',
+  'reset',
+  'save',
+  'saved',
+  'saveFailed',
+  'readOnly',
+  'image',
+  'uploadImage',
+  'replaceImage',
+  'removeImage',
+  'dropImage',
+  'imageSaveFirst',
+  'imageFailed',
+  'imageRemoveConfirm',
+] as const
 
-const addAttributeLineForm = (c: Context): JSXChild => {
-  if (!c.data.permissions.saveAttributeLine || !c.data.attributes.length) return ''
-  const attributeId = c.state('attributeId', String(c.data.attributes[0]?.value ?? ''))
-  const values = c.data.attributeValuesByAttribute[attributeId] ?? []
-  return RecordModalForm({
-    kind: c.kind,
-    fields: [
-      stateSelect(c, {
-        name: 'attributeId',
-        label: t(c, 'attributes.attribute'),
-        value: attributeId,
-        required: true,
-        options: c.data.attributes.map((row) => ({ value: String(row.value), label: String(row.label) })),
-      }),
-      field(c, {
-        name: 'valueIds',
-        label: t(c, 'attributes.values'),
-        type: 'checkbox-group',
-        span: 'full',
-        required: true,
-        options: values.map((value) => ({
-          name: `value_${value.value}`,
-          value: '1',
-          label: value.label,
-        })),
-      }),
-    ],
-    actions: [submitButton(c, 'saveAttributeLine', t(c, 'attributes.addLine'), 'secondary')],
-  })
-}
-
-const variantRows = (c: Context): JSXChild =>
-  c.data.variants.length
-    ? DataTable<AnyRow>({
-        rows: c.data.variants,
-        id: (row) => String(row.id),
-        // No dedicated actions column — narrower than General, it was the one
-        // that clipped at a normal modal width. The code cell itself opens the
-        // edit dialog, a tertiary button rather than a bordered secondary one so
-        // it reads as the row's own identity, not a fifth column competing for
-        // the same cramped space.
-        columns: [
-          {
-            key: 'code',
-            label: t(c, 'variants.code'),
-            priority: 'primary',
-            cell: (row) =>
-              RecordDialogTrigger({
-                dialog: 'variant',
-                id: String(row.id),
-                children: Button({
-                  label: String(row.defaultCode || row.name || row.id),
-                  variant: 'tertiary',
-                  size: 'compact',
-                }),
-              }),
-          },
-          {
-            key: 'values',
-            label: t(c, 'variants.values'),
-            cell: (row) =>
-              (Array.isArray(row.values) ? row.values : [])
-                .map((value: AnyRow) => String(value.value))
-                .join(' · '),
-          },
-          { key: 'price', label: t(c, 'field.listPrice'), cell: () => money(c.data.record.listPrice) },
-          {
-            key: 'state',
-            label: t(c, 'col.state'),
-            cell: (row) =>
-              Badge({
-                label: row.active === false ? t(c, 'state.archived') : t(c, 'variants.selling'),
-                tone: row.active === false ? 'neutral' : 'positive',
-              }),
-          },
-        ],
-      })
-    : Notice({ title: t(c, 'variants.empty'), message: t(c, 'variants.panelHint') })
+/**
+ * The whole tab is one island: attribute lines with their value chips on top, the
+ * variant rows below, saved together through `product.saveVariantSetup`. The
+ * setup is read by the modal's own context, so opening the tab costs no second
+ * request; the island keeps its edits until its own Save or Reset.
+ */
+const variantEditorId = (c: Context): string => `product-variant-editor-${c.id}`
 
 const variantsTab = (c: Context): JSXChild =>
-  Stack({
-    gap: 'loose',
-    items: [
-      Section({
-        title: t(c, 'attributes.panelTitle'),
-        description: t(c, 'attributes.panelHint'),
-        body: Stack({ gap: 'compact', items: [attributeLineRows(c), addAttributeLineForm(c)] }),
-      }),
-      Section({
-        title: t(c, 'variants.title'),
-        description: t(c, 'variants.panelHint'),
-        actions: c.data.permissions.generateVariants
-          ? actionForm(c, 'generateVariants', {}, t(c, 'variants.generate'))
-          : undefined,
-        body: variantRows(c),
-      }),
-    ],
-  })
-
-// ── Variant dialog ───────────────────────────────────────────────────────────
-
-const editedVariant = (c: Context): AnyRow | undefined =>
-  c.data.variants.find((variant) => String(variant.id) === c.dialog?.params.id)
-
-const variantDialogView = (c: Context): JSXChild => {
-  const variant = editedVariant(c)
-  if (!variant) return Notice({ title: t(c, 'variants.empty'), message: '' })
-  return RecordModalForm({
-    kind: c.kind,
-    fields: [
-      field(c, { name: 'defaultCode', label: t(c, 'field.defaultCode'), value: variant.defaultCode }),
-      field(c, { name: 'barcode', label: t(c, 'field.barcode'), value: variant.barcode }),
-      field(c, { name: 'weight', label: t(c, 'field.weight'), type: 'decimal', value: variant.weight ?? 0 }),
-      field(c, { name: 'volume', label: t(c, 'field.volume'), type: 'decimal', value: variant.volume ?? 0 }),
-    ],
-    actions: c.data.permissions.saveVariant ? [submitButton(c, 'variantSave', t(c, 'action.save'))] : [],
-  })
-}
+  c.data.variantSetup
+    ? recordIsland('product.variant-editor', {
+        id: variantEditorId(c),
+        kind: c.kind,
+        setup: c.data.variantSetup,
+        editable: c.data.permissions.saveVariantSetup === true,
+        saveFunction: 'product.saveVariantSetup',
+        labels: Object.fromEntries(VARIANT_EDITOR_LABELS.map((key) => [key, t(c, `variantEditor.${key}`)])),
+        lightboxLabels: lightboxLabels(c),
+        media: {
+          upload: c.data.permissions.uploadImage === true,
+          remove: c.data.permissions.removeImage === true,
+        },
+      })
+    : Notice({ title: t(c, 'variants.empty'), message: t(c, 'variants.panelHint') })
 
 // ── Header / create ──────────────────────────────────────────────────────────
 
@@ -524,21 +573,34 @@ const actions = (c: Context): JSXChild | undefined => {
       RecordActions({
         label: t(c, 'action.more'),
         actions: [
-          editable
-            ? Button({
-                type: 'submit',
-                name: COMMAND_FIELD,
-                value: 'save',
-                label: t(c, 'action.save'),
-                variant: 'primary',
-                loading: c.busy,
-                form: GENERAL_FORM_ID,
-                // The General tab's form only exists in the DOM while that tab is
-                // active (the other tab's content isn't mounted) — disabled rather
-                // than silently doing nothing when there is no form to submit.
-                disabled: c.tab !== 'general',
-              })
-            : '',
+          c.tab === 'variants'
+            ? c.data.variantSetup && c.data.permissions.saveVariantSetup === true
+              ? // The variant editor island owns this save: the button submits the
+                // island's own form, and the island enables it once there is a
+                // valid change to send.
+                Button({
+                  type: 'submit',
+                  label: t(c, 'action.save'),
+                  variant: 'primary',
+                  // Same id as `variantEditorSaveForm` in the island, not imported so this bundle
+                  // does not pull in the whole editor.
+                  form: `${variantEditorId(c)}-save`,
+                  disabled: true,
+                })
+              : ''
+            : editable
+              ? Button({
+                  type: 'submit',
+                  name: COMMAND_FIELD,
+                  value: 'save',
+                  label: t(c, 'action.save'),
+                  variant: 'primary',
+                  loading: c.busy,
+                  form: GENERAL_FORM_ID,
+                  // The General tab's form only exists in the DOM while that tab is active.
+                  disabled: c.tab !== 'general',
+                })
+              : '',
           closeButton(c),
           menuItems.length
             ? ActionMenu({
@@ -623,9 +685,6 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
           view: (context: Context) =>
             recordIsland(tab.island, { templateId: context.id, locale: context.data.lang }),
         })),
-  dialogs: {
-    variant: { title: (c) => t(c, 'variants.edit'), view: variantDialogView },
-  },
   commands: {
     create: {
       fn: 'product.saveTemplate',
@@ -685,6 +744,40 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
       ],
       after: 'refresh',
     },
+    // A new main image: store the file, link it as primary, then drop the image it
+    // replaces — one action, so the thumbnail never shows two or none in between.
+    uploadImage: {
+      fn: 'product_media.attachMedia',
+      upload: {
+        file: (_form, c) => ({
+          resModel: 'product.Template',
+          resId: c.id,
+          resField: 'media',
+          public: 'false',
+        }),
+      },
+      input: (_form, c, uploads) => ({
+        id: uploads.file?.id ?? '',
+        attachmentId: uploads.file?.id ?? '',
+        templateId: c.id,
+        alt: uploads.file?.name ?? null,
+        primary: true,
+      }),
+      also: [
+        {
+          fn: 'product_media.removeMedia',
+          when: (c) => c.data.images.some((image) => image.primary),
+          input: (_form, c) => ({ id: c.data.images.find((image) => image.primary)?.mediaId ?? '' }),
+        },
+      ],
+      after: 'refresh',
+    },
+    removeImage: {
+      fn: 'product_media.removeMedia',
+      input: (_form, c) => ({ id: c.data.images[0]?.mediaId ?? '' }),
+      confirm: (c) => t(c, 'image.removeConfirm'),
+      after: 'refresh',
+    },
     archive: {
       fn: 'product.archiveTemplate',
       input: (_form, c) => ({ id: c.id, active: !c.data.record.active }),
@@ -695,40 +788,6 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
       input: (_form, c) => ({ ids: [c.id] }),
       confirm: (c) => t(c, 'archive.deleteConfirm', { name: c.data.record.name }),
       after: 'close',
-    },
-    generateVariants: {
-      fn: 'product.generateVariants',
-      input: (_form, c) => ({ templateId: c.id }),
-      after: 'refresh',
-    },
-    saveAttributeLine: {
-      fn: 'product.saveAttributeLine',
-      input: (form, c) => {
-        const attributeId = text(form, 'attributeId')
-        const values = c.data.attributeValuesByAttribute[attributeId] ?? []
-        const valueIds = values
-          .map((value) => String(value.value))
-          .filter((id) => checked(form, `value_${id}`))
-        return { id: uuid(), templateId: c.id, attributeId, valueIds }
-      },
-      after: 'refresh',
-    },
-    removeAttributeLine: {
-      fn: 'product.removeAttributeLine',
-      input: (form) => ({ id: text(form, 'id') }),
-      after: 'refresh',
-    },
-    variantSave: {
-      fn: 'product.saveVariant',
-      input: (form, c) => ({
-        id: c.dialog?.params.id ?? '',
-        templateId: c.id,
-        defaultCode: text(form, 'defaultCode') || null,
-        barcode: text(form, 'barcode') || null,
-        weight: decimal(form, 'weight'),
-        volume: decimal(form, 'volume'),
-      }),
-      after: 'reload',
     },
   },
 }

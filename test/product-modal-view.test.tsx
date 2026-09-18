@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FieldOption } from '@ketvietlab/design-system'
 import type { RecordModalContext } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
+import {
+  createVariantEditorView,
+  type VariantEditorSetup,
+} from '../packages/ketsuite/src/ui/client/variant-editor-view.tsx'
 import {
   templateModalDefinition,
   type TemplateModalData,
@@ -59,11 +62,9 @@ const record = (overrides: Partial<TemplateRecord> = {}): TemplateRecord => ({
 
 const templateData = (overrides: Partial<TemplateModalData> = {}): TemplateModalData => ({
   record: record(),
-  variants: [],
+  images: [],
   hasVariants: false,
-  attributeLines: [],
-  attributes: [],
-  attributeValuesByAttribute: {},
+  variantSetup: null,
   types: ['goods', 'service'],
   categories: [],
   uoms: [{ value: 'unit', label: 'Cái' }],
@@ -75,10 +76,7 @@ const templateData = (overrides: Partial<TemplateModalData> = {}): TemplateModal
     save: true,
     archive: true,
     delete: true,
-    generateVariants: true,
-    saveAttributeLine: true,
-    removeAttributeLine: true,
-    saveVariant: true,
+    saveVariantSetup: true,
     configureStock: true,
     setTax: true,
   },
@@ -88,7 +86,6 @@ const templateData = (overrides: Partial<TemplateModalData> = {}): TemplateModal
 
 const generalTab = templateModalDefinition.tabs!.find((tab) => tab.id === 'general')!.view
 const variantsTab = templateModalDefinition.tabs!.find((tab) => tab.id === 'variants')!.view
-const variantDialog = templateModalDefinition.dialogs!.variant!.view
 const commands = templateModalDefinition.commands!
 
 const render = (child: JSXChild): string => renderToString(child as TemplateResult)
@@ -123,58 +120,100 @@ test('product modal: identity fields move off General once a template has varian
   assert.doesNotMatch(withVariants, /name="barcode"/)
 })
 
-test("product modal: the attribute-line form offers only the selected attribute's own values", () => {
-  const attributes: FieldOption[] = [
-    { value: 'color', label: 'Màu' },
-    { value: 'size', label: 'Size' },
-  ]
-  const data = templateData({
-    attributes,
-    attributeValuesByAttribute: {
-      color: [
-        { value: 'red', label: 'Đỏ' },
-        { value: 'blue', label: 'Xanh' },
+const teeSetup = (): VariantEditorSetup => ({
+  templateId: 'tpl-1',
+  listPrice: '200000',
+  lines: [
+    {
+      attributeId: 'color',
+      name: 'Màu',
+      createVariant: 'always',
+      displayType: 'select',
+      values: [
+        { valueId: 'red', name: 'Đỏ', priceExtra: '0' },
+        { valueId: 'black', name: 'Đen', priceExtra: '0' },
       ],
-      size: [{ value: 'm', label: 'M' }],
     },
-  })
-  const byDefault = render(variantsTab(contextOf(data)))
-  assert.match(byDefault, /name="value_red"/)
-  assert.match(byDefault, /name="value_blue"/)
-  assert.doesNotMatch(byDefault, /name="value_m"/)
-
-  const switched = render(variantsTab(contextOf(data, { state: { attributeId: 'size' } })))
-  assert.match(switched, /name="value_m"/)
-  assert.doesNotMatch(switched, /name="value_red"/)
+    {
+      attributeId: 'size',
+      name: 'Size',
+      createVariant: 'always',
+      displayType: 'select',
+      values: [
+        { valueId: 's', name: 'S', priceExtra: '0' },
+        { valueId: 'l', name: 'L', priceExtra: '20000' },
+      ],
+    },
+  ],
+  catalogue: [],
+  variants: [
+    {
+      id: 'v1',
+      valueIds: { color: 'red', size: 'l' },
+      defaultCode: 'TEE-RL',
+      barcode: null,
+      weight: '0',
+      volume: '0',
+      active: true,
+      images: [],
+    },
+    {
+      id: 'v2',
+      valueIds: { color: 'red', size: 'l' },
+      defaultCode: null,
+      barcode: null,
+      weight: '0',
+      volume: '0',
+      active: true,
+      images: [],
+    },
+  ],
 })
 
-test('product modal: Variants offers to generate them until the template has some, then lists and opens each in a dialog', () => {
-  const none = render(variantsTab(contextOf(templateData())))
-  assert.match(none, /name="__command" value="generateVariants"/)
-  assert.match(none, /product_backend\.variants\.empty/)
+test('product modal: Attributes & variants mounts the editor island with the setup and whether the viewer may save', () => {
+  const html = render(variantsTab(contextOf(templateData({ variantSetup: teeSetup() }))))
+  assert.match(html, /data-island="product.variant-editor"/)
+  assert.match(html, /&quot;saveFunction&quot;:&quot;product.saveVariantSetup&quot;/)
+  assert.match(html, /&quot;editable&quot;:true/)
+  assert.match(html, /&quot;save&quot;:&quot;product_backend.variantEditor.save&quot;/)
 
-  const withVariants = templateData({
-    hasVariants: true,
-    variants: [{ id: 'v1', defaultCode: 'AO-DO', values: [{ value: 'Đỏ' }], active: true }],
-  })
-  const html = render(variantsTab(contextOf(withVariants)))
-  assert.match(html, /data-record-dialog="variant"/)
-  assert.match(html, /data-record-param-id="v1"/)
-})
-
-test('product modal: the variant dialog edits the variant named by the dialog params', () => {
-  const data = templateData({
-    variants: [{ id: 'v1', defaultCode: 'AO-DO', barcode: '123', weight: 0.2, volume: 0.1 }],
-  })
-  const html = render(variantDialog(contextOf(data, { dialog: { name: 'variant', params: { id: 'v1' } } })))
-  assert.match(html, /name="__command" value="variantSave"/)
-  assert.match(html, /name="defaultCode"/)
-  assert.doesNotMatch(html, /name="standardPrice"|name="uomId"/, 'cost and unit stay on the old variant page')
-
-  const missing = render(
-    variantDialog(contextOf(data, { dialog: { name: 'variant', params: { id: 'ghost' } } })),
+  const readOnly = render(
+    variantsTab(
+      contextOf(
+        templateData({
+          variantSetup: teeSetup(),
+          permissions: { ...templateData().permissions, saveVariantSetup: false },
+        }),
+      ),
+    ),
   )
-  assert.doesNotMatch(missing, /name="__command"/)
+  assert.match(readOnly, /&quot;editable&quot;:false/)
+})
+
+test('variant editor: rows price from list price plus value extras, and a shared combination is flagged on both rows', () => {
+  const view = createVariantEditorView({
+    id: 'editor',
+    kind: 'product.template',
+    setup: teeSetup(),
+    editable: true,
+    saveFunction: 'product.saveVariantSetup',
+    labels: { duplicate: 'dup #{row}', missing: '{count} missing' },
+    lightboxLabels: {
+      open: 'Open {alt}',
+      close: 'Close',
+      previous: 'Previous',
+      next: 'Next',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      counter: '{index} / {total}',
+    },
+    media: { upload: true, remove: true },
+  })
+  const html = renderToString(view.view())
+  assert.match(html, /220\.000/, 'L adds 20.000 to the 200.000 list price')
+  assert.match(html, /dup #2/)
+  assert.match(html, /dup #1/)
+  assert.match(html, /3 missing/, 'red·S, black·S and black·L have no variant yet')
 })
 
 test("product modal: the footer's More menu names archive vs restore by the record's state, and stays empty while creating", () => {
@@ -224,7 +263,7 @@ test("product modal: the footer's More menu names archive vs restore by the reco
   assert.equal(templateModalDefinition.actions!(contextOf(templateData(), { creating: true })), undefined)
 })
 
-test('product modal: the footer carries Save (targeting the General form by id) and Close beside More, outside the scrolling body', () => {
+test('product modal: the footer carries Save (the General form, or the variant editor form on its tab) and Close beside More, outside the scrolling body', () => {
   const onGeneral = render(
     templateModalDefinition.actions!(contextOf(templateData(), { tab: 'general' })) as JSXChild,
   )
@@ -234,11 +273,16 @@ test('product modal: the footer carries Save (targeting the General form by id) 
   assert.match(onGeneral, /data-record-close="true"/)
   assert.match(onGeneral, /product_backend\.action\.close/)
 
-  // The General form isn't mounted on another tab, so Save is disabled rather than a dead click.
+  // On Attributes & variants, Save submits the editor island's own form instead, and
+  // starts disabled until the island has a valid change to send.
   const onVariants = render(
-    templateModalDefinition.actions!(contextOf(templateData(), { tab: 'variants' })) as JSXChild,
+    templateModalDefinition.actions!(
+      contextOf(templateData({ variantSetup: teeSetup() }), { tab: 'variants' }),
+    ) as JSXChild,
   )
-  assert.match(onVariants.match(/name="__command" value="save"[^>]*/)?.[0] ?? '', /disabled/)
+  assert.doesNotMatch(onVariants, /name="__command" value="save"/)
+  const variantSave = onVariants.match(/<button[^>]*form="product-variant-editor-[^"]*-save"[^>]*/)?.[0] ?? ''
+  assert.match(variantSave, /disabled/)
 
   const readOnly = render(
     templateModalDefinition.actions!(
@@ -354,7 +398,7 @@ test('product modal commands: save runs template, stock and tax in sequence, eac
   assert.equal(also[1]!.when!(noPermission), false)
 })
 
-test('product modal commands: archive and generate carry the record id with no extra form fields', () => {
+test('product modal commands: archive carries the record id with no extra form fields', () => {
   assert.deepEqual(commands.archive!.input(new FormData(), contextOf(templateData()), {}), {
     id: 'tpl-1',
     active: false,
@@ -367,9 +411,6 @@ test('product modal commands: archive and generate carry the record id with no e
     ),
     { id: 'tpl-1', active: true },
   )
-  assert.deepEqual(commands.generateVariants!.input(new FormData(), contextOf(templateData()), {}), {
-    templateId: 'tpl-1',
-  })
 })
 
 test('product modal commands: delete removes only this template and asks before running', () => {
@@ -377,44 +418,4 @@ test('product modal commands: delete removes only this template and asks before 
   assert.equal(commands.delete!.after, 'close')
   assert.equal(typeof commands.delete!.confirm, 'function')
   assert.match(commands.delete!.confirm!(contextOf(templateData()))!, /archive\.deleteConfirm/)
-})
-
-test('product modal commands: an attribute line saves only the checked values of its own attribute', () => {
-  const data = templateData({
-    attributeValuesByAttribute: {
-      color: [
-        { value: 'red', label: 'Đỏ' },
-        { value: 'blue', label: 'Xanh' },
-      ],
-    },
-  })
-  const form = new FormData()
-  form.set('attributeId', 'color')
-  form.set('value_red', '1')
-  const input = commands.saveAttributeLine!.input(form, contextOf(data), {})
-  assert.equal(input.templateId, 'tpl-1')
-  assert.equal(input.attributeId, 'color')
-  assert.deepEqual(input.valueIds, ['red'])
-
-  const removeForm = new FormData()
-  removeForm.set('id', 'tpl-1:color')
-  assert.deepEqual(commands.removeAttributeLine!.input(removeForm, contextOf(data), {}), {
-    id: 'tpl-1:color',
-  })
-})
-
-test('product modal commands: a variant save reads its id from the open dialog, not the form', () => {
-  const form = new FormData()
-  form.set('defaultCode', 'AO-UPDATED')
-  form.set('weight', '0.3')
-  const input = commands.variantSave!.input(
-    form,
-    contextOf(templateData(), { dialog: { name: 'variant', params: { id: 'v1' } } }),
-    {},
-  )
-  assert.equal(input.id, 'v1')
-  assert.equal(input.templateId, 'tpl-1')
-  assert.equal(input.defaultCode, 'AO-UPDATED')
-  assert.equal(input.weight, '0.3')
-  assert.equal(commands.variantSave!.after, 'reload')
 })

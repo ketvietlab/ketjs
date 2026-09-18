@@ -11,6 +11,8 @@ import { HOOKS as dialogHooks } from '../interactions/dialog/index.tsx'
 import { HOOKS as toastHooks } from '../interactions/toast/index.tsx'
 import { HOOKS as spinnerHooks } from '../interactions/spinner/index.tsx'
 import { HOOKS as skeletonHooks } from '../interactions/skeleton/index.tsx'
+import { HOOKS as lightboxHooks } from '../interactions/lightbox/index.tsx'
+import { HOOKS as relationSelectHooks } from '../interactions/relation-select/index.tsx'
 import { HOOKS as searchFilterHooks } from '../interactions/search-filter/index.tsx'
 import { HOOKS as ketTableHooks } from '../interactions/ket-table/index.tsx'
 import { HOOKS as scalarFieldHooks } from '../forms/scalar-fields/index.tsx'
@@ -59,6 +61,8 @@ const GROUPS = {
   toast: toastHooks,
   spinner: spinnerHooks,
   skeleton: skeletonHooks,
+  lightbox: lightboxHooks,
+  relationSelect: relationSelectHooks,
   searchFilter: searchFilterHooks,
   ketTable: ketTableHooks,
   scalarFields: scalarFieldHooks,
