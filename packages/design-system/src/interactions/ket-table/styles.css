@@ -152,6 +152,11 @@
     font-size: var(--kv-text-2xs);
     font-weight: var(--kv-weight-semibold);
   }
+  :where([data-kv-design-system]) [data-ui="kt-group-pager"] td {
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-row-bg);
+  }
 
   :where([data-kv-design-system]) [data-ui="kt-pager"] {
     display: flex;

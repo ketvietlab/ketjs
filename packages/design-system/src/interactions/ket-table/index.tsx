@@ -25,6 +25,7 @@ export const HOOKS = [
   'kt-group-toggle',
   'kt-group-indent',
   'kt-group-count',
+  'kt-group-pager',
   'kt-pager',
   'kt-pager-label',
   'kt-pager-button',
@@ -103,6 +104,8 @@ export type KetTableGroup = {
   count: number
   children?: KetTableGroup[]
   rows?: KetTableRow[]
+  /** Zero-based row offset for this leaf group's current page. */
+  offset?: number
 }
 
 export type KetTableLabels = {
@@ -323,16 +326,21 @@ export function createKetTableView(
     try {
       if (depth === keys.length) {
         if (!manager.listFunction) return
+        const node = nodeAt(path)
+        const offset = node?.offset ?? 0
         const value = (await callApi(manager.listFunction, {
           ...(manager.listInput ?? {}),
           groupBy: keys,
           groupPath: path,
           ...sortParams(),
+          limit: pageSize,
+          offset,
         })) as unknown
         groups.set(
           updateNodeAt(groups(), path, (node) => ({
             ...node,
             rows: Array.isArray(value) ? (value as KetTableRow[]) : [],
+            offset,
           })),
         )
       } else {
@@ -372,6 +380,13 @@ export function createKetTableView(
     openGroups.set(next)
     const node = nodeAt(path)
     if (node && node.children === undefined && node.rows === undefined) void fetchGroupLevel(path)
+  }
+
+  const goToGroupPage = (path: readonly string[], offset: number): void => {
+    const node = nodeAt(path)
+    if (!node || offset < 0 || offset >= node.count) return
+    groups.set(updateNodeAt(groups(), path, (held) => ({ ...held, rows: undefined, offset })))
+    void fetchGroupLevel(path)
   }
 
   const rowHrefFor = (row: KetTableRow): string =>
@@ -466,6 +481,10 @@ export function createKetTableView(
 
   const groupRowView = (node: KetTableGroup, path: readonly string[], depth: number): TemplateResult => {
     const open = openGroups().has(pathKey(path))
+    const offset = node.offset ?? 0
+    const hasPager = node.rows !== undefined && node.count > pageSize
+    const from = node.count === 0 ? 0 : offset + 1
+    const to = Math.min(offset + (node.rows?.length ?? 0), node.count)
     return (
       <>
         <tr data-ui="kt-group-row" data-depth={String(depth)}>
@@ -491,6 +510,35 @@ export function createKetTableView(
             )
           : null}
         {open && node.rows ? each(node.rows, idOf, tableRow) : null}
+        {open && hasPager ? (
+          <tr data-ui="kt-group-pager">
+            <td colSpan={String(groupSpan())}>
+              <div data-ui="kt-pager">
+                <span data-ui="kt-pager-label">{`${from}–${to} / ${formatApproxCount(node.count)}`}</span>
+                <button
+                  data-ui="kt-pager-button"
+                  data-direction="prev"
+                  type="button"
+                  disabled={offset === 0}
+                  aria-label={labels.previousPage}
+                  onClick={() => goToGroupPage(path, Math.max(0, offset - pageSize))}
+                >
+                  ‹
+                </button>
+                <button
+                  data-ui="kt-pager-button"
+                  data-direction="next"
+                  type="button"
+                  disabled={offset + pageSize >= node.count}
+                  aria-label={labels.nextPage}
+                  onClick={() => goToGroupPage(path, offset + pageSize)}
+                >
+                  ›
+                </button>
+              </div>
+            </td>
+          </tr>
+        ) : null}
       </>
     )
   }

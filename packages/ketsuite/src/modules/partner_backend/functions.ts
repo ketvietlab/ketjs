@@ -25,25 +25,29 @@ export const functions: Record<string, FnSpec> = {
       groupBy: 'json?',
       favoriteId: 'text?',
       customFilters: 'json?',
+      lang: 'text?',
     },
     output: { href: 'text' },
     effects: [],
     handler: (_ctx: Ctx, a) => {
       const facets = Array.isArray(a.facets) ? (a.facets as Facet[]) : []
-      const searchLabel = facets.find((facet) => facet.type === 'field')?.label
-      const role = facets.find((facet) => facet.type === 'filter' && facet.id === 'customer')
-        ? 'customer'
-        : facets.find((facet) => facet.type === 'filter' && facet.id === 'supplier')
-          ? 'supplier'
-          : undefined
+      // The UI holds old and newly selected chips until the navigation below
+      // completes. The newest compatible facet is the user's latest intent.
+      const latest = (matches: (facet: Facet) => boolean) => [...facets].reverse().find(matches)
+      const searchLabel = latest((facet) => facet.type === 'field')?.label
+      const roleId = latest(
+        (facet) => facet.type === 'filter' && (facet.id === 'customer' || facet.id === 'supplier'),
+      )?.id
+      const role = roleId === 'customer' || roleId === 'supplier' ? roleId : undefined
       const archived = facets.some((facet) => facet.type === 'filter' && facet.id === 'archived')
-      const group = facets.find((facet) => facet.type === 'groupBy' && GROUP_KEYS.has(facet.id))?.id
+      const group = latest((facet) => facet.type === 'groupBy' && GROUP_KEYS.has(facet.id))?.id
 
       const params = new URLSearchParams()
       if (searchLabel) params.set('q', searchLabel)
       if (role) params.set('role', role)
       if (archived) params.set('archived', '1')
       if (group) params.set('groupBy', group)
+      if (a.lang) params.set('lang', String(a.lang))
       const query = params.toString()
       return { href: query ? `${LIST_PATH}?${query}` : LIST_PATH }
     },

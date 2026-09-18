@@ -120,6 +120,8 @@ export type SearchFavorite = { id: string; label: string; isDefault: boolean; ac
 export type SearchFilterManager = {
   applyFunction: string
   bodyId: string
+  /** Static, screen-owned input kept with every apply request (for example the active locale). */
+  applyInput?: Record<string, unknown>
   saveFavoriteFunction?: string
   deleteFavoriteFunction?: string
   setDefaultFavoriteFunction?: string
@@ -226,6 +228,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   }
 
   const applyPayload = () => ({
+    ...(manager?.applyInput ?? {}),
     query: query(),
     facets: facets(),
     filters: facets()

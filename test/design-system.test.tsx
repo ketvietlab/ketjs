@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { ketTableGroupedDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
+import { createKetTableView } from '../packages/design-system/src/interactions/ket-table/index.tsx'
 import {
   AppShell,
   AppNavigation,
@@ -843,6 +845,25 @@ test('design system: operational tables expose sort, selection, grouping and row
       .find((body) => body.includes('padding:')) ?? ''
   assert.match(selectRule, /min-width: 3\.5rem/)
   assert.match(selectRule, /padding: 0\.4375rem var\(--kv-space-3\)/)
+})
+
+test('design system: grouped KetTable pages each leaf without dropping later rows', () => {
+  const firstGroup = ketTableGroupedDemoConfig.groups?.[0]
+  assert.ok(firstGroup)
+  const html = renderToString(
+    createKetTableView({
+      id: 'paged-grouped-table',
+      config: {
+        ...ketTableGroupedDemoConfig,
+        manager: { listFunction: 'orders.list', pageSize: 1 },
+        groups: [{ ...firstGroup, count: 2, rows: firstGroup.rows?.slice(0, 1), offset: 0 }],
+      },
+    }).view(),
+  )
+  assert.match(html, /data-ui="kt-group-pager"[\s\S]*?1–1 \/ 2/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="prev"[^>]*disabled/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="next"/)
+  assert.match(css, /\[data-ui="kt-group-pager"\] td\s*\{[^}]*padding: var\(--kv-space-2\)/)
 })
 
 test('design system: ListChrome assembles URL-driven collection controls', () => {
