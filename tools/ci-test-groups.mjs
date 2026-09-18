@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 
 /** @typedef {'framework' | 'identity' | 'collaboration' | 'catalog' | 'orders' | 'accounting' | 'crm-loyalty' | 'hospitality' | 'website' | 'manufacturing'} TestGroup */
@@ -173,13 +173,38 @@ function emittedPath(source) {
   return join('.build', source.slice(0, -extension.length) + '.js')
 }
 
+/**
+ * Whether a test file opts into a live Postgres or S3 rather than the
+ * in-process fakes everything else here uses — `KET_TEST_PG`/`KET_TEST_S3_*`,
+ * defaulting to a fixed local address when unset. GitHub Actions sets `CI`
+ * and gives the "postgres" matrix job its own disposable service container,
+ * so those addresses are always exactly what that job intends. A developer's
+ * machine has no such guarantee — `reachable` can find a real, shared
+ * Postgres instead (used by unrelated projects, with no CREATEDB grant for
+ * this login), and a permission error there can leave the test hanging
+ * rather than failing fast. So outside CI, `runGroup` skips these files
+ * rather than risk that.
+ *
+ * @param {string} testPath
+ */
+function isLiveGated(testPath) {
+  return /\bKET_TEST_(?:PG|S3)/.test(readFileSync(testPath, 'utf8'))
+}
+
 /** @param {string | undefined} group */
 function runGroup(group) {
   if (!group || !GROUPS.includes(/** @type {TestGroup} */ (group))) {
     throw new Error(`unknown CI test group: ${group ?? ''}`)
   }
-  const tests = discoverTests(/** @type {TestGroup} */ (group))
+  const discovered = discoverTests(/** @type {TestGroup} */ (group))
+  if (!discovered.length) throw new Error(`CI test group has no tests: ${group}`)
+  const skippedLive = process.env.CI ? [] : discovered.filter(isLiveGated)
+  const tests = discovered.filter((test) => !skippedLive.includes(test))
   if (!tests.length) throw new Error(`CI test group has no tests: ${group}`)
+  if (skippedLive.length)
+    console.log(
+      `Skipping ${skippedLive.length} live-Postgres/S3 test file(s) outside CI: ${skippedLive.join(', ')}`,
+    )
   console.log(`Running ${group}: ${tests.length} test files`)
   const result = spawnSync(process.execPath, ['--test', ...tests.map(emittedPath)], {
     stdio: 'inherit',
