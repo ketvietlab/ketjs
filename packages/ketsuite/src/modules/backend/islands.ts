@@ -2,13 +2,16 @@ import { defineIsland } from '@ketvietlab/ketjs-view'
 import {
   createLightboxView,
   createRelationSelectView,
+  type KetTableConfig,
   type LightboxConfig,
   type RelationSelectConfig,
 } from '@ketvietlab/design-system'
 import { createChartView, type ChartSpec } from '../../ui/client/chart-view.tsx'
+import { ketTable } from '../../ui/client/ket-table-view.tsx'
 
 type ChartProps = { id: string; config: ChartSpec }
 type RelationSelectProps = { id: string; config: RelationSelectConfig }
+type KetTableProps = { id: string; config: KetTableConfig }
 type LightboxProps = { id: string; config: LightboxConfig }
 
 export const islands = {
@@ -38,5 +41,12 @@ export const islands = {
     client: 'client/lightbox.mjs',
     export: 'lightbox',
     view: (props) => createLightboxView(props),
+  }),
+  'backend.ket-table': defineIsland<KetTableProps>()({
+    props: { id: 'id', config: 'json' },
+    key: ['id'],
+    client: 'client/ket-table.mjs',
+    export: 'ketTable',
+    view: (props) => ketTable(props),
   }),
 }

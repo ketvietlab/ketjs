@@ -73,6 +73,8 @@ export type TemplateModalData = {
   taxEnabled: boolean
   permissions: Record<string, boolean>
   lang: 'vi' | 'en'
+  /** Tabs other modules add through `product_backend:template.recordTabs`. */
+  extensionTabs?: Array<{ id: string; label: string; island: string }>
 }
 
 type Context = RecordModalContext<TemplateModalData>
@@ -674,6 +676,15 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
     { id: 'general', label: (c) => t(c, 'tabs.general'), visible: (c) => !c.creating, view: generalTab },
     { id: 'variants', label: (c) => t(c, 'tabs.variants'), visible: (c) => !c.creating, view: variantsTab },
   ],
+  extensionTabs: (c) =>
+    c.creating
+      ? []
+      : (c.data.extensionTabs ?? []).map((tab) => ({
+          id: tab.id,
+          label: () => tab.label,
+          view: (context: Context) =>
+            recordIsland(tab.island, { templateId: context.id, locale: context.data.lang }),
+        })),
   commands: {
     create: {
       fn: 'product.saveTemplate',

@@ -58,6 +58,7 @@
     "@ketvietlab/ketjs": "0.1.23",
     "@ketvietlab/ketjs-view": "0.1.23",
     "chart.js": "4.5.1",
+    "ioredis": "^6.0.0",
     "sharp": "0.35.4",
     "yjs": "13.6.32"
   },

@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import { bootDeployment, callFn } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { recordTabsFor } from '../packages/ketsuite/src/modules/product/product-record-tabs.ts'
 
 const companyScope = (company: string, branch = `root:${company}`) => ({
   company,
@@ -146,6 +147,8 @@ test('product modal context: an existing template carries its attributes-and-var
     'blue',
     'red',
   ])
+  // Nothing in this deployment fills template.recordTabs.
+  assert.deepEqual((context as Row).extensionTabs, [])
   // The modal's text travels with its data, so the view never shows a message key.
   assert.equal(result.messages['product_backend.tabs.general'], 'Thông tin chung')
 })
@@ -345,4 +348,36 @@ test('variant setup: a variant left out is archived, never deleted, and the defa
   assert.ok(dropped.setup!.variants.every((row) => row.active === false))
   const context = await run<Context>('product.templateModalContext', { id: 'tee' })
   assert.equal(context!.data.hasVariants, false, 'General shows the default variant again')
+})
+
+test('product modal context: a module filling template.recordTabs adds a tab labelled by its own message', () => {
+  const manifest = {
+    fills: [
+      {
+        joint: 'product_backend:template.recordTabs',
+        by: 'cosmetic_usage_care',
+        template: '{% island "cosmetic-care.product-cycle-record" %}',
+      },
+      {
+        joint: 'product_backend:template.tabs',
+        by: 'cosmetic_usage_care',
+        template: '{% island "cosmetic-care.product-cycle-tab" %}',
+      },
+      { joint: 'product_backend:template.recordTabs', by: 'plain_markup', template: '<p>not an island</p>' },
+      {
+        joint: 'product_backend:template.recordTabs',
+        by: 'unlabelled',
+        template: '{% island "unlabelled.panel" %}',
+      },
+    ],
+    messages: {
+      vi: { 'cosmetic_usage_care.productTemplateTab': 'Chu kỳ sử dụng' },
+      en: { 'cosmetic_usage_care.productTemplateTab': 'Usage cycle' },
+    },
+  } as unknown as Parameters<typeof recordTabsFor>[0]['manifest']
+  assert.deepEqual(recordTabsFor({ manifest }, 'vi'), [
+    { id: 'cosmetic_usage_care', label: 'Chu kỳ sử dụng', island: 'cosmetic-care.product-cycle-record' },
+    { id: 'unlabelled', label: 'unlabelled', island: 'unlabelled.panel' },
+  ])
+  assert.equal(recordTabsFor({ manifest }, 'en')[0]?.label, 'Usage cycle')
 })

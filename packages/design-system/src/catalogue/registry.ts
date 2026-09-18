@@ -151,6 +151,16 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('Spinner', 'Feedback', 'interactions/spinner', 'interactions', 'feedback-runtime'),
   entry('Skeleton', 'Feedback', 'interactions/skeleton', 'interactions', 'feedback-runtime'),
   entry(
+    'createSearchFilterView',
+    'Data operations',
+    'interactions/search-filter',
+    'interactions',
+    'search-filter',
+  ),
+  entry('searchFilter', 'Data operations', 'interactions/search-filter', 'interactions', 'search-filter'),
+  entry('createKetTableView', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry('ketTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry(
     'createRelationSelectView',
     'Forms',
     'interactions/relation-select',

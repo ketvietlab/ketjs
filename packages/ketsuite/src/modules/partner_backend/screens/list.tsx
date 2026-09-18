@@ -1,80 +1,30 @@
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
-  badge,
   bulkActions,
-  code,
   CollectionTabs,
-  dataTable,
-  emptyState,
   inline,
   LinkButton,
   ListPage,
   listChrome,
-  person,
   shell,
   stack,
 } from '../../../ui/index.ts'
-import type { DataTable, Frame } from '../../../ui/index.ts'
-import { localized } from '../../backend/screen.ts'
-import type { PartnerListRow, PartnerListSummary } from './types.ts'
-
-const tableFor = (
-  _: Translator,
-  rows: PartnerListRow[],
-  table: Partial<DataTable<PartnerListRow>>,
-  locale: string,
-) =>
-  dataTable(_, {
-    rows,
-    id: (row) => row.id,
-    rowHref: (row) => localized(`/admin/partner/partners/${row.id}`, locale),
-    rowLink: false,
-    columns: [
-      {
-        key: 'name',
-        label: _('partner_backend.field.name'),
-        priority: 'primary',
-        width: 'wide',
-        cell: (row) => person(row.name),
-      },
-      {
-        key: 'kind',
-        label: _('partner_backend.field.kind'),
-        kind: 'status',
-        cell: (row) => badge(_(`partner.kind.${row.kind}`), row.kind === 'company' ? 'info' : 'neutral'),
-      },
-      { key: 'email', label: _('partner_backend.field.email'), cell: (row) => row.email || '—' },
-      { key: 'phone', label: _('partner_backend.field.phone'), cell: (row) => row.phone || '—' },
-      {
-        key: 'ref',
-        label: _('partner_backend.field.ref'),
-        kind: 'identifier',
-        optional: true,
-        cell: (row) => (row.ref ? code(row.ref, 'identifier') : '—'),
-      },
-      {
-        key: 'state',
-        label: _('partner_backend.field.state'),
-        kind: 'status',
-        cell: (row) =>
-          badge(
-            row.active ? _('partner_backend.state.active') : _('partner_backend.state.archived'),
-            row.active ? 'positive' : 'neutral',
-          ),
-      },
-    ],
-    ...table,
-  })
+import type { Frame } from '../../../ui/index.ts'
+import type { PartnerListSummary } from './types.ts'
 
 export const partnersScreen = (
   _: Translator,
-  rows: PartnerListRow[],
   frame: Frame,
-  table: Partial<DataTable<PartnerListRow>> = {},
+  // Pre-rendered by the route via `backend/ket-table.ts`'s `tableGrid()` —
+  // `partnersScreen` stays a pure, synchronous view function, and the island
+  // only needs `ctx`/`url`/`req` (for its joint) at the one call site that
+  // already has them. The island also owns its own empty state, so there is
+  // no `rows.length ? … : emptyState(...)` branch left to keep here.
+  tableGrid: JSXChild,
   locale = '',
   summary?: PartnerListSummary,
-  total = rows.length,
+  total = 0,
 ): TemplateResult =>
   shell(
     _,
@@ -155,15 +105,11 @@ export const partnersScreen = (
                     },
                   ]}
                 />,
-                rows.length
-                  ? tableFor(_, rows, table, locale)
-                  : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint')),
+                tableGrid,
               ],
               'compact',
             )
-          : rows.length
-            ? tableFor(_, rows, table, locale)
-            : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))
+          : tableGrid
       }
     />,
     { ...frame, chrome: null, topbar: false },
