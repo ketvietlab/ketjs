@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 119,
     "cssFiles": 74,
-    "cssLines": 14427
+    "cssLines": 14432
   },
   "rows": [
     {
@@ -4050,7 +4050,8 @@
       "testFiles": [
         "test/crm-configuration-screen.test.tsx",
         "test/design-system.test.tsx",
-        "test/flow-issue-detail-screen.test.tsx"
+        "test/flow-issue-detail-screen.test.tsx",
+        "test/partner-e2e.test.ts"
       ],
       "gapTask": "DS-035"
     },
@@ -10449,7 +10450,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/ket-table/styles.css",
-      "lines": 185,
+      "lines": 190,
       "hooks": [
         "badge",
         "ket-table",
@@ -10459,6 +10460,7 @@
         "kt-group-cell",
         "kt-group-count",
         "kt-group-indent",
+        "kt-group-pager",
         "kt-group-row",
         "kt-group-toggle",
         "kt-pager",

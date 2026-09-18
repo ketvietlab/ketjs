@@ -101,6 +101,25 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     ok: true,
     updated: 1,
   })
+  assert.deepEqual(
+    (
+      await call<{ href: string }>('partner_backend.applyFilter', {
+        lang: 'en',
+        facets: [
+          { id: 'search:old', type: 'field', label: 'old query' },
+          { id: 'customer', type: 'filter', label: 'Customers' },
+          { id: 'supplier', type: 'filter', label: 'Suppliers' },
+          { id: 'kind', type: 'groupBy', label: 'Partner type' },
+          { id: 'state', type: 'groupBy', label: 'Status' },
+          { id: 'search:new', type: 'field', label: 'new query' },
+        ],
+      })
+    ).value,
+    {
+      href: '/admin/partner/partners?q=new+query&role=supplier&groupBy=state&lang=en',
+    },
+    'filter navigation preserves locale and applies the newest replacement facet',
+  )
 
   const pages: Array<[string, RegExp]> = [
     ['/admin/partner/partners', /Công ty Minh An/],

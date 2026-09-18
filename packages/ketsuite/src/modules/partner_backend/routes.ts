@@ -350,8 +350,20 @@ export const routes: Record<string, RouteEntry> = {
           ) as Promise<AnyRow[]>,
         ])
         groups = [
-          { id: 'company', label: _('partner.kind.company'), count: companyCount.count, rows: companyRows },
-          { id: 'person', label: _('partner.kind.person'), count: personCount.count, rows: personRows },
+          {
+            id: 'company',
+            label: _('partner.kind.company'),
+            count: companyCount.count,
+            rows: companyRows,
+            offset: 0,
+          },
+          {
+            id: 'person',
+            label: _('partner.kind.person'),
+            count: personCount.count,
+            rows: personRows,
+            offset: 0,
+          },
         ]
         total = companyCount.count + personCount.count
       } else if (groupBy === 'state') {
@@ -386,12 +398,14 @@ export const routes: Record<string, RouteEntry> = {
             label: _('partner_backend.state.active'),
             count: activeCount.count,
             rows: activeRows,
+            offset: 0,
           },
           {
             id: 'archived',
             label: _('partner_backend.state.archived'),
             count: archivedCount,
             rows: archivedRows,
+            offset: 0,
           },
         ]
         total = inclusiveCount.count
@@ -492,7 +506,11 @@ export const routes: Record<string, RouteEntry> = {
           applyError: _('partner_backend.search.applyError'),
           retry: _('partner_backend.search.retry'),
         },
-        manager: { applyFunction: 'partner_backend.applyFilter', bodyId: 'partner-directory-table' },
+        manager: {
+          applyFunction: 'partner_backend.applyFilter',
+          bodyId: 'partner-directory-table',
+          applyInput: url.searchParams.get('lang') ? { lang: url.searchParams.get('lang') } : undefined,
+        },
       }
 
       return adminPage(ctx, url, req, {
