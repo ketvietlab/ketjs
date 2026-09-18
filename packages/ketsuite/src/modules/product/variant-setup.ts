@@ -241,11 +241,18 @@ export const variantSetupFunctions: Record<string, FnSpec> = {
         }
       const lines = readLines(args.lines)
       const variants = readVariants(args.variants)
-      const [attributeRows, valueRows, productRows] = await Promise.all([
+      const [attributeRows, valueRows, productRows, lineRows] = await Promise.all([
         ctx.db.select('product.Attribute'),
         ctx.db.select('product.AttributeValue'),
         ctx.db.select('product.Product', { templateId }),
+        ctx.db.select('product.TemplateAttributeLine', { templateId }),
       ])
+      // A line this function did not create keeps whatever id it has, and
+      // `generateVariants` breaks ties on that stored id — so the order below has to
+      // read it rather than assume the id this function would have minted.
+      const heldLineIds = new Map(lineRows.map((row) => [String(row.attributeId), String(row.id)]))
+      const lineIdOf = (attributeId: string): string =>
+        heldLineIds.get(attributeId) ?? lineIdFor(templateId, attributeId)
       const attributes = new Map(attributeRows.map((row) => [String(row.id), row]))
       const values = new Map(valueRows.map((row) => [String(row.id), row]))
       const errors: Issue[] = []
@@ -307,7 +314,7 @@ export const variantSetupFunctions: Record<string, FnSpec> = {
           const bb = attributes.get(b.attributeId)
           return (
             Number(aa?.sequence ?? 10) - Number(bb?.sequence ?? 10) ||
-            lineIdFor(templateId, a.attributeId).localeCompare(lineIdFor(templateId, b.attributeId))
+            lineIdOf(a.attributeId).localeCompare(lineIdOf(b.attributeId))
           )
         })
 
@@ -418,7 +425,7 @@ export const variantSetupFunctions: Record<string, FnSpec> = {
         const templateValueIds = new Map<string, string>()
         for (const line of lines) {
           const held = currentLines.find((row) => String(row.attributeId) === line.attributeId)
-          const lineId = held ? String(held.id) : lineIdFor(templateId, line.attributeId)
+          const lineId = held ? String(held.id) : lineIdOf(line.attributeId)
           if (!held)
             await tx.db.insert('product.TemplateAttributeLine', {
               id: lineId,
