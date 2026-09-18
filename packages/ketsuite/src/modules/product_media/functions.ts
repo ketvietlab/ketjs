@@ -234,6 +234,7 @@ export const functions: Record<string, FnSpec> = {
       'read:storage.Attachment',
       'write:product_media.Media',
       'write:storage.Attachment',
+      'write:storage.AttachmentRendition',
       'enqueue:storage.sweep',
     ],
     idempotent: true,
@@ -245,6 +246,11 @@ export const functions: Record<string, FnSpec> = {
         const rows = await rowsFor(tx, { templateId: row.templateId, productId: row.productId })
         await tx.db.del(
           deleteFrom(tx.table('product_media.Media')).where(eq(tx.table('product_media.Media').id, args.id)),
+        )
+        await tx.db.del(
+          deleteFrom(tx.table('storage.AttachmentRendition')).where(
+            eq(tx.table('storage.AttachmentRendition').attachmentId, row.attachmentId),
+          ),
         )
         await tx.db.del(
           deleteFrom(tx.table('storage.Attachment')).where(

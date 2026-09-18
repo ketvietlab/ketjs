@@ -2,7 +2,15 @@
 // It consumes the public package exactly as another application would and renders
 // every component specimen from the package-owned catalogue.
 
-import { compose, createKetServer, document, json, page, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  compose,
+  createKetServer,
+  document,
+  json,
+  page,
+  registerFunctions,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import { BulkActions, DataTable, ListChrome, ListPage } from '@ketvietlab/design-system'
 import {
   CatalogueHead,
@@ -18,6 +26,7 @@ import {
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { demoBackendModule } from './demo-backend.ts'
 import { createDemo2Routes, createDemoRoutes } from './demo.tsx'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -29,7 +38,11 @@ const designSystemSrc = (dir: string): string => {
   return designSystemSrc(parent)
 }
 const ASSETS = designSystemSrc(HERE)
-const manifest = compose([], { headless: true })
+// The one module this app composes: it backs /demo2's relation-select field with
+// real listCustomers/createCustomer calls instead of a client-only illusion of a
+// backend — see demo-backend.ts.
+const manifest = compose([demoBackendModule], { headless: true })
+registerFunctions([demoBackendModule])
 const adapter = sqliteAdapter()
 await adapter.open()
 

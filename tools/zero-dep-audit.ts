@@ -51,6 +51,12 @@ const RULES: Record<string, Rule> = {
   // a deployment that installs the framework alone still installs nothing
   // else.
   //
+  // sharp is the fourth: storage's rendition job resizes uploaded images to WebP
+  // through it, on the worker only — Node ships no image codec, and a hand-written
+  // JPEG decoder is not a fence worth keeping. Since 0.33 it installs prebuilt
+  // libvips from npm (@img/*) with no install script or source build; the lockfile
+  // records every platform's package, so a Linux image installs from a macOS lock.
+  //
   // One entry point, like everything else here: nothing imports a path inside
   // them. For chart.js that also decides the bundle — `chart.js/auto` would
   // register every controller ever written, while the root entry makes each
@@ -61,6 +67,7 @@ const RULES: Record<string, Rule> = {
       '@ketvietlab/ketjs',
       '@ketvietlab/ketjs-view',
       'chart.js',
+      'sharp',
       'yjs',
       'ioredis',
     ],

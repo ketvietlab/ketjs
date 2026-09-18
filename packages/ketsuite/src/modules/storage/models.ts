@@ -23,4 +23,26 @@ export const models: Record<string, ModelDef> = {
       createdAt: 'datetime',
     },
   },
+
+  /**
+   * A smaller WebP copy of a stored image, made by the `storage.render` job after
+   * upload. Worker-owned like `publicStoreKey`: nothing but the job writes one, and
+   * a missing rendition only means the original is served in its place.
+   */
+  AttachmentRendition: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      attachmentId: 'ref:storage.Attachment',
+      /** One of RENDITION_SIZES' names (policy.ts). */
+      size: 'text',
+      storeKey: 'text',
+      mimetype: 'text',
+      width: 'int',
+      height: 'int',
+      bytes: 'int',
+      createdAt: 'datetime',
+    },
+    indexes: { attachment_size: { fields: ['attachmentId', 'size'], unique: true } },
+  },
 }
