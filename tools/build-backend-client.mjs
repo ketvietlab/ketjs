@@ -24,6 +24,10 @@ const entries = [
     output: join(BACKEND_CLIENT_DIR, 'ket-table.mjs'),
   },
   {
+    source: join(UI_CLIENT_DIR, 'search-filter-view.tsx'),
+    output: join(BACKEND_CLIENT_DIR, 'search-filter.mjs'),
+  },
+  {
     source: join(DESIGN_SYSTEM_DIR, 'interactions/lightbox/index.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'lightbox.mjs'),
   },

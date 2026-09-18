@@ -1,15 +1,3 @@
-export type PartnerListSummary = {
-  total: number
-  customers: number
-  suppliers: number
-  archived: number
-  allHref: string
-  customersHref: string
-  suppliersHref: string
-  archivedHref: string
-  active: 'all' | 'customers' | 'suppliers' | 'archived'
-}
-
 export type PartnerListRow = {
   id: string
   kind: string
