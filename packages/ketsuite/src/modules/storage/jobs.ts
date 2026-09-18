@@ -1,8 +1,98 @@
 import { asc, defineJob, deleteFrom, eq, from, gt, inArray, isNull } from '@ketvietlab/ketjs'
 import type { JobContext, JobSpec } from '@ketvietlab/ketjs'
-import { inlineTypes, publicationKey } from './policy.ts'
+import { inlineTypes, publicationKey, RENDITION_SIZES, renderableTypes, renditionKey } from './policy.ts'
+import type { RenditionSize } from './policy.ts'
+
+/** Everything a stream yields, as one buffer: sharp decodes from memory, not from a stream. */
+const bytesOf = async (body: AsyncIterable<Uint8Array>): Promise<Buffer> => {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of body) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
+/** Refuse decompression bombs before they allocate: 12k × 12k is already 432 MB of RGBA. */
+const MAX_INPUT_PIXELS = 12_000 * 12_000
+
+async function* single(buffer: Buffer): AsyncIterable<Uint8Array> {
+  yield buffer
+}
 
 export const jobs: Record<string, JobSpec> = {
+  /**
+   * Resize one stored raster image into every RENDITION_SIZES entry, as WebP.
+   *
+   * sharp is imported here, inside the handler, so only a worker that actually runs
+   * this job loads libvips — the HTTP process imports this module too. A size the
+   * source is already smaller than is still written (never enlarged), so the file
+   * route can always ask for one by name.
+   */
+  render: defineJob({
+    // Its own queue: resizing is CPU work, and a burst of uploads must not hold up
+    // publication or the sweep behind it.
+    queue: 'media',
+    input: { id: 'id' },
+    effects: [
+      'read:storage.Attachment',
+      'read:storage.AttachmentRendition',
+      'write:storage.AttachmentRendition',
+      'storage:read',
+      'storage:write',
+    ],
+    idempotent: true,
+    maxAttempts: 3,
+    timeoutMs: 120_000,
+    handler: async (ctx: JobContext, args) => {
+      const company = ctx.scope.company
+      if (!company) throw new Error('storage.render requires a company scope')
+      const A = ctx.table('storage.Attachment')
+      const row = await ctx.db.one(from(A).where(eq(A.id, args.id), eq(A.companyId, company)))
+      // Removed since it was queued, or not something this job renders: nothing to do.
+      if (row?.kind !== 'stored' || !row.storeKey || !row.checksum) return
+      if (!renderableTypes.has(String(row.mimetype))) return
+      const source = await ctx.storage.get(String(row.storeKey))
+      if (!source) throw new Error('rendition source is missing')
+      const input = await bytesOf(source.body)
+      const { default: sharp } = await import('sharp')
+      // Bytes sharp cannot read (a mislabelled or truncated upload) will not decode on a
+      // retry either: the original simply stays the only copy, and the job is done.
+      const readable = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+        .metadata()
+        .then(() => true)
+        .catch(() => false)
+      if (!readable) return
+      for (const [size, spec] of Object.entries(RENDITION_SIZES) as Array<
+        [RenditionSize, (typeof RENDITION_SIZES)[RenditionSize]]
+      >) {
+        if (ctx.signal.aborted) throw ctx.signal.reason
+        const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS, animated: false })
+          .rotate() // honour EXIF orientation before the pixels are resized away from it
+          .resize(spec.width, spec.height, { fit: spec.fit, withoutEnlargement: true })
+          .webp({ quality: size === 'thumb' ? 75 : 82 })
+          .toBuffer({ resolveWithObject: true })
+        const key = renditionKey(company, String(row.checksum), size)
+        await ctx.storage.put(key, single(data), { type: 'image/webp', size: data.length })
+        const record = {
+          id: `${String(row.id)}:${size}`,
+          attachmentId: row.id,
+          size,
+          storeKey: key,
+          mimetype: 'image/webp',
+          width: info.width,
+          height: info.height,
+          bytes: data.length,
+          createdAt: new Date().toISOString(),
+        }
+        await ctx.tx(async (tx) => {
+          // The attachment may have been removed while this size was being encoded.
+          if (!(await tx.db.one(from(A).where(eq(A.id, args.id), eq(A.companyId, company))))) return
+          const inserted = await tx.db.insertIfAbsent('storage.AttachmentRendition', record)
+          if (!('dryRun' in inserted) && !inserted.inserted)
+            await tx.db.update('storage.AttachmentRendition', { id: record.id }, record)
+        })
+      }
+    },
+  }),
+
   publish: defineJob({
     queue: 'maintenance',
     input: { id: 'id' },
@@ -58,7 +148,13 @@ export const jobs: Record<string, JobSpec> = {
   sweep: defineJob({
     queue: 'maintenance',
     input: { minAgeMs: 'int?' },
-    effects: ['read:storage.Attachment', 'storage:read', 'storage:remove', 'enqueue:storage.publish'],
+    effects: [
+      'read:storage.Attachment',
+      'read:storage.AttachmentRendition',
+      'storage:read',
+      'storage:remove',
+      'enqueue:storage.publish',
+    ],
     idempotent: true,
     handler: async (ctx: JobContext, args) => {
       const company = ctx.scope.company
@@ -74,6 +170,28 @@ export const jobs: Record<string, JobSpec> = {
         const page = await ctx.storage.list(prefix, { ...(after ? { after } : {}), limit: 250 })
         const referenced = new Set(
           (await ctx.db.all(from(A).select(A.storeKey).where(inArray(A.storeKey, page.keys)))).map(
+            (row) => row.storeKey,
+          ),
+        )
+        for (const key of page.keys) {
+          if (ctx.signal.aborted) throw ctx.signal.reason
+          if (referenced.has(key)) continue
+          const meta = await ctx.storage.head(key)
+          if (!meta?.modifiedAt || new Date(meta.modifiedAt).getTime() > cutoff) continue
+          await ctx.storage.remove(key)
+        }
+        after = page.next
+      } while (after)
+      // Rendition objects are kept while any rendition row still names them.
+      const R = ctx.table('storage.AttachmentRendition')
+      after = undefined
+      do {
+        const page = await ctx.storage.list(`renditions/${company}/`, {
+          ...(after ? { after } : {}),
+          limit: 250,
+        })
+        const referenced = new Set(
+          (await ctx.db.all(from(R).select(R.storeKey).where(inArray(R.storeKey, page.keys)))).map(
             (row) => row.storeKey,
           ),
         )

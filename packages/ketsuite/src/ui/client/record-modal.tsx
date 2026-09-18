@@ -1169,20 +1169,21 @@ export const createRecordModal =
 
         // An input or select carrying `data-record-state` feeds view state as it
         // changes; a file chosen in a `data-record-submit` input submits its form.
+        // A design-system `RelationSelect`'s own hidden native select carries no
+        // such marker (the package knows nothing of this runtime), but it fires a
+        // real `change` too — keyed by its `name`, which every field in this kit
+        // already sets to the same key `state()` reads it back under.
         document.addEventListener(
           'change',
           (event) => {
             const control = event.target instanceof Element ? event.target : null
             if (!control || !root?.contains(control)) return
-            if (
-              (control instanceof HTMLSelectElement || control instanceof HTMLInputElement) &&
-              control.hasAttribute('data-record-state')
-            ) {
+            const stateKey =
+              control.getAttribute('data-record-state') ??
+              (control.getAttribute('data-ui') === 'relation-native' ? control.getAttribute('name') : null)
+            if ((control instanceof HTMLSelectElement || control instanceof HTMLInputElement) && stateKey) {
               keepAllDrafts()
-              viewState.set({
-                ...viewState(),
-                [control.getAttribute('data-record-state') ?? '']: control.value,
-              })
+              viewState.set({ ...viewState(), [stateKey]: control.value })
               return
             }
             if (

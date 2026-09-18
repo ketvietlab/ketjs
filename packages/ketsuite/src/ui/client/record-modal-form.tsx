@@ -120,3 +120,91 @@ export const RecordCommandForm = (props: { kind: string; id: string }): Template
 export const RecordCloseTrigger = (props: { children: JSXChild }): TemplateResult => (
   <span data-record-close="true">{props.children}</span>
 )
+
+/**
+ * A record's main image beside the first rows of its form: the viewer (a
+ * thumbnail opening the image set), and under it the controls that change it.
+ *
+ * The whole block is one dropzone form: dropping a photo on the thumbnail, or
+ * picking one, submits `uploadCommand` straight away (`data-record-submit`). Remove
+ * is a button of that same form naming its own command, so it never carries the
+ * file input with it.
+ */
+export const RecordImageField = (props: {
+  kind: string
+  id: string
+  /** The viewer island (`backend.lightbox`), or null when there is no image yet. */
+  viewer: JSXChild | null
+  uploadCommand?: string | null
+  removeCommand?: string | null
+  labels: { empty: string; upload: string; replace: string; remove: string; drop: string }
+  busy?: boolean
+}): TemplateResult => {
+  const hasImage = props.viewer != null
+  const editable = Boolean(props.uploadCommand)
+  return (
+    <form
+      data-ui="record-image"
+      id={props.id}
+      method="post"
+      action=""
+      enctype="multipart/form-data"
+      data-record-kind={props.kind}
+      data-record-dropzone={editable ? 'true' : null}
+      data-busy={props.busy ? 'true' : 'false'}
+    >
+      {editable ? (
+        <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.uploadCommand} autocomplete="off" />
+      ) : (
+        ''
+      )}
+      <div data-ui="record-image-frame" title={editable ? props.labels.drop : undefined}>
+        {hasImage ? props.viewer : <span data-ui="record-image-empty">{props.labels.empty}</span>}
+      </div>
+      {editable || (hasImage && props.removeCommand) ? (
+        <div data-ui="record-image-actions">
+          {editable ? (
+            <label data-ui="record-image-upload" data-variant="tertiary">
+              <input
+                type="file"
+                name="file"
+                accept="image/avif,image/gif,image/jpeg,image/png,image/webp"
+                data-record-submit="true"
+                disabled={props.busy === true}
+              />
+              <span>{hasImage ? props.labels.replace : props.labels.upload}</span>
+            </label>
+          ) : (
+            ''
+          )}
+          {hasImage && props.removeCommand ? (
+            <button
+              type="submit"
+              data-ui="action"
+              data-variant="tertiary"
+              data-size="compact"
+              name={RECORD_COMMAND_FIELD}
+              value={props.removeCommand}
+              formnovalidate
+              disabled={props.busy === true}
+            >
+              {props.labels.remove}
+            </button>
+          ) : (
+            ''
+          )}
+        </div>
+      ) : (
+        ''
+      )}
+    </form>
+  )
+}
+
+/** A form with its image block placed at the right of the form's first two rows. */
+export const RecordFormWithImage = (props: { form: JSXChild; image: JSXChild }): TemplateResult => (
+  <div data-ui="record-form-with-image">
+    {props.form}
+    {props.image}
+  </div>
+)

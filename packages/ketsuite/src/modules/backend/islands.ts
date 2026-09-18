@@ -1,7 +1,13 @@
 import { defineIsland } from '@ketvietlab/ketjs-view'
-import type { KetTableConfig, SearchFilterConfig } from '@ketvietlab/design-system'
+import {
+  createLightboxView,
+  createRelationSelectView,
+  type KetTableConfig,
+  type LightboxConfig,
+  type RelationSelectConfig,
+  type SearchFilterConfig,
+} from '@ketvietlab/design-system'
 import { createChartView, type ChartSpec } from '../../ui/client/chart-view.tsx'
-import { createRelationSelectView, type RelationSelectConfig } from '../../ui/client/relation-select-view.tsx'
 import { ketTable } from '../../ui/client/ket-table-view.tsx'
 import { searchFilter } from '../../ui/client/search-filter-view.tsx'
 
@@ -9,6 +15,7 @@ type ChartProps = { id: string; config: ChartSpec }
 type RelationSelectProps = { id: string; config: RelationSelectConfig }
 type KetTableProps = { id: string; config: KetTableConfig }
 type SearchFilterProps = { id: string; config: SearchFilterConfig }
+type LightboxProps = { id: string; config: LightboxConfig }
 
 export const islands = {
   /**
@@ -29,6 +36,14 @@ export const islands = {
     client: 'client/relation-select.mjs',
     export: 'relationSelect',
     view: (props) => createRelationSelectView(props),
+  }),
+  /** The design-system image viewer: a thumbnail that opens zoom, pan and pinch over a set of images. */
+  'backend.lightbox': defineIsland<LightboxProps>()({
+    props: { id: 'id', config: 'json' },
+    key: ['id'],
+    client: 'client/lightbox.mjs',
+    export: 'lightbox',
+    view: (props) => createLightboxView(props),
   }),
   'backend.ket-table': defineIsland<KetTableProps>()({
     props: { id: 'id', config: 'json' },
