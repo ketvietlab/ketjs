@@ -117,7 +117,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
     datastore: 'main',
     permissions: { modules: suite.ketsuitePermissionModules },
     worker: {
-      queues: { default: 10, maintenance: 2, mail: 5 },
+      queues: { default: 10, maintenance: 2, mail: 5, media: 2 },
     },
     serve: {
       openStore,

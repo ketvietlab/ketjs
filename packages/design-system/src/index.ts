@@ -45,6 +45,27 @@ export { Toast, ToastRegion } from './interactions/toast/index.tsx'
 export type { ToastProps } from './interactions/toast/index.tsx'
 export { Spinner } from './interactions/spinner/index.tsx'
 export { Skeleton } from './interactions/skeleton/index.tsx'
+export { createRelationSelectView, relationSelect } from './interactions/relation-select/index.tsx'
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from './interactions/relation-select/index.tsx'
+export {
+  createLightbox,
+  createLightboxView,
+  lightbox,
+  LightboxThumb,
+} from './interactions/lightbox/index.tsx'
+export type {
+  LightboxConfig,
+  LightboxController,
+  LightboxIslandProps,
+  LightboxItem,
+  LightboxLabels,
+} from './interactions/lightbox/index.tsx'
 export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
 export type {
   CustomFilterField,

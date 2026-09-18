@@ -1,5 +1,38 @@
-import { each, signal } from '@ketvietlab/ketjs-view'
+// Unlike its neighbors here, this is a ketjs-view *island*: it owns reactive state
+// (`signal`) and fetches its own data (`/_ket/fn/...`, a ketjs runtime contract, not
+// an application-specific one) rather than being a static, server-rendered control
+// wired up by the shared `attachDesignSystemInteractions` delegator. A consuming app
+// mounts it through its own island runtime (see `defineIsland` in `@ketvietlab/ketjs-view`)
+// and supplies the `manager` config that names which functions to call.
+
+import { each, effect, signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
+
+export const HOOKS = [
+  'relation-select',
+  'relation-native',
+  'relation-trigger',
+  'relation-value',
+  'relation-caret',
+  'relation-chips',
+  'relation-chip',
+  'relation-chip-clear',
+  'relation-menu',
+  'relation-search',
+  'relation-options',
+  'relation-option',
+  'relation-footer',
+  'relation-empty',
+  'relation-editor',
+  'relation-dialog-toolbar',
+  'relation-search-field',
+  'relation-search-icon',
+  'relation-dialog-list',
+  'relation-dialog-row',
+  'relation-dialog-main',
+  'relation-dialog-meta',
+  'relation-dialog-actions',
+] as const
 
 export type RelationOption = { value: string; label: string; description?: string | null }
 
@@ -387,7 +420,6 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
       </button>
       <section
         data-ui="modal-sheet"
-        data-size="large"
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${islandId}-relation-title`}
@@ -408,15 +440,32 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
         </header>
         <div data-ui="modal-body">
           <div data-ui="relation-dialog-toolbar">
-            <input
-              data-ui="form-control"
-              type="search"
-              value={query()}
-              autocomplete="off"
-              placeholder={labels.search}
-              aria-label={labels.search}
-              onInput={searchManager}
-            />
+            <div data-ui="relation-search-field">
+              <span data-ui="relation-search-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </span>
+              <input
+                data-ui="field-control"
+                type="search"
+                value={query()}
+                autocomplete="off"
+                placeholder={labels.search}
+                aria-label={labels.search}
+                onInput={searchManager}
+              />
+            </div>
             {manager?.saveFunction ? (
               <button
                 data-ui="action"
@@ -514,7 +563,9 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
           onClick={() => open.set(!open())}
         >
           <span data-ui="relation-value">{multiple ? labels.choose : selectedLabel()}</span>
-          <span aria-hidden="true">⌄</span>
+          <span data-ui="relation-caret" aria-hidden="true">
+            ▾
+          </span>
         </button>
         {multiple && chosen().length ? (
           <ul data-ui="relation-chips" aria-label={labels.chosen}>
@@ -585,6 +636,46 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
         {dialog() ? dialogView() : null}
       </div>
     ),
+    // The hidden native select stands in for a real one — including firing
+    // `change` for whatever the host page already listens for there (a state
+    // recomputed off another field's selection, say). Skip the effect's own
+    // eager first run: nothing has changed yet, only settled onto its initial value.
+    // The dispatch itself waits a microtask: firing it synchronously, still
+    // inside the signal write that is choosing this very value, let a listener
+    // that reacts by re-rendering (and so disposing and re-mounting this same
+    // island) re-enter this instance's own `choose()` while it was still on the
+    // stack — deferring runs it only once the choice has fully settled.
+    mount: ({ root, lifetime }) => {
+      let first = true
+      const stop = effect(() => {
+        chosen()
+        if (first) {
+          first = false
+          return
+        }
+        queueMicrotask(() => {
+          if (disposed) return
+          const native = [...root.querySelectorAll('[data-ui="relation-native"]')][0]
+          if (native instanceof HTMLSelectElement)
+            native.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+      })
+      lifetime.addEventListener('abort', stop)
+      // The inline dropdown isn't a <details> — nothing in the shared
+      // `attachDesignSystemInteractions` outside-click delegator sees it, so it
+      // closes itself the same way every other popup does. The dialog already
+      // closes on its own backdrop click.
+      document.addEventListener(
+        'click',
+        (event) => {
+          if (!open()) return
+          const target = event.target
+          if (target instanceof Node && (root as unknown as Node).contains(target)) return
+          open.set(false)
+        },
+        { signal: lifetime },
+      )
+    },
     dispose: () => {
       disposed = true
       clearTimeout(searchTimer)

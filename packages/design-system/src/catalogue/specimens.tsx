@@ -78,6 +78,10 @@ import { FormattedDate, FormattedMoney, FormattedNumber } from '../record/format
 import { RecordActions, RecordRail, RecordSummary } from '../record/composition/index.tsx'
 import { ActivityTimeline, AuditLog } from '../record/activity/index.tsx'
 import { Attachments, MediaGallery } from '../record/media/index.tsx'
+import { lightboxDemoConfig } from '../interactions/lightbox/demo.ts'
+import { createLightboxView } from '../interactions/lightbox/index.tsx'
+import { relationSelectDemoConfig } from '../interactions/relation-select/demo.ts'
+import { createRelationSelectView } from '../interactions/relation-select/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -1668,6 +1672,21 @@ export const componentGroups: readonly ComponentGroup[] = [
             ]}
           />
         ),
+      },
+      {
+        id: 'relation-select',
+        name: 'Relation select',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns state and fetches its own results client-side, so it keeps working after this static snapshot only once the page hydrates it. Shown in its default (closed) state with one value already chosen; distinct from RelationPicker below, which is href-driven and receives results pre-fetched by the server.',
+        render: () =>
+          createRelationSelectView({ id: 'demo-relation-select', config: relationSelectDemoConfig }).view(),
+      },
+      {
+        id: 'lightbox',
+        name: 'Lightbox',
+        description:
+          'A Fancybox-style image viewer, also an island: thumbnails open a full-screen stage with zoom (buttons, wheel, click to toggle 2×), drag to pan, pinch on a touch screen, previous/next and a counter; Escape closes and returns focus to the thumbnail. `createLightbox` is the same viewer without thumbnails, for a view that renders its own.',
+        render: () => createLightboxView({ id: 'demo-lightbox', config: lightboxDemoConfig }).view(),
       },
     ],
   },

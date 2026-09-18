@@ -4,8 +4,18 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { renderToString } from '@ketvietlab/ketjs-view'
-import { AppShell, ListPage, Metric, RecordPage, Section, Surface, WorkspacePage } from './index.ts'
+import { renderIsland, renderToString } from '@ketvietlab/ketjs-view'
+import {
+  AppShell,
+  ListPage,
+  Metric,
+  RecordPage,
+  Section,
+  Surface,
+  WorkspacePage,
+  createRelationSelectView,
+} from './index.ts'
+import { relationSelectDemoConfig } from './interactions/relation-select/demo.ts'
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url))
 const packageJsonPath = [
@@ -159,6 +169,14 @@ const renderContracts = (): string => {
       }),
     ),
     metric: renderToString(Metric({ label: markers.label, value: markers.value, detail: markers.detail })),
+    // The one island-based contract: island-runtime.js hydrates it for real (open,
+    // close, choose, chips) against this same seeded option list — see that file
+    // and relation-select/demo.ts for why search/create/remove stay inert here.
+    'relation-select': renderIsland(
+      'design-system.relation-select',
+      (props) => createRelationSelectView(props as Parameters<typeof createRelationSelectView>[0]),
+      { id: 'atlas-relation-select', config: relationSelectDemoConfig },
+    ),
   }
   const revision = process.env.KET_DESIGN_SYSTEM_REVISION ?? packageJson.version
   const global = JSON.stringify(profile.composition.global)
@@ -174,9 +192,21 @@ const renderRuntime = (): string => {
   )
   if (classicSource === moduleSource || /\bexport\s/u.test(classicSource))
     throw new Error('Design-system runtime can no longer be converted to a classic KetAtlas script')
+  // Built by tools/build-design-system-atlas-runtime.mjs: a self-contained bundle
+  // (no imports, no exports — checked below the same way) that hydrates the one
+  // island-based contract, `relation-select`, against its seeded demo data.
+  const islandRuntime = readFileSync(join(sourceDirectory, 'atlas/island-runtime.mjs'), 'utf8')
+  if (/\bexport\s/u.test(islandRuntime) || /\bimport\s/u.test(islandRuntime))
+    throw new Error('KetAtlas island runtime must be a self-contained script with no imports or exports')
   const global = JSON.stringify(profile.composition.global)
   const property = JSON.stringify(profile.composition.attachProperty)
-  return `${classicSource.trimEnd()}\n\nwindow[${global}] = window[${global}] || {};\nwindow[${global}][${property}] = attachDesignSystemInteractions;\nif (document.readyState === 'loading') {\n  document.addEventListener('DOMContentLoaded', () => attachDesignSystemInteractions(), { once: true })\n} else {\n  attachDesignSystemInteractions()\n}\n`
+  return (
+    `${classicSource.trimEnd()}\n\n` +
+    `window[${global}] = window[${global}] || {};\n` +
+    `window[${global}][${property}] = attachDesignSystemInteractions;\n` +
+    `if (document.readyState === 'loading') {\n  document.addEventListener('DOMContentLoaded', () => attachDesignSystemInteractions(), { once: true })\n} else {\n  attachDesignSystemInteractions()\n}\n\n` +
+    `${islandRuntime.trimEnd()}\n`
+  )
 }
 
 type MaterializedFile = { path: string; content: string }
