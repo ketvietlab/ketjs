@@ -38,21 +38,32 @@ const RULES: Record<string, Rule> = {
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
   'design-system': { allow: ['@ketvietlab/ketjs-view'] },
-  // yjs and chart.js are the accepted breaches of ketsuite's own allowance,
-  // mirroring how ketjs-postgres is the framework's one accepted breach of rule
-  // 1: named, narrow exceptions rather than an open door. yjs backs the Flow
-  // collaborative editor's CRDT merge, in the browser bundle and on the server
-  // that flattens the document; chart.js draws the analytical screens, in the
-  // browser bundle only. Neither is ever reached by ketjs/ketjs-view — so the
-  // framework core stays untouched, and a deployment that installs the
-  // framework alone still installs nothing else.
+  // yjs, chart.js and ioredis are the accepted breaches of ketsuite's own
+  // allowance, mirroring how ketjs-postgres is the framework's one accepted
+  // breach of rule 1: named, narrow exceptions rather than an open door. yjs
+  // backs the Flow collaborative editor's CRDT merge, in the browser bundle
+  // and on the server that flattens the document; chart.js draws the
+  // analytical screens, in the browser bundle only; ioredis backs
+  // `cache.ts`'s shared cache when `REDIS_URL` is set, on the server only —
+  // unset, it is installed but never connected to, and ketsuite behaves
+  // exactly as it did before this entry existed. None of the three is ever
+  // reached by ketjs/ketjs-view — so the framework core stays untouched, and
+  // a deployment that installs the framework alone still installs nothing
+  // else.
   //
   // One entry point, like everything else here: nothing imports a path inside
   // them. For chart.js that also decides the bundle — `chart.js/auto` would
   // register every controller ever written, while the root entry makes each
   // screen register the two or three it actually draws.
   ketsuite: {
-    allow: ['@ketvietlab/design-system', '@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'chart.js', 'yjs'],
+    allow: [
+      '@ketvietlab/design-system',
+      '@ketvietlab/ketjs',
+      '@ketvietlab/ketjs-view',
+      'chart.js',
+      'yjs',
+      'ioredis',
+    ],
     publicOnly: true,
   },
 }

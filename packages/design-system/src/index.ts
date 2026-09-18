@@ -45,6 +45,32 @@ export { Toast, ToastRegion } from './interactions/toast/index.tsx'
 export type { ToastProps } from './interactions/toast/index.tsx'
 export { Spinner } from './interactions/spinner/index.tsx'
 export { Skeleton } from './interactions/skeleton/index.tsx'
+export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
+export type {
+  CustomFilterField,
+  SearchFacet,
+  SearchFavorite,
+  SearchFilterConfig,
+  SearchFilterFieldType,
+  SearchFilterLabels,
+  SearchFilterManager,
+  SearchFilterOperator,
+  SearchFilterOption,
+  SearchGroupByOption,
+} from './interactions/search-filter/index.tsx'
+export { createKetTableView, ketTable } from './interactions/ket-table/index.tsx'
+export type {
+  KetTableCellFormat,
+  KetTableColumn,
+  KetTableConfig,
+  KetTableExtensions,
+  KetTableGroup,
+  KetTableLabels,
+  KetTableManager,
+  KetTableRow,
+  KetTableSelection,
+  KetTableSort,
+} from './interactions/ket-table/index.tsx'
 export { attachDesignSystemInteractions } from './runtime/index.js'
 
 export {

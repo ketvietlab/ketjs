@@ -8,6 +8,8 @@ import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { TableSelection } from '../../ui/index.ts'
+import { tableGrid } from '../backend/ket-table.ts'
+import type { KetTableColumn } from '../backend/ket-table.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -26,17 +28,29 @@ const onlyPost = (req: Req) =>
       ? text('Forbidden', { status: 403 })
       : null
 
-const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
-  (
-    (await ctx.call(
-      'partner.listPartners',
-      { kind: 'company', includeArchived: false },
-      url,
-      req,
-    )) as AnyRow[]
-  )
+// Seeds the parent-organisation relation-select with only the currently chosen
+// company (if any) — the widget already searches `partner.listPartners` for the
+// rest as the user types, so preloading every company here would mean fetching
+// (and embedding into the page as JSON) the entire company partner list on every
+// partner detail render, which does not scale past a few thousand partners.
+const partnerOptions = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  parentId?: string | null,
+  exclude?: string,
+) => {
+  if (!parentId || parentId === exclude) return []
+  const rows = (await ctx.call(
+    'partner.listPartners',
+    { ids: [parentId], kind: 'company', includeArchived: true },
+    url,
+    req,
+  )) as AnyRow[]
+  return rows
     .filter((row) => row.id !== exclude)
     .map((row) => ({ value: String(row.id), label: String(row.name) }))
+}
 
 const parentControlFor = (
   ctx: ServeContext,
@@ -186,9 +200,10 @@ export const renderPartnerForm = async (
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration, salesActions, collaboration] = await Promise.all([
-    ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
-    partnerOptions(ctx, url, req, id),
+  const row = (await ctx.call('partner.getPartner', { id }, url, req)) as AnyRow | null
+  if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
+  const [parents, terms, integration, salesActions, collaboration] = await Promise.all([
+    partnerOptions(ctx, url, req, row.parentId ? String(row.parentId) : null, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
     ctx.joint(url, req, 'partner_backend:record.actions', {
       partnerId: id,
@@ -206,7 +221,6 @@ export const renderPartnerForm = async (
       lang,
     }),
   ])
-  if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
   const parentControl = await parentControlFor(ctx, url, req, _, parents, {
     id: `partner-parent-${id}`,
     value: row.parentId ? String(row.parentId) : '',
@@ -345,12 +359,93 @@ export const routes: Record<string, RouteEntry> = {
           ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
         ],
       }
+      const langSuffix = url.searchParams.get('lang')
+        ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+        : ''
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
-        body: (_, frame) =>
-          partnersScreen(
+        body: async (_, frame) => {
+          const columns: KetTableColumn[] = [
+            {
+              key: 'name',
+              label: _('partner_backend.field.name'),
+              format: { kind: 'person', field: 'name' },
+              priority: 'primary',
+              width: 'wide',
+              sortable: true,
+            },
+            {
+              key: 'kind',
+              label: _('partner_backend.field.kind'),
+              format: {
+                kind: 'status',
+                field: 'kind',
+                tones: {
+                  company: { label: _('partner.kind.company'), tone: 'info' },
+                  person: { label: _('partner.kind.person'), tone: 'neutral' },
+                },
+              },
+              sortable: true,
+            },
+            {
+              key: 'email',
+              label: _('partner_backend.field.email'),
+              format: { kind: 'text', field: 'email' },
+              sortable: true,
+            },
+            {
+              key: 'phone',
+              label: _('partner_backend.field.phone'),
+              format: { kind: 'text', field: 'phone' },
+              sortable: true,
+            },
+            {
+              key: 'ref',
+              label: _('partner_backend.field.ref'),
+              format: { kind: 'identifier', field: 'ref' },
+              sortable: true,
+            },
+            {
+              key: 'state',
+              label: _('partner_backend.field.state'),
+              format: {
+                kind: 'status',
+                field: 'active',
+                tones: {
+                  true: { label: _('partner_backend.state.active'), tone: 'positive' },
+                  false: { label: _('partner_backend.state.archived'), tone: 'neutral' },
+                },
+              },
+            },
+          ]
+          const grid = await tableGrid(ctx, url, req, 'partner-directory-table', {
+            columns,
+            rows: rows as never,
+            total: total.count,
+            idField: 'id',
+            rowHrefTemplate: `/admin/partner/partners/{id}${langSuffix}`,
+            selection: { formId: 'partner-directory-bulk' },
+            manager: {
+              listFunction: 'partner.listPartners',
+              listInput: { search, role, includeArchived },
+              pageSize: PAGE_SIZE,
+            },
+            labels: {
+              selectAll: _('partner_backend.table.selectAll'),
+              selectRow: _('partner_backend.table.selectRow'),
+              sortedAscending: _('partner_backend.table.sortAscending'),
+              sortedDescending: _('partner_backend.table.sortDescending'),
+              previousPage: _('partner_backend.table.previousPage'),
+              nextPage: _('partner_backend.table.nextPage'),
+              loading: _('partner_backend.table.loading'),
+              loadError: _('partner_backend.table.loadError'),
+              retry: _('partner_backend.table.retry'),
+              empty: _('partner_backend.screen.empty'),
+              emptyHint: _('partner_backend.screen.emptyHint'),
+            },
+          })
+          return partnersScreen(
             _,
-            rows as never,
             {
               ...frame,
               chrome: {
@@ -401,8 +496,8 @@ export const routes: Record<string, RouteEntry> = {
                 pager: pager(url, current, rows.length, total.count),
               },
             },
-            { selection },
-            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            grid,
+            langSuffix,
             {
               total: activeTotal.count,
               customers: customerTotal.count,
@@ -421,7 +516,8 @@ export const routes: Record<string, RouteEntry> = {
                     : 'all',
             },
             total.count,
-          ),
+          )
+        },
       })
     },
 
@@ -464,7 +560,7 @@ export const routes: Record<string, RouteEntry> = {
         const id = randomUUID()
         const result = await savePartner(ctx, url, req, id, form)
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partner/partners/${id}`))
-        const parents = await partnerOptions(ctx, url, req)
+        const parents = await partnerOptions(ctx, url, req, form.parentId || null)
         return adminPage(ctx, url, req, {
           title: 'partner_backend.create.title',
           body: async (_, frame) =>
@@ -484,7 +580,7 @@ export const routes: Record<string, RouteEntry> = {
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const parents = await partnerOptions(ctx, url, req)
+      const parents = await partnerOptions(ctx, url, req, null)
       return adminPage(ctx, url, req, {
         title: 'partner_backend.create.title',
         body: async (_, frame) =>
