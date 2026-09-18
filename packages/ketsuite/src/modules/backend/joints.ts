@@ -28,6 +28,12 @@ export const joints: Record<string, JointDef> = {
    */
   'table.grid': { props: { id: 'id', config: 'json' } },
   /**
+   * A `search-filter` island (`@ketvietlab/design-system`) — the free-text
+   * search, filter menu and Group By picker for a screen's `table.grid`. Like
+   * `table.grid`, the config is already computed, translated and formatted.
+   */
+  'search.filter': { props: { id: 'id', config: 'json' } },
+  /**
    * Sidebar entries, after the ones backend owns.
    *
    * `active` is the screen currently shown, so a fill can mark itself. It is a

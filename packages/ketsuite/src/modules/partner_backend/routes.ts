@@ -2,14 +2,21 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, searchOf } from '../backend/paging.ts'
 import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { TableSelection } from '../../ui/index.ts'
 import { tableGrid } from '../backend/ket-table.ts'
-import type { KetTableColumn } from '../backend/ket-table.ts'
+import type { KetTableColumn, KetTableGroup } from '../backend/ket-table.ts'
+import { searchFilterBar } from '../backend/search-filter.ts'
+import type { SearchFacet, SearchFilterConfig } from '../backend/search-filter.ts'
+
+/** The only two fields the partner list can currently be grouped by. */
+type PartnerGroupBy = 'kind' | 'state'
+const isPartnerGroupBy = (value: string | null): value is PartnerGroupBy =>
+  value === 'kind' || value === 'state'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -313,43 +320,95 @@ export const routes: Record<string, RouteEntry> = {
       const search = searchOf(url)
       const role = url.searchParams.get('role') || undefined
       const includeArchived = url.searchParams.get('archived') === '1'
+      const groupBy = isPartnerGroupBy(url.searchParams.get('groupBy'))
+        ? url.searchParams.get('groupBy')
+        : undefined
       const filter = { search, role, includeArchived }
-      const listHref = (changes: Record<string, string | null>) => {
-        const target = new URL(url)
-        target.searchParams.delete('page')
-        for (const [key, value] of Object.entries(changes)) {
-          if (value === null) target.searchParams.delete(key)
-          else target.searchParams.set(key, value)
-        }
-        return `${target.pathname}${target.search}`
+
+      let rows: AnyRow[] = []
+      let total = 0
+      let groups: KetTableGroup[] | undefined
+      if (groupBy === 'kind') {
+        const [companyCount, personCount, companyRows, personRows] = await Promise.all([
+          ctx.call('partner.countPartners', { ...filter, kind: 'company' }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call('partner.countPartners', { ...filter, kind: 'person' }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, groupBy: ['kind'], groupPath: ['company'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, groupBy: ['kind'], groupPath: ['person'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+        ])
+        groups = [
+          { id: 'company', label: _('partner.kind.company'), count: companyCount.count, rows: companyRows },
+          { id: 'person', label: _('partner.kind.person'), count: personCount.count, rows: personRows },
+        ]
+        total = companyCount.count + personCount.count
+      } else if (groupBy === 'state') {
+        // Grouping by state shows both buckets regardless of the `archived`
+        // filter facet — that checkbox has nothing left to add once the group
+        // headers already separate active from archived.
+        const stateFilter = { search, role }
+        const [activeCount, inclusiveCount, activeRows, archivedRows] = await Promise.all([
+          ctx.call('partner.countPartners', { ...stateFilter, includeArchived: false }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call('partner.countPartners', { ...stateFilter, includeArchived: true }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call(
+            'partner.listPartners',
+            { ...stateFilter, groupBy: ['state'], groupPath: ['active'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call(
+            'partner.listPartners',
+            { ...stateFilter, groupBy: ['state'], groupPath: ['archived'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+        ])
+        const archivedCount = Math.max(0, inclusiveCount.count - activeCount.count)
+        groups = [
+          {
+            id: 'active',
+            label: _('partner_backend.state.active'),
+            count: activeCount.count,
+            rows: activeRows,
+          },
+          {
+            id: 'archived',
+            label: _('partner_backend.state.archived'),
+            count: archivedCount,
+            rows: archivedRows,
+          },
+        ]
+        total = inclusiveCount.count
+      } else {
+        const [listRows, countResult] = await Promise.all([
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
+        ])
+        rows = listRows
+        total = countResult.count
       }
-      const [rows, total, activeTotal, inclusiveTotal, customerTotal, supplierTotal] = await Promise.all([
-        ctx.call(
-          'partner.listPartners',
-          { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
-          url,
-          req,
-        ) as Promise<AnyRow[]>,
-        ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
-        ctx.call('partner.countPartners', { search, includeArchived: false }, url, req) as Promise<{
-          count: number
-        }>,
-        ctx.call('partner.countPartners', { search, includeArchived: true }, url, req) as Promise<{
-          count: number
-        }>,
-        ctx.call(
-          'partner.countPartners',
-          { search, role: 'customer', includeArchived: false },
-          url,
-          req,
-        ) as Promise<{ count: number }>,
-        ctx.call(
-          'partner.countPartners',
-          { search, role: 'supplier', includeArchived: false },
-          url,
-          req,
-        ) as Promise<{ count: number }>,
-      ])
+
       const selection: TableSelection = {
         formId: 'partner-directory-bulk',
         action: inLocale(url, '/admin/partner/partners/bulk'),
@@ -362,9 +421,90 @@ export const routes: Record<string, RouteEntry> = {
       const langSuffix = url.searchParams.get('lang')
         ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
         : ''
+
+      const facets: SearchFacet[] = [
+        ...(search ? [{ id: 'search:current', type: 'field' as const, label: search }] : []),
+        ...(role === 'customer'
+          ? [{ id: 'customer', type: 'filter' as const, label: _('partner_backend.filter.customers') }]
+          : []),
+        ...(role === 'supplier'
+          ? [{ id: 'supplier', type: 'filter' as const, label: _('partner_backend.filter.suppliers') }]
+          : []),
+        ...(includeArchived
+          ? [{ id: 'archived', type: 'filter' as const, label: _('partner_backend.filter.includeArchived') }]
+          : []),
+        ...(groupBy
+          ? [{ id: groupBy, type: 'groupBy' as const, label: _(`partner_backend.groupBy.${groupBy}`) }]
+          : []),
+      ]
+      const searchFilterConfig: SearchFilterConfig = {
+        name: 'partner-directory-filter',
+        facets,
+        filters: [
+          {
+            id: 'customer',
+            label: _('partner_backend.filter.customers'),
+            active: role === 'customer',
+            group: 'role',
+          },
+          {
+            id: 'supplier',
+            label: _('partner_backend.filter.suppliers'),
+            active: role === 'supplier',
+            group: 'role',
+          },
+          {
+            id: 'archived',
+            label: _('partner_backend.filter.includeArchived'),
+            active: includeArchived,
+            group: 'state',
+          },
+        ],
+        groupBy: [
+          { id: 'kind', label: _('partner_backend.groupBy.kind'), active: groupBy === 'kind' },
+          { id: 'state', label: _('partner_backend.groupBy.state'), active: groupBy === 'state' },
+        ],
+        favorites: [],
+        customFilterFields: [],
+        labels: {
+          searchLabel: _('partner_backend.search.label'),
+          searchPlaceholder: _('partner_backend.search.placeholder'),
+          toggleLabel: _('partner_backend.search.toggle'),
+          filters: _('partner_backend.search.filters'),
+          groupBy: _('partner_backend.search.groupBy'),
+          favorites: _('partner_backend.search.favorites'),
+          searchGenericLabel: _('partner_backend.search.genericLabel'),
+          searchFieldPrefix: _('partner_backend.search.fieldPrefix'),
+          searchFieldPreposition: _('partner_backend.search.fieldPreposition'),
+          customFilterField: _('partner_backend.search.customFilterField'),
+          customFilterOperator: _('partner_backend.search.customFilterOperator'),
+          customFilterValue: _('partner_backend.search.customFilterValue'),
+          customFilterAdd: _('partner_backend.search.customFilterAdd'),
+          customGroupByPlaceholder: _('partner_backend.search.customGroupByPlaceholder'),
+          saveSearch: _('partner_backend.search.saveSearch'),
+          favoriteName: _('partner_backend.search.favoriteName'),
+          favoriteDefault: _('partner_backend.search.favoriteDefault'),
+          favoriteSaveAction: _('partner_backend.search.favoriteSaveAction'),
+          favoriteRemove: _('partner_backend.search.favoriteRemove'),
+          favoriteSetDefault: _('partner_backend.search.favoriteSetDefault'),
+          noFavorites: _('partner_backend.search.noFavorites'),
+          clear: _('partner_backend.search.clear'),
+          applyError: _('partner_backend.search.applyError'),
+          retry: _('partner_backend.search.retry'),
+        },
+        manager: { applyFunction: 'partner_backend.applyFilter', bodyId: 'partner-directory-table' },
+      }
+
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
         body: async (_, frame) => {
+          const filterBar = await searchFilterBar(
+            ctx,
+            url,
+            req,
+            'partner-directory-filter',
+            searchFilterConfig,
+          )
           const columns: KetTableColumn[] = [
             {
               key: 'name',
@@ -421,12 +561,19 @@ export const routes: Record<string, RouteEntry> = {
           const grid = await tableGrid(ctx, url, req, 'partner-directory-table', {
             columns,
             rows: rows as never,
-            total: total.count,
+            total,
             idField: 'id',
             rowHrefTemplate: `/admin/partner/partners/{id}${langSuffix}`,
+            groupBy: groupBy ? [groupBy] : undefined,
+            groups: groups as never,
             selection: { formId: 'partner-directory-bulk' },
             manager: {
               listFunction: 'partner.listPartners',
+              // No `groupFunction`: with a single group-by level, an expanded
+              // group's `depth` always equals `groupBy.length`, so `KetTable`
+              // only ever calls `listFunction` (for that group's rows) — see
+              // `fetchGroupLevel` in `ket-table/index.tsx`. It would only be
+              // reached by a second grouping level, which this screen doesn't offer.
               listInput: { search, role, includeArchived },
               pageSize: PAGE_SIZE,
             },
@@ -454,68 +601,11 @@ export const routes: Record<string, RouteEntry> = {
                   path: inLocale(url, '/admin/partner/partners/new'),
                 },
                 selection,
-                search: {
-                  name: 'q',
-                  value: search ?? '',
-                  placeholder: _('partner_backend.chrome.search'),
-                  keep: {
-                    ...(role ? { role } : {}),
-                    ...(includeArchived ? { archived: '1' } : {}),
-                    ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-                  },
-                  facets: role
-                    ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
-                    : [],
-                  menus: [
-                    {
-                      id: 'filters',
-                      label: _('backend.chrome.filters'),
-                      items: [
-                        {
-                          id: 'customers',
-                          label: _('partner_backend.filter.customers'),
-                          path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
-                          active: role === 'customer',
-                        },
-                        {
-                          id: 'suppliers',
-                          label: _('partner_backend.filter.suppliers'),
-                          path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
-                          active: role === 'supplier',
-                        },
-                        {
-                          id: 'archived',
-                          label: _('partner_backend.filter.includeArchived'),
-                          path: withParam(url, 'archived', includeArchived ? null : '1'),
-                          active: includeArchived,
-                        },
-                      ],
-                    },
-                  ],
-                },
-                pager: pager(url, current, rows.length, total.count),
               },
             },
+            filterBar,
             grid,
-            langSuffix,
-            {
-              total: activeTotal.count,
-              customers: customerTotal.count,
-              suppliers: supplierTotal.count,
-              archived: Math.max(0, inclusiveTotal.count - activeTotal.count),
-              allHref: listHref({ role: null, archived: null }),
-              customersHref: listHref({ role: 'customer', archived: null }),
-              suppliersHref: listHref({ role: 'supplier', archived: null }),
-              archivedHref: listHref({ role: null, archived: '1' }),
-              active: includeArchived
-                ? 'archived'
-                : role === 'customer'
-                  ? 'customers'
-                  : role === 'supplier'
-                    ? 'suppliers'
-                    : 'all',
-            },
-            total.count,
+            total,
           )
         },
       })
