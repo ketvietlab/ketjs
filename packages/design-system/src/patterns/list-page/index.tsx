@@ -61,7 +61,7 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
         eyebrow: props.eyebrow,
         title: props.title,
         description: props.description,
-        actions: props.actions,
+        actions: operational ? undefined : props.actions,
       })}
       {(props.controls !== undefined || toolbarStatus !== undefined) && (
         <div data-ui="list-page-toolbar">
@@ -69,6 +69,7 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
           {props.controls !== undefined && <div data-ui="list-page-controls">{props.controls}</div>}
         </div>
       )}
+      {operational && props.actions !== undefined && <div data-ui="list-page-actions">{props.actions}</div>}
       <div data-ui="list-page-body">{props.body}</div>
       {footer !== undefined && <footer data-ui="list-page-footer">{footer}</footer>}
     </section>

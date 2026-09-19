@@ -105,13 +105,15 @@ test('chart of accounts list keeps command controls, grouping, paging, summaries
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/accounts\/new\?lang=vi&amp;returnTo=/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="111"/)
   assert.match(html, /data-ui="facet"[\s\S]*?Tài sản/)
   assert.match(html, /data-ui="pager-range"[^>]*>[\s\S]*?31-31 \/ 216/)
   assert.match(html, /Tổng tài khoản: 216[\s\S]*?Tài sản: 80[\s\S]*?Nợ và vốn: 60/)
-  assert.match(html, /data-ui="group-row"[\s\S]*?data-ui="group-count"[\s\S]*?1/)
+  assert.match(html, /data-ui="kt-group-row"[\s\S]*?data-ui="kt-group-count"[\s\S]*?1/)
   assert.match(
     html,
     /data-row-href="\/admin\/accounting\/accounts\/new\?lang=vi&amp;returnTo=.*&amp;edit=cash"/,

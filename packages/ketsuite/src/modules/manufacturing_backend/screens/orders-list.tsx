@@ -1,6 +1,7 @@
+import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import { badge, collectionTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 
 export type ManufacturingOrderListRow = {
@@ -69,6 +70,7 @@ export const ordersListScreen = (
       variant="operational"
       frame={frame}
       title={_('manufacturing_backend.orders.title')}
+      controls={collectionControls(_, _('manufacturing_backend.orders.title'), frame)}
       actions={inline([
         <LinkButton
           label={_('manufacturing_backend.orders.create')}
@@ -79,7 +81,7 @@ export const ordersListScreen = (
       ])}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => row.id,
               rowHref: (row) => row.href,

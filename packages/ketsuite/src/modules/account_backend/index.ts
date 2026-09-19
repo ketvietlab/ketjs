@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -3395,8 +3396,17 @@ export default defineModule({
           title: 'account_backend.opening.title',
           body: (_, frame) =>
             openingBalancesListScreen(_, {
-              frame,
-              rows,
+              frame: collectionSearchFrame(url, frame, _('account_backend.opening.title')),
+              rows: searchCollectionRows(
+                url,
+                rows,
+                (row) =>
+                  String(row.accountingDate ?? '') +
+                  ' ' +
+                  String(row.state ?? '') +
+                  ' ' +
+                  String(row.sourceChecksum ?? ''),
+              ),
               createHref: `/admin/accounting/opening-balances/new${localeQuery(url)}`,
               rowHref: (row) =>
                 `/admin/accounting/opening-balances/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
@@ -3573,8 +3583,19 @@ export default defineModule({
           title: 'account_backend.close.title',
           body: (_, frame) =>
             periodClosesListScreen(_, {
-              frame,
-              rows,
+              frame: collectionSearchFrame(url, frame, _('account_backend.close.title')),
+              rows: searchCollectionRows(
+                url,
+                rows,
+                (row) =>
+                  String(row.periodKey ?? '') +
+                  ' ' +
+                  String(row.dateFrom ?? '') +
+                  ' ' +
+                  String(row.dateTo ?? '') +
+                  ' ' +
+                  String(row.state ?? ''),
+              ),
               action: `${url.pathname}${localeQuery(url)}`,
               errors,
               fields: [

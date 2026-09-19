@@ -4,7 +4,7 @@ import {
   avatar,
   CardGrid,
   deadline,
-  dataTable,
+  collectionTable,
   emptyState,
   linkButton,
   ListPage,
@@ -173,7 +173,7 @@ export const crossProjectScreen = (
             ]
           : []),
         rows.length || groups.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows,
               groups,
               id: (row) => String(row.id),

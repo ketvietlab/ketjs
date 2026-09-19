@@ -1,7 +1,7 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   LinkButton,
@@ -135,7 +135,7 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
       body={stack([
         options.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,
         options.rows.length || groups.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               groups,
               id: (row) => String(row.id),

@@ -5,6 +5,7 @@ import {
   CardGrid,
   choices,
   dataTable,
+  collectionTable,
   emptyState,
   floorColumns,
   type FloorRow,
@@ -61,8 +62,7 @@ export const roomsScreen = (
             })
           : undefined
       }
-      body={stack([
-        roomFeedback(_, status, errors),
+      controls={
         <RecordForm
           action="/admin/hospitality/rooms"
           method="get"
@@ -79,7 +79,11 @@ export const roomsScreen = (
           hidden={{ lang: locale }}
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
-        />,
+        />
+      }
+      body={stack([
+        roomFeedback(_, status, errors),
+
         canCreateRoom ? null : (
           <Notice
             title={_('hospitality_core.room.empty.prerequisite')}
@@ -246,7 +250,7 @@ export const roomsScreen = (
           description={_('hospitality_core.room.section.roomsHint')}
           body={
             data.rows.length
-              ? dataTable(_, {
+              ? collectionTable(_, {
                   columns: roomColumns(_),
                   rows: data.rows,
                   id: (row) => row.id,

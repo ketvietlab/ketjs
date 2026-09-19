@@ -16,6 +16,7 @@ import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
 import { recordModalHost } from '@ketvietlab/ketsuite/ui'
+import { listChrome } from '../packages/ketsuite/src/ui/chrome.tsx'
 import {
   actionGroup,
   attachmentPanel,
@@ -655,6 +656,7 @@ const componentContract = [
 ]
 
 const everything = [
+  listChrome(_, 'Custom search', { searchContent: 'Search filter island' }, false),
   recordModalHost('ketsuite.example'),
   shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
   pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {

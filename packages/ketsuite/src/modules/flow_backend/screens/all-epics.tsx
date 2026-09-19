@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { dataTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
+import { collectionTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
@@ -54,7 +54,7 @@ export const allEpicsScreen = (
       status={`${options.title}: ${String(options.total ?? options.epics.length)}`}
       body={
         options.epics.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.epics,
               id: (epic) => String(epic.id),
               rowHref: (epic) =>

@@ -91,6 +91,8 @@ test('purchase vendor pricelists list: keeps policy action, price columns, curre
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/vi\/admin\/purchase\/vendor-pricelists\/new"/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="bàn"/)

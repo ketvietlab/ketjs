@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -910,12 +911,27 @@ export default defineModule({
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
-                rows: rows
-                  .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                  .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: searchCollectionRows(
+                  url,
+                  rows
+                    .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                    .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                  (row: AnyRow) =>
+                    String(row.name ?? '') +
+                    ' ' +
+                    String(row.partnerName ?? '') +
+                    ' ' +
+                    String(row.dateOrder ?? '') +
+                    ' ' +
+                    String(row.validityDate ?? '') +
+                    ' ' +
+                    String(row.state ?? '') +
+                    ' ' +
+                    String(row.amountTotal ?? ''),
+                ),
                 detailSuffix,
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.quotations.title')),
             ),
         })
       },
@@ -965,10 +981,23 @@ export default defineModule({
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: searchCollectionRows(
+                  url,
+                  rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                  (row: AnyRow) =>
+                    String(row.name ?? '') +
+                    ' ' +
+                    String(row.partnerName ?? '') +
+                    ' ' +
+                    String(row.dateOrder ?? '') +
+                    ' ' +
+                    String(row.state ?? '') +
+                    ' ' +
+                    String(row.amountTotal ?? ''),
+                ),
                 detailSuffix,
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.orders.title')),
             ),
         })
       },
@@ -993,9 +1022,13 @@ export default defineModule({
               _,
               {
                 createHref: invoicingPolicyModalPath(url),
-                rows,
+                rows: searchCollectionRows(
+                  url,
+                  rows,
+                  (row: AnyRow) => String(row.name ?? '') + ' ' + String(row.invoicePolicy ?? ''),
+                ),
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.policies.title')),
             )
             if (url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(

@@ -1,5 +1,5 @@
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   feedback,
   type FolioBillingRow,
@@ -27,7 +27,7 @@ export const billingScreen = (
     body={stack([
       feedback(_, state),
       rows.length
-        ? dataTable(_, { columns: folioColumns(_), rows, id: (row) => row.folioId })
+        ? collectionTable(_, { columns: folioColumns(_), rows, id: (row) => row.folioId })
         : // A dead end that names the next step and does not link to it is the
           // defect the hospitality review filed seven times; the rules screen is
           // where an operator has to go from here.

@@ -5,6 +5,18 @@ description: KetSuite Website modules, the site and publication model, and the p
 
 # Website
 
+## Administration collections
+
+Website administration lists use KetTable below the shared app context, URL-backed filters,
+and tool actions. Existing site, status, search, and paging controls retain their route
+contracts. Revision, member, domain, and site-health lists also support text search.
+Revision comparison still receives every revision, and domain readiness still receives
+every domain, even when search narrows the primary table. Search cannot change the selected
+revision, primary-domain evidence, or a refused form's submitted draft.
+
+Inline member/domain/redirect/publication forms, submission export and retention forms,
+revision diffs, and detail tables remain specialized content within those screens.
+
 KetSuite Website is the public content surface: sites, domains, pages and posts, revisions and
 publication, media, menus, forms, and the customer account that goes with them. Business facts stay
 with the domain that owns them — price and stock in Sale and Stock, stays in Hospitality, cases in

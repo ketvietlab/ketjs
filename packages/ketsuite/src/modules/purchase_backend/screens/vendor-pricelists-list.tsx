@@ -1,7 +1,8 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionTable,
+  Disclosure,
   emptyState,
   formatMoney,
   inline,
@@ -93,7 +94,7 @@ export const vendorPricelistsListScreen = (
 ): TemplateResult => {
   const table =
     options.rows.length || options.table?.groups?.length
-      ? dataTable(_, {
+      ? collectionTable(_, {
           rows: options.rows,
           id: (row) => row.id,
           columns: vendorPricelistColumns(_, options.currency),
@@ -116,6 +117,27 @@ export const vendorPricelistsListScreen = (
           href={options.createHref}
           variant="primary"
         />,
+        <Disclosure
+          summary={_('purchase_backend.method.title')}
+          body={
+            <Section
+              title={_('purchase_backend.method.title')}
+              body={
+                <Surface
+                  body={
+                    <RecordForm
+                      action={options.action}
+                      submit={_('purchase_backend.action.saveMethod')}
+                      submitVariant="primary"
+                      hidden={{ action: 'method' }}
+                      fields={options.methodFields}
+                    />
+                  }
+                />
+              }
+            />
+          }
+        />,
         options.frame.extras?.['topbar.end'] ?? '',
       ])}
       controls={
@@ -134,29 +156,9 @@ export const vendorPricelistsListScreen = (
             )
           : undefined
       }
-      status={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
+      footer={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
       body={stack(
-        [
-          rejection(_, options.invalid),
-          options.setup ? missingSetup(_, options.setup) : null,
-          <Section
-            title={_('purchase_backend.method.title')}
-            body={
-              <Surface
-                body={
-                  <RecordForm
-                    action={options.action}
-                    submit={_('purchase_backend.action.saveMethod')}
-                    submitVariant="primary"
-                    hidden={{ action: 'method' }}
-                    fields={options.methodFields}
-                  />
-                }
-              />
-            }
-          />,
-          table,
-        ],
+        [rejection(_, options.invalid), options.setup ? missingSetup(_, options.setup) : null, table],
         'loose',
       )}
     />,

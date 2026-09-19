@@ -5,7 +5,7 @@ import {
   cleaningTaskColumns,
   type CleaningTaskRow,
   type CleaningTaskSummary,
-  dataTable,
+  collectionTable,
   cleaningTone,
   emptyState,
   type Frame,
@@ -84,8 +84,7 @@ export const cleaningTasksScreen = (
             })
           : undefined
       }
-      body={stack([
-        feedback,
+      controls={
         <RecordForm
           action="/admin/hospitality/housekeeping"
           method="get"
@@ -113,7 +112,11 @@ export const cleaningTasksScreen = (
               })),
             },
           ]}
-        />,
+        />
+      }
+      body={stack([
+        feedback,
+
         <CardGrid
           items={['todo', 'in_progress', 'done'].map((state) => ({
             state,
@@ -144,7 +147,7 @@ export const cleaningTasksScreen = (
           description={_('hospitality_core.housekeeping.section.queueHint')}
           body={
             visibleRows.length
-              ? dataTable(_, {
+              ? collectionTable(_, {
                   columns: cleaningTaskColumns(_, locale, timezone),
                   rows: visibleRows,
                   id: (row) => row.id,

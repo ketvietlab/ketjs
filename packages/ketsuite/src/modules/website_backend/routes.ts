@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -429,7 +430,16 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
         body: (_, frame) =>
-          revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
+          revisionsScreen(
+            _,
+            detail.entry,
+            rows,
+            collectionSearchFrame(url, frame, _('website_backend.revisions.title')),
+            localeQuery(url),
+            kind.basePath,
+            diff,
+            searchCollectionRows(url, rows, (row) => `${row.version} ${row.kind} ${row.authorId ?? ''}`),
+          ),
       })
     },
 
@@ -866,7 +876,17 @@ export const routes: Record<string, RouteEntry> = {
       }>
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) => revisionsScreen(_, detail.entry, rows, frame, localeQuery(url)),
+        body: (_, frame) =>
+          revisionsScreen(
+            _,
+            detail.entry,
+            rows,
+            collectionSearchFrame(url, frame, _('website_backend.revisions.title')),
+            localeQuery(url),
+            undefined,
+            undefined,
+            searchCollectionRows(url, rows, (row) => `${row.version} ${row.kind} ${row.authorId ?? ''}`),
+          ),
       })
     },
 
@@ -1158,7 +1178,14 @@ export const routes: Record<string, RouteEntry> = {
       )
       return adminPage(ctx, url, req, {
         title: 'website_backend.health.title',
-        body: (_, frame) => siteHealthScreen(_, rows, frame, localeQuery(url)),
+        body: (_, frame) =>
+          siteHealthScreen(
+            _,
+            rows,
+            collectionSearchFrame(url, frame, _('website_backend.health.title')),
+            localeQuery(url),
+            searchCollectionRows(url, rows, (row) => `${row.title} ${row.primaryHost ?? ''}`),
+          ),
       })
     },
 
@@ -1240,7 +1267,17 @@ export const routes: Record<string, RouteEntry> = {
         return adminPage(ctx, url, req, {
           title: 'website_backend.members.title',
           body: (_, frame) =>
-            siteMembersScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+            siteMembersScreen(
+              _,
+              site,
+              searchCollectionRows(
+                url,
+                rows,
+                (row) => `${row.userId} ${_(`website_backend.role.${row.role}`)}`,
+              ),
+              collectionSearchFrame(url, frame, _('website_backend.members.title')),
+              { values, errors, locale: localeQuery(url) },
+            ),
         })
       }
       if (req.method === 'GET') return render()
@@ -1286,12 +1323,19 @@ export const routes: Record<string, RouteEntry> = {
         return adminPage(ctx, url, req, {
           title: 'website_backend.domains.title',
           body: (_, frame) =>
-            siteDomainsScreen(_, site, rows, frame, {
-              values,
-              errors,
-              locale: localeQuery(url),
-              editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
-            }),
+            siteDomainsScreen(
+              _,
+              site,
+              rows,
+              collectionSearchFrame(url, frame, _('website_backend.domains.title')),
+              {
+                tableRows: searchCollectionRows(url, rows, (row) => row.host),
+                values,
+                errors,
+                locale: localeQuery(url),
+                editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
+              },
+            ),
         })
       }
       if (req.method === 'GET') return render()

@@ -2,7 +2,7 @@ import { ListScreenFrame } from './page-frame.tsx'
 import {
   CardGrid,
   choices,
-  dataTable,
+  collectionTable,
   emptyState,
   type Frame,
   linkButton,
@@ -41,7 +41,7 @@ export const roomTypesScreen = (
             })
           : undefined
       }
-      body={stack([
+      controls={
         <RecordForm
           action="/admin/hospitality/room-types"
           method="get"
@@ -58,7 +58,9 @@ export const roomTypesScreen = (
           hidden={{ lang: locale }}
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
-        />,
+        />
+      }
+      body={stack([
         properties.length ? null : (
           <Notice
             title={_('hospitality_core.roomType.empty.noProperty')}
@@ -105,7 +107,7 @@ export const roomTypesScreen = (
           card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
         rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: roomTypeColumns(_),
               rows,
               id: (row) => row.id,

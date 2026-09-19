@@ -1,6 +1,14 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, ListPage, RecordActions, shell } from '../../../ui/index.ts'
+import {
+  collectionControls,
+  badge,
+  collectionTable,
+  emptyState,
+  ListPage,
+  RecordActions,
+  shell,
+} from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 import type { CatalogRow } from './types.ts'
 
@@ -59,11 +67,12 @@ export const catalogsScreen = (
       variant="operational"
       frame={frame}
       title={_('address_backend.title')}
+      controls={collectionControls(_, _('address_backend.title'), frame)}
       description={_('address_backend.hint')}
       status={`${_('address_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => `${row.countryCode}:${row.version}`,
               rowHref: (row) => row.detailHref,

@@ -1,8 +1,10 @@
+import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionTable,
   dataTable,
   emptyState,
   FormPage,
@@ -42,14 +44,15 @@ export const openingBalancesListScreen = (
       variant="operational"
       frame={options.frame}
       title={_('account_backend.opening.title')}
+      controls={collectionControls(_, _('account_backend.opening.title'), options.frame)}
       description={_('account_backend.opening.subtitle')}
       actions={
         <LinkButton label={_('account_backend.opening.create')} href={options.createHref} variant="primary" />
       }
-      status={`${_('account_backend.opening.summary')}: ${String(options.rows.length)}`}
+      footer={`${_('account_backend.opening.summary')}: ${String(options.rows.length)}`}
       body={
         options.rows.length ? (
-          dataTable(_, {
+          collectionTable(_, {
             rows: options.rows,
             id: (row) => String(row.id),
             rowHref: options.rowHref,

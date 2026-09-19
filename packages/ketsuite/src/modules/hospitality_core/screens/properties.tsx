@@ -1,7 +1,7 @@
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CardGrid,
-  dataTable,
+  collectionTable,
   emptyState,
   type Frame,
   linkButton,
@@ -62,7 +62,7 @@ export const propertiesScreen = (
         card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
       />,
       rows.length
-        ? dataTable(_, {
+        ? collectionTable(_, {
             columns: propertyColumns(_),
             rows,
             id: (row) => row.id,

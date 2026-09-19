@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -101,10 +101,10 @@ export const locationsListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.location.configured.title')}: ${String(total)}`}
+      footer={`${_('stock_backend.location.configured.title')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: locationListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

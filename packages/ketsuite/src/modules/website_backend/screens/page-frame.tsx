@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { FormPage, ListPage, shell } from '../../../ui/index.ts'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { collectionActions, collectionControls, FormPage, ListPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 type PageFrameProps = {
@@ -8,7 +8,9 @@ type PageFrameProps = {
   title: string
   subtitle?: string | null
   frame: Frame
-  body: TemplateResult
+  actions?: JSXChild
+  controls?: JSXChild
+  body: JSXChild
   width?: 'default' | 'wide'
   /** Closes the collection: a pager, a count, whatever the list ends with. */
   footer?: TemplateResult | null
@@ -20,6 +22,8 @@ export const ListScreenFrame = ({
   subtitle,
   frame,
   body,
+  actions,
+  controls,
   footer,
 }: PageFrameProps): TemplateResult =>
   shell(
@@ -30,7 +34,8 @@ export const ListScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame, actions)}
+      controls={controls ?? collectionControls(_, title, frame)}
       body={body}
       footer={footer ?? undefined}
     />,

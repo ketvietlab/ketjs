@@ -170,7 +170,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.match(partnerList, /data-ui="kt-select-persisted"/)
   assert.match(
     partnerList,
-    /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"[\s\S]*?data-ui="list-page-toolbar"/,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"/,
   )
   assert.match(
     partnerList,
@@ -185,7 +185,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
   const partnerControls = partnerList.slice(
     partnerList.indexOf('data-ui="list-page-controls"'),
-    partnerList.indexOf('data-ui="list-page-body"'),
+    partnerList.indexOf('data-ui="list-page-actions"'),
   )
   assert.doesNotMatch(partnerControls, /data-ui="bulk-form"/)
   for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {

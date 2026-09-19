@@ -115,6 +115,9 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'table.selectAll': 'Chọn tất cả dòng',
     'table.selectRow': 'Chọn dòng',
+    'table.sortAscending': 'Sắp xếp tăng dần',
+    'table.sortDescending': 'Sắp xếp giảm dần',
+    'table.empty': 'Không có bản ghi',
 
     'menu.admin': 'Quản trị',
     'menu.content': 'Nội dung',
@@ -225,6 +228,9 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'table.selectAll': 'Select all rows',
     'table.selectRow': 'Select row',
+    'table.sortAscending': 'Sorted ascending',
+    'table.sortDescending': 'Sorted descending',
+    'table.empty': 'No records',
 
     'menu.admin': 'Administration',
     'menu.content': 'Content',

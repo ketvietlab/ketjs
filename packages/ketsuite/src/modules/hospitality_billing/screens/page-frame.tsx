@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { inline, ListPage, shell } from '../../../ui/index.ts'
+import { collectionActions, collectionControls, ListPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 type PageFrameProps = {
@@ -8,6 +8,7 @@ type PageFrameProps = {
   title: string
   subtitle?: string | null
   frame: Frame
+  controls?: JSXChild
   body: JSXChild
   actions?: JSXChild
 }
@@ -18,6 +19,7 @@ export const ListScreenFrame = ({
   subtitle,
   frame,
   body,
+  controls,
   actions,
 }: PageFrameProps): TemplateResult =>
   shell(
@@ -28,11 +30,8 @@ export const ListScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
-      actions={
-        actions !== undefined || frame.extras?.['topbar.end'] !== undefined
-          ? inline([actions ?? '', frame.extras?.['topbar.end'] ?? ''])
-          : undefined
-      }
+      actions={collectionActions(_, frame, actions)}
+      controls={controls ?? collectionControls(_, title, frame)}
       body={body}
     />,
     { ...frame, chrome: null, topbar: false },

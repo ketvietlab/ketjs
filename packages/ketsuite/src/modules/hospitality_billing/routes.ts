@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { createHash } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -114,13 +115,18 @@ export const routes: Record<string, RouteEntry> = {
           const selected = rules.find((row) => row.chargeType === url.searchParams.get('rule'))
           return chargeRulesScreen(
             _,
-            rules,
+            searchCollectionRows(
+              url,
+              rules,
+              (row) =>
+                `${_(`hospitality_billing.chargeType.${row.chargeType}`)} ${row.incomeAccountName ?? ''} ${row.taxName ?? ''}`,
+            ),
             taxes
               .filter((row) => ['sale', 'none'].includes(String(row.typeTaxUse)))
               .map((row) => ({ id: String(row.id), name: String(row.name) })),
             choices(accounts.filter((row) => String(row.accountType).startsWith('income'))),
             choices(accounts.filter((row) => String(row.accountType).startsWith('liability'))),
-            frame,
+            collectionSearchFrame(url, frame, _('hospitality_billing.chargeRules.title')),
             url.searchParams.get('status'),
             {
               open: url.searchParams.get('create') === '1',
@@ -229,7 +235,17 @@ export const routes: Record<string, RouteEntry> = {
 
       return adminPage(ctx, url, req, {
         title: 'hospitality_billing.screen.title',
-        body: (_, frame) => billingScreen(_, rows, frame, url.searchParams.get('status')),
+        body: (_, frame) =>
+          billingScreen(
+            _,
+            searchCollectionRows(
+              url,
+              rows,
+              (row) => `${row.folioCode} ${row.guest ?? ''} ${row.moveName ?? ''}`,
+            ),
+            collectionSearchFrame(url, frame, _('hospitality_billing.screen.title')),
+            url.searchParams.get('status'),
+          ),
       })
     },
 }

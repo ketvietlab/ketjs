@@ -5,6 +5,10 @@ import {
   CardGrid,
   ContentCard,
   dataTable,
+  collectionTable,
+  collectionActions,
+  collectionControls,
+  ListPage,
   DashboardPage,
   emptyState,
   formatMoney,
@@ -344,8 +348,8 @@ export const sessionDetail = (
   )
 }
 
-const orderTable = (_: Translator, rows: AnyRow[]) =>
-  dataTable(_, {
+const orderTable = (_: Translator, rows: AnyRow[], collection = false) =>
+  (collection ? collectionTable : dataTable)(_, {
     rows,
     id: (r) => String(r.id),
     columns: [
@@ -376,14 +380,20 @@ const orderTable = (_: Translator, rows: AnyRow[]) =>
     ],
   })
 
-export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('pos_backend.orders.title')}
-    frame={frame}
-    body={rows.length ? orderTable(_, rows) : empty(_)}
-  />
-)
+export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult =>
+  shell(
+    _,
+    _('pos_backend.orders.title'),
+    <ListPage
+      variant="operational"
+      frame={frame}
+      title={_('pos_backend.orders.title')}
+      controls={collectionControls(_, _('pos_backend.orders.title'), frame)}
+      actions={collectionActions(_, frame)}
+      body={rows.length ? orderTable(_, rows, true) : empty(_)}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 export const registerScreen = (
   _: Translator,

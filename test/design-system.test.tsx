@@ -1973,7 +1973,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 125)
+  assert.equal(names.length, 126)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2010,10 +2010,10 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 263)
-  assert.equal(designSystemInventory.summary.runtimeExports, 130)
+  assert.equal(designSystemInventory.summary.publicExports, 265)
+  assert.equal(designSystemInventory.summary.runtimeExports, 131)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 42)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),

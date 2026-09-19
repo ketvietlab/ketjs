@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -123,10 +123,10 @@ export const transfersListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.transfer.list.records.title')}: ${String(total)}`}
+      footer={`${_('stock_backend.transfer.list.records.title')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: transferListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

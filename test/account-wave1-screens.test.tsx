@@ -4,6 +4,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   openingBalanceDetailScreen,
+  openingBalancesListScreen,
   periodClosesListScreen,
 } from '../packages/ketsuite/src/modules/account_backend/screens/index.ts'
 
@@ -44,4 +45,49 @@ test('account wave 1 screens keep rejected opening and close actions visible', (
   )
   assert.match(closes, /data-ui="form-errors" role="alert"/)
   assert.match(closes, /The close period overlaps an existing period/)
+  assert.match(closes, /data-ui="disclosure"[^>]*open/)
+})
+
+test('opening balances and period closes render collection KetTables after search and tools', () => {
+  const frame = { chrome: { search: { name: 'q', value: '', placeholder: 'Search' } } }
+  const opening = renderToString(
+    openingBalancesListScreen(translate, {
+      frame,
+      rows: [
+        {
+          id: 'opening-1',
+          accountingDate: '2026-01-01',
+          state: 'draft',
+          controlDebit: '10',
+          sourceChecksum: 'source',
+        },
+      ],
+      createHref: '/admin/accounting/opening-balances/new?lang=vi',
+      rowHref: (row) => `/admin/accounting/opening-balances/${String(row.id)}?lang=vi`,
+    }),
+  )
+  const closes = renderToString(
+    periodClosesListScreen(translate, {
+      frame,
+      rows: [
+        {
+          id: 'period-1',
+          periodKey: '2026-01',
+          dateFrom: '2026-01-01',
+          dateTo: '2026-01-31',
+          state: 'open',
+          blockerCount: 0,
+        },
+      ],
+      action: '/admin/accounting/period-closes?lang=vi',
+      fields: [],
+      rowHref: (row) => `/admin/accounting/period-closes/${String(row.id)}?lang=vi`,
+    }),
+  )
+  for (const html of [opening, closes]) {
+    assert.match(html, /data-ui="ket-table"/)
+    assert.ok(html.indexOf('data-ui="chrome-search"') < html.indexOf('data-ui="list-page-actions"'))
+    assert.ok(html.indexOf('data-ui="list-page-actions"') < html.indexOf('data-ui="ket-table"'))
+  }
+  assert.match(closes, /action="\/admin\/accounting\/period-closes\?lang=vi"/)
 })

@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -695,8 +696,12 @@ export default defineModule({
           body: (_, shell) =>
             ordersScreen(
               _,
-              shell,
-              rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+              collectionSearchFrame(url, shell, _('pos_backend.orders.title')),
+              searchCollectionRows(
+                url,
+                rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+                (row: AnyRow) => `${row.posReference ?? ''} ${row.partnerName ?? ''}`,
+              ),
             ),
         })
       },

@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -91,10 +91,10 @@ export const stockRoutesListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.stockRoute.list.summary.total')}: ${String(total)}`}
+      footer={`${_('stock_backend.stockRoute.list.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: stockRouteListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

@@ -120,12 +120,14 @@ test('purchase RFQ list keeps command search, filters, groups, pager and localiz
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/purchase\/rfqs\/new\?lang=vi&amp;returnTo=/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="RFQ00001"/)
   assert.match(html, /data-ui="facet"[\s\S]*?RFQ/)
   assert.match(html, /data-ui="pager-range"[^>]*>[\s\S]*?31-31 \/ 61/)
-  assert.match(html, /data-ui="group-row"[\s\S]*?data-ui="group-count"[\s\S]*?61/)
+  assert.match(html, /data-ui="kt-group-row"[\s\S]*?data-ui="kt-group-count"[\s\S]*?61/)
   assert.match(html, /data-row-href="\/admin\/purchase\/rfqs\/rfq-1\?lang=vi"/)
   assert.match(html, /data-col="vendor"[\s\S]*?NCC An Phú/)
   assert.match(html, /data-col="state"[\s\S]*?data-tone="neutral"[\s\S]*?RFQ/)

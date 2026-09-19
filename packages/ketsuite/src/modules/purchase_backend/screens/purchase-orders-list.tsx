@@ -43,7 +43,7 @@ export const purchaseOrdersListScreen = (
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
           ? purchaseOrderTable(_, options.rows, options.detailSuffix, options.table)

@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   CardGrid,
-  dataTable,
+  collectionTable,
   inline,
   LinkButton,
   ListPage,
@@ -155,7 +155,7 @@ export const projectsListScreen = (
           }))}
         />,
         overview.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: overview.rows,
               id: (row) => String(row.id),
               rowHref: (row) =>

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -2410,9 +2411,14 @@ export const routes: Record<string, RouteEntry> = {
         // were on a screen they had left.
         active: `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`,
         body: (_, frame) =>
-          sprintsScreen(_, frame, {
+          sprintsScreen(_, collectionSearchFrame(url, frame, _('flow_backend.menu.sprints')), {
             projectName: String(project.name),
-            sprints,
+            sprints: searchCollectionRows(
+              url,
+              sprints,
+              (row) =>
+                `${row.name} ${_(`flow.sprint.${row.state}`)} ${row.startDate ?? ''} ${row.endDate ?? ''}`,
+            ),
             closeSprintHref: (sprint: AnyRow) => {
               const target = new URL(url)
               target.searchParams.set('close', String(sprint.id))

@@ -107,5 +107,5 @@ test('HR leave approvals list: decision validation is visible without replacing 
   assert.match(html, /data-ui="notice" data-tone="danger" role="alert"/)
   assert.match(html, /Không thể cập nhật yêu cầu nghỉ/)
   assert.match(html, /decision: Quyết định không hợp lệ\./)
-  assert.match(html, /data-ui="table"/)
+  assert.match(html, /data-ui="kt-grid"/)
 })

@@ -1,7 +1,7 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionTable,
   ListScreen,
   LinkButton,
   modalForm,
@@ -64,7 +64,7 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
             />
           ) : null}
           {options.sprints.length
-            ? dataTable(_, {
+            ? collectionTable(_, {
                 rows: options.sprints,
                 id: (row) => String(row.id),
                 columns: [

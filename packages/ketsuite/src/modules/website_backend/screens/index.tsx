@@ -6,6 +6,7 @@ import {
   columns,
   ContentCard,
   dataTable,
+  collectionTable,
   emptyState,
   RecordScreen,
   inline,
@@ -292,27 +293,27 @@ export const sitesScreen = (
     translator={_}
     title={_('website_backend.sites.title')}
     frame={frame}
+    controls={activeFilter(
+      _,
+      (state) => `/admin/website/sites?state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+      active,
+    )}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.newSite'),
+        href: `/admin/website/sites/new${locale}`,
+        variant: 'primary',
+      }),
+      linkButton({
+        label: _('website_backend.action.pages'),
+        href: `/admin/website/pages${locale}`,
+        variant: 'secondary',
+      }),
+    ])}
     body={stack([
-      inline([
-        linkButton({
-          label: _('website_backend.action.newSite'),
-          href: `/admin/website/sites/new${locale}`,
-          variant: 'primary',
-        }),
-        linkButton({
-          label: _('website_backend.action.pages'),
-          href: `/admin/website/pages${locale}`,
-          variant: 'secondary',
-        }),
-      ]),
-      activeFilter(
-        _,
-        (state) => `/admin/website/sites?state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
-        active,
-      ),
       rows.length === 0
         ? emptyState(_('website_backend.sites.empty'), _('website_backend.sites.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             rowHref: (row) => `/admin/website/sites/${row.id}${locale}`,
@@ -531,9 +532,7 @@ export const contentScreen = (
     title={_(`website_backend.${kind.titleKey}.title`)}
     frame={frame}
     footer={pager ? pagerBar(_, pager) : null}
-    body={stack([
-      // One GET form for all three, because they are one question - which
-      // pages am I looking at - and three forms would each drop the other two.
+    controls={
       <Surface
         padding="compact"
         body={
@@ -574,27 +573,32 @@ export const contentScreen = (
             submitVariant="secondary"
           />
         }
-      />,
-      inline([
-        linkButton({
-          label: _(`website_backend.action.new${kind.titleKey === 'pages' ? 'Page' : 'Post'}`),
-          href: `${kind.basePath}/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-          variant: 'primary',
-        }),
-        linkButton({
-          label: _('website_backend.action.taxonomies'),
-          href: `/admin/website/taxonomies?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-        }),
-        linkButton({
-          label: _('website_backend.action.preflight'),
-          href: `/admin/website/preflight?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-        }),
-      ]),
+      />
+    }
+    actions={inline([
+      linkButton({
+        label: _(`website_backend.action.new${kind.titleKey === 'pages' ? 'Page' : 'Post'}`),
+        href: `${kind.basePath}/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        variant: 'primary',
+      }),
+      linkButton({
+        label: _('website_backend.action.taxonomies'),
+        href: `/admin/website/taxonomies?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+      }),
+      linkButton({
+        label: _('website_backend.action.preflight'),
+        href: `/admin/website/preflight?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+      }),
+    ])}
+    body={stack([
+      // One GET form for all three, because they are one question - which
+      // pages am I looking at - and three forms would each drop the other two.
+
       !siteId
         ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
         : rows.length === 0
           ? emptyState(_('website_backend.content.empty'), _('website_backend.content.emptyHint'))
-          : dataTable(_, {
+          : collectionTable(_, {
               rows,
               id: (row) => row.id,
               rowHref: (row) => `${kind.basePath}/${row.id}${locale}`,
@@ -1084,23 +1088,24 @@ export const revisionsScreen = (
   locale = '',
   basePath = '/admin/website/pages',
   diff: RevisionDiff | null = null,
+  tableRows: RevisionRow[] = rows,
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.revisions.title')}
     frame={frame}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.backToEntry'),
+        href: `${basePath}/${entry.id}${locale}`,
+      }),
+    ])}
     body={stack([
-      inline([
-        linkButton({
-          label: _('website_backend.action.backToEntry'),
-          href: `${basePath}/${entry.id}${locale}`,
-        }),
-      ]),
       ...(rows.length > 1 ? [revisionCompare(_, entry, rows, diff, basePath, locale)] : []),
       rows.length === 0
         ? emptyState(_('website_backend.revisions.empty'), _('website_backend.revisions.emptyHint'))
-        : dataTable(_, {
-            rows,
+        : collectionTable(_, {
+            rows: tableRows,
             id: (row) => row.id,
             columns: [
               {
@@ -1294,18 +1299,18 @@ export const taxonomyScreen = (
     translator={_}
     title={_('website_backend.taxonomies.title')}
     frame={frame}
+    controls={siteSwitcher(_, '/admin/website/taxonomies', sites, siteId, locale)}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.newTerm'),
+        href: `/admin/website/taxonomies/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        variant: 'primary',
+      }),
+    ])}
     body={stack([
-      siteSwitcher(_, '/admin/website/taxonomies', sites, siteId, locale),
-      inline([
-        linkButton({
-          label: _('website_backend.action.newTerm'),
-          href: `/admin/website/taxonomies/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-          variant: 'primary',
-        }),
-      ]),
       rows.length === 0
         ? emptyState(_('website_backend.taxonomies.empty'), _('website_backend.taxonomies.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             rowHref: (row) => `/admin/website/taxonomies/${row.id}${locale}`,
@@ -1429,18 +1434,18 @@ export const mediaScreen = (
     translator={_}
     title={_('website_backend.media.title')}
     frame={frame}
+    controls={siteSwitcher(_, '/admin/website/media', sites, siteId, locale)}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.newMedia'),
+        href: `/admin/website/media/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        variant: 'primary',
+      }),
+    ])}
     body={stack([
-      siteSwitcher(_, '/admin/website/media', sites, siteId, locale),
-      inline([
-        linkButton({
-          label: _('website_backend.action.newMedia'),
-          href: `/admin/website/media/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-          variant: 'primary',
-        }),
-      ]),
       rows.length === 0
         ? emptyState(_('website_backend.media.empty'), _('website_backend.media.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             rowHref: (row) => `/admin/website/media/${row.id}${locale}`,
@@ -1742,19 +1747,20 @@ export const menusScreen = (
     translator={_}
     title={_('website_backend.menus.title')}
     frame={frame}
+    controls={siteSwitcher(_, '/admin/website/menus', sites, siteId, locale)}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.newMenuItem'),
+        href: `/admin/website/menus/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        variant: 'primary',
+      }),
+    ])}
     body={stack([
-      siteSwitcher(_, '/admin/website/menus', sites, siteId, locale),
       ...danglingNotice(_, dangling),
-      inline([
-        linkButton({
-          label: _('website_backend.action.newMenuItem'),
-          href: `/admin/website/menus/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-          variant: 'primary',
-        }),
-      ]),
+
       rows.length === 0
         ? emptyState(_('website_backend.menus.empty'), _('website_backend.menus.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             rowHref: (row) =>
@@ -1906,23 +1912,23 @@ export const formsScreen = (
     translator={_}
     title={_('website_backend.forms.title')}
     frame={frame}
+    controls={activeFilter(
+      _,
+      (state) =>
+        `/admin/website/forms?site=${encodeURIComponent(siteId ?? '')}&state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+      active,
+    )}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.newForm'),
+        href: `/admin/website/forms/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        variant: 'primary',
+      }),
+    ])}
     body={stack([
-      activeFilter(
-        _,
-        (state) =>
-          `/admin/website/forms?site=${encodeURIComponent(siteId ?? '')}&state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
-        active,
-      ),
-      inline([
-        linkButton({
-          label: _('website_backend.action.newForm'),
-          href: `/admin/website/forms/new?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
-          variant: 'primary',
-        }),
-      ]),
       rows.length === 0
         ? emptyState(_('website_backend.forms.empty'), _('website_backend.forms.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             // The row opens the form, the way a row opens the record on every
@@ -2376,10 +2382,7 @@ export const submissionsScreen = (
     title={_('website_backend.submissions.title')}
     frame={frame}
     footer={options.pager ? pagerBar(_, options.pager) : null}
-    body={stack([
-      // `listSubmissions` and `countSubmissions` have both taken this since
-      // they were written. Without it a form with a year of entries is read
-      // thirty at a time and the erased rows sit among the live ones.
+    controls={stack([
       ...(options.formId
         ? [
             <Surface
@@ -2409,6 +2412,12 @@ export const submissionsScreen = (
             />,
           ]
         : []),
+    ])}
+    body={stack([
+      // `listSubmissions` and `countSubmissions` have both taken this since
+      // they were written. Without it a form with a year of entries is read
+      // thirty at a time and the erased rows sit among the live ones.
+
       ...(options.formId
         ? submissionActions(
             _,
@@ -2421,7 +2430,7 @@ export const submissionsScreen = (
         : []),
       rows.length === 0
         ? emptyState(_('website_backend.submissions.empty'), _('website_backend.submissions.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             rowHref: (row) => `/admin/website/forms/${row.formId}/submissions/${row.id}`,
@@ -2520,13 +2529,13 @@ export const siteMembersScreen = (
     translator={_}
     title={_('website_backend.members.title')}
     frame={frame}
+    actions={inline([
+      linkButton({
+        label: _('website_backend.action.backToSite'),
+        href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
+      }),
+    ])}
     body={stack([
-      inline([
-        linkButton({
-          label: _('website_backend.action.backToSite'),
-          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
-        }),
-      ]),
       <Section
         title={_('website_backend.members.add')}
         description={_('website_backend.members.addHint')}
@@ -2565,7 +2574,7 @@ export const siteMembersScreen = (
       />,
       rows.length === 0
         ? emptyState(_('website_backend.members.empty'), _('website_backend.members.emptyHint'))
-        : dataTable(_, {
+        : collectionTable(_, {
             rows,
             id: (row) => row.id,
             columns: [
@@ -2621,6 +2630,7 @@ export const siteDomainsScreen = (
     locale?: string
     /** The row `?edit=` names, if any: the add form becomes that row's form. */
     editing?: DomainRow | null
+    tableRows?: DomainRow[]
   } = {},
 ): TemplateResult => {
   const editing = options.editing ?? null
@@ -2654,21 +2664,21 @@ export const siteDomainsScreen = (
       translator={_}
       title={_('website_backend.domains.title')}
       frame={frame}
+      actions={inline([
+        linkButton({
+          label: _('website_backend.action.backToSite'),
+          href: `/admin/website/sites/${site.id}${locale}`,
+        }),
+        ...(editing
+          ? [
+              linkButton({
+                label: _('website_backend.action.cancel'),
+                href: `/admin/website/sites/${site.id}/domains${locale}`,
+              }),
+            ]
+          : []),
+      ])}
       body={stack([
-        inline([
-          linkButton({
-            label: _('website_backend.action.backToSite'),
-            href: `/admin/website/sites/${site.id}${locale}`,
-          }),
-          ...(editing
-            ? [
-                linkButton({
-                  label: _('website_backend.action.cancel'),
-                  href: `/admin/website/sites/${site.id}/domains${locale}`,
-                }),
-              ]
-            : []),
-        ]),
         rows.length === 0
           ? Notice({
               tone: 'warning',
@@ -2767,8 +2777,8 @@ export const siteDomainsScreen = (
         rows.length === 0 ? (
           <></>
         ) : (
-          dataTable(_, {
-            rows,
+          collectionTable(_, {
+            rows: options.tableRows ?? rows,
             id: (row) => row.id,
             columns: [
               {
@@ -2866,8 +2876,22 @@ export const redirectsScreen = (
       translator={_}
       title={_('website_backend.redirects.title')}
       frame={frame}
-      body={stack([
+      controls={stack([
         siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
+        ...(siteId
+          ? [
+              inline([
+                linkButton({ label: _('website_backend.redirects.all'), href: query({}) }),
+                linkButton({ label: _('website_backend.state.active'), href: query({ state: 'active' }) }),
+                linkButton({
+                  label: _('website_backend.state.inactive'),
+                  href: query({ state: 'inactive' }),
+                }),
+              ]),
+            ]
+          : []),
+      ])}
+      body={stack([
         ...(siteId
           ? [
               <Section
@@ -2916,24 +2940,13 @@ export const redirectsScreen = (
               // The list already had a column for a state nothing could produce:
               // the route wrote `active: true` every time, so every row read
               // "active" for ever and the off switch on the contract was unreachable.
-              inline([
-                linkButton({ label: _('website_backend.redirects.all'), href: query({}) }),
-                linkButton({
-                  label: _('website_backend.state.active'),
-                  href: query({ state: 'active' }),
-                }),
-                linkButton({
-                  label: _('website_backend.state.inactive'),
-                  href: query({ state: 'inactive' }),
-                }),
-              ]),
             ]
           : []),
         !siteId
           ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
           : rows.length === 0
             ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
-            : dataTable(_, {
+            : collectionTable(_, {
                 rows,
                 id: (row) => row.id,
                 columns: [
@@ -3120,41 +3133,46 @@ export const publicationsScreen = (
     translator={_}
     title={_('website_backend.publications.title')}
     frame={frame}
-    body={stack([
+    controls={stack([
       siteSwitcher(_, '/admin/website/publications', sites, siteId, options.locale ?? ''),
+      stack([
+        ...(siteId
+          ? [
+              <Surface
+                padding="compact"
+                body={
+                  <RecordForm
+                    action={`/admin/website/publications${options.locale ?? ''}`}
+                    method="get"
+                    layout="inline"
+                    hidden={{ site: siteId }}
+                    fields={[
+                      {
+                        name: 'state',
+                        label: _('website_backend.field.status'),
+                        type: 'select',
+                        value: options.state ?? 'all',
+                        options: [
+                          { value: 'all', label: _('website_backend.state.all') },
+                          { value: 'prepared', label: _('website_backend.pubstate.prepared') },
+                          { value: 'active', label: _('website_backend.pubstate.active') },
+                          { value: 'superseded', label: _('website_backend.pubstate.superseded') },
+                        ],
+                      },
+                    ]}
+                    submit={_('website_backend.action.apply')}
+                    submitVariant="secondary"
+                  />
+                }
+              />,
+            ]
+          : []),
+      ]),
+    ])}
+    body={stack([
       // Superseded sets accumulate one per activation and are the majority of
       // the list within a week, which buries the two rows anybody came to see.
-      ...(siteId
-        ? [
-            <Surface
-              padding="compact"
-              body={
-                <RecordForm
-                  action={`/admin/website/publications${options.locale ?? ''}`}
-                  method="get"
-                  layout="inline"
-                  hidden={{ site: siteId }}
-                  fields={[
-                    {
-                      name: 'state',
-                      label: _('website_backend.field.status'),
-                      type: 'select',
-                      value: options.state ?? 'all',
-                      options: [
-                        { value: 'all', label: _('website_backend.state.all') },
-                        { value: 'prepared', label: _('website_backend.pubstate.prepared') },
-                        { value: 'active', label: _('website_backend.pubstate.active') },
-                        { value: 'superseded', label: _('website_backend.pubstate.superseded') },
-                      ],
-                    },
-                  ]}
-                  submit={_('website_backend.action.apply')}
-                  submitVariant="secondary"
-                />
-              }
-            />,
-          ]
-        : []),
+
       ...(options.notice
         ? [<Notice tone="positive" title={_('website_backend.publications.done')} message={options.notice} />]
         : []),
@@ -3194,7 +3212,7 @@ export const publicationsScreen = (
         ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
         : rows.length === 0
           ? emptyState(_('website_backend.publications.empty'), _('website_backend.publications.emptyHint'))
-          : dataTable(_, {
+          : collectionTable(_, {
               rows,
               id: (row) => row.id,
               columns: [
@@ -3360,6 +3378,7 @@ export const siteHealthScreen = (
   rows: SiteHealth[],
   frame: Frame,
   locale = '',
+  tableRows: SiteHealth[] = rows,
 ): TemplateResult => {
   const troubled = rows.filter((row) => concernsOf(_, row).length > 0)
   return (
@@ -3377,8 +3396,8 @@ export const siteHealthScreen = (
             message={_('website_backend.health.allWellHint')}
           />
         ) : (
-          dataTable(_, {
-            rows: troubled,
+          collectionTable(_, {
+            rows: tableRows.filter((row) => concernsOf(_, row).length > 0),
             id: (row) => row.siteId,
             rowHref: (row) => `/admin/website/sites/${row.siteId}${locale}`,
             columns: [

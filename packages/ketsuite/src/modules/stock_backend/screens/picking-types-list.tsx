@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -116,14 +116,14 @@ export const pickingTypesListScreen = (
             )
           : undefined
       }
-      status={inline([
+      footer={inline([
         badge(`${_('stock_backend.pickingType.summary.incoming')}: ${incomingCount}`, 'positive'),
         badge(`${_('stock_backend.pickingType.summary.outgoing')}: ${outgoingCount}`, 'info'),
         badge(`${_('stock_backend.pickingType.summary.internal')}: ${internalCount}`, 'neutral'),
       ])}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: pickingTypeListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

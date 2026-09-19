@@ -167,6 +167,7 @@ export const RecordImageField = (props: {
             <label data-ui="record-image-upload" data-variant="tertiary">
               <input
                 type="file"
+                autocomplete="off"
                 name="file"
                 accept="image/avif,image/gif,image/jpeg,image/png,image/webp"
                 data-record-submit="true"
@@ -201,7 +202,7 @@ export const RecordImageField = (props: {
   )
 }
 
-/** A form with its image block placed at the right of the form's first two rows. */
+/** A form with an independent image column; narrow surfaces stack the image above it. */
 export const RecordFormWithImage = (props: { form: JSXChild; image: JSXChild }): TemplateResult => (
   <div data-ui="record-form-with-image">
     {props.form}

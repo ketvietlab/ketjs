@@ -1,9 +1,10 @@
+import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   LinkButton,
@@ -105,6 +106,7 @@ export const workCentersListScreen = (
       variant="operational"
       frame={frame}
       title={_('manufacturing_backend.workCenters.title')}
+      controls={collectionControls(_, _('manufacturing_backend.workCenters.title'), frame)}
       actions={inline([
         <LinkButton
           label={_('manufacturing_backend.workCenters.create')}
@@ -115,7 +117,7 @@ export const workCentersListScreen = (
       ])}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => row.id,
               rowHref: (row) => row.editHref,

@@ -67,7 +67,7 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={stack([options.setup ? missingSetup(_, options.setup) : null, table], 'loose')}
     />,
     { ...options.frame, chrome: null, topbar: false },

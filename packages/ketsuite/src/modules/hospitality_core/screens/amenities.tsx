@@ -4,7 +4,7 @@ import {
   type AmenityRow,
   type Choice,
   choices,
-  dataTable,
+  collectionTable,
   emptyState,
   feedback,
   type Frame,
@@ -44,7 +44,7 @@ export const amenitiesScreen = (
       body={stack([
         feedback(_, state),
         rows.length
-          ? dataTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
+          ? collectionTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
           : emptyState(
               _('hospitality_core.screen.amenities.empty'),
               _('hospitality_core.screen.amenities.emptyHint'),

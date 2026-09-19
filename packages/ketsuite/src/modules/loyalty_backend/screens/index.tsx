@@ -7,6 +7,7 @@ import {
   actionGroup,
   ContentCard,
   dataTable,
+  collectionTable,
   DashboardPage,
   DefinitionList,
   Delta,
@@ -316,7 +317,7 @@ export const programsScreen = (
         },
       ]),
       programs.length
-        ? dataTable(_, {
+        ? collectionTable(_, {
             rows: programs,
             rowHref: (row) => `/admin/loyalty/programs/${encodeURIComponent(String(row.id))}`,
             rowLink: false,
@@ -411,7 +412,7 @@ export const walletsScreen = (
         },
       ]),
       wallets.length
-        ? dataTable(_, {
+        ? collectionTable(_, {
             rows: wallets,
             id: (row) => String(row.id),
             columns: [
@@ -689,9 +690,13 @@ export const walletDetailScreen = (
  * they cannot follow. `wallet` drops out on a wallet's own page, where a column
  * repeating the same code twenty times carries no information.
  */
-const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean; admin?: boolean } = {}) => {
+const ledgerTable = (
+  _: Translator,
+  rows: AnyRow[],
+  options: { wallet?: boolean; admin?: boolean; collection?: boolean } = {},
+) => {
   const admin = options.admin !== false
-  return dataTable(_, {
+  return (options.collection ? collectionTable : dataTable)(_, {
     rows,
     id: (row) => String(row.id),
     columns: [
@@ -810,7 +815,7 @@ export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals
           value: figure(totals.opening),
         },
       ]),
-      rows.length ? ledgerTable(_, rows) : empty(_),
+      rows.length ? ledgerTable(_, rows, { collection: true }) : empty(_),
     ])}
   />
 )
@@ -855,7 +860,7 @@ export const membershipsScreen = (
         },
       ]),
       rows.length
-        ? dataTable(_, {
+        ? collectionTable(_, {
             rows,
             id: (row) => String(row.id),
             rowHref: (row) => `/admin/partner/partners/${encodeURIComponent(String(row.partnerId))}`,
@@ -944,7 +949,7 @@ export const tiersScreen = (
           description={_('loyalty_backend.tiers.hint')}
           body={
             tiers.length
-              ? dataTable(_, {
+              ? collectionTable(_, {
                   rows: tiers,
                   id: (row) => String(row.id),
                   rowHref: options.tierHref,
