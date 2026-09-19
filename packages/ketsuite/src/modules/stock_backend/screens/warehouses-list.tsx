@@ -1,10 +1,11 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -69,29 +70,46 @@ export const warehousesListScreen = (
   options: WarehousesListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: warehouseListColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
 
   return shell(
     _,
     _('stock_backend.warehouses'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('stock_backend.warehouse.title')}
       description={_('stock_backend.warehouse.subtitle')}
-      actions={inline([
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />,
-        selection ? bulkActions(_, selection) : '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={
+        selection || collection.frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              selection ? bulkActions(_, selection) : '',
+              collection.frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
       controls={
-        frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('stock_backend.warehouse.title'),
               {
-                ...frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -101,20 +119,15 @@ export const warehousesListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.warehouse.summary.total')}: ${String(total)}`}
+      footer={`${_('stock_backend.warehouse.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
-              columns: warehouseListColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('stock_backend.warehouse.empty'), _('stock_backend.warehouse.emptyHint'), {
               icon: icon('warehouse'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

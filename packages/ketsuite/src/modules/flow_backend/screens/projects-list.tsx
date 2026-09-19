@@ -1,9 +1,10 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   CardGrid,
-  dataTable,
+  collectionTable,
   inline,
   LinkButton,
   ListPage,
@@ -100,8 +101,61 @@ export const projectsListScreen = (
   overview: ProjectsOverview,
 ): TemplateResult => {
   const title = _('flow_backend.projects.title')
-  const hasActions = overview.createHref || frame.extras?.['topbar.end'] !== undefined
+  const hasActions = frame.extras?.['topbar.end'] !== undefined
 
+  frame = { ...frame, chrome: { ...frame.chrome, pager: overview.pager ?? frame.chrome?.pager } }
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: overview.rows,
+      id: (row) => String(row.id),
+      rowHref: (row) =>
+        localized(`/admin/flow/projects/${encodeURIComponent(String(row.id))}/board`, overview.locale ?? ''),
+      columns: [
+        {
+          key: 'name',
+          label: _('flow_backend.projects.column'),
+          priority: 'primary',
+          cell: (row) => String(row.name),
+        },
+        {
+          key: 'key',
+          label: _('flow_backend.field.key'),
+          kind: 'identifier',
+          cell: (row) => String(row.key),
+        },
+        {
+          key: 'state',
+          label: _('flow_backend.field.status'),
+          kind: 'status',
+          cell: (row) =>
+            badge(
+              _(`flow_backend.projects.state.${String(row.state ?? 'empty')}`),
+              STATE_TONE[String(row.state ?? 'empty')] ?? 'neutral',
+            ),
+        },
+        {
+          key: 'progress',
+          label: _('flow_backend.projects.progress'),
+          cell: (row) => (
+            <Progress
+              value={percent(Number(row.done ?? 0), Number(row.total ?? 0))}
+              label={String(row.name)}
+              text={`${Number(row.done ?? 0)}/${Number(row.total ?? 0)}`}
+            />
+          ),
+        },
+        {
+          key: 'description',
+          label: _('flow_backend.field.description'),
+          cell: (row) => String(row.description ?? ''),
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     title,
@@ -110,22 +164,18 @@ export const projectsListScreen = (
       frame={frame}
       title={title}
       description={_('flow_backend.projects.subtitle')}
-      actions={
-        hasActions
-          ? inline([
-              overview.createHref ? (
-                <LinkButton
-                  label={_('flow_backend.projects.create')}
-                  href={overview.createHref}
-                  variant="primary"
-                />
-              ) : (
-                ''
-              ),
-              frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
+      headerActions={
+        overview.createHref ? (
+          <LinkButton
+            label={_('flow_backend.projects.create')}
+            href={overview.createHref}
+            variant="primary"
+          />
+        ) : (
+          ''
+        )
       }
+      actions={hasActions ? inline([frame.extras?.['topbar.end'] ?? '']) : undefined}
       controls={
         frame.chrome
           ? listChrome(
@@ -142,7 +192,7 @@ export const projectsListScreen = (
             )
           : undefined
       }
-      status={`${title}: ${String(overview.rows.length)}`}
+      status={`${title}: ${String(overview.projectCount)}`}
       body={stack([
         overviewCards(_, overview),
         <Tabs
@@ -154,57 +204,7 @@ export const projectsListScreen = (
             active: tab.id === overview.tab,
           }))}
         />,
-        overview.rows.length
-          ? dataTable(_, {
-              rows: overview.rows,
-              id: (row) => String(row.id),
-              rowHref: (row) =>
-                localized(
-                  `/admin/flow/projects/${encodeURIComponent(String(row.id))}/board`,
-                  overview.locale ?? '',
-                ),
-              columns: [
-                {
-                  key: 'name',
-                  label: _('flow_backend.projects.column'),
-                  priority: 'primary',
-                  cell: (row) => String(row.name),
-                },
-                {
-                  key: 'key',
-                  label: _('flow_backend.field.key'),
-                  kind: 'identifier',
-                  cell: (row) => String(row.key),
-                },
-                {
-                  key: 'state',
-                  label: _('flow_backend.field.status'),
-                  kind: 'status',
-                  cell: (row) =>
-                    badge(
-                      _(`flow_backend.projects.state.${String(row.state ?? 'empty')}`),
-                      STATE_TONE[String(row.state ?? 'empty')] ?? 'neutral',
-                    ),
-                },
-                {
-                  key: 'progress',
-                  label: _('flow_backend.projects.progress'),
-                  cell: (row) => (
-                    <Progress
-                      value={percent(Number(row.done ?? 0), Number(row.total ?? 0))}
-                      label={String(row.name)}
-                      text={`${Number(row.done ?? 0)}/${Number(row.total ?? 0)}`}
-                    />
-                  ),
-                },
-                {
-                  key: 'description',
-                  label: _('flow_backend.field.description'),
-                  cell: (row) => String(row.description ?? ''),
-                },
-              ],
-            })
-          : empty(_),
+        overview.rows.length ? collectionTable(_, prepared.table) : empty(_),
         <Section
           title={_('flow_backend.projects.activity')}
           body={
@@ -224,35 +224,6 @@ export const projectsListScreen = (
             )
           }
         />,
-        // Rendered here rather than handed to `ListPage`, which has no pager of
-        // its own — that belongs to the workspace chrome the board screens use.
-        // A truncated list that looks complete is the failure being fixed, so
-        // the links go somewhere visible rather than nowhere at all.
-        overview.pager
-          ? inline([
-              `${overview.pager.from}–${overview.pager.to} / ${overview.pager.total}`,
-              overview.pager.prev ? (
-                <LinkButton
-                  label={_('flow_backend.action.previous')}
-                  href={overview.pager.prev}
-                  variant="secondary"
-                  size="compact"
-                />
-              ) : (
-                ''
-              ),
-              overview.pager.next ? (
-                <LinkButton
-                  label={_('flow_backend.action.next')}
-                  href={overview.pager.next}
-                  variant="secondary"
-                  size="compact"
-                />
-              ) : (
-                ''
-              ),
-            ])
-          : '',
       ])}
     />,
     { ...frame, chrome: null, topbar: false },

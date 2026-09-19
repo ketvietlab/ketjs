@@ -1,7 +1,11 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
+import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  Disclosure,
+  collectionTable,
   dataTable,
   emptyState,
   RecordScreen,
@@ -42,82 +46,94 @@ export const periodClosesListScreen = (
     rowHref: (row: Row) => string
     errors?: string[]
   },
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      id: (row) => String(row.id),
+      rowHref: options.rowHref,
+      columns: [
+        {
+          key: 'period',
+          label: _('account_backend.close.period'),
+          priority: 'primary',
+          cell: (row) => String(row.periodKey),
+        },
+        {
+          key: 'range',
+          label: _('account_backend.close.range'),
+          cell: (row) => `${String(row.dateFrom)} – ${String(row.dateTo)}`,
+        },
+        {
+          key: 'state',
+          label: _('account_backend.field.state'),
+          kind: 'status',
+          cell: (row) => closeBadge(_, row.state),
+        },
+        {
+          key: 'blockers',
+          label: _('account_backend.close.blockers'),
+          cell: (row) => String(row.blockerCount),
+          align: 'end',
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  return shell(
     _,
     _('account_backend.close.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.close.title')}
+      controls={collectionControls(_, _('account_backend.close.title'), collection.frame)}
       description={_('account_backend.close.subtitle')}
-      status={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
-      body={stack(
-        [
-          <Section
-            title={_('account_backend.close.create')}
-            description={_('account_backend.close.createHint')}
-            body={
-              <Surface
-                body={
-                  <RecordForm
-                    id="close-create-form"
-                    scope="close-create"
-                    action={options.action}
-                    submit={_('account_backend.close.create')}
-                    submitVariant="secondary"
-                    fields={options.fields}
-                    errors={options.errors}
-                  />
-                }
-              />
-            }
-          />,
-          options.rows.length ? (
-            dataTable(_, {
-              rows: options.rows,
-              id: (row) => String(row.id),
-              rowHref: options.rowHref,
-              columns: [
-                {
-                  key: 'period',
-                  label: _('account_backend.close.period'),
-                  priority: 'primary',
-                  cell: (row) => String(row.periodKey),
-                },
-                {
-                  key: 'range',
-                  label: _('account_backend.close.range'),
-                  cell: (row) => `${String(row.dateFrom)} – ${String(row.dateTo)}`,
-                },
-                {
-                  key: 'state',
-                  label: _('account_backend.field.state'),
-                  kind: 'status',
-                  cell: (row) => closeBadge(_, row.state),
-                },
-                {
-                  key: 'blockers',
-                  label: _('account_backend.close.blockers'),
-                  cell: (row) => String(row.blockerCount),
-                  align: 'end',
-                },
-              ],
-            })
-          ) : (
-            <Surface
-              padding="compact"
-              body={emptyState(_('account_backend.close.empty'), _('account_backend.close.emptyHint'), {
-                icon: icon('calendar-check'),
-              })}
+      footer={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
+      actions={collection.frame.extras?.['topbar.end']}
+      body={stack([
+        <Disclosure
+          summary={_('account_backend.close.create')}
+          open={Boolean(options.errors?.length)}
+          body={
+            <Section
+              title={_('account_backend.close.create')}
+              description={_('account_backend.close.createHint')}
+              body={
+                <Surface
+                  body={
+                    <RecordForm
+                      id="close-create-form"
+                      scope="close-create"
+                      action={options.action}
+                      submit={_('account_backend.close.create')}
+                      submitVariant="secondary"
+                      fields={options.fields}
+                      errors={options.errors}
+                    />
+                  }
+                />
+              }
             />
-          ),
-        ],
-        'loose',
-      )}
+          }
+        />,
+        options.rows.length ? (
+          collectionTable(_, collection.table)
+        ) : (
+          <Surface
+            padding="compact"
+            body={emptyState(_('account_backend.close.empty'), _('account_backend.close.emptyHint'), {
+              icon: icon('calendar-check'),
+            })}
+          />
+        ),
+      ])}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}
 
 export const periodCloseDetailScreen = (
   _: Translator,

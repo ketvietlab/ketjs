@@ -7,6 +7,7 @@ import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { employeeFormModal, employeesListScreen, leavesListScreen, rosterScreen } from './screens/index.ts'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import type { EmployeeFormValues } from './screens/index.ts'
 
 const errors = (result: unknown, _: Translator) => resultErrors(result, _, 'hr_backend.error.invalid')
@@ -164,7 +165,12 @@ const employeesPage = async (
         {
           action: collection,
           createHref: employeeModalPath(url),
-          rows: rows.map((row) => ({
+          rows: searchCollectionRows(
+            url,
+            rows,
+            (row) =>
+              `${row.code} ${row.name} ${branchNames.get(String(row.homeBranchId)) ?? ''} ${row.timezone}`,
+          ).map((row) => ({
             id: String(row.id),
             code: String(row.code),
             name: String(row.name),
@@ -174,7 +180,7 @@ const employeesPage = async (
             editHref: employeeModalPath(url, String(row.id)),
           })),
         },
-        frame,
+        collectionSearchFrame(url, frame, _('hr_backend.employees.title')),
       )
       if (!forceModal && url.searchParams.get('create') !== '1' && !url.searchParams.get('edit')) return list
       const formValues = editing

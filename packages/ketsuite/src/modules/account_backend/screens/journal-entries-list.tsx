@@ -1,11 +1,11 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
   listChrome,
@@ -73,15 +73,16 @@ export const journalEntriesListScreen = (
     `${_('account_backend.entry.summary.draft')}: ${String(options.summary.draft)}`,
     `${_('account_backend.entry.summary.posted')}: ${String(options.summary.posted)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: journalEntryListColumns(_),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: journalEntryListColumns(_),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -96,20 +97,20 @@ export const journalEntriesListScreen = (
     _('account_backend.entries.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.entries.title')}
       description={_('account_backend.entry.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('account_backend.entries.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -119,9 +120,9 @@ export const journalEntriesListScreen = (
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

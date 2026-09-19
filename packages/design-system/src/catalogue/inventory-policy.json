@@ -335,6 +335,13 @@
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-017"
+    },
+    "./interactions/reorder-list/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
     }
   },
   "compatibilityModules": {
@@ -393,6 +400,20 @@
       "target": "Public core",
       "wave": 4,
       "gapTask": "DS-027"
+    },
+    "./collection-state.ts": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./collection.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
     },
     "./dashboard-page.tsx": {
       "owner": "Page recipes",

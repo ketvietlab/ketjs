@@ -1030,7 +1030,11 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(correctedFolioHtml, /Đã hủy khoản phí/)
   assert.match(correctedFolioHtml, /Dịch vụ spa/)
   assert.doesNotMatch(correctedFolioHtml, /hospitality_core\./)
-  assert.equal(await e2e.drainJobs(), 1)
+  // Other deployment jobs may also be due; this flow requires the stay notice preparation.
+  await e2e.drainJobs()
+  assert.ok(
+    e2e.records.of('job_completed').some((record) => record.fn === 'hospitality_core.prepareStayNotices'),
+  )
 
   const stayNotice = await e2e.client.get(
     '/admin/hospitality/stay-notices?lang=vi&property=hotel&notice=booking-1%3Astay%3Anotice%3Abooking-1%3Aguest',

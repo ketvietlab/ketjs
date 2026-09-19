@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   ListPage,
@@ -111,7 +111,7 @@ export const leavesListScreen = (
   options: LeavesListScreenOptions,
 ): TemplateResult => {
   const table = options.rows.length
-    ? dataTable(_, {
+    ? collectionTable(_, {
         rows: options.rows,
         id: (row) => row.id,
         columns: leaveListColumns(_),

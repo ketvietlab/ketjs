@@ -980,23 +980,20 @@
     min-inline-size: 0;
   }
 
-  /* A record's main image beside its form's first two rows (RecordFormWithImage).
-     The image block sits in the corner; those two rows leave room for it, and the
-     rest of the form runs full width underneath. */
+  /* The image owns a column beside the form. Both remain in flow, so adding
+     identity fields or wrapping image actions cannot cover an input. */
   [data-ui="record-form-with-image"] {
     --record-image-size: 6rem;
-    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--record-image-size);
+    gap: var(--space-4, 16px);
+    align-items: start;
   }
   [data-ui="record-form-with-image"] > [data-ui="record-image"] {
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-end: 0;
+    position: static;
   }
-  [data-ui="record-form-with-image"]
-    > [data-ui="record-form"]
-    [data-ui="form-grid"]
-    > [data-ui="field"]:nth-child(-n + 2) {
-    padding-inline-end: calc(var(--record-image-size) + var(--space-4, 16px));
+  [data-ui="record-form-with-image"] > [data-ui="record-form"] {
+    min-inline-size: 0;
   }
   [data-ui="record-image"] {
     display: grid;
@@ -1073,18 +1070,12 @@
 
   @media (max-width: 47.9375rem) {
     [data-ui="record-form-with-image"] > [data-ui="record-image"] {
-      position: static;
-      margin-block-end: var(--space-3, 12px);
+      margin-block-end: 0;
     }
     [data-ui="record-form-with-image"] {
       display: flex;
       flex-direction: column-reverse;
-    }
-    [data-ui="record-form-with-image"]
-      > [data-ui="record-form"]
-      [data-ui="form-grid"]
-      > [data-ui="field"]:nth-child(-n + 2) {
-      padding-inline-end: 0;
+      align-items: stretch;
     }
   }
 }

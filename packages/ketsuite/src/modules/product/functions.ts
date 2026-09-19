@@ -14,7 +14,9 @@ import {
 import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
 import { PRODUCT_TYPES } from './types.ts'
 import { productModalContextFunctions } from './product-modal-context.ts'
+import { attributeModalContextFunctions } from './attribute-modal-context.ts'
 import { variantSetupFunctions } from './variant-setup.ts'
+import { attributeDraftFunctions } from './attribute-draft.ts'
 import { emptyProductListState, productListSearch } from './search.ts'
 
 /**
@@ -517,7 +519,7 @@ export const functions: Record<string, FnSpec> = {
    */
   listAttributeValues: defineFn({
     input: { attributeId: 'id?', search: 'text?', limit: 'int?' },
-    output: { id: 'id', attributeId: 'id', name: 'text', sequence: 'int' },
+    output: { id: 'id', attributeId: 'id', name: 'text', sequence: 'int', htmlColor: 'text?' },
     effects: ['read:product.AttributeValue'],
     agent: true,
     handler: async (ctx, args) => {
@@ -1370,5 +1372,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   ...productModalContextFunctions,
+  ...attributeModalContextFunctions,
   ...variantSetupFunctions,
+  ...attributeDraftFunctions,
 }

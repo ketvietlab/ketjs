@@ -2,7 +2,7 @@ import type { KetTableConfig } from './index.tsx'
 
 // Shared between the design-system's own catalogue specimen and (potentially) an
 // atlas-style static demo, same role as `search-filter/demo.ts`. There is no
-// `manager`, so sort/pager stay visibly present but inert — a viewer can still
+// live RPC, so sort/pager stay visibly present but inert — a viewer can still
 // select rows and expand the pre-populated group, which needs no round trip.
 export const ketTableDemoConfig: KetTableConfig = {
   idField: 'id',
