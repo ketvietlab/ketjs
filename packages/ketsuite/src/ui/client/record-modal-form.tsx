@@ -18,12 +18,22 @@ import { RECORD_COMMAND_FIELD } from './record-modal.tsx'
 export const RecordModalForm = (props: {
   kind: string
   fields: readonly FieldProps[]
+  body?: JSXChild
+  /** Structural edits and retained drafts remain dirty after a view-state render. */
+  dirty?: boolean
   actions?: readonly JSXChild[]
   command?: string | null
   /** Lets a button outside this form submit it via the HTML `form` attribute. */
   id?: string
 }): TemplateResult => (
-  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind} id={props.id}>
+  <form
+    data-ui="record-form"
+    method="post"
+    action=""
+    data-record-kind={props.kind}
+    id={props.id}
+    data-record-dirty={props.dirty === true ? 'true' : null}
+  >
     {props.command ? (
       // autocomplete="off" like every other input the kit writes: the ui contract
       // holds for a hidden field too, and a browser restoring one would submit a
@@ -33,6 +43,7 @@ export const RecordModalForm = (props: {
       ''
     )}
     <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
+    {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
 )

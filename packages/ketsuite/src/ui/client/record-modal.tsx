@@ -150,6 +150,8 @@ export type RecordModalCommandStep<Data> = {
 
 export type RecordModalCommand<Data> = {
   fn: string
+  /** Map server paths to stable native field names using the submitted snapshot. */
+  issueField?: (field: string, form: FormData, context: RecordModalContext<Data>) => string
   /** Map the submitted form to the function's input. */
   input: (
     form: FormData,
@@ -331,6 +333,7 @@ const focusablesIn = (element: HTMLElement): HTMLElement[] =>
 
 /** Whether anything in a layer was typed into since it rendered. Same rule as route modals. */
 export const recordLayerHasDraft = (layer: HTMLElement): boolean => {
+  if (layer.querySelector('[data-record-dirty="true"]')) return true
   for (const field of layer.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')) {
     if (field.disabled) continue
     if (field.type === 'checkbox' || field.type === 'radio') {
@@ -789,7 +792,13 @@ export const createRecordModal =
           // The layer was snapshotted before the busy state rendered, including unchecked controls.
           issues.set(
             result.issues.length
-              ? result.issues
+              ? result.issues.map((issue) => ({
+                  ...issue,
+                  field:
+                    issue.field && command.issueField
+                      ? command.issueField(issue.field, formData, context)
+                      : issue.field,
+                }))
               : [
                   {
                     field: null,
@@ -1180,7 +1189,9 @@ export const createRecordModal =
             if (!control || !root?.contains(control)) return
             const stateKey =
               control.getAttribute('data-record-state') ??
-              (control.getAttribute('data-ui') === 'relation-native' ? control.getAttribute('name') : null)
+              (['relation-native', 'reorder-list-value'].includes(control.getAttribute('data-ui') ?? '')
+                ? control.getAttribute('name')
+                : null)
             if ((control instanceof HTMLSelectElement || control instanceof HTMLInputElement) && stateKey) {
               keepAllDrafts()
               viewState.set({ ...viewState(), [stateKey]: control.value })

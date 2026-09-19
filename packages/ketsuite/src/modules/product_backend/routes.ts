@@ -30,6 +30,8 @@ import {
 } from './screens/index.ts'
 import { uomControl } from './relation-control.ts'
 import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
+import type { AttributeListRow } from './screens/attributes.tsx'
+import { attributeSearchFilterConfig } from './attributes-search.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import { searchFilterBar } from '../backend/search-filter.ts'
 import type { SearchFacet, SearchFilterConfig, SearchFilterCustomRule } from '../backend/search-filter.ts'
@@ -1086,10 +1088,39 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('product.listAttributes', {}, url, req)) as Array<Record<string, unknown>>
+      const rows = (await ctx.call('product.listAttributes', {}, url, req)) as AttributeListRow[]
+      const live = await ctx.live(req)
+      const canCreate = Boolean(live.functions['product.saveAttributeDraft'])
+      const filterBar = await searchFilterBar(
+        ctx,
+        url,
+        req,
+        'product-attribute-filter',
+        attributeSearchFilterConfig(_, url),
+      )
       return adminPage(ctx, url, req, {
         title: 'product_backend.attributes.title',
-        body: (_, frame) => attributesScreen(_, rows, frame, invalidErrors(url, _), localeQuery(url)),
+        body: (_, frame) =>
+          attributesScreen(
+            _,
+            rows,
+            {
+              ...frame,
+              collectionUrl: url.pathname + url.search,
+              chrome: {
+                ...frame.chrome,
+                searchContent: filterBar,
+                create: canCreate
+                  ? {
+                      label: _('product_backend.attributes.createTitle'),
+                      path: recordModalCreateHref(url, { kind: 'product.attribute' }),
+                    }
+                  : null,
+              },
+            },
+            invalidErrors(url, _),
+            localeQuery(url),
+          ),
       })
     },
   '/admin/product/attributes/{id}/values':
