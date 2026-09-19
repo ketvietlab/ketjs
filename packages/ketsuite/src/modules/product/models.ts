@@ -109,7 +109,13 @@ export const models: Record<string, ModelDef> = {
 
   AttributeValue: {
     scope: 'shared',
-    fields: { id: 'id', attributeId: 'ref:product.Attribute', name: 'text', sequence: 'int' },
+    fields: {
+      id: 'id',
+      attributeId: 'ref:product.Attribute',
+      name: 'text',
+      sequence: 'int',
+      htmlColor: 'text?',
+    },
     indexes: {
       attribute_name: { fields: ['attributeId', 'name'] },
       name: { fields: ['name'] },

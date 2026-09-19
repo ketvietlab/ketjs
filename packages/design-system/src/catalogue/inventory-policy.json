@@ -335,6 +335,13 @@
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-017"
+    },
+    "./interactions/reorder-list/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
     }
   },
   "compatibilityModules": {

@@ -1016,6 +1016,7 @@ const sources = {
       listVariants: ['read', 'view'],
       removeAttributeLine: ['configure', 'configure', 'product.configuration-audit'],
       saveAttribute: ['configure', 'configure', 'product.configuration-audit'],
+      saveAttributeDraft: ['configure', 'configure', 'product.configuration-audit'],
       saveAttributeLine: ['configure', 'configure', 'product.configuration-audit'],
       saveAttributeValue: ['configure', 'configure', 'product.configuration-audit'],
       saveBrand: ['configure', 'configure', 'product.configuration-audit'],
@@ -1026,6 +1027,7 @@ const sources = {
       setCost: ['configure', 'configure', 'product.configuration-audit'],
       setProductUom: ['configure', 'configure', 'product.configuration-audit'],
       templateModalContext: ['read', 'view'],
+      attributeModalContext: ['read', 'view'],
     },
     exemptions: {},
   },
@@ -1034,6 +1036,7 @@ const sources = {
     bundles: ['view', 'operate'],
     functions: {
       applySearchFilter: ['read', 'view'],
+      applyAttributeSearchFilter: ['read', 'view'],
       saveSearchFavorite: ['operate', 'operate'],
       deleteSearchFavorite: ['operate', 'operate'],
       setDefaultSearchFavorite: ['operate', 'operate'],

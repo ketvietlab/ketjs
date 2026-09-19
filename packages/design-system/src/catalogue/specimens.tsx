@@ -1,4 +1,5 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { ReorderList } from '../interactions/reorder-list/index.tsx'
 import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
@@ -432,6 +433,31 @@ export const componentGroups: readonly ComponentGroup[] = [
     name: 'Fields',
     description: 'Native controls with one label, help and error contract.',
     examples: [
+      {
+        id: 'reorder-list',
+        name: 'Reorder list',
+        description:
+          'Controlled editable rows emit ordered ids through one native change field; move controls accompany drag handles.',
+        render: () => (
+          <ReorderList
+            id="reorder-demo"
+            name="order"
+            label="Values"
+            labels={{
+              add: 'Add value',
+              remove: 'Remove',
+              up: 'Move up',
+              down: 'Move down',
+              drag: 'Drag',
+              empty: 'No values',
+            }}
+            items={[
+              { id: 'red', content: <Field id="reorder-red" name="red" label="Value" value="Red" /> },
+              { id: 'blue', content: <Field id="reorder-blue" name="blue" label="Value" value="Blue" /> },
+            ]}
+          />
+        ),
+      },
       {
         id: 'field',
         name: 'Field',
@@ -1664,6 +1690,25 @@ export const componentGroups: readonly ComponentGroup[] = [
           'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
         render: () =>
           createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
+      },
+      {
+        id: 'search-filter-presets',
+        name: 'Preset search filter',
+        description:
+          'The same compact search with only supported preset facets; unsupported custom rules, grouping and favorites are omitted.',
+        render: () =>
+          createSearchFilterView({
+            id: 'demo-search-filter-presets',
+            config: {
+              ...searchFilterDemoConfig,
+              size: 'compact',
+              capabilities: { groupBy: false, favorites: false, customFilters: false },
+              facets: searchFilterDemoConfig.facets.filter((facet) => facet.type === 'filter'),
+              groupBy: [],
+              favorites: [],
+              customFilterFields: [],
+            },
+          }).view(),
       },
       {
         id: 'ket-table',

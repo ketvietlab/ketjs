@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineFn, encodeListState, eq, from, parseListState, validateListState } from '@ketvietlab/ketjs'
 import type { Ctx, FilterOperator, FnSpec, ListState } from '@ketvietlab/ketjs'
 import { emptyProductListState, productListSearch } from '../product/search.ts'
+import { attributeSearchHref } from './attribute-search-state.ts'
 
 type Facet = { id: string; type: string; label: string }
 type CustomRule = { id: string; field: string; operator: FilterOperator; value?: unknown }
@@ -165,6 +166,20 @@ const hrefFor = (ctx: Ctx, payload: SearchPayload): Promise<string> | string => 
 }
 
 export const functions: Record<string, FnSpec> = {
+  applyAttributeSearchFilter: defineFn({
+    input: {
+      query: 'text?',
+      returnTo: 'text?',
+      facets: 'json?',
+      filters: 'json?',
+      groupBy: 'json?',
+      favoriteId: 'text?',
+      customFilters: 'json?',
+    },
+    output: { href: 'text' },
+    effects: ['read:product.Attribute'],
+    handler: (_ctx, args) => ({ href: attributeSearchHref(args) }),
+  }),
   applySearchFilter: defineFn({
     input: {
       query: 'text?',
