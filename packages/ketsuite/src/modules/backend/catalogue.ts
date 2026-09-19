@@ -98,22 +98,15 @@ const MENU: MenuNode[] = [
   node('sale', 'Bán hàng', {
     icon: 'shopping-bag',
     children: [
-      node('sale.orders', 'Đơn hàng', {
-        icon: 'receipt-text',
-        children: [
-          node('sale.quotes', 'Báo giá', { path: '/quotes' }),
-          node('sale.list', 'Đơn hàng', { path: '/orders' }),
-        ],
-      }),
+      node('sale.quotations', 'Báo giá', { path: '/admin/sale/quotations' }),
+      node('sale.orders', 'Đơn hàng', { path: '/admin/sale/orders' }),
     ],
   }),
   node('product', 'Sản phẩm', {
     icon: 'package',
     children: [
-      node('product.catalogue', 'Danh mục', {
-        icon: 'package',
-        children: [node('product.templates', 'Mẫu sản phẩm', { path: '/admin/product/templates' })],
-      }),
+      node('product.templates', 'Mẫu sản phẩm', { path: '/admin/product/templates' }),
+      node('product.attributes', 'Thuộc tính', { path: '/admin/product/attributes' }),
     ],
   }),
   node('pricing', 'Bảng giá', { icon: 'tag', path: '/admin/pricing/pricelists' }),
@@ -127,7 +120,10 @@ const MENU: MenuNode[] = [
       node('admin.config', 'Cấu hình', {
         icon: 'settings',
         active: true,
-        children: [node('admin.users', 'Người dùng', { path: '/admin/users' })],
+        children: [
+          node('admin.users', 'Người dùng', { path: '/admin/users' }),
+          node('admin.companies', 'Công ty', { path: '/admin/companies' }),
+        ],
       }),
     ],
   }),
