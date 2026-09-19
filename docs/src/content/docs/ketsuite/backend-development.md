@@ -25,6 +25,16 @@ Backend companions contain `index.ts`, route declarations/adapters, a `screens/`
 `menus.ts`, and optional `islands.ts` plus client assets. Their manifest depends on the domain and
 `backend`; it may declare assets, styles, routes, menus, messages, islands, joints, and fills.
 
+KétSuite sidebar menus normally have two levels: an application heading and its screen links.
+Declare each screen's `parent` as the application ID (for example, `product.templates` and
+`product.attributes` both use `parent: 'product'`). Do not add intermediate catalogue or
+operations headings. A **Configuration** heading with two or more declared screen links
+keeps its existing third level, including `admin.config`. Count declared links across
+modules, before permission filtering; a viewer with fewer permissions still sees the
+same configuration grouping.
+Keep screen IDs, paths, `needs`, and `for` declarations stable when moving menu entries.
+Use distinct sequence ranges to keep related screens together without another menu level.
+
 ## Screen organization
 
 Every routed business screen owns one `screens/<name>.tsx` file and composes its UI with JSX.

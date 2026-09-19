@@ -9,19 +9,18 @@ import type { MenuDef } from '@ketvietlab/ketjs'
 
 export const menus: Record<string, MenuDef> = {
   product: { label: 'menu.app', icon: 'package', sequence: 20 },
-  'product.catalogue': { parent: 'product', label: 'menu.catalogue', sequence: 10 },
   'product.templates': {
-    parent: 'product.catalogue',
+    parent: 'product',
     label: 'menu.templates',
     path: '/admin/product/templates',
     needs: 'product.listTemplates',
-    sequence: 10,
+    sequence: 1010,
   },
   'product.attributes': {
-    parent: 'product.catalogue',
+    parent: 'product',
     label: 'menu.attributes',
     path: '/admin/product/attributes',
     needs: 'product.listAttributes',
-    sequence: 20,
+    sequence: 1020,
   },
 }
