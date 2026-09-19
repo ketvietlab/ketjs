@@ -10233,6 +10233,7 @@
         "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/flow-inbox.test.ts",
+        "test/ketsuite-menu.test.ts",
         "test/list-chrome.test.ts",
         "test/menu.test.ts",
         "test/partner-e2e.test.ts",
