@@ -1,4 +1,5 @@
 import { accessRoutes, renderAccess } from './access-routes.tsx'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
@@ -751,8 +752,12 @@ export const routes: Record<string, RouteEntry> = {
         title: 'user_backend.roles.title',
         active: '/admin/roles',
         body: async (_, frame) =>
-          rolesScreen(_, frame, {
-            rows: (await rolesOf(ctx, url, req)).map((row) => ({
+          rolesScreen(_, collectionSearchFrame(url, frame, _('user_backend.roles.title')), {
+            rows: searchCollectionRows(
+              url,
+              await rolesOf(ctx, url, req),
+              (row) => `${row.name} ${row.description ?? ''} ${row.mode}`,
+            ).map((row) => ({
               ...row,
               detailHref: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
             })),

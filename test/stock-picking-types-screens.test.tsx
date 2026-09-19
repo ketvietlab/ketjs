@@ -98,6 +98,8 @@ test('stock operation types list: preserves columns, summaries, search and pager
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.match(html, /href="\/vi\/admin\/stock\/picking-types\/new"/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="kho"/)

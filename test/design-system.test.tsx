@@ -1234,6 +1234,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       variant="operational"
       context="Sales / Sales orders"
       title="Sales orders"
+      headerActions={<Button label="Create order" variant="primary" />}
+      actions={<Button label="Export orders" variant="secondary" />}
       controls="Search orders"
       body="Order rows"
       status="148 orders"
@@ -1249,6 +1251,14 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
     /data-ui="list-page-body"[^>]*>[\s\S]*?Order rows[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?148 orders/,
   )
   assert.match(operationalList, /data-ui="list-page-toolbar"[\s\S]*?Search orders/)
+  const header = operationalList.slice(
+    operationalList.indexOf('data-ui="list-page-header"'),
+    operationalList.indexOf('</header>'),
+  )
+  assert.match(header, /data-ui="list-page-actions"[\s\S]*?Create order/)
+  assert.doesNotMatch(header, /Export orders/)
+  assert.ok(operationalList.indexOf('Search orders') < operationalList.indexOf('Export orders'))
+  assert.ok(operationalList.indexOf('Export orders') < operationalList.indexOf('Order rows'))
   assert.doesNotMatch(operationalList, /data-ui="list-page-status"/)
 
   const dashboardPage = renderToString(
@@ -1974,7 +1984,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 125)
+  assert.equal(names.length, 127)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2011,10 +2021,10 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 261)
-  assert.equal(designSystemInventory.summary.runtimeExports, 130)
+  assert.equal(designSystemInventory.summary.publicExports, 267)
+  assert.equal(designSystemInventory.summary.runtimeExports, 132)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, searchOf } from '../backend/paging.ts'
+import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf } from '../backend/paging.ts'
 import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
@@ -452,6 +452,7 @@ export const routes: Record<string, RouteEntry> = {
           : []),
       ]
       const searchFilterConfig: SearchFilterConfig = {
+        size: 'compact',
         name: 'partner-directory-filter',
         facets,
         filters: [
@@ -486,6 +487,11 @@ export const routes: Record<string, RouteEntry> = {
           toggleLabel: _('partner_backend.search.toggle'),
           filters: _('partner_backend.search.filters'),
           groupBy: _('partner_backend.search.groupBy'),
+          groupByApplied: _('partner_backend.search.groupByApplied'),
+          groupByAdd: _('partner_backend.search.groupByAdd'),
+          groupByClear: _('partner_backend.search.groupByClear'),
+          groupByMoveEarlier: _('partner_backend.search.groupByMoveEarlier'),
+          groupByMoveLater: _('partner_backend.search.groupByMoveLater'),
           favorites: _('partner_backend.search.favorites'),
           searchGenericLabel: _('partner_backend.search.genericLabel'),
           searchFieldPrefix: _('partner_backend.search.fieldPrefix'),
@@ -509,7 +515,10 @@ export const routes: Record<string, RouteEntry> = {
         manager: {
           applyFunction: 'partner_backend.applyFilter',
           bodyId: 'partner-directory-table',
-          applyInput: url.searchParams.get('lang') ? { lang: url.searchParams.get('lang') } : undefined,
+          applyInput: {
+            lang: url.searchParams.get('lang') ?? undefined,
+            cols: url.searchParams.get('cols') ?? undefined,
+          },
         },
       }
 
@@ -523,6 +532,7 @@ export const routes: Record<string, RouteEntry> = {
             'partner-directory-filter',
             searchFilterConfig,
           )
+          const shown = colsOf(url)
           const columns: KetTableColumn[] = [
             {
               key: 'name',
@@ -576,6 +586,13 @@ export const routes: Record<string, RouteEntry> = {
               },
             },
           ]
+          if (shown.includes('id'))
+            columns.push({
+              key: 'id',
+              label: _('backend.table.id'),
+              format: { kind: 'identifier', field: 'id' },
+              priority: 'tertiary',
+            })
           const grid = await tableGrid(ctx, url, req, 'partner-directory-table', {
             columns,
             rows: rows as never,
@@ -585,6 +602,8 @@ export const routes: Record<string, RouteEntry> = {
             groupBy: groupBy ? [groupBy] : undefined,
             groups: groups as never,
             selection: { formId: 'partner-directory-bulk' },
+            page: current,
+            pager: false,
             manager: {
               listFunction: 'partner.listPartners',
               // No `groupFunction`: with a single group-by level, an expanded
@@ -619,6 +638,23 @@ export const routes: Record<string, RouteEntry> = {
                   path: inLocale(url, '/admin/partner/partners/new'),
                 },
                 selection,
+                pager: groupBy ? null : pager(url, current, rows.length, total),
+                tailMenus: [
+                  {
+                    id: 'columns',
+                    label: _('backend.table.columns'),
+                    items: [
+                      {
+                        id: 'id',
+                        label: _('backend.table.id'),
+                        active: shown.includes('id'),
+                        path: colsHref(url)(
+                          shown.includes('id') ? shown.filter((key) => key !== 'id') : [...shown, 'id'],
+                        ),
+                      },
+                    ],
+                  },
+                ],
               },
             },
             filterBar,

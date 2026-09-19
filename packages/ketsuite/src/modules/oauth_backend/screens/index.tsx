@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
@@ -5,7 +6,8 @@ import {
   CardGrid,
   code,
   ContentCard,
-  dataTable,
+  collectionTable,
+  collectionControls,
   DefinitionList,
   emptyState,
   FormPage,
@@ -66,21 +68,67 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (row) => row.id,
+      columns: [
+        {
+          key: 'name',
+          label: _('oauth_backend.field.name'),
+          priority: 'primary',
+          cell: (row) =>
+            linkButton({
+              label: row.name,
+              href: localized(`/admin/oauth/providers/${row.id}`, locale),
+              variant: 'tertiary',
+            }),
+        },
+        { key: 'code', label: _('oauth_backend.field.code'), cell: (row) => code(row.code) },
+        { key: 'issuer', label: _('oauth_backend.field.issuer'), cell: (row) => code(row.issuer) },
+        {
+          key: 'provision',
+          label: _('oauth_backend.field.autoProvision'),
+          kind: 'status',
+          cell: (row) =>
+            badge(
+              row.autoProvision ? _('oauth_backend.state.enabled') : _('oauth_backend.state.disabled'),
+              row.autoProvision ? 'info' : 'neutral',
+            ),
+        },
+        {
+          key: 'state',
+          label: _('oauth_backend.field.state'),
+          kind: 'status',
+          cell: (row) =>
+            badge(
+              row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
+              row.active ? 'positive' : 'neutral',
+            ),
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('oauth_backend.providers.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('oauth_backend.providers.title')}
+      controls={collectionControls(_, _('oauth_backend.providers.title'), frame)}
       description={_('oauth_backend.providers.subtitle')}
+      headerActions={linkButton({
+        label: _('oauth_backend.action.create'),
+        href: localized('/admin/oauth/providers/new', locale),
+        variant: 'primary',
+      })}
       actions={inline([
-        linkButton({
-          label: _('oauth_backend.action.create'),
-          href: localized('/admin/oauth/providers/new', locale),
-          variant: 'primary',
-        }),
         linkButton({
           label: _('oauth_backend.action.identities'),
           href: localized('/admin/oauth/identities', locale),
@@ -101,51 +149,12 @@ export const providersScreen = (
       body={
         rows.length === 0
           ? emptyState(_('oauth_backend.providers.empty'), _('oauth_backend.providers.emptyHint'))
-          : dataTable(_, {
-              rows,
-              id: (row) => row.id,
-              columns: [
-                {
-                  key: 'name',
-                  label: _('oauth_backend.field.name'),
-                  priority: 'primary',
-                  cell: (row) =>
-                    linkButton({
-                      label: row.name,
-                      href: localized(`/admin/oauth/providers/${row.id}`, locale),
-                      variant: 'tertiary',
-                    }),
-                },
-                { key: 'code', label: _('oauth_backend.field.code'), cell: (row) => code(row.code) },
-                { key: 'issuer', label: _('oauth_backend.field.issuer'), cell: (row) => code(row.issuer) },
-                {
-                  key: 'provision',
-                  label: _('oauth_backend.field.autoProvision'),
-                  kind: 'status',
-                  cell: (row) =>
-                    badge(
-                      row.autoProvision
-                        ? _('oauth_backend.state.enabled')
-                        : _('oauth_backend.state.disabled'),
-                      row.autoProvision ? 'info' : 'neutral',
-                    ),
-                },
-                {
-                  key: 'state',
-                  label: _('oauth_backend.field.state'),
-                  kind: 'status',
-                  cell: (row) =>
-                    badge(
-                      row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
-                      row.active ? 'positive' : 'neutral',
-                    ),
-                },
-              ],
-            })
+          : collectionTable(_, prepared.table)
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}
 
 type ProviderOptions = {
   companies: FormOption[]
@@ -378,21 +387,69 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (row) => row.id,
+      columns: [
+        {
+          key: 'user',
+          label: _('oauth_backend.field.user'),
+          priority: 'primary',
+          cell: (row) => row.user?.name || row.user?.login || row.userId,
+        },
+        {
+          key: 'provider',
+          label: _('oauth_backend.field.provider'),
+          cell: (row) => row.provider?.name || row.provider?.code || row.providerId,
+        },
+        { key: 'subject', label: _('oauth_backend.field.subject'), cell: (row) => code(row.subject) },
+        { key: 'email', label: _('oauth_backend.field.email'), cell: (row) => row.email || '—' },
+        {
+          key: 'lastLogin',
+          label: _('oauth_backend.field.lastLogin'),
+          cell: (row) => row.lastLoginAt || _('oauth_backend.state.never'),
+        },
+        {
+          key: 'actions',
+          label: _('oauth_backend.field.actions'),
+          kind: 'status',
+          cell: (row) => (
+            <RecordActions
+              action={localized(`/admin/oauth/identities/${row.id}/unlink`, locale)}
+              actions={[
+                {
+                  value: 'unlink',
+                  label: _('oauth_backend.action.unlink'),
+                  variant: 'destructive',
+                },
+              ]}
+            />
+          ),
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('oauth_backend.identities.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('oauth_backend.identities.title')}
+      controls={collectionControls(_, _('oauth_backend.identities.title'), frame)}
       description={_('oauth_backend.identities.subtitle')}
+      headerActions={linkButton({
+        label: _('oauth_backend.action.linkIdentity'),
+        href: localized('/admin/oauth/identities/new', locale),
+        variant: 'primary',
+      })}
       actions={inline([
-        linkButton({
-          label: _('oauth_backend.action.linkIdentity'),
-          href: localized('/admin/oauth/identities/new', locale),
-          variant: 'primary',
-        }),
         linkButton({
           label: _('oauth_backend.action.providers'),
           href: localized('/admin/oauth/providers', locale),
@@ -406,51 +463,12 @@ export const identitiesScreen = (
           : []),
         rows.length === 0
           ? emptyState(_('oauth_backend.identities.empty'), _('oauth_backend.identities.emptyHint'))
-          : dataTable(_, {
-              rows,
-              id: (row) => row.id,
-              columns: [
-                {
-                  key: 'user',
-                  label: _('oauth_backend.field.user'),
-                  priority: 'primary',
-                  cell: (row) => row.user?.name || row.user?.login || row.userId,
-                },
-                {
-                  key: 'provider',
-                  label: _('oauth_backend.field.provider'),
-                  cell: (row) => row.provider?.name || row.provider?.code || row.providerId,
-                },
-                { key: 'subject', label: _('oauth_backend.field.subject'), cell: (row) => code(row.subject) },
-                { key: 'email', label: _('oauth_backend.field.email'), cell: (row) => row.email || '—' },
-                {
-                  key: 'lastLogin',
-                  label: _('oauth_backend.field.lastLogin'),
-                  cell: (row) => row.lastLoginAt || _('oauth_backend.state.never'),
-                },
-                {
-                  key: 'actions',
-                  label: _('oauth_backend.field.actions'),
-                  kind: 'status',
-                  cell: (row) => (
-                    <RecordActions
-                      action={localized(`/admin/oauth/identities/${row.id}/unlink`, locale)}
-                      actions={[
-                        {
-                          value: 'unlink',
-                          label: _('oauth_backend.action.unlink'),
-                          variant: 'destructive',
-                        },
-                      ]}
-                    />
-                  ),
-                },
-              ],
-            }),
+          : collectionTable(_, prepared.table),
       ])}
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}
 
 export const identityFormScreen = (
   _: Translator,

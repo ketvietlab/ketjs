@@ -65,7 +65,10 @@ const list = () =>
         },
       ],
     },
-    {},
+    {
+      chrome: { search: { name: 'q', placeholder: 'Find employees' } },
+      extras: { 'topbar.end': <a href="/admin/hr/export?lang=vi">Export employees</a> },
+    },
   )
 
 test('HR employees list: public ListPage keeps edit, state and archive commands', () => {
@@ -73,6 +76,15 @@ test('HR employees list: public ListPage keeps edit, state and archive commands'
 
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/hr\?create=1&amp;lang=vi"/)
+  assert.match(
+    html,
+    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/hr\?create=1&amp;lang=vi"[\s\S]*?data-ui="list-page-tools"[\s\S]*?href="\/admin\/hr\/export\?lang=vi"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="list-page-body"/,
+  )
+  assert.equal((html.match(/href="\/admin\/hr\?create=1&amp;lang=vi"/g) ?? []).length, 1)
+  assert.doesNotMatch(
+    html.slice(html.indexOf('data-ui="list-page-toolbar"')),
+    /data-ui="list-page-actions"|data-ui="list-page-tools"/,
+  )
   assert.match(html, /data-row-href="\/admin\/hr\?edit=employee-1&amp;lang=vi"/)
   assert.match(html, /NV001/)
   assert.match(html, /Nguyễn Minh Anh/)

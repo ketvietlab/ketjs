@@ -6,9 +6,11 @@ export type {
   CustomFilterField,
   SearchFacet,
   SearchFavorite,
+  SearchFilterCustomRule,
   SearchFilterConfig,
   SearchFilterLabels,
   SearchFilterManager,
+  SearchFilterSize,
   SearchFilterOption,
   SearchGroupByOption,
 } from '@ketvietlab/design-system'

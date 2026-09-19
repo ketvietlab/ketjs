@@ -91,9 +91,11 @@ const cleanPath = (value: unknown): string | null => {
 }
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+// Keep offsets exact: clamping a large offset repeats an earlier page and can
+// make a caller collecting pages report duplicated rows as a complete total.
 const page = (limit: unknown, offset: unknown, defaultLimit = 50) => ({
   limit: Math.min(Math.max(Number.isInteger(limit) ? Number(limit) : defaultLimit, 1), 100),
-  offset: Math.min(Math.max(Number.isInteger(offset) ? Number(offset) : 0, 0), 100_000),
+  offset: Math.max(Number.isSafeInteger(offset) ? Number(offset) : 0, 0),
 })
 const jsonBytes = (value: unknown): number => {
   try {
@@ -359,7 +361,10 @@ const conflictReport = async (
 const latestRevisionOf = async (ctx: Ctx, entryId: unknown): Promise<Row | null> => {
   const Revision = ctx.table('website.EntryRevision')
   return ctx.db.one(
-    from(Revision).where(eq(Revision.entryId, entryId)).orderBy(desc(Revision.version)).limit(1),
+    from(Revision)
+      .where(eq(Revision.entryId, entryId))
+      .orderBy(desc(Revision.version), asc(Revision.id))
+      .limit(1),
   )
 }
 
@@ -1206,8 +1211,16 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const paging = page(args.limit, args.offset)
       return ctx.db.all(
         from(Revision)
+          .select(
+            Revision.id,
+            Revision.entryId,
+            Revision.version,
+            Revision.kind,
+            Revision.authorId,
+            Revision.createdAt,
+          )
           .where(eq(Revision.entryId, args.entryId))
-          .orderBy(desc(Revision.version))
+          .orderBy(desc(Revision.version), asc(Revision.id))
           .limit(paging.limit)
           .offset(paging.offset),
       )
@@ -1457,7 +1470,9 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!(await canAccessSite(ctx, args.siteId))) return []
       const Term = ctx.table('website.TaxonomyTerm')
       const paging = page(args.limit, args.offset, 100)
-      let query = from(Term).where(eq(Term.siteId, args.siteId)).orderBy(asc(Term.taxonomy), asc(Term.name))
+      let query = from(Term)
+        .where(eq(Term.siteId, args.siteId))
+        .orderBy(asc(Term.taxonomy), asc(Term.name), asc(Term.id))
       if (args.taxonomy) query = query.where(eq(Term.taxonomy, args.taxonomy))
       return ctx.db.all(query.limit(paging.limit).offset(paging.offset))
     },
@@ -1608,7 +1623,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
               assignments.map((row) => row.termId),
             ),
           )
-          .orderBy(asc(Term.taxonomy), asc(Term.name)),
+          .orderBy(asc(Term.taxonomy), asc(Term.name), asc(Term.id)),
       )
       const byId = new Map(terms.map((term) => [term.id, term]))
       // The assignment's own id, because that is what unassignTerm is given
@@ -1782,7 +1797,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       return ctx.db.all(
         from(Media)
           .where(eq(Media.siteId, args.siteId))
-          .orderBy(asc(Media.attachmentId))
+          .orderBy(asc(Media.attachmentId), asc(Media.id))
           .limit(paging.limit)
           .offset(paging.offset),
       )
@@ -1843,7 +1858,9 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!(await canAccessSite(ctx, args.siteId))) return []
       const Redirect = ctx.table('website.Redirect')
       const paging = page(args.limit, args.offset, 100)
-      let query = from(Redirect).where(eq(Redirect.siteId, args.siteId)).orderBy(asc(Redirect.fromPath))
+      let query = from(Redirect)
+        .where(eq(Redirect.siteId, args.siteId))
+        .orderBy(asc(Redirect.fromPath), asc(Redirect.id))
       if (args.active != null) query = query.where(eq(Redirect.active, args.active))
       return ctx.db.all(query.limit(paging.limit).offset(paging.offset))
     },

@@ -1,9 +1,10 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -82,31 +83,48 @@ export const pickingTypesListScreen = (
   options: PickingTypesListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: pickingTypeListColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const incomingCount = options.rows.filter((row) => row.code === 'incoming').length
   const outgoingCount = options.rows.filter((row) => row.code === 'outgoing').length
   const internalCount = options.rows.filter((row) => row.code === 'internal').length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
 
   return shell(
     _,
     _('stock_backend.pickingTypes'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('stock_backend.pickingType.title')}
       description={_('stock_backend.pickingType.subtitle')}
-      actions={inline([
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />,
-        selection ? bulkActions(_, selection) : '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={
+        selection || collection.frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              selection ? bulkActions(_, selection) : '',
+              collection.frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
       controls={
-        frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('stock_backend.pickingType.title'),
               {
-                ...frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -116,24 +134,19 @@ export const pickingTypesListScreen = (
             )
           : undefined
       }
-      status={inline([
+      footer={inline([
         badge(`${_('stock_backend.pickingType.summary.incoming')}: ${incomingCount}`, 'positive'),
         badge(`${_('stock_backend.pickingType.summary.outgoing')}: ${outgoingCount}`, 'info'),
         badge(`${_('stock_backend.pickingType.summary.internal')}: ${internalCount}`, 'neutral'),
       ])}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
-              columns: pickingTypeListColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('stock_backend.pickingType.empty'), _('stock_backend.pickingType.emptyHint'), {
               icon: icon('truck'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

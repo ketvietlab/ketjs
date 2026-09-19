@@ -164,7 +164,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
     if (path === '/admin/sales/orders') {
       assert.match(html, /data-ui="list-page"/)
-      assert.match(html, /data-ui="table"/)
+      assert.match(html, /data-ui="kt-grid"/)
       assert.match(html, /Theo dõi đơn đã xác nhận, trạng thái lập hoá đơn và tổng giá trị\./)
       assert.match(html, /Khách hàng Minh Anh/)
       assert.match(html, /href="\/admin\/sales\/orders\/so-1"/)
@@ -173,7 +173,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     }
     if (path === '/admin/sales/invoicing-policies') {
       assert.match(html, /data-ui="list-page"/)
-      assert.match(html, /data-ui="table"/)
+      assert.match(html, /data-ui="kt-grid"/)
       assert.match(html, /Theo số lượng giao/)
       assert.match(html, /href="\/admin\/sales\/invoicing-policies\?create=1"/)
       assert.doesNotMatch(html, /id="invoicing-policy-form"|data-ui="record-workspace"/)
@@ -238,7 +238,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     clientOrderRef: 'KH/2026/HTTP',
     pricelistId: 'retail',
   })
-  assert.match(createdQuotation, /data-ui="table"/)
+  assert.match(createdQuotation, /data-ui="kt-grid"/)
   assert.match(createdQuotation, /Khách hàng Minh Anh/)
   assert.match(createdQuotation, /Bản nháp/)
   assert.doesNotMatch(createdQuotation, /data-island="mail\.chatter"/)

@@ -1,3 +1,5 @@
+import { loadSaleOrderCollection, loadSalePartnerNames } from './order-collection.ts'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -174,16 +176,13 @@ const partnerNames = async (
 ): Promise<Map<string, unknown>> => {
   const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
   if (!ids.length) return new Map()
-  // The picker list is capped, so it can no longer double as a name lookup: a
-  // page of orders names exactly the partners it shows, however many the
-  // tenant holds.
-  const partners = (await ctx.call(
-    'partner.listPartners',
-    { ids, includeArchived: true },
-    url,
-    req,
-  )) as AnyRow[]
-  return new Map(partners.map((r) => [String(r.id), r.name]))
+  // Explicit-ID lookups are bounded too; resolve every order's customer before
+  // visible-field search, including customers beyond the first lookup batch.
+  return loadSalePartnerNames(
+    ids,
+    (batch) =>
+      ctx.call('partner.listPartners', { ids: batch, includeArchived: true }, url, req) as Promise<AnyRow[]>,
+  )
 }
 const orderFields = async (
   ctx: ServeContext,
@@ -889,14 +888,15 @@ export default defineModule({
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const state = url.searchParams.get('state')
-        const rows = (await ctx.call(
-          'sale.listOrders',
-          {
-            ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
-          },
-          url,
-          req,
-        )) as AnyRow[]
+        const rows = await loadSaleOrderCollection(
+          (page) =>
+            ctx.call(
+              'sale.listOrders',
+              { ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }), ...page },
+              url,
+              req,
+            ) as Promise<AnyRow[]>,
+        )
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
@@ -908,12 +908,27 @@ export default defineModule({
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
-                rows: rows
-                  .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                  .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: searchCollectionRows(
+                  url,
+                  rows
+                    .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                    .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                  (row: AnyRow) =>
+                    String(row.name ?? '') +
+                    ' ' +
+                    String(row.partnerName ?? '') +
+                    ' ' +
+                    String(row.dateOrder ?? '') +
+                    ' ' +
+                    String(row.validityDate ?? '') +
+                    ' ' +
+                    String(row.state ?? '') +
+                    ' ' +
+                    String(row.amountTotal ?? ''),
+                ),
                 detailSuffix,
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.quotations.title')),
             ),
         })
       },
@@ -952,7 +967,9 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const detailSuffix = localeQuery(url)
-        const rows = (await ctx.call('sale.listOrders', { state: 'sale' }, url, req)) as AnyRow[]
+        const rows = await loadSaleOrderCollection(
+          (page) => ctx.call('sale.listOrders', { state: 'sale', ...page }, url, req) as Promise<AnyRow[]>,
+        )
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
@@ -963,10 +980,23 @@ export default defineModule({
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: searchCollectionRows(
+                  url,
+                  rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                  (row: AnyRow) =>
+                    String(row.name ?? '') +
+                    ' ' +
+                    String(row.partnerName ?? '') +
+                    ' ' +
+                    String(row.dateOrder ?? '') +
+                    ' ' +
+                    String(row.state ?? '') +
+                    ' ' +
+                    String(row.amountTotal ?? ''),
+                ),
                 detailSuffix,
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.orders.title')),
             ),
         })
       },
@@ -991,9 +1021,13 @@ export default defineModule({
               _,
               {
                 createHref: invoicingPolicyModalPath(url),
-                rows,
+                rows: searchCollectionRows(
+                  url,
+                  rows,
+                  (row: AnyRow) => String(row.name ?? '') + ' ' + String(row.invoicePolicy ?? ''),
+                ),
               },
-              shell,
+              collectionSearchFrame(url, shell, _('sale_backend.policies.title')),
             )
             if (url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(

@@ -58,6 +58,10 @@ const entries = [
     source: join(PRODUCT_BACKEND_DIR, 'modal/product-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/product-modal.mjs'),
   },
+  {
+    source: join(PRODUCT_BACKEND_DIR, 'modal/attribute-modal-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/attribute-modal.mjs'),
+  },
 ]
 
 /** @type {import('esbuild').Plugin} */

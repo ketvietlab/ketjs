@@ -1,9 +1,10 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
@@ -100,11 +101,23 @@ export const quotationsListScreen = (
   options: QuotationsListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: quotationListColumns(_, options.detailSuffix, options.printReport),
+      rows: options.rows,
+      id: (row) => String(row.id),
+      rowHref: (row) => `/admin/sales/quotations/${String(row.id)}${options.detailSuffix}`,
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const draft = options.rows.filter((row) => row.state === 'draft').length
   const sent = options.rows.filter((row) => row.state === 'sent').length
   const cancelled = options.rows.filter((row) => row.state === 'cancel').length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
   const summary = [
     `${_('sale_backend.quotation.summary.total')}: ${String(total)}`,
     `${_('sale_backend.quotation.summary.draft')}: ${String(draft)}`,
@@ -117,21 +130,27 @@ export const quotationsListScreen = (
     _('sale_backend.quotations.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('sale_backend.quotation.title')}
       description={_('sale_backend.quotation.subtitle')}
-      actions={inline([
-        <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />,
-        selection ? bulkActions(_, selection) : '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={
+        selection || collection.frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              selection ? bulkActions(_, selection) : '',
+              collection.frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
       controls={
-        frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('sale_backend.quotation.title'),
               {
-                ...frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -141,21 +160,15 @@ export const quotationsListScreen = (
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
-              columns: quotationListColumns(_, options.detailSuffix, options.printReport),
-              rows: options.rows,
-              id: (row) => String(row.id),
-              rowHref: (row) => `/admin/sales/quotations/${String(row.id)}${options.detailSuffix}`,
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('sale_backend.quotation.empty'), _('sale_backend.quotation.emptyHint'), {
               icon: icon('shopping-bag'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

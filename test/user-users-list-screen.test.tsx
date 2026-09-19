@@ -47,6 +47,15 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   assert.match(html, /31-31 \/ 31/)
   assert.match(html, /data-row-href="\/admin\/users\/user%2Fa\?lang=en"/)
   assert.match(html, /href="\/admin\/users\/new\?lang=en"/)
+  assert.match(
+    html,
+    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/users\/new\?lang=en"[\s\S]*?data-ui="list-page-tools"[\s\S]*?href="\/admin\/users\?q=Ada&amp;lang=en"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+  )
+  assert.doesNotMatch(
+    html.slice(html.indexOf('data-ui="list-page-toolbar"')),
+    /data-ui="list-page-actions"|data-ui="list-page-tools"/,
+  )
+  assert.equal((html.match(/href="\/admin\/users\/new\?lang=en"/g) ?? []).length, 1)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
   assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
 })

@@ -1,5 +1,5 @@
-import { each, signal } from '@ketvietlab/ketjs-view'
-import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
+import { each, effect, signal } from '@ketvietlab/ketjs-view'
+import type { IslandController, IslandProps, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Avatar, Badge, Code } from '../../primitives/status/index.tsx'
 import type { Tone } from '../../primitives/status/index.tsx'
 import { EmptyState, Notice } from '../../primitives/feedback/index.tsx'
@@ -30,6 +30,8 @@ export const HOOKS = [
   'kt-pager-label',
   'kt-pager-button',
   'kt-select-persisted',
+  'kt-caption',
+  'kt-tools',
 ] as const
 
 export type KetTableRow = Record<string, unknown>
@@ -59,6 +61,12 @@ export type KetTableColumn = {
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
   sortable?: boolean
+  /** Native URL-driven sorting; takes precedence over the RPC sort handler. */
+  sortHref?: string
+  sortLabel?: string
+  sortDirection?: 'asc' | 'desc' | null
+  /** Semantic presentation hint for server-rendered custom cells. */
+  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person' | 'media'
 }
 
 export type KetTableSort = { field: string; direction: 'asc' | 'desc' }
@@ -106,6 +114,10 @@ export type KetTableGroup = {
   rows?: KetTableRow[]
   /** Zero-based row offset for this leaf group's current page. */
   offset?: number
+  /** URL-driven trees explicitly carry their expansion state and next URL. */
+  open?: boolean
+  href?: string
+  pager?: { label: string; prev?: string; next?: string }
 }
 
 export type KetTableLabels = {
@@ -128,6 +140,7 @@ export type KetTableConfig = {
   rows: KetTableRow[]
   total: number
   idField: string
+  locale?: string
   /** A `{id}`-interpolated href, replacing a function-typed `rowHref` that couldn't cross the props boundary. */
   rowHrefTemplate?: string
   /** The active group-by keys, in order — the array `search-filter`'s active Group By facets already produce. Empty ⇒ a flat table. */
@@ -135,7 +148,12 @@ export type KetTableConfig = {
   /** The server-rendered top level, when `groupBy` is non-empty. */
   groups?: KetTableGroup[]
   selection?: KetTableSelection
-  manager: KetTableManager
+  /** Omit for URL-driven tables whose rows are supplied by the page route. */
+  manager?: KetTableManager
+  page?: number
+  sort?: KetTableSort | null
+  /** False when the containing toolbar owns pagination. */
+  pager?: false | { prev?: string; next?: string }
   labels: KetTableLabels
 }
 
@@ -143,6 +161,85 @@ export type KetTableExtensions = Record<
   string,
   (value: unknown, row: KetTableRow, options: Record<string, unknown> | undefined) => TemplateResult
 >
+
+/** Server-owned collection cells keep their semantic markup and exact values.
+ * URL navigation and native external-form controls require no island props.
+ * The same KetTable renderer and CSS serve both this surface and the island.
+ */
+export type KetTableServerProps<Row> = {
+  columns: Array<Omit<KetTableColumn, 'format' | 'sortable'> & { cell: (row: Row) => JSXChild }>
+  rows: readonly Row[]
+  id: (row: Row) => string
+  rowHref?: (row: Row) => string
+  rowLink?: boolean
+  caption?: string | null
+  tools?: JSXChild
+  responsive?: 'scroll' | 'stack'
+  gutter?: 'compact'
+  selection?: KetTableSelection
+  groups?: readonly (Omit<KetTableGroup, 'rows' | 'children' | 'href'> & {
+    href: string
+    rows?: readonly Row[]
+    children?: KetTableServerProps<Row>['groups']
+  })[]
+  sort?: KetTableSort | null
+  labels: KetTableLabels
+}
+
+type ServerRendering = {
+  rowHref?: (row: KetTableRow) => string
+  rowLink?: boolean
+  caption?: string | null
+  tools?: JSXChild
+  responsive?: 'scroll' | 'stack'
+  gutter?: 'compact'
+}
+
+export const KetTable = <Row,>(props: KetTableServerProps<Row>): TemplateResult => {
+  const wrap = (row: Row): KetTableRow => ({ id: props.id(row), source: row })
+  const groups = (nodes: NonNullable<KetTableServerProps<Row>['groups']>): KetTableGroup[] =>
+    nodes.map((node) => ({
+      ...node,
+      rows: node.rows?.map(wrap),
+      children: node.children ? groups(node.children) : undefined,
+    }))
+  const extensions: KetTableExtensions = Object.fromEntries(
+    props.columns.map((column) => [
+      column.key,
+      (_value: unknown, row: KetTableRow) => <>{column.cell(row.source as Row)}</>,
+    ]),
+  )
+  return createKetTableView(
+    {
+      id: 'server-collection',
+      config: {
+        columns: props.columns.map(({ cell: _cell, ...column }) => ({
+          ...column,
+          sortable: false,
+          format: { kind: 'custom', field: 'source', renderer: column.key },
+        })),
+        rows: props.rows.map(wrap),
+        total: props.rows.length,
+        idField: 'id',
+        groupBy: props.groups?.length ? ['server'] : [],
+        groups: props.groups ? groups(props.groups) : undefined,
+        selection: props.selection,
+        sort: props.sort,
+        pager: false,
+        labels: props.labels,
+      },
+    },
+    extensions,
+    {
+      rowHref: props.rowHref ? (row) => props.rowHref!(row.source as Row) : undefined,
+      rowLink: props.rowLink,
+      caption: props.caption,
+      tools: props.tools,
+      responsive: props.responsive,
+      gutter: props.gutter,
+    },
+  ).view() as TemplateResult
+}
 
 type KetTableIslandProps = IslandProps & { id: string; config: KetTableConfig }
 type ApiPayload = { ok?: boolean; value?: unknown; message?: unknown; errors?: Array<{ message?: unknown }> }
@@ -195,24 +292,27 @@ const updateNodeAt = (
 export function createKetTableView(
   props: KetTableIslandProps,
   extensions?: KetTableExtensions,
+  server?: ServerRendering,
 ): IslandController {
   const { config } = props
   const labels = config.labels
-  const manager = config.manager
+  const manager = config.manager ?? { listFunction: '' }
   const pageSize = manager.pageSize ?? 50
   const columns = config.columns
 
   const rows = signal<KetTableRow[]>(config.rows ?? [])
   const total = signal(config.total ?? 0)
-  const page = signal(1)
-  const sort = signal<KetTableSort | null>(null)
+  const page = signal(config.page ?? 1)
+  const sort = signal<KetTableSort | null>(config.sort ?? null)
   const groupBy = signal<string[]>(config.groupBy ?? [])
   const groups = signal<KetTableGroup[]>(config.groups ?? [])
-  // Top-level groups start open — a screen without any JS running (this
-  // island unhydrated, e.g. a static catalogue snapshot) would otherwise show
-  // an entirely empty table; a reader can still collapse from here once the
-  // page does hydrate.
-  const openGroups = signal<Set<string>>(new Set((config.groups ?? []).map((node) => pathKey([node.id]))))
+  const initialOpen = (nodes: KetTableGroup[], path: string[] = []): string[] =>
+    nodes.flatMap((node) => {
+      const next = [...path, node.id]
+      const open = node.open ?? (node.rows !== undefined || node.children !== undefined)
+      return open ? [pathKey(next), ...initialOpen(node.children ?? [], next)] : []
+    })
+  const openGroups = signal<Set<string>>(new Set(initialOpen(config.groups ?? [])))
   const selectedIds = signal<Set<string>>(new Set())
   const loading = signal(false)
   const error = signal('')
@@ -400,6 +500,7 @@ export function createKetTableView(
       case 'number':
         return typeof value === 'number' ? (
           <FormattedNumber
+            locale={config.locale}
             value={value}
             minimumFractionDigits={format.minimumFractionDigits}
             maximumFractionDigits={format.maximumFractionDigits}
@@ -408,13 +509,14 @@ export function createKetTableView(
           <>—</>
         )
       case 'currency':
-        return typeof value === 'number' ? (
-          <FormattedMoney value={value} currency={format.currency} />
+        return typeof value === 'number' ||
+          (typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim())) ? (
+          <FormattedMoney value={value} currency={format.currency} locale={config.locale} />
         ) : (
           <>—</>
         )
       case 'date':
-        return <FormattedDate value={string(value)} />
+        return <FormattedDate value={string(value)} locale={config.locale} />
       case 'status': {
         const entry = format.tones[string(value)]
         return entry ? <Badge label={entry.label} tone={entry.tone} /> : <>{string(value)}</>
@@ -442,12 +544,22 @@ export function createKetTableView(
   }
 
   const tableRow = (row: KetTableRow): TemplateResult => (
-    <tr data-ui="kt-row" data-row={idOf(row)} data-selected={isSelected(row) ? 'true' : null}>
+    <tr
+      data-ui="kt-row"
+      data-row={idOf(row)}
+      data-selected={isSelected(row) ? 'true' : null}
+      data-row-href={server?.rowHref?.(row)}
+      tabindex={server?.rowHref && server.rowLink === false ? 0 : null}
+    >
       {config.selection ? (
         <td data-ui="kt-select-cell">
           <input
             data-ui="kt-row-select"
             type="checkbox"
+            autocomplete="off"
+            name={server ? `${config.selection.fieldName ?? 'selected'}.${idOf(row)}` : undefined}
+            value={server ? '1' : undefined}
+            form={server ? config.selection.formId : undefined}
             checked={isSelected(row)}
             aria-label={`${labels.selectRow}: ${idOf(row)}`}
             onChange={() => toggleSelect(row)}
@@ -462,10 +574,12 @@ export function createKetTableView(
             data-ui="kt-cell"
             data-col={column.key}
             data-align={column.align ?? 'start'}
+            data-kind={column.kind ?? column.format.kind}
             data-priority={column.priority ?? 'secondary'}
+            data-label={server?.responsive === 'stack' ? column.label : null}
           >
-            {index === 0 && config.rowHrefTemplate ? (
-              <a data-ui="kt-row-link" href={rowHrefFor(row)}>
+            {index === 0 && (config.rowHrefTemplate || (server?.rowHref && server.rowLink !== false)) ? (
+              <a data-ui="kt-row-link" data-primary="true" href={server?.rowHref?.(row) ?? rowHrefFor(row)}>
                 {renderCell(row, column.format)}
               </a>
             ) : (
@@ -482,24 +596,34 @@ export function createKetTableView(
   const groupRowView = (node: KetTableGroup, path: readonly string[], depth: number): TemplateResult => {
     const open = openGroups().has(pathKey(path))
     const offset = node.offset ?? 0
-    const hasPager = node.rows !== undefined && node.count > pageSize
+    const hasPager =
+      node.pager !== undefined || (node.rows !== undefined && node.count > pageSize && !node.href)
     const from = node.count === 0 ? 0 : offset + 1
     const to = Math.min(offset + (node.rows?.length ?? 0), node.count)
     return (
       <>
         <tr data-ui="kt-group-row" data-depth={String(depth)}>
           <td data-ui="kt-group-cell" colSpan={String(groupSpan())}>
-            <button
-              data-ui="kt-group-toggle"
-              type="button"
-              aria-expanded={String(open)}
-              onClick={() => toggleGroup(path)}
-            >
-              <span data-ui="kt-group-indent" style={`--kt-group-depth: ${depth}`} aria-hidden="true" />
-              <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-              <span>{node.label}</span>
-              <span data-ui="kt-group-count">{String(node.count)}</span>
-            </button>
+            {node.href ? (
+              <a data-ui="kt-group-toggle" href={node.href} aria-expanded={String(open)}>
+                <span data-ui="kt-group-indent" style={`--kt-group-depth: ${depth}`} aria-hidden="true" />
+                <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                <span>{node.label}</span>
+                <span data-ui="kt-group-count">{String(node.count)}</span>
+              </a>
+            ) : (
+              <button
+                data-ui="kt-group-toggle"
+                type="button"
+                aria-expanded={String(open)}
+                onClick={() => toggleGroup(path)}
+              >
+                <span data-ui="kt-group-indent" style={`--kt-group-depth: ${depth}`} aria-hidden="true" />
+                <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                <span>{node.label}</span>
+                <span data-ui="kt-group-count">{String(node.count)}</span>
+              </button>
+            )}
           </td>
         </tr>
         {open && node.children
@@ -513,29 +637,33 @@ export function createKetTableView(
         {open && hasPager ? (
           <tr data-ui="kt-group-pager">
             <td colSpan={String(groupSpan())}>
-              <div data-ui="kt-pager">
-                <span data-ui="kt-pager-label">{`${from}–${to} / ${formatApproxCount(node.count)}`}</span>
-                <button
-                  data-ui="kt-pager-button"
-                  data-direction="prev"
-                  type="button"
-                  disabled={offset === 0}
-                  aria-label={labels.previousPage}
-                  onClick={() => goToGroupPage(path, Math.max(0, offset - pageSize))}
-                >
-                  ‹
-                </button>
-                <button
-                  data-ui="kt-pager-button"
-                  data-direction="next"
-                  type="button"
-                  disabled={offset + pageSize >= node.count}
-                  aria-label={labels.nextPage}
-                  onClick={() => goToGroupPage(path, offset + pageSize)}
-                >
-                  ›
-                </button>
-              </div>
+              {node.pager ? (
+                navigationPager(node.pager)
+              ) : (
+                <div data-ui="kt-pager">
+                  <span data-ui="kt-pager-label">{`${from}–${to} / ${formatApproxCount(node.count)}`}</span>
+                  <button
+                    data-ui="kt-pager-button"
+                    data-direction="prev"
+                    type="button"
+                    disabled={offset === 0}
+                    aria-label={labels.previousPage}
+                    onClick={() => goToGroupPage(path, Math.max(0, offset - pageSize))}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    data-ui="kt-pager-button"
+                    data-direction="next"
+                    type="button"
+                    disabled={offset + pageSize >= node.count}
+                    aria-label={labels.nextPage}
+                    onClick={() => goToGroupPage(path, offset + pageSize)}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
             </td>
           </tr>
         ) : null}
@@ -545,18 +673,28 @@ export function createKetTableView(
 
   const columnHeader = (column: KetTableColumn): TemplateResult => {
     const active = sort()?.field === column.key
-    const direction = active ? (sort()?.direction ?? null) : null
+    const direction = column.sortDirection ?? (active ? (sort()?.direction ?? null) : null)
     return (
       <th
         data-ui="kt-col"
         data-col={column.key}
         data-align={column.align ?? 'start'}
+        data-kind={column.kind ?? column.format.kind}
         data-priority={column.priority ?? 'secondary'}
         data-width={column.width ?? null}
         aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : null}
         scope="col"
       >
-        {column.sortable ? (
+        {column.sortHref ? (
+          <a data-ui="kt-sort-button" href={column.sortHref} aria-label={column.sortLabel}>
+            <span>{column.label}</span>
+            {direction ? (
+              <span data-ui="kt-sort-icon" aria-hidden="true">
+                {direction === 'asc' ? '↑' : '↓'}
+              </span>
+            ) : null}
+          </a>
+        ) : column.sortable && !isGrouped() ? (
           <button data-ui="kt-sort-button" type="button" onClick={() => toggleSort(column)}>
             <span>{column.label}</span>
             {direction ? (
@@ -576,10 +714,28 @@ export function createKetTableView(
     )
   }
 
+  const navigationPager = (links: { label: string; prev?: string; next?: string }): TemplateResult => (
+    <div data-ui="kt-pager">
+      <span data-ui="kt-pager-label">{links.label}</span>
+      {links.prev ? (
+        <a data-ui="kt-pager-button" data-direction="prev" href={links.prev} aria-label={labels.previousPage}>
+          ‹
+        </a>
+      ) : null}
+      {links.next ? (
+        <a data-ui="kt-pager-button" data-direction="next" href={links.next} aria-label={labels.nextPage}>
+          ›
+        </a>
+      ) : null}
+    </div>
+  )
+
   const pagerView = (): TemplateResult => {
     const totalPages = Math.max(1, Math.ceil(total() / pageSize))
     const from = total() === 0 ? 0 : (page() - 1) * pageSize + 1
     const to = Math.min(page() * pageSize, total())
+    if (config.pager)
+      return navigationPager({ ...config.pager, label: `${from}–${to} / ${formatApproxCount(total())}` })
     return (
       <div data-ui="kt-pager">
         <span data-ui="kt-pager-label">{`${from}–${to} / ${formatApproxCount(total())}`}</span>
@@ -608,7 +764,7 @@ export function createKetTableView(
   }
 
   const persistedInputs = (): TemplateResult | null =>
-    config.selection ? (
+    config.selection && !server ? (
       <div data-ui="kt-select-persisted" aria-hidden="true">
         {each(
           [...selectedIds()],
@@ -627,7 +783,14 @@ export function createKetTableView(
 
   return {
     view: () => (
-      <div data-ui="ket-table" data-busy={loading() ? 'true' : null}>
+      <div
+        data-ui="ket-table"
+        data-server={server ? 'true' : null}
+        data-responsive={server?.responsive}
+        data-gutter={server?.gutter}
+        data-busy={loading() ? 'true' : null}
+      >
+        {server?.tools !== undefined && <div data-ui="kt-tools">{server.tools}</div>}
         {error() ? (
           <Notice
             tone="danger"
@@ -641,11 +804,12 @@ export function createKetTableView(
           />
         ) : null}
         {persistedInputs()}
-        {!isGrouped() && rows().length === 0 ? (
+        {(isGrouped() ? groups().length === 0 : rows().length === 0) ? (
           <EmptyState title={labels.empty} message={labels.emptyHint} />
         ) : (
           <div data-ui="kt-scroll">
             <table data-ui="kt-grid">
+              {server?.caption && <caption data-ui="kt-caption">{server.caption}</caption>}
               <thead>
                 <tr>
                   {config.selection ? (
@@ -653,6 +817,7 @@ export function createKetTableView(
                       <input
                         data-ui="kt-select-all"
                         type="checkbox"
+                        autocomplete="off"
                         checked={allVisibleSelected()}
                         aria-label={labels.selectAll}
                         onChange={toggleSelectAllVisible}
@@ -674,9 +839,20 @@ export function createKetTableView(
             </table>
           </div>
         )}
-        {!isGrouped() ? pagerView() : null}
+        {!isGrouped() && config.pager !== false ? pagerView() : null}
       </div>
     ),
+    mount: ({ root, lifetime }) => {
+      const stop = effect(() => {
+        const visible = visibleRows()
+        const selected = visible.filter(isSelected).length
+        const checkbox = (root as unknown as HTMLElement).querySelector<HTMLInputElement>(
+          '[data-ui="kt-select-all"]',
+        )
+        if (checkbox) checkbox.indeterminate = selected > 0 && selected < visible.length
+      })
+      lifetime.addEventListener('abort', stop, { once: true })
+    },
     dispose: () => {
       loading.set(false)
     },

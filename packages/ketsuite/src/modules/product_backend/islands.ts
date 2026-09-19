@@ -30,6 +30,11 @@ export const islands = {
     client: 'product-modal.mjs',
     export: 'templateModal',
   }),
+  'product.attribute-modal': defineRecordModalIsland({
+    kind: 'product.attribute',
+    client: 'attribute-modal.mjs',
+    export: 'attributeModal',
+  }),
   // The template modal's "Attributes & variants" tab — see ui/client/variant-editor-view.tsx.
   'product.variant-editor': defineIsland<VariantEditorProps>()({
     props: {
