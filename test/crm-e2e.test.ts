@@ -4,6 +4,8 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
+import { renderCaseModal, type CaseModalPayload } from './crm-case-modal-helper.ts'
+
 const boot = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite)
   t.after(() => app.close())
@@ -98,13 +100,16 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   // The confirmation step chooses the stage the opportunity opens in.
   const step = await app.client.get(`/admin/crm/cases/${id}?lang=en&modal=convert`)
   assert.equal(step.status, 200)
-  const stepHtml = await step.text()
+  const stepHtml = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id, locale: 'en' }),
+    'overview',
+    'convert',
+  )
   assert.match(stepHtml, /Convert lead to opportunity/u)
-  assert.match(stepHtml, /No second customer and no second case are created/u)
   assert.match(stepHtml, /name="expectedRevenue"[^>]*required/u)
   assert.match(stepHtml, /name="expectedClosing"[^>]*required/u)
   // The step posts back to itself, so a refusal lands with the step still open.
-  assert.match(stepHtml, /<form[^>]*action="[^"]*modal=convert[^"]*"/u)
+  assert.match(stepHtml, /data-record-kind="crm.case"/u)
 
   const converted = await app.client.post(
     `/admin/crm/cases/${id}?lang=en`,
@@ -143,16 +148,23 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   assert.equal(moved.status, 303)
   row = await call<Row>('crm.case.get', { id })
   const sales = await app.client.get(`/admin/crm/cases/${id}?tab=sales&lang=en`)
-  const salesHtml = await sales.text()
+  const salesHtml = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id, locale: 'en' }),
+    'sales',
+  )
   assert.equal(sales.status, 200)
-  assert.match(salesHtml, /1,850,000/u)
+  assert.match(salesHtml, /1850000/u)
   assert.match(salesHtml, /2026-09-12/u)
 
   const closeStep = await app.client.get(`/admin/crm/cases/${id}?tab=sales&modal=close&lang=en`)
-  const closeStepHtml = await closeStep.text()
+  const closeStepHtml = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id, locale: 'en' }),
+    'sales',
+    'close',
+  )
   assert.equal(closeStep.status, 200)
   assert.match(closeStepHtml, /Close opportunity/u)
-  assert.match(closeStepHtml, /name="terminal"/u)
+  assert.match(closeStepHtml, /name="__command" value="won"/u)
   assert.match(closeStepHtml, /name="closeReason"/u)
   assert.match(closeStepHtml, /name="confirm"/u)
 

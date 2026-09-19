@@ -41,6 +41,10 @@ const entries = [
   },
   // The CRM configuration record modals: one bundle, one export per record kind.
   {
+    source: join(CRM_BACKEND_DIR, 'modal/case-modal-view.tsx'),
+    output: join(CRM_BACKEND_DIR, 'client/crm-case-modal.mjs'),
+  },
+  {
     source: join(CRM_BACKEND_DIR, 'modal/configuration-modal-view.tsx'),
     output: join(CRM_BACKEND_DIR, 'client/crm-configuration-modal.mjs'),
   },

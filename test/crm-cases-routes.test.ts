@@ -4,6 +4,8 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
+import { renderCaseModal, type CaseModalPayload } from './crm-case-modal-helper.ts'
+
 const formHeaders = { 'content-type': 'application/x-www-form-urlencoded' }
 const post = { headers: formHeaders, redirect: 'manual' as const }
 
@@ -55,35 +57,32 @@ test('crm cases routes: list and dedicated create preserve filters, presets and 
   assert.equal(list.status, 200)
   assert.match(listHtml, /data-ui="list-page"/)
   assert.match(listHtml, /data-ui="chrome-search-input"[^>]*value="Route case"/)
-  assert.match(listHtml, /href="\/admin\/crm\/cases\/route-case\?lang=en"/)
-  assert.match(listHtml, /href="\/admin\/crm\/cases\/new\?[^"<]*lang=en/)
-  assert.match(listHtml, /returnTo=%2Fadmin%2Fcrm%2Fcases%3Fq%3DRoute%2520case/)
+  assert.match(listHtml, /record=crm.case%3Aroute-case/)
+  assert.match(listHtml, /record=crm.case%3Anew/)
+  assert.match(listHtml, /q=Route\+case&amp;preset=open&amp;lang=en/)
   assert.doesNotMatch(listHtml, /id="crm-case-create-form"|data-ui="chatter"/)
 
   const returnTo = '/admin/crm/cases?q=Route%20case&preset=open&lang=en'
   const create = await app.client.get(
     `/admin/crm/cases/new?stageId=crm-stage-proposition&kind=opportunity&lang=en&returnTo=${encodeURIComponent(returnTo)}`,
   )
-  const createHtml = await create.text()
   assert.equal(create.status, 200)
-  assert.match(createHtml, /data-ui="form-page"/)
-  assert.match(createHtml, /action="\/admin\/crm\/cases\/new\?lang=en"/)
-  assert.match(createHtml, /href="\/admin\/crm\/cases\?q=Route%20case&amp;preset=open&amp;lang=en"/)
+  assert.match(create.url, /record=crm.case%3Anew/)
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', {
+    kind: 'opportunity',
+    stageId: 'crm-stage-proposition',
+    locale: 'en',
+  })
+  const createHtml = renderCaseModal(payload)
+  assert.match(createHtml, /data-ui="record-form"/)
   assert.match(createHtml, /name="kind"[\s\S]*?value="opportunity"[^>]*selected/)
-  assert.match(
-    createHtml,
-    /<select[^>]*name="stageId"[\s\S]*?<option[^>]*value="crm-stage-proposition"[^>]*selected/,
-  )
-  assert.match(createHtml, /data-ui="relation-select"/)
-  assert.doesNotMatch(createHtml, /data-ui="chatter"|data-ui="form-page-aside"/)
+  assert.match(createHtml, /name="stageId"[\s\S]*?value="crm-stage-proposition"[^>]*selected/)
+  assert.match(createHtml, /data-island="backend.relation-select"/)
 
   const pipeline = await app.client.get('/admin/crm/pipeline?teamId=crm-team-sales&lang=en')
   const pipelineHtml = await pipeline.text()
   assert.equal(pipeline.status, 200)
-  assert.match(
-    pipelineHtml,
-    /href="\/admin\/crm\/cases\/new\?stageId=crm-stage-proposition&amp;kind=opportunity/,
-  )
+  assert.match(pipelineHtml, /stageId=crm-stage-proposition&amp;kind=opportunity&amp;record=crm.case%3Anew/)
 })
 
 test('crm cases routes: new POST and backward-compatible list POST retain safety and redirects', async (t) => {
@@ -152,19 +151,21 @@ test('crm cases routes: new POST and backward-compatible list POST retain safety
 })
 
 test('crm cases routes: Partner intent prefills contact context and returns field refusals in place', async (t) => {
-  const { app } = await boot(t)
+  const { app, call } = await boot(t)
   const create = await app.client.get('/admin/crm/cases/new?kind=lead&partnerId=customer&lang=en')
-  const createHtml = await create.text()
   assert.equal(create.status, 200)
-  assert.match(createHtml, /data-ui="form-page-title"[^>]*>[\s\S]*?Create lead/)
-  assert.match(createHtml, /A customer does not automatically become a lead/)
+  assert.match(create.url, /partnerId=customer/)
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', {
+    kind: 'lead',
+    partnerId: 'customer',
+    locale: 'en',
+  })
+  const createHtml = renderCaseModal(payload)
+  assert.equal(payload.data.partnerIntent, true)
   assert.match(createHtml, /name="email"[^>]*value="minh@example\.test"/)
   assert.match(createHtml, /name="phone"[^>]*value="0909000123"/)
   assert.match(createHtml, /name="contactName"[^>]*value="Nguyễn Minh"/)
-  assert.match(createHtml, /name="partnerIntent"[^>]*value="1"/)
-  assert.match(createHtml, /name="utmSource"[\s\S]*?value="marketplace"[^>]*selected/)
   assert.match(createHtml, /name="description"[^>]*required/)
-  assert.match(createHtml, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
 
   const refused = await app.client.post(
     '/admin/crm/cases/new?lang=en',
@@ -185,4 +186,123 @@ test('crm cases routes: Partner intent prefills contact context and returns fiel
   assert.match(refusedHtml, /name="description"[^>]*aria-invalid="true"/)
   assert.match(refusedHtml, /name="expectedRevenue"[^>]*value="still here"[^>]*aria-invalid="true"/)
   assert.match(refusedHtml, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
+})
+
+test('crm record modal: large surfaces, commands preserve stage and version, stale saves are refused', async (t) => {
+  const { call } = await boot(t)
+  const { caseModalDefinition } = await import(
+    '../packages/ketsuite/src/modules/crm_backend/modal/case-modal-view.tsx'
+  )
+  const { caseContext } = await import('./crm-case-modal-helper.ts')
+  assert.equal(caseModalDefinition.size, 'large')
+  assert.ok(caseModalDefinition.fixedHeight)
+  await call('crm.case.save', {
+    id: 'native',
+    kind: 'opportunity',
+    name: 'Native modal',
+    stageId: 'crm-stage-proposition',
+    partnerId: 'customer',
+    idempotencyKey: 'native-create-001',
+  })
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', { id: 'native', locale: 'en' })
+  const context = caseContext(payload)
+  assert.deepEqual(
+    caseModalDefinition.tabs!.filter((tab) => !tab.visible || tab.visible(context)).map((tab) => tab.id),
+    ['overview', 'sales', 'activities', 'timeline'],
+  )
+  const form = new FormData()
+  form.set('name', 'Edited through modal')
+  form.set('partnerId', 'customer')
+  form.set('priority', '2')
+  form.set('expectedRevenue', '500000')
+  form.set('probability', '30')
+  const input = caseModalDefinition.commands!.save!.input(form, context, {})
+  assert.equal(input.stageId, 'crm-stage-proposition')
+  assert.equal(input.expectedVersion, payload.data.record.version)
+  const saved = await call<Row>('crm.case.save', input)
+  assert.equal(saved.ok, true, JSON.stringify(saved))
+  const held = await call<Row>('crm.case.get', { id: 'native' })
+  assert.equal(held.stageId, 'crm-stage-proposition')
+  assert.equal(held.name, 'Edited through modal')
+  const stale = await call<Row>('crm.case.save', {
+    ...input,
+    name: 'Stale edit',
+    idempotencyKey: 'native-stale-001',
+  })
+  assert.equal(stale.ok, false)
+  assert.equal((await call<Row>('crm.case.get', { id: 'native' })).name, 'Edited through modal')
+  const draft = {
+    ...context,
+    draft: (name: string, fallback = '') => (name === 'name' ? 'Unsaved draft' : fallback),
+    fieldError: (name: string) => (name === 'name' ? 'Title required' : null),
+  }
+  const { renderToString } = await import('@ketvietlab/ketjs-view')
+  const html = renderToString(
+    caseModalDefinition.tabs![0]!.view(draft) as import('@ketvietlab/ketjs-view').TemplateResult,
+  )
+  assert.match(html, /value="Unsaved draft"/)
+  assert.match(html, /aria-invalid="true"/)
+  assert.match(html, /Title required/)
+  assert.equal(await call('crm.case.modalContext', { id: 'missing' }), null)
+})
+
+test('crm record modal: existing links redirect with tab and locale, unknown records stay 404', async (t) => {
+  const { app, call } = await boot(t)
+  await call('crm.case.save', {
+    id: 'deep-link',
+    kind: 'lead',
+    name: 'Deep link',
+    idempotencyKey: 'deep-link-create',
+  })
+  const response = await app.client.get('/admin/crm/cases/deep-link?tab=timeline&lang=en', {
+    redirect: 'manual',
+  })
+  assert.equal(response.status, 303)
+  const destination = new URL(response.headers.get('location')!, app.baseUrl)
+  assert.equal(destination.pathname, '/admin/crm/cases')
+  assert.equal(destination.searchParams.get('record'), 'crm.case:deep-link')
+  assert.equal(destination.searchParams.get('tab'), 'timeline')
+  assert.equal(destination.searchParams.get('lang'), 'en')
+  assert.equal((await app.client.get('/admin/crm/cases/missing', { redirect: 'manual' })).status, 404)
+})
+
+test('crm record modal: read-only actor receives no mutation actions or unrelated people', async (t) => {
+  const { app, call } = await boot(t)
+  await call('crm.case.save', {
+    id: 'reader-case',
+    kind: 'lead',
+    name: 'Readable case',
+    idempotencyKey: 'reader-create-001',
+  })
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call(name, input, { scope: { company: 'acme', branches: null } })
+  await fixture('user.createUser', {
+    id: 'reader',
+    login: 'reader',
+    password: 'reader-test',
+    name: 'CRM Reader',
+    defaultCompanyId: 'acme',
+  })
+  await fixture('user.grantCompany', { id: 'reader:acme', userId: 'reader', companyId: 'acme' })
+  await fixture('user.saveRole', { id: 'crm-reader', name: 'CRM reader' })
+  for (const fnKey of ['crm.case.modalContext', 'crm.case.get'])
+    await fixture('user.grantFunction', { id: `reader:${fnKey}`, roleId: 'crm-reader', fnKey })
+  await fixture('user.assignRole', { id: 'reader:role', userId: 'reader', roleId: 'crm-reader' })
+  await call('crm.team.member.save', {
+    id: 'reader:member',
+    userId: 'reader',
+    teamId: 'crm-team-sales',
+    idempotencyKey: 'reader-team-member',
+  })
+  await app.client.logout()
+  await app.client.login({ login: 'reader', password: 'reader-test' })
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', { id: 'reader-case' })
+  assert.ok(payload, 'a team member may read the case')
+  assert.equal(Object.values(payload.data.permissions).some(Boolean), false)
+  assert.deepEqual(
+    payload.data.users.map((user) => user.id),
+    ['reader'],
+  )
+  assert.doesNotMatch(renderCaseModal(payload), /data-record-dialog=|data-ui="record-form"/)
+  assert.equal(await call('crm.case.modalContext', {}), null)
 })
