@@ -524,3 +524,5 @@ loading, aborts and cache policy for either source.
 A successful command may declare `navigate(value, context)` for a same-origin
 location, for example a newly created record or a URL-backed collection filter. The
 runtime performs navigation only after the command succeeds; refusals retain the draft.
+
+Action-only record forms (`data-layout="actions"`) opt out of field-container sizing and retain their intrinsic button width inside a fixed footer. This contract belongs to the shared RecordForm stylesheet.
