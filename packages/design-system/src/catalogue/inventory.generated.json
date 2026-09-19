@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 132,
     "cssFiles": 76,
-    "cssLines": 14929
+    "cssLines": 14937
   },
   "rows": [
     {
@@ -11397,7 +11397,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 175,
+      "lines": 183,
       "hooks": [
         "bulk-action-list",
         "cell",

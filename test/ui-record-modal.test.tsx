@@ -434,3 +434,10 @@ test('record modal: public forms associate fixed-footer submitters and retain co
   assert.match(html, /form="milestone-form"/)
   assert.ok(html.indexOf('form="milestone-form"') > html.indexOf('</form>'))
 })
+
+test('record modal: action forms opt out of field container sizing in fixed footers', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const actionRule = css.match(/\[data-ui="record-form"\]\[data-layout="actions"\]\s*\{([^}]+)\}/u)?.[1] ?? ''
+  assert.match(actionRule, /container-type:\s*normal/u)
+  assert.match(actionRule, /flex:\s*0 0 auto/u)
+})
