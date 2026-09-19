@@ -280,6 +280,7 @@ const sources = {
       'case.markWon': ['approve', 'approve', 'crm.domain-policy'],
       'case.merge': ['approve', 'merge', 'crm.merge-policy'],
       'case.move': ['operate', 'agent-operate'],
+      'case.modalContext': ['read', 'view'],
       'case.options': ['read', 'view'],
       'case.reassign': ['approve', 'assignment', 'crm.assignment-policy'],
       'case.refreshScore': ['operate', 'analytics'],

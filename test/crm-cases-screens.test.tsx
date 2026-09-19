@@ -101,7 +101,7 @@ test('crm cases list: keeps filtered ListPage chrome, columns and localized row 
   assert.match(rendered, /data-col="assignee"[\s\S]*?Nguyễn Minh/)
   assert.match(rendered, /data-col="revenue"/)
   assert.match(rendered, /data-col="state"[\s\S]*?Đang mở/)
-  assert.match(rendered, /href="\/admin\/crm\/cases\/case-denim\?lang=vi"/)
+  assert.match(rendered, /href="\/admin\/crm\/cases\?lang=vi&amp;record=crm.case%3Acase-denim"/)
   assert.doesNotMatch(rendered, /crm-case-create-form|data-ui="chatter"/)
 })
 

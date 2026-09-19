@@ -38,6 +38,11 @@ export const kanbanMovePayload = (
 type CrmPipelineProps = { lang?: string; data?: string }
 
 export const islands = {
+  'crm.case-modal': defineRecordModalIsland({
+    kind: 'crm.case',
+    client: 'crm-case-modal.mjs',
+    export: 'caseModal',
+  }),
   'crm.pipeline': defineIsland<CrmPipelineProps>()({
     props: { lang: 'text?', data: 'text?' },
     client: 'crm-kanban.mjs',
