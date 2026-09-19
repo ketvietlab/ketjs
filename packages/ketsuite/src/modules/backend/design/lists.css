@@ -43,7 +43,11 @@
   /* A ListPage command bar keeps query controls bounded on the left while the
      pager and view controls remain anchored to the far edge. */
   [data-ui="list-chrome"][data-layout="command"] [data-ui="list-chrome-row"] {
+    flex-wrap: wrap;
     gap: var(--admin-gap-sm);
+  }
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tools"] {
+    flex-wrap: wrap;
   }
 
   [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-search"] {
@@ -54,7 +58,17 @@
   }
 
   [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tail"] {
+    flex-wrap: wrap;
     margin-inline-start: auto;
+  }
+
+  /* The new filter island replaces only the legacy query control, and shares
+     its bounded, flexible footprint beside paging and view choice. */
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-search-content"] {
+    min-inline-size: 0;
+    flex: 1 1 24rem;
+    inline-size: auto;
+    max-inline-size: 50rem;
   }
 
   [data-ui="list-page"][data-variant="operational"]

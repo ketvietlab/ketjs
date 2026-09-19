@@ -1,12 +1,10 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
+import type { KetTableColumn } from '@ketvietlab/design-system'
 import {
   badge,
   bulkActions,
-  code,
-  dataTable,
   emptyState,
-  formatMoney,
   icon,
   inline,
   KanbanCard,
@@ -18,7 +16,7 @@ import {
   shell,
   thumbnail,
 } from '../../../ui/index.ts'
-import type { Column, DataTable, Frame } from '../../../ui/index.ts'
+import type { Frame } from '../../../ui/index.ts'
 
 export type TemplateRow = {
   id: string
@@ -26,7 +24,7 @@ export type TemplateRow = {
   type: string
   categoryId: string | null
   uomId: string | null
-  listPrice: number
+  listPrice: number | string
   isStorable?: boolean | null
   variants: number
   /**
@@ -60,76 +58,70 @@ export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
  * Goods and services are not a good/bad axis, so neither gets a judgemental tone.
  * The id is off by default: useful to a specialist, noise to everyone else.
  */
-export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
+export const templateColumns = (_: Translator): KetTableColumn[] => [
   {
     key: 'name',
     label: _('product_backend.col.name'),
-    // The catalogue is looked at as much as it is read, and a thumbnail is the
-    // fastest way to tell two similar names apart. The placeholder keeps the
-    // identity's width steady so rows do not jog as images come and go. Keeping
-    // image and name together also leaves one obvious first link for the record.
-    cell: (r) =>
-      inline([
-        r.image ? thumbnail({ src: r.image.src, alt: '' }) : thumbnail({ fallback: icon('package') }),
-        r.name,
-      ]),
+    format: { kind: 'custom', field: 'name', renderer: 'thumbnail-label' },
     priority: 'primary',
     width: 'wide',
   },
   {
     key: 'type',
     label: _('product_backend.col.type'),
-    kind: 'status',
     priority: 'secondary',
-    cell: (r) =>
-      badge(_(`product_backend.type.${r.type}`), r.type === 'service' ? 'info' : 'neutral', r.type),
+    format: {
+      kind: 'status',
+      field: 'type',
+      tones: {
+        goods: { label: _('product_backend.type.goods'), tone: 'neutral' },
+        service: { label: _('product_backend.type.service'), tone: 'info' },
+      },
+    },
   },
   {
     key: 'category',
     label: _('product_backend.col.category'),
-    cell: (r) => r.categoryName || r.categoryId || '—',
+    format: { kind: 'text', field: 'categoryName' },
     priority: 'secondary',
   },
   {
     key: 'isStorable',
     label: _('product_backend.field.isStorable'),
-    kind: 'status',
     priority: 'secondary',
-    cell: (r) =>
-      r.isStorable == null
-        ? '—'
-        : badge(
-            _(r.isStorable ? 'product_backend.value.yes' : 'product_backend.value.no'),
-            r.isStorable ? 'positive' : 'neutral',
-          ),
+    format: {
+      kind: 'status',
+      field: 'isStorable',
+      tones: {
+        true: { label: _('product_backend.value.yes'), tone: 'positive' },
+        false: { label: _('product_backend.value.no'), tone: 'neutral' },
+        '': { label: '—', tone: 'neutral' },
+      },
+    },
   },
   {
     key: 'uom',
     label: _('product_backend.col.uom'),
-    cell: (r) => r.uomName || r.uomId || '—',
+    format: { kind: 'text', field: 'uomName' },
   },
   {
     key: 'listPrice',
     label: _('product_backend.field.listPrice'),
-    cell: (r) => formatMoney(_, r.listPrice),
+    format: { kind: 'currency', field: 'listPrice', currency: 'VND' },
     align: 'end',
-    kind: 'currency',
     priority: 'primary',
   },
   {
     key: 'variants',
     label: _('product_backend.col.variants'),
-    cell: (r) => String(r.variants),
+    format: { kind: 'number', field: 'variants' },
     align: 'end',
-    kind: 'number',
   },
   {
     key: 'id',
     label: _('backend.table.id'),
-    cell: (r) => code(r.id, 'identifier'),
-    kind: 'identifier',
+    format: { kind: 'identifier', field: 'id' },
     priority: 'tertiary',
-    optional: true,
   },
 ]
 
@@ -166,8 +158,8 @@ const kanban = (
  *
  * `ListPage` owns the reusable collection hierarchy while the backend frame keeps
  * the global sidebar and navigation slots. Search, grouping, paging and view
- * choice stay URL-driven through the existing chrome; list and kanban remain two
- * renderings of the same rows rather than two screens.
+ * choice stay URL-driven through the list chrome; its search slot may host the
+ * new search-filter island while the surrounding catalogue controls stay intact.
  */
 export const productsScreen = (
   _: Translator,
@@ -176,7 +168,7 @@ export const productsScreen = (
   /** A row (and a kanban card) open their template through the record-modal contract. */
   recordHref: (id: string) => string,
   frame: Frame = {},
-  table: Partial<DataTable<TemplateRow>> = {},
+  table: JSXChild = null,
   total = rows.length,
   extensionActions?: JSXChild,
 ): TemplateResult =>
@@ -233,17 +225,11 @@ export const productsScreen = (
           : undefined
       }
       body={
-        rows.length === 0 && !table.groups?.length
-          ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-          : view === 'kanban'
-            ? kanban(_, rows, recordHref)
-            : dataTable(_, {
-                columns: templateColumns(_),
-                rows,
-                id: (r) => r.id,
-                rowHref: (r) => recordHref(r.id),
-                ...table,
-              })
+        view === 'list'
+          ? table
+          : rows.length === 0
+            ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+            : kanban(_, rows, recordHref)
       }
       footer={_('product_backend.screen.results', { count: total })}
     />,

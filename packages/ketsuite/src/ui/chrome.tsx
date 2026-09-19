@@ -2,7 +2,7 @@
 // Every state-changing navigation remains a link or a method=get form.
 
 import { each } from '@ketvietlab/ketjs-view'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import { icon } from './icons.ts'
 import type { TableSelection } from './table.tsx'
@@ -22,6 +22,7 @@ export const HOOKS = [
   'bulk-action',
   'title',
   'chrome-search',
+  'chrome-search-content',
   'chrome-search-query',
   'chrome-search-menus',
   'chrome-search-icon',
@@ -112,6 +113,11 @@ export type ListChrome = {
     keep?: Record<string, string | string[]>
     menus?: SearchMenu[]
   } | null
+  /**
+   * A compatible replacement for the legacy search form. The surrounding
+   * catalogue chrome (paging and view switcher) remains unchanged.
+   */
+  searchContent?: JSXChild
   pager?: Pager | null
   /** Resource-specific filters rendered after paging, outside the global search. */
   tailMenus?: TailMenu[]
@@ -328,7 +334,11 @@ export const listChrome = (
     <div data-ui="list-chrome-row">
       {chromeLead(_, title, chrome, titled)}
       <div data-ui="chrome-tools">
-        {!!chrome.search && topbarSearch(_, chrome)}
+        {chrome.searchContent !== undefined ? (
+          <div data-ui="chrome-search-content">{chrome.searchContent}</div>
+        ) : (
+          !!chrome.search && topbarSearch(_, chrome)
+        )}
         {chromeTail(_, chrome)}
       </div>
     </div>

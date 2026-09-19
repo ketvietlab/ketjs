@@ -1663,12 +1663,26 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'ket-table',
         name: 'Ket table',
         description:
-          "Also a ketjs-view island, meant to pair with search-filter above: rows, sort and pagination come from a manager RPC, and grouping mirrors the same server-side contract ketsuite's SSR grouped tables already use, just fetched from the client instead of navigated. Shown flat (sortable columns, selectable rows) and grouped by kind — both manager-less here, so the grouped tree is pre-populated and the flat table's sort/pager stay visible but inert.",
+          'Selectable table island with either manager RPCs or native URL navigation. Shown flat, grouped with preloaded rows, and URL-driven with an active sort. The last specimen delegates paging to its surrounding toolbar. Demo links target this catalogue section; production routes supply real sort, group and page URLs.',
         render: () => (
           <Stack
             items={[
               createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
               createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
+              createKetTableView({
+                id: 'demo-ket-table-navigation',
+                config: {
+                  ...ketTableDemoConfig,
+                  manager: undefined,
+                  pager: false,
+                  sort: { field: 'name', direction: 'asc' },
+                  columns: ketTableDemoConfig.columns.map((column) => ({
+                    ...column,
+                    sortable: false,
+                    sortHref: column.key === 'name' ? '#ket-table' : undefined,
+                  })),
+                },
+              }).view(),
             ]}
           />
         ),

@@ -40,13 +40,15 @@ export const FormattedNumber = (props: {
 )
 
 export const FormattedMoney = (props: {
-  value: number
+  /** Decimal text preserves database precision beyond Number.MAX_SAFE_INTEGER. */
+  value: number | string
   currency: string
   locale?: string
 }): TemplateResult => (
   <data data-ui="formatted-money" value={String(props.value)} data-currency={props.currency}>
-    {new Intl.NumberFormat(props.locale ?? 'vi-VN', { style: 'currency', currency: props.currency }).format(
-      props.value,
-    )}
+    {(
+      new Intl.NumberFormat(props.locale ?? 'vi-VN', { style: 'currency', currency: props.currency })
+        .format as unknown as (value: number | string) => string
+    )(props.value)}
   </data>
 )
