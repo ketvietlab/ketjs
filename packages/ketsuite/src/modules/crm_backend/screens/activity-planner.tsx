@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   ListPage,
   linkButton,
@@ -180,7 +180,7 @@ export const plannerScreen = (
             ]
           : []),
         rows.length
-          ? dataTable(_, { rows, id: (item) => String(item.id), columns, responsive: 'stack' })
+          ? collectionTable(_, { rows, id: (item) => String(item.id), columns, responsive: 'stack' })
           : empty(_),
       ])}
     />,

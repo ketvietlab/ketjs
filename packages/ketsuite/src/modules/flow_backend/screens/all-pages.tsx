@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { dataTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
+import { collectionTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
@@ -54,7 +54,7 @@ export const allPagesScreen = (
       status={`${options.title}: ${String(options.total ?? options.pages.length)}`}
       body={
         options.pages.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.pages,
               id: (page) => String(page.id),
               rowHref: (page) =>

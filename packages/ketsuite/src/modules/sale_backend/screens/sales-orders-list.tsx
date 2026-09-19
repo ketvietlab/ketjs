@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
@@ -154,10 +154,10 @@ export const salesOrdersListScreen = (
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
               rows: options.rows,
               id: (row) => String(row.id),

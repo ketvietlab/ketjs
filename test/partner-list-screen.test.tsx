@@ -76,7 +76,7 @@ test('partner list: follows the shared ListPage hierarchy and places the filter 
   )
   assert.match(
     html,
-    /data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"[\s\S]*?data-ui="list-page-toolbar"/,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"/,
   )
   assert.match(
     html,
@@ -85,7 +85,7 @@ test('partner list: follows the shared ListPage hierarchy and places the filter 
   assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="ket-table-test-marker"[\s\S]*?Công ty Minh An/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
-    html.indexOf('data-ui="list-page-body"'),
+    html.indexOf('data-ui="list-page-actions"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
   assert.doesNotMatch(html, /data-ui="tabs"/)

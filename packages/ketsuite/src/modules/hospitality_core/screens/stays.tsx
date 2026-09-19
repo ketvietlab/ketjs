@@ -1,6 +1,6 @@
 import { ListScreenFrame } from './page-frame.tsx'
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   type Frame,
   stayColumns,
@@ -22,7 +22,7 @@ export const staysScreen = (
     frame={frame}
     body={
       rows.length
-        ? dataTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
+        ? collectionTable(_, { columns: stayColumns(_, locale, timezone), rows, id: (row) => row.id })
         : emptyState(_('hospitality_core.screen.stays.empty'), _('hospitality_core.screen.stays.emptyHint'))
     }
   />

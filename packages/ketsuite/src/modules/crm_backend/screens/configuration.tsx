@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   designSystem,
   emptyState,
   ListPage,
@@ -297,7 +297,7 @@ export const configurationScreen = (
       status={`${_(`crm_backend.configuration.${section}`)} · ${options.rows.length}`}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => String(row.id),
               columns: columnsFor(_, section, teamNames, userNames),

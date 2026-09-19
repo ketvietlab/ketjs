@@ -3,7 +3,7 @@ import {
   CardGrid,
   type Choice,
   choices,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   type Frame,
@@ -60,8 +60,7 @@ export const reservationsScreen = (
         href: modal?.createHref ?? '/admin/hospitality/reservations?create=1',
         variant: 'primary',
       })}
-      body={stack([
-        reservationFeedback(_, status),
+      controls={
         <RecordForm
           action="/admin/hospitality/reservations"
           method="get"
@@ -79,13 +78,17 @@ export const reservationsScreen = (
               required: true,
             },
           ]}
-        />,
+        />
+      }
+      body={stack([
+        reservationFeedback(_, status),
+
         <Section
           title={_('hospitality_core.reservation.section.list')}
           description={_('hospitality_core.reservation.section.listHint')}
           body={
             data.rows.length
-              ? dataTable(_, {
+              ? collectionTable(_, {
                   columns: reservationColumns(_, locale, timezone),
                   rows: data.rows,
                   id: (row) => row.id,

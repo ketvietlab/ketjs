@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -90,7 +90,7 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
   ].join(' · ')
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
+      collectionTable(_, {
         rows: options.rows,
         id: (row) => String(row.id),
         rowHref: options.rowHref,
@@ -134,7 +134,7 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={table}
     />,
     { ...options.frame, chrome: null, topbar: false },

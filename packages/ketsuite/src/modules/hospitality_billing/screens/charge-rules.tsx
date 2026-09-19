@@ -4,7 +4,7 @@ import {
   chargeName,
   type ChargeRuleRow,
   type ChoiceRow,
-  dataTable,
+  collectionTable,
   feedback,
   type Frame,
   linkButton,
@@ -59,7 +59,7 @@ export const chargeRulesScreen = (
             })}
           />
         ),
-        dataTable(_, {
+        collectionTable(_, {
           columns: ruleColumns(_),
           rows,
           id: (row) => row.chargeType,

@@ -1,6 +1,16 @@
+import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, icon, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import {
+  badge,
+  collectionTable,
+  emptyState,
+  icon,
+  inline,
+  LinkButton,
+  ListPage,
+  shell,
+} from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type LotListRow = {
@@ -77,15 +87,16 @@ export const lotsListScreen = (
       variant="operational"
       frame={frame}
       title={_('stock_backend.lot.list.title')}
+      controls={collectionControls(_, _('stock_backend.lot.list.title'), frame)}
       description={_('stock_backend.lot.list.subtitle')}
       actions={inline([
         <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />,
         frame.extras?.['topbar.end'] ?? '',
       ])}
-      status={`${_('stock_backend.lot.list.summary.total')}: ${String(total)}`}
+      footer={`${_('stock_backend.lot.list.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: lotListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

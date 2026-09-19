@@ -40,7 +40,7 @@ import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
 import { createSearchFilterView } from '../interactions/search-filter/index.tsx'
 import { searchFilterDemoConfig } from '../interactions/search-filter/demo.ts'
-import { createKetTableView } from '../interactions/ket-table/index.tsx'
+import { createKetTableView, KetTable } from '../interactions/ket-table/index.tsx'
 import { ketTableDemoConfig, ketTableGroupedDemoConfig } from '../interactions/ket-table/demo.ts'
 import {
   Checkbox,
@@ -1668,6 +1668,21 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Stack
             items={[
               createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              <KetTable
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Server collection',
+                    cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
+                    sortHref: '#ket-table',
+                  },
+                ]}
+                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                id={(row) => row.id}
+                rowHref={() => '#ket-table'}
+                caption="URL-driven server collection"
+                labels={ketTableDemoConfig.labels}
+              />,
               createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
               createKetTableView({
                 id: 'demo-ket-table-navigation',

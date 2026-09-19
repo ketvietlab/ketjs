@@ -1,6 +1,16 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, code, dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import {
+  collectionControls,
+  badge,
+  code,
+  collectionTable,
+  emptyState,
+  inline,
+  LinkButton,
+  ListPage,
+  shell,
+} from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 import { pricingSelectionLabel } from './shared.ts'
 import type { PricelistRow } from './shared.ts'
@@ -35,6 +45,7 @@ export const pricelistsScreen = (
       variant="operational"
       frame={frame}
       title={_('pricing_backend.title')}
+      controls={collectionControls(_, _('pricing_backend.title'), frame)}
       description={_('pricing_backend.subtitle')}
       actions={inline([
         <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />,
@@ -43,7 +54,7 @@ export const pricelistsScreen = (
       status={`${_('pricing_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: pricelistColumns(_),
               rows: options.rows,
               id: (row) => row.id,

@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   inline,
@@ -141,7 +141,7 @@ export const casesListScreen = (
       status={`${_('crm_backend.cases.title')}: ${String(total)}`}
       body={
         options.rows.length || groups.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: caseListColumns(_),
               rows: options.rows,
               groups,

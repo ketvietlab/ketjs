@@ -52,6 +52,8 @@ test('manufacturing orders list: ListPage is list-only and keeps localized workf
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/manufacturing\/new\?lang=vi"[\s\S]*?Tạo lệnh sản xuất/)
   assert.match(html, /data-row-href="\/admin\/manufacturing\/orders\/mo-1\?lang=vi"/)

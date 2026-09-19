@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import type { RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
@@ -110,7 +111,19 @@ const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: s
   return adminPage(ctx, url, req, {
     title: 'oauth_backend.identities.title',
     active: '/admin/oauth/identities',
-    body: (_, frame) => identitiesScreen(_, rows, frame, localeQuery(url), errors),
+    body: (_, frame) =>
+      identitiesScreen(
+        _,
+        searchCollectionRows(
+          url,
+          rows,
+          (row) =>
+            `${row.user?.name ?? ''} ${row.user?.login ?? ''} ${row.provider?.name ?? ''} ${row.email ?? ''} ${row.subject}`,
+        ),
+        collectionSearchFrame(url, frame, _('oauth_backend.identities.title')),
+        localeQuery(url),
+        errors,
+      ),
   })
 }
 
@@ -126,8 +139,12 @@ export const routes: Record<string, RouteEntry> = {
         body: async (_, frame) =>
           providersScreen(
             _,
-            await providersOf(ctx, url, req, includeArchived),
-            frame,
+            searchCollectionRows(
+              url,
+              await providersOf(ctx, url, req, includeArchived),
+              (row) => `${row.name} ${row.code} ${row.protocol} ${row.issuer}`,
+            ),
+            collectionSearchFrame(url, frame, _('oauth_backend.providers.title')),
             localeQuery(url),
             includeArchived,
           ),

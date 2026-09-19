@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   bulkActions,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -141,10 +141,10 @@ export const replenishmentListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.replenishment.summary.rules')}: ${String(total)}`}
+      footer={`${_('stock_backend.replenishment.summary.rules')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: replenishmentListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

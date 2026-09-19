@@ -106,6 +106,21 @@ Custom cells register through `KetTableExtensions` in one shared SSR/client adap
 callbacks serialized in island props. KetSuite's `thumbnail-label` renderer intentionally reuses the
 existing backend thumbnail compatibility primitive pending that primitive's public promotion.
 
+The public `KetTable<Row>` server component renders through this same grid engine. Use it when a
+URL-owned collection has semantic cell callbacks, record links or inline command forms. Its
+`KetTableServerProps<Row>` accepts `columns[].cell`, rows, recursive groups, sort state, caption,
+responsive mode and external-form selection. These callbacks execute only on the server; they never
+cross an island JSON boundary. Native checkboxes submit `fieldName.id=1` to the supplied form.
+`rowLink: false` retains keyboard row navigation when the first cell already contains a link.
+KetSuite's `collectionTable` adapts its existing column/selection metadata to that public component;
+the legacy column visibility menu remains an explicit compatibility slot until its own promotion.
+
+Operational `ListPage` orders context, query controls, tool actions, then collection body. The
+application `collectionControls` and `collectionActions` helpers split existing list chrome into
+those slots without changing command or permission decisions. `searchCollectionRows` is reserved
+for complete authorized catalogues: its explicit callback searches reader-visible fields. Paged
+collections continue using their existing server query/search contracts.
+
 ### Record and workspace composition
 
 Wave 5 adds description lists, people, avatar groups, status, formatted values, record summaries,

@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -88,10 +88,10 @@ export const invoicingPoliciesListScreen = (
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => String(row.id),
               columns: invoicingPolicyColumns(_),

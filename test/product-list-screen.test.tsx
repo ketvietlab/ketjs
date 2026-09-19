@@ -140,7 +140,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
   )
   assert.match(
     html,
-    /data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"[\s\S]*?data-ui="list-page-toolbar"/,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"/,
   )
   assert.match(html, /href="\/admin\/product\/templates\/new\?lang=vi"/)
   assert.match(
@@ -159,7 +159,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?24 sản phẩm/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
-    html.indexOf('data-ui="list-page-body"'),
+    html.indexOf('data-ui="list-page-actions"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
   assert.match(html, /data-col="name"[\s\S]*?data-ui="thumbnail"[\s\S]*?Áo khoác gió vận hành/)

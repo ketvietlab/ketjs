@@ -2,7 +2,7 @@ import { ListScreenFrame } from './page-frame.tsx'
 import {
   type Choice,
   choices,
-  dataTable,
+  collectionTable,
   emptyState,
   feedback,
   type Frame,
@@ -50,8 +50,7 @@ export const ratePlansScreen = (
             })
           : undefined
       }
-      body={stack([
-        feedback(_, state),
+      controls={
         <RecordForm
           action="/admin/hospitality/rate-plans"
           method="get"
@@ -68,7 +67,11 @@ export const ratePlansScreen = (
               required: true,
             },
           ]}
-        />,
+        />
+      }
+      body={stack([
+        feedback(_, state),
+
         roomTypes.length
           ? null
           : emptyState(
@@ -85,7 +88,7 @@ export const ratePlansScreen = (
           title={_('hospitality_core.screen.ratePlans.list')}
           body={
             rows.length
-              ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
+              ? collectionTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
               : emptyState(
                   _('hospitality_core.screen.ratePlans.empty'),
                   _('hospitality_core.screen.ratePlans.emptyHint'),

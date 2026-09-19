@@ -103,6 +103,8 @@ test('sales quotations list: preserves state, columns, reports and ListPage cont
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(html, /href="\/admin\/sales\/quotations\/new\?state=draft&amp;lang=vi"/)
@@ -118,7 +120,7 @@ test('sales quotations list: preserves state, columns, reports and ListPage cont
   assert.match(html, /data-col="total"/)
   assert.match(html, /href="\/admin\/sales\/quotations\/so-001\?lang=vi"/)
   assert.match(html, /href="\/reports\/sale\.quotation\/so-001\?lang=vi"/)
-  assert.match(html, /data-ui="row-select"[^>]*form="sale-quotation-bulk"/)
+  assert.match(html, /data-ui="kt-row-select"[^>]*form="sale-quotation-bulk"/)
   assert.doesNotMatch(html, /quotation-create-form|data-island="mail\.chatter"/)
 })
 

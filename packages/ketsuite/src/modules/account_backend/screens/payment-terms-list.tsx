@@ -2,6 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionTable,
   dataTable,
   emptyState,
   icon,
@@ -60,7 +61,7 @@ export const paymentTermsListScreen = (
   ].join(' · ')
   const terms =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
+      collectionTable(_, {
         rows: options.rows,
         id: (row) => String(row.id),
         rowHref: options.rowHref,
@@ -196,7 +197,7 @@ export const paymentTermsListScreen = (
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={stack(
         [
           <Section

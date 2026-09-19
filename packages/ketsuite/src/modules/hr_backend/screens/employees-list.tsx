@@ -3,7 +3,8 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
+  collectionControls,
   emptyState,
   inline,
   LinkButton,
@@ -94,13 +95,14 @@ export const employeesListScreen = (
       variant="operational"
       frame={frame}
       title={_('hr_backend.employees.title')}
+      controls={collectionControls(_, _('hr_backend.employees.title'), frame)}
       actions={inline([
         <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />,
         frame.extras?.['topbar.end'] ?? '',
       ])}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => row.id,
               rowHref: (row) => row.editHref,

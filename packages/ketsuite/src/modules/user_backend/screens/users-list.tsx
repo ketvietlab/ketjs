@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   LinkButton,
@@ -103,7 +103,7 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => row.id,
               rowHref: (row) => row.detailHref,

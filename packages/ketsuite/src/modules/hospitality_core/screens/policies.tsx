@@ -1,6 +1,6 @@
 import { ListScreenFrame } from './page-frame.tsx'
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   feedback,
   type Frame,
@@ -41,7 +41,7 @@ export const policiesScreen = (
       body={stack([
         feedback(_, state),
         rows.length
-          ? dataTable(_, { columns: policyColumns(_), rows, id: (row) => row.id })
+          ? collectionTable(_, { columns: policyColumns(_), rows, id: (row) => row.id })
           : emptyState(
               _('hospitality_core.screen.policies.empty'),
               _('hospitality_core.screen.policies.emptyHint'),

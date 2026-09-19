@@ -1,7 +1,7 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   linkButton,
@@ -135,7 +135,7 @@ export const leaderboardScreen = (
       status={`${title}: ${String(rows.length)}`}
       body={
         rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows,
               id: (profile) => String(profile.id),
               responsive: 'stack',

@@ -3,6 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   dataTable,
+  collectionTable,
   emptyState,
   ListScreen,
   linkButton,
@@ -19,6 +20,7 @@ import { CHARGE_TYPES } from '../../hospitality_core/types.ts'
 export {
   badge,
   dataTable,
+  collectionTable,
   emptyState,
   ListScreen,
   linkButton,

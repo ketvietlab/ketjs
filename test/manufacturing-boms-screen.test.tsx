@@ -89,6 +89,8 @@ test('manufacturing BOM list: ListPage is collection-only with a localized modal
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/manufacturing\/boms\?create=1&amp;lang=vi"/)
   assert.match(html, /BOM\/0001/)

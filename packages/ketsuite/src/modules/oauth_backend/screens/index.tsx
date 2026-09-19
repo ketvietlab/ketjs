@@ -5,7 +5,8 @@ import {
   CardGrid,
   code,
   ContentCard,
-  dataTable,
+  collectionTable,
+  collectionControls,
   DefinitionList,
   emptyState,
   FormPage,
@@ -74,6 +75,7 @@ export const providersScreen = (
       variant="operational"
       frame={frame}
       title={_('oauth_backend.providers.title')}
+      controls={collectionControls(_, _('oauth_backend.providers.title'), frame)}
       description={_('oauth_backend.providers.subtitle')}
       actions={inline([
         linkButton({
@@ -101,7 +103,7 @@ export const providersScreen = (
       body={
         rows.length === 0
           ? emptyState(_('oauth_backend.providers.empty'), _('oauth_backend.providers.emptyHint'))
-          : dataTable(_, {
+          : collectionTable(_, {
               rows,
               id: (row) => row.id,
               columns: [
@@ -386,6 +388,7 @@ export const identitiesScreen = (
       variant="operational"
       frame={frame}
       title={_('oauth_backend.identities.title')}
+      controls={collectionControls(_, _('oauth_backend.identities.title'), frame)}
       description={_('oauth_backend.identities.subtitle')}
       actions={inline([
         linkButton({
@@ -406,7 +409,7 @@ export const identitiesScreen = (
           : []),
         rows.length === 0
           ? emptyState(_('oauth_backend.identities.empty'), _('oauth_backend.identities.emptyHint'))
-          : dataTable(_, {
+          : collectionTable(_, {
               rows,
               id: (row) => row.id,
               columns: [

@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { dateTimeFormatter, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
@@ -1463,7 +1464,19 @@ export const routes: Record<string, RouteEntry> = {
       )) as StayRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.stays.title',
-        body: (_, frame) => staysScreen(_, rows, lang, timezone, frame),
+        body: (_, frame) =>
+          staysScreen(
+            _,
+            searchCollectionRows(
+              url,
+              rows,
+              (row) =>
+                `${row.code} ${row.partner?.name ?? ''} ${row.currentRoom?.name ?? ''} ${row.currentRoom?.code ?? ''}`,
+            ),
+            lang,
+            timezone,
+            collectionSearchFrame(url, frame, _('hospitality_core.screen.stays.title')),
+          ),
       })
     },
 
@@ -1556,7 +1569,14 @@ export const routes: Record<string, RouteEntry> = {
       )) as FolioRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.folios.title',
-        body: (_, frame) => foliosScreen(_, rows, lang, timezone, frame),
+        body: (_, frame) =>
+          foliosScreen(
+            _,
+            searchCollectionRows(url, rows, (row) => `${row.code} ${row.partner?.name ?? ''}`),
+            lang,
+            timezone,
+            collectionSearchFrame(url, frame, _('hospitality_core.screen.folios.title')),
+          ),
       })
     },
 
@@ -1645,14 +1665,14 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) =>
           propertiesScreen(
             _,
-            properties,
+            searchCollectionRows(url, properties, (row) => `${row.name} ${row.code} ${row.city ?? ''}`),
             {
               rooms: properties.reduce((sum, property) => sum + property.rooms, 0),
               available: properties.reduce((sum, property) => sum + property.availableRooms, 0),
               attention: properties.reduce((sum, property) => sum + property.attentionRooms, 0),
             },
             lang,
-            frame,
+            collectionSearchFrame(url, frame, _('hospitality_core.screen.properties.title')),
           ),
       })
     },
@@ -2882,14 +2902,21 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.amenities.title',
         body: (_, frame) =>
-          amenitiesScreen(_, rows, categories, frame, url.searchParams.get('status'), {
-            open: url.searchParams.get('create') === '1',
-            createHref: modalHref(url, true, ['code', 'name', 'scope', 'categoryId', 'sequence']),
-            closeHref: modalHref(url, false, ['code', 'name', 'scope', 'categoryId', 'sequence']),
-            action: modalAction(url),
-            errors: modalErrors(url, _),
-            values: modalValues(url, ['code', 'name', 'scope', 'categoryId', 'sequence']),
-          }),
+          amenitiesScreen(
+            _,
+            searchCollectionRows(url, rows, (row) => `${row.code} ${row.name}`),
+            categories,
+            collectionSearchFrame(url, frame, _('hospitality_core.screen.amenities.title')),
+            url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+              closeHref: modalHref(url, false, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+              action: modalAction(url),
+              errors: modalErrors(url, _),
+              values: modalValues(url, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+            },
+          ),
       })
     },
 
@@ -2928,35 +2955,41 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.policies.title',
         body: (_, frame) =>
-          policiesScreen(_, rows, frame, url.searchParams.get('status'), {
-            open: url.searchParams.get('create') === '1',
-            createHref: modalHref(url, true, [
-              'code',
-              'name',
-              'type',
-              'description',
-              'freeCancellationHours',
-              'penaltyPercent',
-            ]),
-            closeHref: modalHref(url, false, [
-              'code',
-              'name',
-              'type',
-              'description',
-              'freeCancellationHours',
-              'penaltyPercent',
-            ]),
-            action: modalAction(url),
-            errors: modalErrors(url, _),
-            values: modalValues(url, [
-              'code',
-              'name',
-              'type',
-              'description',
-              'freeCancellationHours',
-              'penaltyPercent',
-            ]),
-          }),
+          policiesScreen(
+            _,
+            searchCollectionRows(url, rows, (row) => `${row.code} ${row.name}`),
+            collectionSearchFrame(url, frame, _('hospitality_core.screen.policies.title')),
+            url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true, [
+                'code',
+                'name',
+                'type',
+                'description',
+                'freeCancellationHours',
+                'penaltyPercent',
+              ]),
+              closeHref: modalHref(url, false, [
+                'code',
+                'name',
+                'type',
+                'description',
+                'freeCancellationHours',
+                'penaltyPercent',
+              ]),
+              action: modalAction(url),
+              errors: modalErrors(url, _),
+              values: modalValues(url, [
+                'code',
+                'name',
+                'type',
+                'description',
+                'freeCancellationHours',
+                'penaltyPercent',
+              ]),
+            },
+          ),
       })
     },
 }

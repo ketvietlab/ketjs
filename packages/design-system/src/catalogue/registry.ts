@@ -160,6 +160,7 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('searchFilter', 'Data operations', 'interactions/search-filter', 'interactions', 'search-filter'),
   entry('createKetTableView', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
   entry('ketTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry('KetTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
   entry(
     'createRelationSelectView',
     'Forms',

@@ -4,7 +4,7 @@ import {
   badge,
   bulkActions,
   code,
-  dataTable,
+  collectionTable,
   emptyState,
   icon,
   inline,
@@ -101,10 +101,10 @@ export const warehousesListScreen = (
             )
           : undefined
       }
-      status={`${_('stock_backend.warehouse.summary.total')}: ${String(total)}`}
+      footer={`${_('stock_backend.warehouse.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               columns: warehouseListColumns(_),
               rows: options.rows,
               id: (row) => row.id,

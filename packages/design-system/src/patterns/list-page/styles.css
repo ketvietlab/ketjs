@@ -154,7 +154,8 @@
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-actions"] {
-    justify-content: flex-end;
+    justify-content: flex-start;
+    padding: var(--kv-space-2) var(--kv-page-padding-x);
   }
 
   :where([data-kv-design-system])

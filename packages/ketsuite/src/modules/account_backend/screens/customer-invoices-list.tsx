@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
@@ -111,7 +111,7 @@ export const customerInvoicesListScreen = (
   ].join(' · ')
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
+      collectionTable(_, {
         rows: options.rows,
         id: (row) => String(row.id),
         rowHref: options.rowHref,
@@ -157,7 +157,7 @@ export const customerInvoicesListScreen = (
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={table}
     />,
     { ...options.frame, chrome: null, topbar: false },

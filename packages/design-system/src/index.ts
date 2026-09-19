@@ -81,7 +81,8 @@ export type {
   SearchFilterOption,
   SearchGroupByOption,
 } from './interactions/search-filter/index.tsx'
-export { createKetTableView, ketTable } from './interactions/ket-table/index.tsx'
+export { createKetTableView, ketTable, KetTable } from './interactions/ket-table/index.tsx'
+export type { KetTableServerProps } from './interactions/ket-table/index.tsx'
 export type {
   KetTableCellFormat,
   KetTableColumn,

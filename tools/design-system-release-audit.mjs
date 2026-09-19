@@ -56,8 +56,8 @@ assert(
 
 const registeredNames = [...registry.matchAll(/entry\(\s*'([^']+)'/gu)].map((match) => match[1])
 assert(
-  registeredNames.length === 115,
-  `component registry has ${registeredNames.length} entries, expected 115`,
+  registeredNames.length === 126,
+  `component registry has ${registeredNames.length} entries, expected 126`,
 )
 for (const name of registeredNames) {
   const row = inventory.rows.find(

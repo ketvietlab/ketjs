@@ -1,6 +1,14 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import {
+  collectionControls,
+  collectionTable,
+  emptyState,
+  inline,
+  LinkButton,
+  ListPage,
+  shell,
+} from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 import type { RoleRow } from './types.ts'
 
@@ -56,6 +64,7 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       variant="operational"
       frame={frame}
       title={_('user_backend.roles.title')}
+      controls={collectionControls(_, _('user_backend.roles.title'), frame)}
       description={_('user_backend.roles.subtitle')}
       actions={inline([
         <LinkButton
@@ -73,7 +82,7 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
-          ? dataTable(_, {
+          ? collectionTable(_, {
               rows: options.rows,
               id: (row) => row.id,
               rowHref: (row) => row.detailHref,
