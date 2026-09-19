@@ -138,6 +138,7 @@ collection screens use this same composition. Existing inline creation forms, su
 period closing, retain their disclosure below the filters rather than placing a form in the header.
 
 ```tsx
+// File: packages/ketsuite/src/modules/example_backend/screens/list.tsx (composition example)
 <ListPage
   variant="operational"
   frame={frame} // chrome.create contains the authorized { label, path }, if any
