@@ -1301,8 +1301,7 @@ data in the manifest, so it arrives and leaves with the code that serves it, and
 // File: packages/ketsuite/src/modules/product_backend/menus.ts
 menus: {
   product: { label: 'menu.app', icon: '📦', sequence: 20 },
-  'product.catalogue': { parent: 'product', label: 'menu.catalogue' },
-  'product.templates': { parent: 'product.catalogue', label: 'menu.templates',
+  'product.templates': { parent: 'product', label: 'menu.templates',
                          path: '/admin/product/templates', needs: 'product.listTemplates' },
 }
 ```
