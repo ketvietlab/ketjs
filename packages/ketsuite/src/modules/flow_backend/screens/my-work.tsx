@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -129,6 +130,92 @@ export const crossProjectScreen = (
   overview?: IssueOverview,
 ): TemplateResult => {
   const locale = overview?.locale ?? ''
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      groups,
+      id: (row) => String(row.id),
+      rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+      columns: [
+        {
+          key: 'title',
+          label: _('flow_backend.field.title'),
+          priority: 'primary',
+          cell: (row) =>
+            linkButton({
+              href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+              label: String(row.title),
+              variant: 'tertiary',
+              size: 'compact',
+            }),
+        },
+        {
+          key: 'project',
+          label: _('flow_backend.field.project'),
+          cell: (row) =>
+            linkButton({
+              href: localized(
+                `/admin/flow/projects/${encodeURIComponent(String(row.projectId))}/board`,
+                locale,
+              ),
+              label: String(row.projectName ?? '\u2014'),
+              variant: 'tertiary',
+              size: 'compact',
+            }),
+        },
+        {
+          key: 'assignee',
+          label: _('flow_backend.field.assignee'),
+          cell: (row) =>
+            row.assigneeName ? (
+              <>
+                {avatar(String(row.assigneeName))}
+                {String(row.assigneeName)}
+              </>
+            ) : (
+              '\u2014'
+            ),
+        },
+        {
+          key: 'priority',
+          label: _('flow_backend.field.priority'),
+          cell: (row) => priorityBadge(_, row.priority),
+        },
+        {
+          key: 'column',
+          label: _('flow_backend.field.column'),
+          cell: (row) => String(row.columnName ?? '\u2014'),
+        },
+        {
+          key: 'dueDate',
+          label: _('flow_backend.field.dueDate'),
+          kind: 'date',
+          // A date that has passed is the one thing on this row somebody
+          // has to act on, so it is marked rather than left to be noticed.
+          cell: (row) => deadline({ date: when(row.dueDate), late: row.overdue === true }),
+        },
+        {
+          key: 'progress',
+          label: _('flow_backend.field.progress'),
+          cell: (row) => (
+            <Progress
+              value={row.progress == null ? null : Number(row.progress)}
+              label={_('flow_backend.field.progress')}
+              text={
+                row.progress == null
+                  ? null
+                  : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+              }
+            />
+          ),
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     title,
@@ -173,86 +260,7 @@ export const crossProjectScreen = (
             ]
           : []),
         rows.length || groups.length
-          ? collectionTable(_, {
-              rows,
-              groups,
-              id: (row) => String(row.id),
-              rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
-              columns: [
-                {
-                  key: 'title',
-                  label: _('flow_backend.field.title'),
-                  priority: 'primary',
-                  cell: (row) =>
-                    linkButton({
-                      href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
-                      label: String(row.title),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                },
-                {
-                  key: 'project',
-                  label: _('flow_backend.field.project'),
-                  cell: (row) =>
-                    linkButton({
-                      href: localized(
-                        `/admin/flow/projects/${encodeURIComponent(String(row.projectId))}/board`,
-                        locale,
-                      ),
-                      label: String(row.projectName ?? '\u2014'),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                },
-                {
-                  key: 'assignee',
-                  label: _('flow_backend.field.assignee'),
-                  cell: (row) =>
-                    row.assigneeName ? (
-                      <>
-                        {avatar(String(row.assigneeName))}
-                        {String(row.assigneeName)}
-                      </>
-                    ) : (
-                      '\u2014'
-                    ),
-                },
-                {
-                  key: 'priority',
-                  label: _('flow_backend.field.priority'),
-                  cell: (row) => priorityBadge(_, row.priority),
-                },
-                {
-                  key: 'column',
-                  label: _('flow_backend.field.column'),
-                  cell: (row) => String(row.columnName ?? '\u2014'),
-                },
-                {
-                  key: 'dueDate',
-                  label: _('flow_backend.field.dueDate'),
-                  kind: 'date',
-                  // A date that has passed is the one thing on this row somebody
-                  // has to act on, so it is marked rather than left to be noticed.
-                  cell: (row) => deadline({ date: when(row.dueDate), late: row.overdue === true }),
-                },
-                {
-                  key: 'progress',
-                  label: _('flow_backend.field.progress'),
-                  cell: (row) => (
-                    <Progress
-                      value={row.progress == null ? null : Number(row.progress)}
-                      label={_('flow_backend.field.progress')}
-                      text={
-                        row.progress == null
-                          ? null
-                          : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
-                      }
-                    />
-                  ),
-                },
-              ],
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('flow_backend.mine.emptyTitle'), _('flow_backend.mine.emptyHint')),
         ...(overview
           ? [

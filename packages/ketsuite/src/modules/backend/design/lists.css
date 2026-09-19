@@ -134,7 +134,11 @@
     text-decoration: none;
   }
 
-  [data-ui="bulk-form"] {
+  [data-ui="bulk-form"][hidden] {
+    display: none;
+  }
+
+  [data-ui="bulk-form"]:not([hidden]) {
     display: block;
   }
 
@@ -143,8 +147,7 @@
     display: none;
   }
 
-  [data-ui="app-shell"]:has([data-ui="row-select"]:checked, [data-ui="kt-row-select"]:checked)
-    [data-ui="bulk-actions"] {
+  [data-ui="bulk-form"]:not([hidden]) > [data-ui="bulk-actions"] {
     display: block;
   }
 

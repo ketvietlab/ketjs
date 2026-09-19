@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -5,7 +6,6 @@ import {
   collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
   listChrome,
@@ -53,6 +53,17 @@ export const invoicingPoliciesListScreen = (
   options: InvoicingPoliciesListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => String(row.id),
+      columns: invoicingPolicyColumns(_),
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const ordered = options.rows.filter((row) => (row.invoicePolicy ?? 'order') === 'order').length
   const delivered = options.rows.filter((row) => row.invoicePolicy === 'delivery').length
@@ -67,23 +78,19 @@ export const invoicingPoliciesListScreen = (
     _('sale_backend.policies.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('sale_backend.policies.title')}
       description={_('sale_backend.policy.subtitle')}
-      actions={inline([
-        <LinkButton
-          label={_('sale_backend.action.savePolicy')}
-          href={options.createHref}
-          variant="primary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('sale_backend.action.savePolicy')} href={options.createHref} variant="primary" />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('sale_backend.policies.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null },
+              { ...collection.frame.chrome, layout: 'command', section: undefined, create: null },
               false,
             )
           : undefined
@@ -91,17 +98,12 @@ export const invoicingPoliciesListScreen = (
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => String(row.id),
-              columns: invoicingPolicyColumns(_),
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('sale_backend.policy.empty'), _('sale_backend.policy.emptyHint'), {
               icon: icon('shopping-bag'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

@@ -115,11 +115,36 @@ cross an island JSON boundary. Native checkboxes submit `fieldName.id=1` to the 
 KetSuite's `collectionTable` adapts its existing column/selection metadata to that public component;
 the legacy column visibility menu remains an explicit compatibility slot until its own promotion.
 
-Operational `ListPage` orders context, query controls, tool actions, then collection body. The
+KétSuite operational lists order context, page identity with collection actions, query controls and table tools, then collection body.
+This is the required pattern for new collection screens. The KétSuite `ListPage` and `ListScreen`
+wrappers automatically render `frame.chrome.create` beside the title, above filters. Supply
+`headerActions` only when the screen has a specialised primary action; it replaces the automatic
+create link, so authorization remains the caller's responsibility. Omitting both leaves no creation
+control; an explicit `headerActions={null}` suppresses a frame's default create link. On narrow
+screens the action stacks beneath the heading, still before filters.
+Keep bulk and secondary collection commands in `actions`; the KétSuite wrapper places them beside
+the primary action in the header and removes the separate action bar. Bulk controls appear only
+when rows belonging to their form are selected. The primary action remains visible. Do not position
+buttons with module-local CSS or put creation links into `actions`. The
 application `collectionControls` and `collectionActions` helpers split existing list chrome into
 those slots without changing command or permission decisions. `searchCollectionRows` is reserved
 for complete authorized catalogues: its explicit callback searches reader-visible fields. Paged
 collections continue using their existing server query/search contracts.
+
+The catalogue's List page specimen demonstrates the shared header action composition. Product, Partner and the other
+collection screens use this same composition. Existing inline creation forms, such as accounting
+period closing, retain their disclosure below the filters rather than placing a form in the header.
+
+```tsx
+<ListPage
+  variant="operational"
+  frame={frame} // chrome.create contains the authorized { label, path }, if any
+  title={title}
+  controls={collectionControls(_, title, frame)}
+  actions={collectionActions(_, frame)}
+  body={collectionTable(_, table)}
+/>
+```
 
 ### Record and workspace composition
 
@@ -213,3 +238,5 @@ for optional/deferred capabilities. On feature branches it also rejects newly ad
 This check establishes release readiness; it does not publish. Publication must run from a commit
 reachable from `master`. Private Két Việt pinning, cohort migrations, zero-consumer deletion, and rollback
 evidence follow the released exact SHA.
+
+Public operational `ListPage.actionsPlacement="header"` places `actions` in the `list-page-tools` subgroup beside `headerActions`, without a separate action row. The KétSuite wrapper selects this placement for every operational list. `actionsHidden` hides only the tools subgroup in this mode, preserving the primary action and external form associations. Bulk-only tools initially stay hidden, including when extensions render empty fragments. The client follows each form's enabled row checkboxes and KetTable island persisted selection inputs. Clearing selection closes that form's menu and hides its tools when no other commands remain. The public component retains its default body placement for compatibility. Complete inline creation/configuration forms belong in the body above the table, not in the header tools.

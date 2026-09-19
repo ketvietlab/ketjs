@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -59,8 +60,20 @@ export const catalogsScreen = (
   _: Translator,
   frame: Frame,
   options: CatalogsListScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => `${row.countryCode}:${row.version}`,
+      rowHref: (row) => row.detailHref,
+      columns: catalogListColumns(_),
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('address_backend.title'),
     <ListPage
@@ -72,14 +85,10 @@ export const catalogsScreen = (
       status={`${_('address_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => `${row.countryCode}:${row.version}`,
-              rowHref: (row) => row.detailHref,
-              columns: catalogListColumns(_),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('address_backend.empty'), _('address_backend.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

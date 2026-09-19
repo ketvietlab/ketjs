@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CHARGE_TYPES,
@@ -36,12 +37,23 @@ export const chargeRulesScreen = (
     values?: Record<string, string>
   },
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: ruleColumns(_),
+      rows,
+      id: (row) => row.chargeType,
+      rowHref: modal?.rowHref,
+    },
+    { paginate: true },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_billing.chargeRules.title')}
-      frame={frame}
-      actions={linkButton({
+      frame={collection.frame}
+      headerActions={linkButton({
         label: _('hospitality_billing.chargeRules.save'),
         href: modal?.createHref ?? '/admin/hospitality/billing/rules?create=1',
         variant: 'primary',
@@ -59,12 +71,7 @@ export const chargeRulesScreen = (
             })}
           />
         ),
-        collectionTable(_, {
-          columns: ruleColumns(_),
-          rows,
-          id: (row) => row.chargeType,
-          rowHref: modal?.rowHref,
-        }),
+        collectionTable(_, collection.table),
       ])}
     />
   )

@@ -1,3 +1,4 @@
+import { collectionQueryKeep, prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CardGrid,
@@ -27,12 +28,24 @@ export const roomTypesScreen = (
   frame: Frame,
 ): TemplateResult => {
   const propertyQuery = propertyId ? `&property=${encodeURIComponent(propertyId)}` : ''
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: roomTypeColumns(_),
+      rows,
+      id: (row) => row.id,
+      rowHref: (row) =>
+        `/admin/hospitality/room-types/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+    },
+    { paginate: true, searchText: (row) => `${row.code} ${row.name} ${row.publicName ?? ''}` },
+  )
   return (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.roomTypes.title')}
-      frame={frame}
-      actions={
+      frame={collection.frame}
+      headerActions={
         properties.length
           ? linkButton({
               label: _('hospitality_core.roomType.action.create'),
@@ -55,7 +68,13 @@ export const roomTypesScreen = (
               options: choices(properties),
             },
           ]}
-          hidden={{ lang: locale }}
+          hidden={{
+            ...collectionQueryKeep(
+              new URL(frame.collectionUrl ?? '/admin/hospitality/room-types', 'http://collection.local'),
+              ['property'],
+            ),
+            lang: locale,
+          }}
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />
@@ -106,14 +125,8 @@ export const roomTypesScreen = (
           id={(item) => item.id}
           card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
-        rows.length
-          ? collectionTable(_, {
-              columns: roomTypeColumns(_),
-              rows,
-              id: (row) => row.id,
-              rowHref: (row) =>
-                `/admin/hospitality/room-types/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-            })
+        collection.table.rows.length
+          ? collectionTable(_, collection.table)
           : emptyState(
               _('hospitality_core.screen.roomTypes.empty'),
               _('hospitality_core.screen.roomTypes.emptyHint'),

@@ -394,6 +394,13 @@
       "wave": 4,
       "gapTask": "DS-027"
     },
+    "./collection-state.ts": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
     "./collection.tsx": {
       "owner": "Page recipes",
       "decision": "recipe",

@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -113,11 +114,22 @@ export const salesOrdersListScreen = (
   options: SalesOrdersListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
+      rows: options.rows,
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const toInvoice = options.rows.filter((row) => row.invoiceStatus === 'to invoice').length
   const invoiced = options.rows.filter((row) => row.invoiceStatus === 'invoiced').length
   const locked = options.rows.filter((row) => row.locked).length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
   const summary = [
     `${_('sale_backend.orderList.summary.total')}: ${String(total)}`,
     `${_('sale_backend.orderList.summary.toInvoice')}: ${String(toInvoice)}`,
@@ -130,21 +142,24 @@ export const salesOrdersListScreen = (
     _('sale_backend.orders.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('sale_backend.orderList.title')}
       description={_('sale_backend.orderList.subtitle')}
       actions={
-        selection || frame.extras?.['topbar.end'] !== undefined
-          ? inline([selection ? bulkActions(_, selection) : '', frame.extras?.['topbar.end'] ?? ''])
+        selection || collection.frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              selection ? bulkActions(_, selection) : '',
+              collection.frame.extras?.['topbar.end'] ?? '',
+            ])
           : undefined
       }
       controls={
-        frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('sale_backend.orderList.title'),
               {
-                ...frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -157,17 +172,12 @@ export const salesOrdersListScreen = (
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? collectionTable(_, {
-              columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
-              rows: options.rows,
-              id: (row) => String(row.id),
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('sale_backend.orderList.empty'), _('sale_backend.orderList.emptyHint'), {
               icon: icon('shopping-bag'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

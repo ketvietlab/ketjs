@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
@@ -6,7 +7,6 @@ import {
   code,
   collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
   RecordForm,
@@ -98,36 +98,44 @@ export const workCentersListScreen = (
   _: Translator,
   options: WorkCentersListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.editHref,
+      columns: workCenterListColumns(_, options.action),
+    },
+    { paginate: true },
+  )
+  return shell(
     _,
     _('manufacturing_backend.workCenters.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('manufacturing_backend.workCenters.title')}
-      controls={collectionControls(_, _('manufacturing_backend.workCenters.title'), frame)}
-      actions={inline([
+      controls={collectionControls(_, _('manufacturing_backend.workCenters.title'), collection.frame)}
+      headerActions={
         <LinkButton
           label={_('manufacturing_backend.workCenters.create')}
           href={options.createHref}
           variant="primary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
+      footer={`${_('manufacturing_backend.workCenters.title')}: ${String(collection.total)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.editHref,
-              columns: workCenterListColumns(_, options.action),
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(
               _('manufacturing_backend.empty.workCenters'),
               _('manufacturing_backend.empty.workCentersHint'),
             )
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}

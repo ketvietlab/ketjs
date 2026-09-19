@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -45,13 +46,111 @@ export type SprintsScreenOptions = {
 }
 
 export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScreenOptions): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.sprints,
+      id: (row) => String(row.id),
+      columns: [
+        {
+          key: 'name',
+          label: _('flow_backend.field.name'),
+          priority: 'primary',
+          cell: (row) => String(row.name),
+        },
+        {
+          key: 'state',
+          label: _('flow_backend.field.state'),
+          kind: 'status',
+          cell: (row) => sprintStateBadge(_, row.state),
+        },
+        {
+          key: 'startDate',
+          label: _('flow_backend.field.startDate'),
+          kind: 'date',
+          cell: (row) => when(row.startDate),
+        },
+        {
+          key: 'endDate',
+          label: _('flow_backend.field.endDate'),
+          kind: 'date',
+          cell: (row) => when(row.endDate),
+        },
+        {
+          key: 'progress',
+          label: _('flow_backend.sprints.progress'),
+          cell: (row) => `${String(row.done ?? 0)} / ${String(row.total ?? 0)}`,
+        },
+        {
+          // `estimate` has been stored and shown per issue since the
+          // module was written and added up nowhere, so a sprint had
+          // no size and there was no velocity to read.
+          key: 'estimate',
+          label: _('flow_backend.sprints.estimate'),
+          cell: (row) =>
+            Number(row.estimate ?? 0)
+              ? `${String(row.estimateDone ?? 0)} / ${String(row.estimate ?? 0)}`
+              : '—',
+        },
+        {
+          key: 'actions',
+          label: '',
+          align: 'end',
+          cell: (row) =>
+            row.state === 'planned' || row.state === 'active' ? (
+              <RecordActions
+                action={options.action}
+                hidden={{ id: String(row.id), idempotencyKey: options.transitionKey(row) }}
+                actions={[
+                  row.state === 'planned'
+                    ? {
+                        value: 'start',
+                        label: _('flow_backend.action.start'),
+                        variant: 'secondary' as const,
+                      }
+                    : {
+                        value: 'close',
+                        label: _('flow_backend.action.close'),
+                        variant: 'secondary' as const,
+                      },
+                ]}
+              />
+            ) : (
+              '—'
+            ),
+        },
+        {
+          key: 'closing',
+          label: '',
+          align: 'end',
+          // Closing an active sprint asks first, because the answer to
+          // "what happens to what did not finish" used to be "nothing,
+          // move them one at a time".
+          cell: (row) =>
+            row.state === 'active' && Number(row.unfinished ?? 0) ? (
+              <LinkButton
+                label={_('flow_backend.sprints.closeWith')}
+                href={options.closeSprintHref(row)}
+                variant="tertiary"
+                size="compact"
+              />
+            ) : (
+              ''
+            ),
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
   const workspace = (
     <ListScreen
       translator={_}
       title={options.projectName}
       subtitle={_('flow_backend.menu.sprints')}
       frame={frame}
-      actions={
+      headerActions={
         <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />
       }
       body={
@@ -63,100 +162,7 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
               message={options.errors.join(' · ')}
             />
           ) : null}
-          {options.sprints.length
-            ? collectionTable(_, {
-                rows: options.sprints,
-                id: (row) => String(row.id),
-                columns: [
-                  {
-                    key: 'name',
-                    label: _('flow_backend.field.name'),
-                    priority: 'primary',
-                    cell: (row) => String(row.name),
-                  },
-                  {
-                    key: 'state',
-                    label: _('flow_backend.field.state'),
-                    kind: 'status',
-                    cell: (row) => sprintStateBadge(_, row.state),
-                  },
-                  {
-                    key: 'startDate',
-                    label: _('flow_backend.field.startDate'),
-                    kind: 'date',
-                    cell: (row) => when(row.startDate),
-                  },
-                  {
-                    key: 'endDate',
-                    label: _('flow_backend.field.endDate'),
-                    kind: 'date',
-                    cell: (row) => when(row.endDate),
-                  },
-                  {
-                    key: 'progress',
-                    label: _('flow_backend.sprints.progress'),
-                    cell: (row) => `${String(row.done ?? 0)} / ${String(row.total ?? 0)}`,
-                  },
-                  {
-                    // `estimate` has been stored and shown per issue since the
-                    // module was written and added up nowhere, so a sprint had
-                    // no size and there was no velocity to read.
-                    key: 'estimate',
-                    label: _('flow_backend.sprints.estimate'),
-                    cell: (row) =>
-                      Number(row.estimate ?? 0)
-                        ? `${String(row.estimateDone ?? 0)} / ${String(row.estimate ?? 0)}`
-                        : '—',
-                  },
-                  {
-                    key: 'actions',
-                    label: '',
-                    align: 'end',
-                    cell: (row) =>
-                      row.state === 'planned' || row.state === 'active' ? (
-                        <RecordActions
-                          action={options.action}
-                          hidden={{ id: String(row.id), idempotencyKey: options.transitionKey(row) }}
-                          actions={[
-                            row.state === 'planned'
-                              ? {
-                                  value: 'start',
-                                  label: _('flow_backend.action.start'),
-                                  variant: 'secondary' as const,
-                                }
-                              : {
-                                  value: 'close',
-                                  label: _('flow_backend.action.close'),
-                                  variant: 'secondary' as const,
-                                },
-                          ]}
-                        />
-                      ) : (
-                        '—'
-                      ),
-                  },
-                  {
-                    key: 'closing',
-                    label: '',
-                    align: 'end',
-                    // Closing an active sprint asks first, because the answer to
-                    // "what happens to what did not finish" used to be "nothing,
-                    // move them one at a time".
-                    cell: (row) =>
-                      row.state === 'active' && Number(row.unfinished ?? 0) ? (
-                        <LinkButton
-                          label={_('flow_backend.sprints.closeWith')}
-                          href={options.closeSprintHref(row)}
-                          variant="tertiary"
-                          size="compact"
-                        />
-                      ) : (
-                        ''
-                      ),
-                  },
-                ],
-              })
-            : empty(_)}
+          {options.sprints.length ? collectionTable(_, prepared.table) : empty(_)}
         </>
       }
     />

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { LinkButton } from '../packages/ketsuite/src/ui/index.ts'
 import {
   orderCreateScreen,
   ordersListScreen,
@@ -48,13 +49,30 @@ test('manufacturing orders list: ListPage is list-only and keeps localized workf
           },
         ],
       },
-      {},
+      {
+        chrome: { search: { name: 'q', placeholder: 'Search orders' } },
+        extras: {
+          'topbar.end': (
+            <LinkButton
+              label="Export orders"
+              href="/admin/manufacturing/export?lang=vi"
+              variant="secondary"
+            />
+          ),
+        },
+      },
     ),
   )
 
   assert.match(html, /data-ui="ket-table"/)
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
+  assert.equal(html.match(/data-ui="list-page-actions"/g)?.length, 1)
+  const headerStart = html.indexOf('data-ui="list-page-header"')
+  const header = html.slice(headerStart, html.indexOf('</header>', headerStart))
+  assert.match(header, /href="\/admin\/manufacturing\/new\?lang=vi"/)
+  assert.match(header, /data-ui="list-page-tools"[\s\S]*?Export orders/)
+  assert.ok(html.indexOf('Export orders') < html.indexOf('data-ui="chrome-search"'))
   assert.match(html, /href="\/admin\/manufacturing\/new\?lang=vi"[\s\S]*?Tạo lệnh sản xuất/)
   assert.match(html, /data-row-href="\/admin\/manufacturing\/orders\/mo-1\?lang=vi"/)
   assert.match(html, /MO\/0001/)

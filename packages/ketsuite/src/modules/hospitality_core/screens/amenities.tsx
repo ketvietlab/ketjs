@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   amenityColumns,
@@ -31,20 +32,26 @@ export const amenitiesScreen = (
     values?: Record<string, string>
   },
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    { columns: amenityColumns(_), rows, id: (row) => row.id },
+    { paginate: true },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.amenities.title')}
-      frame={frame}
-      actions={linkButton({
+      frame={collection.frame}
+      headerActions={linkButton({
         label: _('hospitality_core.screen.amenities.create'),
         href: modal?.createHref ?? '/admin/hospitality/amenities?create=1',
         variant: 'primary',
       })}
       body={stack([
         feedback(_, state),
-        rows.length
-          ? collectionTable(_, { columns: amenityColumns(_), rows, id: (row) => row.id })
+        collection.table.rows.length
+          ? collectionTable(_, collection.table)
           : emptyState(
               _('hospitality_core.screen.amenities.empty'),
               _('hospitality_core.screen.amenities.emptyHint'),

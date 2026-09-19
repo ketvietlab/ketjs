@@ -99,6 +99,8 @@ export type TailMenu = SearchMenu & {
 }
 
 export type ListChrome = {
+  /** Additional native filter controls, composed by the shared collection bar. */
+  advancedControls?: JSXChild
   /** Optional visual treatment for catalogue topbars or in-page command bars. */
   layout?: 'catalogue' | 'command'
   /** Small section label above the list title. */
@@ -339,6 +341,7 @@ export const listChrome = (
         ) : (
           !!chrome.search && topbarSearch(_, chrome)
         )}
+        {chrome.advancedControls}
         {chromeTail(_, chrome)}
       </div>
     </div>
@@ -346,12 +349,12 @@ export const listChrome = (
 )
 
 /**
- * Selection actions belong with page actions, not with query controls. Keeping
- * this renderer public lets a self-titled ListPage place More directly beside
- * Create while legacy topbars can continue to render the same form in chrome.
+ * Selection actions join primary actions in the shared list header. The native form
+ * stays mounted while hidden so external row checkboxes retain their association;
+ * the shared client reveals it only when that form has selected rows.
  */
 export const bulkActions = (_: Translator, selection: TableSelection): TemplateResult => (
-  <form data-ui="bulk-form" id={selection.formId} method="post" action={selection.action}>
+  <form data-ui="bulk-form" id={selection.formId} method="post" action={selection.action} hidden>
     {each(
       Object.entries(selection.hidden ?? {}),
       ([key]) => key,

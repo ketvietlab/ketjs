@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
@@ -36,59 +37,65 @@ const stateBadge = (_: Translator, state: unknown) => {
 export const openingBalancesListScreen = (
   _: Translator,
   options: { frame: Frame; rows: Row[]; createHref: string; rowHref: (row: Row) => string },
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      id: (row) => String(row.id),
+      rowHref: options.rowHref,
+      columns: [
+        {
+          key: 'date',
+          label: _('account_backend.field.accountingDate'),
+          priority: 'primary',
+          cell: (row) => String(row.accountingDate),
+        },
+        {
+          key: 'state',
+          label: _('account_backend.field.state'),
+          kind: 'status',
+          cell: (row) => stateBadge(_, row.state),
+        },
+        {
+          key: 'lines',
+          label: _('account_backend.opening.lines'),
+          cell: (row) => String(row.lineCount ?? '—'),
+          align: 'end',
+        },
+        {
+          key: 'debit',
+          label: _('account_backend.field.debit'),
+          cell: (row) => formatMoney(_, row.controlDebit, row.currency),
+          align: 'end',
+          kind: 'currency',
+        },
+        {
+          key: 'checksum',
+          label: _('account_backend.opening.source'),
+          cell: (row) => code(String(row.sourceChecksum).slice(0, 12)),
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  return shell(
     _,
     _('account_backend.opening.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.opening.title')}
-      controls={collectionControls(_, _('account_backend.opening.title'), options.frame)}
+      controls={collectionControls(_, _('account_backend.opening.title'), collection.frame)}
       description={_('account_backend.opening.subtitle')}
-      actions={
+      headerActions={
         <LinkButton label={_('account_backend.opening.create')} href={options.createHref} variant="primary" />
       }
       footer={`${_('account_backend.opening.summary')}: ${String(options.rows.length)}`}
       body={
         options.rows.length ? (
-          collectionTable(_, {
-            rows: options.rows,
-            id: (row) => String(row.id),
-            rowHref: options.rowHref,
-            columns: [
-              {
-                key: 'date',
-                label: _('account_backend.field.accountingDate'),
-                priority: 'primary',
-                cell: (row) => String(row.accountingDate),
-              },
-              {
-                key: 'state',
-                label: _('account_backend.field.state'),
-                kind: 'status',
-                cell: (row) => stateBadge(_, row.state),
-              },
-              {
-                key: 'lines',
-                label: _('account_backend.opening.lines'),
-                cell: (row) => String(row.lineCount ?? '—'),
-                align: 'end',
-              },
-              {
-                key: 'debit',
-                label: _('account_backend.field.debit'),
-                cell: (row) => formatMoney(_, row.controlDebit, row.currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'checksum',
-                label: _('account_backend.opening.source'),
-                cell: (row) => code(String(row.sourceChecksum).slice(0, 12)),
-              },
-            ],
-          })
+          collectionTable(_, collection.table)
         ) : (
           <Surface
             padding="compact"
@@ -99,8 +106,9 @@ export const openingBalancesListScreen = (
         )
       }
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}
 
 export const openingBalanceImportScreen = (
   _: Translator,

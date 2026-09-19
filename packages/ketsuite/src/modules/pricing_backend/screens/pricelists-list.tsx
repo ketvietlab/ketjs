@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -6,7 +7,6 @@ import {
   code,
   collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
   shell,
@@ -37,8 +37,20 @@ export const pricelistsScreen = (
   _: Translator,
   frame: Frame,
   options: PricelistsScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: pricelistColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('pricing_backend.title'),
     <ListPage
@@ -47,21 +59,17 @@ export const pricelistsScreen = (
       title={_('pricing_backend.title')}
       controls={collectionControls(_, _('pricing_backend.title'), frame)}
       description={_('pricing_backend.subtitle')}
-      actions={inline([
-        <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={frame.extras?.['topbar.end']}
       status={`${_('pricing_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              columns: pricelistColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('pricing_backend.empty'), _('pricing_backend.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

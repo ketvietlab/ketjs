@@ -138,10 +138,18 @@ test('product list: follows the design-system list hierarchy without a duplicate
     html,
     /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-variant="primary"/,
   )
+  const headerStart = html.indexOf('data-ui="list-page-header"')
+  const header = html.slice(headerStart, html.indexOf('</header>', headerStart))
+  assert.match(header, /href="\/admin\/product\/templates\/new\?lang=vi"/)
   assert.match(
-    html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"/,
+    header,
+    /data-ui="list-page-tools"[^>]* hidden[\s\S]*?data-ui="bulk-form" id="product-template-bulk" method="post" action="\/admin\/product\/templates\/bulk"/,
   )
+  assert.doesNotMatch(
+    html.slice(html.indexOf('</header>', headerStart)),
+    /data-ui="list-page-actions"|data-ui="list-page-tools"/,
+  )
+  assert.equal(html.match(/href="\/admin\/product\/templates\/new\?lang=vi"/g)?.length, 1)
   assert.match(html, /href="\/admin\/product\/templates\/new\?lang=vi"/)
   assert.match(
     html,
@@ -159,7 +167,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?24 sản phẩm/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
-    html.indexOf('data-ui="list-page-actions"'),
+    html.indexOf('data-ui="list-page-body"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
   assert.match(html, /data-col="name"[\s\S]*?data-ui="thumbnail"[\s\S]*?Áo khoác gió vận hành/)
@@ -197,6 +205,9 @@ test('product list: renders contributed catalogue actions beside native actions'
     ),
   )
 
-  assert.match(htmlOutput, /data-ui="list-page-actions"[\s\S]*?Kênh bán/)
+  const headerStart = htmlOutput.indexOf('data-ui="list-page-header"')
+  const headerEnd = htmlOutput.indexOf('</header>', headerStart)
+  assert.match(htmlOutput.slice(headerStart, headerEnd), /data-ui="list-page-tools"[\s\S]*?Kênh bán/)
+  assert.doesNotMatch(htmlOutput.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
   assert.match(htmlOutput, /href="\/admin\/channels\/products"/)
 })

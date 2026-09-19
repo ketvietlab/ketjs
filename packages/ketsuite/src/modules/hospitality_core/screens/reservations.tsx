@@ -1,3 +1,4 @@
+import { collectionQueryKeep, prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CardGrid,
@@ -50,12 +51,26 @@ export const reservationsScreen = (
     error.messageKey ? _(error.messageKey, error.params) : _('hospitality_core.feedback.invalid'),
   )
   const quote = data.quote?.ok ? data.quote : null
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: reservationColumns(_, locale, timezone),
+      rows: data.rows,
+      id: (row) => row.id,
+    },
+    {
+      paginate: true,
+      searchText: (row) =>
+        `${row.code} ${row.partner?.name ?? ''} ${row.roomType?.name ?? ''} ${_(`hospitality_core.reservationState.${row.state}`)}`,
+    },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.reservations.title')}
-      frame={frame}
-      actions={linkButton({
+      frame={collection.frame}
+      headerActions={linkButton({
         label: _('hospitality_core.reservation.action.new'),
         href: modal?.createHref ?? '/admin/hospitality/reservations?create=1',
         variant: 'primary',
@@ -67,7 +82,13 @@ export const reservationsScreen = (
           layout="inline"
           submit={_('hospitality_core.action.select')}
           submitVariant="secondary"
-          hidden={{ lang: locale }}
+          hidden={{
+            ...collectionQueryKeep(
+              new URL(frame.collectionUrl ?? '/admin/hospitality/reservations', 'http://collection.local'),
+              ['property'],
+            ),
+            lang: locale,
+          }}
           fields={[
             {
               name: 'property',
@@ -87,12 +108,8 @@ export const reservationsScreen = (
           title={_('hospitality_core.reservation.section.list')}
           description={_('hospitality_core.reservation.section.listHint')}
           body={
-            data.rows.length
-              ? collectionTable(_, {
-                  columns: reservationColumns(_, locale, timezone),
-                  rows: data.rows,
-                  id: (row) => row.id,
-                })
+            collection.table.rows.length
+              ? collectionTable(_, collection.table)
               : emptyState(
                   _('hospitality_core.screen.reservations.empty'),
                   _('hospitality_core.screen.reservations.emptyHint'),

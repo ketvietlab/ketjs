@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { LinkButton } from '../packages/ketsuite/src/ui/index.ts'
 import {
   openingBalanceDetailScreen,
   openingBalancesListScreen,
@@ -48,8 +49,19 @@ test('account wave 1 screens keep rejected opening and close actions visible', (
   assert.match(closes, /data-ui="disclosure"[^>]*open/)
 })
 
-test('opening balances and period closes render collection KetTables after search and tools', () => {
-  const frame = { chrome: { search: { name: 'q', value: '', placeholder: 'Search' } } }
+test('opening balances keep creation in the header while period close forms stay in the body', () => {
+  const frame = {
+    chrome: { search: { name: 'q', value: '', placeholder: 'Search' } },
+    extras: {
+      'topbar.end': (
+        <LinkButton
+          label="Export periods"
+          href="/admin/accounting/period-closes/export?lang=vi"
+          variant="secondary"
+        />
+      ),
+    },
+  }
   const opening = renderToString(
     openingBalancesListScreen(translate, {
       frame,
@@ -86,8 +98,19 @@ test('opening balances and period closes render collection KetTables after searc
   )
   for (const html of [opening, closes]) {
     assert.match(html, /data-ui="ket-table"/)
-    assert.ok(html.indexOf('data-ui="chrome-search"') < html.indexOf('data-ui="list-page-actions"'))
-    assert.ok(html.indexOf('data-ui="list-page-actions"') < html.indexOf('data-ui="ket-table"'))
+    assert.ok(html.indexOf('data-ui="chrome-search"') < html.indexOf('data-ui="ket-table"'))
   }
+  assert.ok(
+    opening.indexOf('href="/admin/accounting/opening-balances/new?lang=vi"') <
+      opening.indexOf('data-ui="chrome-search"'),
+  )
+  assert.equal(opening.match(/data-ui="list-page-actions"/g)?.length, 1)
+  const headerStart = closes.indexOf('data-ui="list-page-header"')
+  const header = closes.slice(headerStart, closes.indexOf('</header>', headerStart))
+  assert.match(header, /data-ui="list-page-tools"[\s\S]*?Export periods/)
+  assert.doesNotMatch(header, /close-create-form|data-ui="record-form"|data-ui="disclosure"/)
+  assert.ok(closes.indexOf('data-ui="chrome-search"') < closes.indexOf('data-ui="list-page-body"'))
+  assert.ok(closes.indexOf('data-ui="list-page-body"') < closes.indexOf('id="close-create-form"'))
+  assert.ok(closes.indexOf('id="close-create-form"') < closes.indexOf('data-ui="ket-table"'))
   assert.match(closes, /action="\/admin\/accounting\/period-closes\?lang=vi"/)
 })

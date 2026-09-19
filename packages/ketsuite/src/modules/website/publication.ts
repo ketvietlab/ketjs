@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { canPublishEntry } from './access.ts'
+import { canAccessSite, canPublishEntry } from './access.ts'
 import { frozenMeta } from './cms.ts'
 import { layoutOf, missingSectionTypes, preflightEntry, sectionTypesIn } from './renderable.ts'
 
@@ -304,7 +304,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
   }),
 
   listPublications: defineFn({
-    input: { siteId: 'id', state: 'text?', limit: 'int?' },
+    input: { siteId: 'id', state: 'text?', limit: 'int?', offset: 'int?' },
     output: {
       id: 'id',
       siteId: 'id',
@@ -317,11 +317,16 @@ export const publicationFunctions: Record<string, FnSpec> = {
     effects: ['read:website.Publication', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
+      if (!(await canAccessSite(ctx, args.siteId))) return []
       const P = ctx.table('website.Publication')
-      let query = from(P).where(eq(P.siteId, args.siteId)).orderBy(desc(P.preparedAt))
+      let query = from(P)
+        .select(P.id, P.siteId, P.state, P.entryCount, P.contentHash, P.preparedAt, P.activatedAt)
+        .where(eq(P.siteId, args.siteId))
+        .orderBy(desc(P.preparedAt), asc(P.id))
       if (args.state) query = query.where(eq(P.state, args.state))
       const limit = Number.isInteger(args.limit) ? Math.min(Math.max(Number(args.limit), 1), 100) : 50
-      return ctx.db.all(query.limit(limit))
+      const offset = Math.max(Number.isSafeInteger(args.offset) ? Number(args.offset) : 0, 0)
+      return ctx.db.all(query.limit(limit).offset(offset))
     },
   }),
 

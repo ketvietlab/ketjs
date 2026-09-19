@@ -247,7 +247,14 @@ export const housekeeping: Record<string, FnSpec> = {
   }),
 
   listCleaningTasks: defineFn({
-    input: { propertyId: 'id?', roomId: 'id?', state: 'text?', assigneeId: 'id?', limit: 'int?' },
+    input: {
+      propertyId: 'id?',
+      roomId: 'id?',
+      state: 'text?',
+      assigneeId: 'id?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     output: taskOutput,
     effects: ['read:hospitality_core.CleaningTask', 'read:hospitality_core.Room'],
     agent: true,
@@ -260,9 +267,13 @@ export const housekeeping: Record<string, FnSpec> = {
       if (args.assigneeId) query = query.where(eq(T.assigneeId, args.assigneeId))
       query =
         args.state === 'todo' || args.state === 'in_progress'
-          ? query.orderBy(desc(T.priority), asc(T.requestedAt))
-          : query.orderBy(desc(T.requestedAt))
-      return ctx.db.all(query.limit(Math.max(1, Math.min(500, Number(args.limit ?? 100)))))
+          ? query.orderBy(desc(T.priority), asc(T.requestedAt), asc(T.id))
+          : query.orderBy(desc(T.requestedAt), desc(T.id))
+      return ctx.db.all(
+        query
+          .limit(Math.max(1, Math.min(500, Number(args.limit ?? 100))))
+          .offset(Math.max(0, Math.trunc(Number(args.offset) || 0))),
+      )
     },
   }),
 

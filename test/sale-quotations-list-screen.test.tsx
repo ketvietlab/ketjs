@@ -106,6 +106,18 @@ test('sales quotations list: preserves state, columns, reports and ListPage cont
   assert.match(html, /data-ui="ket-table"/)
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
+  assert.ok(
+    html.indexOf('href="/admin/sales/quotations/new?state=draft&amp;lang=vi"') <
+      html.indexOf('data-ui="list-page-controls"'),
+  )
+  const headerStart = html.indexOf('data-ui="list-page-header"')
+  const header = html.slice(headerStart, html.indexOf('</header>', headerStart))
+  assert.match(header, /href="\/admin\/sales\/quotations\/new\?state=draft&amp;lang=vi"/)
+  assert.match(header, /data-ui="list-page-tools"[\s\S]*?data-ui="bulk-form"/)
+  assert.match(header, /id="sale-quotation-bulk"/)
+  assert.match(header, /action="\/admin\/sales\/quotations\/bulk\?state=draft&amp;lang=vi"/)
+  assert.equal(html.match(/data-ui="list-page-actions"/g)?.length, 1)
+  assert.ok(html.indexOf('data-ui="bulk-form"') < html.indexOf('data-ui="list-page-controls"'))
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(html, /href="\/admin\/sales\/quotations\/new\?state=draft&amp;lang=vi"/)
   assert.match(

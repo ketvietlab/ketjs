@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -6,7 +7,6 @@ import {
   collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
   listChrome,
@@ -88,15 +88,16 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
     `${_('account_backend.journal.summary.purchase')}: ${String(options.summary.purchase)}`,
     `${_('account_backend.journal.summary.liquidity')}: ${String(options.summary.liquidity)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: journalListColumns(_, accountLabels),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      collectionTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: journalListColumns(_, accountLabels),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -111,20 +112,20 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
     _('account_backend.journals.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.journals.title')}
       description={_('account_backend.journal.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('account_backend.journals.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -137,6 +138,6 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
       footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

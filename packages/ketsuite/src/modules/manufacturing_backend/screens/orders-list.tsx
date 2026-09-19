@@ -1,7 +1,8 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, collectionTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import { badge, collectionTable, emptyState, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 
 export type ManufacturingOrderListRow = {
@@ -62,33 +63,41 @@ export const ordersListScreen = (
   _: Translator,
   options: OrdersListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.href,
+      columns: manufacturingOrderListColumns(_),
+    },
+    { paginate: true },
+  )
+  return shell(
     _,
     _('manufacturing_backend.orders.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('manufacturing_backend.orders.title')}
-      controls={collectionControls(_, _('manufacturing_backend.orders.title'), frame)}
-      actions={inline([
+      controls={collectionControls(_, _('manufacturing_backend.orders.title'), collection.frame)}
+      headerActions={
         <LinkButton
           label={_('manufacturing_backend.orders.create')}
           href={options.createHref}
           variant="primary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
+      footer={`${_('manufacturing_backend.orders.title')}: ${String(collection.total)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.href,
-              columns: manufacturingOrderListColumns(_),
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('manufacturing_backend.empty.orders'), _('manufacturing_backend.empty.ordersHint'))
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}

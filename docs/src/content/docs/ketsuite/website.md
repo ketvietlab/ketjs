@@ -7,9 +7,9 @@ description: KetSuite Website modules, the site and publication model, and the p
 
 ## Administration collections
 
-Website administration lists use KetTable below the shared app context, URL-backed filters,
-and tool actions. Existing site, status, search, and paging controls retain their route
-contracts. Revision, member, domain, and site-health lists also support text search.
+Website administration lists place Create beside the title, followed by URL-backed filters,
+tool actions, and KetTable. Existing site, status, search, and paging controls retain their route
+contracts. Revision, taxonomy, media, redirect, publication, member, domain, and site-health lists also support text search.
 Revision comparison still receives every revision, and domain readiness still receives
 every domain, even when search narrows the primary table. Search cannot change the selected
 revision, primary-domain evidence, or a refused form's submitted draft.
@@ -1020,11 +1020,18 @@ composed. Removing one guard fails it; asserting composition would not have noti
 
 ### A list has to say how much it is not showing
 
-`countEntries` and `countSubmissions` existed with no caller, so both screens read the first
-page of a list and presented it as the list. The pager is the shared one from `backend/paging.ts`,
-and it renders through `pagerBar` — extracted from `chromeTail` rather than copied, because the
-Website frames pass `chrome: null` and reach it through `ListPage`'s footer instead. Two call
-sites, one renderer, one thing to keep in step with the stylesheet.
+Entries and submissions use their domain count and page APIs; the shared command bar shows
+that pager once. Revisions, taxonomy terms, media, redirects and publications read every metadata
+batch before `prepareCollectionTable` applies native URL search and pagination. A 100-row API
+batch is a transport limit, never the reported total. The complete revision choices and the
+selected redirect remain available even when the table shows another page.
+
+The metadata readers use a stable identifier to break ordering ties. Publications accept an
+optional offset and enforce site membership, matching the other Website readers. Revision and
+publication lists select only their declared metadata rather than loading layout or publication
+snapshots. This preserves the existing screens and API grants, at the cost of reading O(N)
+metadata for a collection request; exceptionally large collections may need dedicated filtered
+count APIs later. There is no arbitrary total cap or truncated result presented as complete.
 
 ### Where a shared route sends the browser back to
 

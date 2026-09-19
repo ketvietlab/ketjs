@@ -1,4 +1,8 @@
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import {
+  collectionSearchFrame,
+  searchCollectionRows,
+  loadCollectionRows,
+} from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { dateTimeFormatter, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
@@ -2569,11 +2573,14 @@ export const routes: Record<string, RouteEntry> = {
       const canCreate = await ctx.allows('hospitality_core.createCleaningTask', url, req)
       const [rows, rooms, summary] = propertyId
         ? ((await Promise.all([
-            ctx.call(
-              'hospitality_core.listCleaningTasks',
-              { propertyId, state: state === 'all' ? undefined : state, limit: 500 },
-              url,
-              req,
+            loadCollectionRows(
+              (page) =>
+                ctx.call(
+                  'hospitality_core.listCleaningTasks',
+                  { propertyId, state: state === 'all' ? undefined : state, ...page },
+                  url,
+                  req,
+                ) as Promise<CleaningTaskRow[]>,
             ),
             canCreate
               ? ctx.call('hospitality_core.listRooms', { propertyId }, url, req)
