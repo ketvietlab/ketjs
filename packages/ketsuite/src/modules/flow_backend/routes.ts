@@ -1,3 +1,4 @@
+import { withParam } from '../backend/paging.ts'
 import { randomUUID } from 'node:crypto'
 import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
@@ -1241,48 +1242,35 @@ export const routes: Record<string, RouteEntry> = {
 
       const _ = ctx.translate(ctx.localeOf(url, req))
       const showArchived = url.searchParams.get('archived') === '1'
-      // One page, and the real total beside it. This used to ask for two
-      // hundred and report what came back as the whole company's project
-      // count — wrong past that, and with no way to reach the rest (FLW-039).
-      const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
-      const all = (await ctx.call(
+      const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
+      const filter = {
+        search: url.searchParams.get('q') ?? '',
+        archivedOnly: tab === 'archived',
+        mine: tab === 'mine',
+      }
+      const counted = (await ctx.call('flow.project.count', filter, url, req)) as AnyRow
+      const total = Number(counted.total ?? 0)
+      const page = Math.min(pageOf(url), Math.max(1, Math.ceil(total / LIST_PAGE_SIZE)))
+      const listed = (await ctx.call(
         'flow.project.list',
         {
+          ...filter,
           limit: LIST_PAGE_SIZE,
           cursor: (page - 1) * LIST_PAGE_SIZE,
-          includeArchived: showArchived,
         },
         url,
         req,
       )) as AnyRow[]
-      const counted = (await ctx.call(
-        'flow.project.count',
-        { includeArchived: showArchived },
-        url,
-        req,
-      )) as AnyRow
-      const total = Number(counted.total ?? 0)
       const stats = (await ctx.call(
         'flow.project.stats',
-        { projectIds: all.map((project) => String(project.id)) },
+        {
+          projectIds: listed.map((project) => String(project.id)),
+        },
         url,
         req,
       )) as AnyRow[]
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
-      const withStats = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
-
-      const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
-      // Asked as "which projects", not as "the two hundred issues I touched
-      // most recently" — that page silently dropped projects from the tab of
-      // anyone carrying more work than it held. See projectsWithMyWork.
-      const rows =
-        tab === 'mine'
-          ? ((await ctx.call('flow.project.list', { mine: true }, url, req)) as AnyRow[]).map(
-              (project) => withStats.find((row) => String(row.id) === String(project.id)) ?? project,
-            )
-          : tab === 'archived'
-            ? withStats.filter((project) => project.active === false)
-            : withStats
+      const rows = listed.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
       const recent = (await ctx.call(
         'flow.issue.list',
@@ -1296,49 +1284,47 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
         body: (_, frame) => {
-          const workspace = projectsListScreen(_, frame, {
-            rows,
-            projectCount: total,
-            // Only the tab that really pages gets a pager. `mine` and
-            // `archived` are filters over what came back, so a pager on them
-            // would count pages of a list this route never asked for.
-            pager:
-              tab === 'all' && total > LIST_PAGE_SIZE
-                ? {
-                    from: rows.length ? (page - 1) * LIST_PAGE_SIZE + 1 : 0,
-                    to: Math.min(page * LIST_PAGE_SIZE, total),
-                    total,
-                    prev: page > 1 ? `/admin/flow/projects?page=${page - 1}` : null,
-                    next: page * LIST_PAGE_SIZE < total ? `/admin/flow/projects?page=${page + 1}` : null,
-                  }
-                : null,
-            issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
-            issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
-            activeCount: stats.filter((row) => String(row.state) === 'active').length,
-            activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
-            tab,
-            tabs: [
-              {
-                id: 'all',
-                label: _('flow_backend.projects.tabAll'),
-                href: '/admin/flow/projects',
+          const workspace = projectsListScreen(
+            _,
+            collectionSearchFrame(url, frame, _('flow_backend.projects.title')),
+            {
+              rows,
+              projectCount: total,
+              pager: {
+                from: rows.length ? (page - 1) * LIST_PAGE_SIZE + 1 : 0,
+                to: rows.length ? (page - 1) * LIST_PAGE_SIZE + rows.length : 0,
+                total,
+                prev: page > 1 ? withParam(url, 'page', String(page - 1), false) : null,
+                next: page * LIST_PAGE_SIZE < total ? withParam(url, 'page', String(page + 1), false) : null,
               },
-              {
-                id: 'mine',
-                label: _('flow_backend.projects.tabMine'),
-                href: '/admin/flow/projects?tab=mine',
-              },
-              // A third tab rather than a toggle: archived projects are a place
-              // you go, not a filter you leave on by accident.
-              {
-                id: 'archived',
-                label: _('flow_backend.projects.tabArchived'),
-                href: '/admin/flow/projects?archived=1',
-              },
-            ],
-            createHref: projectCreateHref(url),
-            locale: localeQuery(url),
-          })
+              issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+              issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
+              activeCount: stats.filter((row) => String(row.state) === 'active').length,
+              activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
+              tab,
+              tabs: [
+                {
+                  id: 'all',
+                  label: _('flow_backend.projects.tabAll'),
+                  href: '/admin/flow/projects',
+                },
+                {
+                  id: 'mine',
+                  label: _('flow_backend.projects.tabMine'),
+                  href: '/admin/flow/projects?tab=mine',
+                },
+                // A third tab rather than a toggle: archived projects are a place
+                // you go, not a filter you leave on by accident.
+                {
+                  id: 'archived',
+                  label: _('flow_backend.projects.tabArchived'),
+                  href: '/admin/flow/projects?archived=1',
+                },
+              ],
+              createHref: projectCreateHref(url),
+              locale: localeQuery(url),
+            },
+          )
           if (url.searchParams.get('create') !== '1') return workspace
           const returnUrl = new URL(url)
           for (const key of [

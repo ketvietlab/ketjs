@@ -39,24 +39,22 @@ export const countryScreen = (
       translator={_}
       title={countryName}
       frame={frame}
+      headerActions={
+        !options.status?.installed ? (
+          <RecordActions
+            action={localized(`/admin/addresses/${countryCode}/install`, locale)}
+            actions={[
+              {
+                value: options.status?.version ?? '2025-07-01',
+                label: _('address_backend.action.install'),
+                variant: 'primary',
+              },
+            ]}
+          />
+        ) : null
+      }
+      actions={linkButton({ label: _('address_backend.action.back'), href: back, variant: 'tertiary' })}
       body={stack([
-        inline([
-          linkButton({ label: _('address_backend.action.back'), href: back, variant: 'tertiary' }),
-          ...(!options.status?.installed
-            ? [
-                <RecordActions
-                  action={localized(`/admin/addresses/${countryCode}/install`, locale)}
-                  actions={[
-                    {
-                      value: options.status?.version ?? '2025-07-01',
-                      label: _('address_backend.action.install'),
-                      variant: 'primary',
-                    },
-                  ]}
-                />,
-              ]
-            : []),
-        ]),
         ...(options.errors?.length
           ? [
               <Notice

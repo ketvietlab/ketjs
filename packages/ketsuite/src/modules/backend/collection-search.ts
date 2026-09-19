@@ -1,4 +1,5 @@
 import type { Frame } from '../../ui/index.ts'
+export { paginateCollectionRows, collectionQueryKeep } from '../../ui/collection-state.ts'
 
 /** Search complete, authorised collections using the same text the reader sees. */
 export const searchCollectionRows = <R>(url: URL, rows: R[], text: (row: R) => string): R[] => {
@@ -18,9 +19,29 @@ export const collectionSearchFrame = (url: URL, frame: Frame, placeholder: strin
   }
   return {
     ...frame,
+    collectionUrl: url.pathname + url.search,
     chrome: {
       ...frame.chrome,
       search: { name: 'q', value: url.searchParams.get('q') ?? '', placeholder, keep },
     },
+  }
+}
+
+/**
+ * Read a complete authorized collection from a bounded API before local search,
+ * grouping or pagination. The caller keeps filters and stable ordering identical
+ * for every batch and chooses a size the source supports without truncation.
+ */
+export const loadCollectionRows = async <R>(
+  load: (page: { limit: number; offset: number }) => Promise<R[]>,
+  batchSize = 500,
+): Promise<R[]> => {
+  if (!Number.isSafeInteger(batchSize) || batchSize < 1)
+    throw new RangeError('Collection batch size must be a positive safe integer')
+  const rows: R[] = []
+  for (;;) {
+    const batch = await load({ limit: batchSize, offset: rows.length })
+    rows.push(...batch)
+    if (batch.length < batchSize) return rows
   }
 }

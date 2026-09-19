@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { collectionTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
@@ -26,6 +27,52 @@ export const allEpicsScreen = (
   options: AllEpicsScreenOptions,
 ): TemplateResult => {
   const locale = options.locale ?? ''
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.epics,
+      id: (epic) => String(epic.id),
+      rowHref: (epic) => localized(`/admin/flow/epics/${encodeURIComponent(String(epic.id))}`, locale),
+      columns: [
+        {
+          key: 'title',
+          label: _('flow_backend.field.title'),
+          priority: 'primary',
+          cell: (epic) =>
+            linkButton({
+              href: localized(`/admin/flow/epics/${encodeURIComponent(String(epic.id))}`, locale),
+              label: String(epic.title ?? ''),
+              variant: 'tertiary',
+              size: 'compact',
+            }),
+        },
+        {
+          key: 'project',
+          label: _('flow_backend.field.project'),
+          priority: 'secondary',
+          cell: (epic) =>
+            linkButton({
+              href: localized(
+                `/admin/flow/projects/${encodeURIComponent(String(epic.projectId))}/epics`,
+                locale,
+              ),
+              label: String(epic.projectName ?? '—'),
+              variant: 'tertiary',
+              size: 'compact',
+            }),
+        },
+        {
+          key: 'preview',
+          label: _('flow_backend.field.description'),
+          cell: (epic) =>
+            String(epic.previewText ?? '').slice(0, 140) || _('flow_backend.epics.emptyDocument'),
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     options.title,
@@ -52,51 +99,7 @@ export const allEpicsScreen = (
           : undefined
       }
       status={`${options.title}: ${String(options.total ?? options.epics.length)}`}
-      body={
-        options.epics.length
-          ? collectionTable(_, {
-              rows: options.epics,
-              id: (epic) => String(epic.id),
-              rowHref: (epic) =>
-                localized(`/admin/flow/epics/${encodeURIComponent(String(epic.id))}`, locale),
-              columns: [
-                {
-                  key: 'title',
-                  label: _('flow_backend.field.title'),
-                  priority: 'primary',
-                  cell: (epic) =>
-                    linkButton({
-                      href: localized(`/admin/flow/epics/${encodeURIComponent(String(epic.id))}`, locale),
-                      label: String(epic.title ?? ''),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                },
-                {
-                  key: 'project',
-                  label: _('flow_backend.field.project'),
-                  priority: 'secondary',
-                  cell: (epic) =>
-                    linkButton({
-                      href: localized(
-                        `/admin/flow/projects/${encodeURIComponent(String(epic.projectId))}/epics`,
-                        locale,
-                      ),
-                      label: String(epic.projectName ?? '—'),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                },
-                {
-                  key: 'preview',
-                  label: _('flow_backend.field.description'),
-                  cell: (epic) =>
-                    String(epic.previewText ?? '').slice(0, 140) || _('flow_backend.epics.emptyDocument'),
-                },
-              ],
-            })
-          : empty(_)
-      }
+      body={options.epics.length ? collectionTable(_, prepared.table) : empty(_)}
     />,
     { ...frame, chrome: null, topbar: false },
   )

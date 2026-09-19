@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -60,8 +61,20 @@ export const companiesListScreen = (
   _: Translator,
   frame: Frame,
   options: CompaniesListScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      columns: companyListColumns(_),
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('company_backend.screen.title'),
     <ListPage
@@ -69,8 +82,10 @@ export const companiesListScreen = (
       frame={frame}
       title={_('company_backend.screen.title')}
       description={_('company_backend.screen.subtitle')}
+      headerActions={
+        <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />
+      }
       actions={inline([
-        <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />,
         <LinkButton
           label={_('company_backend.action.hierarchy')}
           href={options.hierarchyHref}
@@ -100,14 +115,10 @@ export const companiesListScreen = (
       status={`${_('company_backend.screen.title')}: ${String(options.total)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-              columns: companyListColumns(_),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('company_backend.screen.empty'), _('company_backend.screen.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

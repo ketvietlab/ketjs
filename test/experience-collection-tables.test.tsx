@@ -23,18 +23,19 @@ translate.resolves = () => true
 const ordered = (html: string, parts: string[]) => {
   let previous = -1
   for (const part of parts) {
-    const current = html.indexOf(part)
+    const current = html.indexOf(part, previous + 1)
     assert.ok(current > previous, `${part} must follow the preceding collection slot`)
     previous = current
   }
 }
 
-test('experience collection frames put functional filters before tools and the KetTable', () => {
+test('experience collection frames put Create and collection actions beside the title, then filters and KetTable', () => {
   for (const Frame of [WebsiteFrame, LoyaltyFrame, HospitalityFrame, BillingFrame]) {
     const html = renderToString(
       Frame({
         translator: translate,
         title: 'Collection',
+        actions: <a href="/export?lang=vi">Export</a>,
         frame: {
           chrome: {
             search: { name: 'q', value: 'A', placeholder: 'Find', keep: { lang: 'vi', state: 'open' } },
@@ -50,13 +51,20 @@ test('experience collection frames put functional filters before tools and the K
     )
     ordered(html, [
       'data-ui="list-page-context"',
+      'href="/new?lang=vi"',
+      'href="/export?lang=vi"',
+      '</header>',
       'data-ui="list-page-controls"',
-      'data-ui="list-page-actions"',
       'data-ui="ket-table"',
     ])
+    assert.doesNotMatch(
+      html.slice(html.indexOf('data-ui="list-page-toolbar"')),
+      /data-ui="list-page-actions"|data-ui="list-page-tools"/,
+    )
     assert.match(html, /name="q"[^>]*value="A"/)
     assert.match(html, /name="lang"[^>]*value="vi"/)
     assert.match(html, /href="\/new\?lang=vi"/)
+    assert.equal((html.match(/href="\/new\?lang=vi"/g) ?? []).length, 1)
     assert.equal((html.match(/data-ui="list-page-controls"/g) ?? []).length, 1)
     // The shared search owns one inline form and its mobile dialog counterpart.
     assert.equal((html.match(/name="q"/g) ?? []).length, 2)
@@ -89,8 +97,10 @@ test('Website content retains the combined site/status/search GET form and local
   )
   ordered(html, [
     'data-ui="list-page-context"',
+    'href="/admin/website/pages/new?site=site1&amp;lang=vi"',
+    'href="/admin/website/taxonomies?site=site1&amp;lang=vi"',
+    '</header>',
     'data-ui="list-page-controls"',
-    'data-ui="list-page-actions"',
     'data-ui="ket-table"',
   ])
   assert.match(html, /method="get"/)

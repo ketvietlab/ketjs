@@ -1,3 +1,4 @@
+import { collectionQueryKeep, prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   buildingColumns,
@@ -48,12 +49,28 @@ export const roomsScreen = (
   const activeBuildings = data.buildings.filter((row) => row.active)
   const activeFloors = data.floors.filter((row) => row.active)
   const canCreateRoom = Boolean(data.propertyId && data.roomTypes.length)
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: roomColumns(_),
+      rows: data.rows,
+      id: (row) => row.id,
+      rowHref: (row) =>
+        `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+    },
+    {
+      paginate: true,
+      searchText: (row) =>
+        `${row.code} ${row.name} ${row.roomType?.name ?? ''} ${row.building?.name ?? ''} ${row.floor?.name ?? ''} ${_(`hospitality_core.roomStatus.${row.status}`)}`,
+    },
+  )
   return (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.rooms.title')}
-      frame={frame}
-      actions={
+      frame={collection.frame}
+      headerActions={
         canCreateRoom
           ? linkButton({
               label: _('hospitality_core.room.action.create'),
@@ -76,7 +93,13 @@ export const roomsScreen = (
               options: choices(data.properties),
             },
           ]}
-          hidden={{ lang: locale }}
+          hidden={{
+            ...collectionQueryKeep(
+              new URL(frame.collectionUrl ?? '/admin/hospitality/rooms', 'http://collection.local'),
+              ['property'],
+            ),
+            lang: locale,
+          }}
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />
@@ -249,14 +272,8 @@ export const roomsScreen = (
           title={_('hospitality_core.room.section.rooms')}
           description={_('hospitality_core.room.section.roomsHint')}
           body={
-            data.rows.length
-              ? collectionTable(_, {
-                  columns: roomColumns(_),
-                  rows: data.rows,
-                  id: (row) => row.id,
-                  rowHref: (row) =>
-                    `/admin/hospitality/rooms/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                })
+            collection.table.rows.length
+              ? collectionTable(_, collection.table)
               : emptyState(
                   _('hospitality_core.screen.rooms.empty'),
                   _('hospitality_core.screen.rooms.emptyHint'),

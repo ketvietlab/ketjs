@@ -1,3 +1,4 @@
+import { readWebsiteCollection } from './collection.ts'
 import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { text, withHeaders } from '@ketvietlab/ketjs'
@@ -268,7 +269,9 @@ const renderEntry = async (
           req,
         ) as Promise<SeoValues | null>,
         ctx.call('website.listEntryTerms', { entryId: detail.entry.id }, url, req) as Promise<EntryTermRow[]>,
-        ctx.call('website.listTaxonomyTerms', { siteId }, url, req) as Promise<TaxonomyRow[]>,
+        readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', { siteId }) as Promise<
+          TaxonomyRow[]
+        >,
       ])
     : [null, [], []]
   return adminPage(ctx, url, req, {
@@ -324,7 +327,7 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
             rows,
             siteOptions(sites),
             siteId,
-            frame,
+            collectionSearchFrame(url, frame, _(`website_backend.${kind.titleKey}.title`)),
             localeQuery(url),
             kind,
             pager(url, current, rows.length, total.count),
@@ -420,12 +423,9 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail || detail.entry.type !== type)
         return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call(
-        'website.listRevisions',
-        { entryId: params.id },
-        url,
-        req,
-      )) as RevisionRow[]
+      const rows = (await readWebsiteCollection(ctx, url, req, 'website.listRevisions', {
+        entryId: params.id,
+      })) as RevisionRow[]
       const diff = await revisionDiffOf(ctx, url, req, params.id, rows)
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
@@ -867,7 +867,9 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail) return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call('website.listRevisions', { entryId: params.id }, url, req)) as Array<{
+      const rows = (await readWebsiteCollection(ctx, url, req, 'website.listRevisions', {
+        entryId: params.id,
+      })) as Array<{
         id: string
         version: number
         kind: string
@@ -926,7 +928,7 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       const rows = siteId
-        ? ((await ctx.call('website.listTaxonomyTerms', { siteId }, url, req)) as never[])
+        ? ((await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', { siteId })) as never[])
         : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.taxonomies.title',
@@ -941,7 +943,9 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
-      const rows = siteId ? ((await ctx.call('website.listMedia', { siteId }, url, req)) as never[]) : []
+      const rows = siteId
+        ? ((await readWebsiteCollection(ctx, url, req, 'website.listMedia', { siteId })) as never[])
+        : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.media.title',
         body: (_, frame) => mediaScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url)),
@@ -1050,12 +1054,10 @@ export const routes: Record<string, RouteEntry> = {
           : null
         const [rows, entries] = siteId
           ? await Promise.all([
-              ctx.call(
-                'website.listPublications',
-                { siteId, ...(state ? { state } : {}) },
-                url,
-                req,
-              ) as Promise<PublicationRow[]>,
+              readWebsiteCollection(ctx, url, req, 'website.listPublications', {
+                siteId,
+                ...(state ? { state } : {}),
+              }) as Promise<PublicationRow[]>,
               ctx.call('website.listEntries', { siteId, status: 'published' }, url, req) as Promise<
                 EntryRow[]
               >,
@@ -1157,7 +1159,9 @@ export const routes: Record<string, RouteEntry> = {
         sites.map(async (site): Promise<SiteHealth> => {
           const [domains, publications, index] = await Promise.all([
             ctx.call('website.listDomains', { siteId: site.id }, url, req) as Promise<DomainRow[]>,
-            ctx.call('website.listPublications', { siteId: site.id }, url, req) as Promise<PublicationRow[]>,
+            readWebsiteCollection(ctx, url, req, 'website.listPublications', { siteId: site.id }) as Promise<
+              PublicationRow[]
+            >,
             ctx.call('website_search.indexStatus', { siteId: site.id }, url, req) as Promise<{
               state: string
               current: boolean
@@ -1452,15 +1456,10 @@ export const routes: Record<string, RouteEntry> = {
         // time: there were no inactive rows to look at.
         const state = url.searchParams.get('state')
         const rows = siteId
-          ? ((await ctx.call(
-              'website.listRedirects',
-              {
-                siteId,
-                ...(state === 'active' || state === 'inactive' ? { active: state === 'active' } : {}),
-              },
-              url,
-              req,
-            )) as RedirectRow[])
+          ? ((await readWebsiteCollection(ctx, url, req, 'website.listRedirects', {
+              siteId,
+              ...(state === 'active' || state === 'inactive' ? { active: state === 'active' } : {}),
+            })) as RedirectRow[])
           : []
         const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
@@ -1511,9 +1510,9 @@ export const routes: Record<string, RouteEntry> = {
       const form = await readForm(req)
       const siteId = form.siteId
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
-      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
-        (row) => row.id === params.id,
-      )
+      const current = (
+        (await readWebsiteCollection(ctx, url, req, 'website.listRedirects', { siteId })) as RedirectRow[]
+      ).find((row) => row.id === params.id)
       if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call(
         'website.saveRedirect',
@@ -1542,9 +1541,9 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
-      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
-        (row) => row.id === params.id,
-      )
+      const current = (
+        (await readWebsiteCollection(ctx, url, req, 'website.listRedirects', { siteId })) as RedirectRow[]
+      ).find((row) => row.id === params.id)
       if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call(
         'website.saveRedirect',
@@ -1566,12 +1565,10 @@ export const routes: Record<string, RouteEntry> = {
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
       const taxonomies = await taxonomyOptions(ctx, url, req)
       const parents = (
-        (await ctx.call(
-          'website.listTaxonomyTerms',
-          { siteId, taxonomy: form?.taxonomy || taxonomies[0]?.value },
-          url,
-          req,
-        )) as TaxonomyRow[]
+        (await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', {
+          siteId,
+          taxonomy: form?.taxonomy || taxonomies[0]?.value,
+        })) as TaxonomyRow[]
       ).map((item) => ({ value: item.id, label: item.name }))
       if (req.method === 'POST') {
         const id = randomUUID()
@@ -1621,12 +1618,10 @@ export const routes: Record<string, RouteEntry> = {
       )) as TaxonomyRow | null
       if (!row) return text(_('website_backend.error.notFound'), { status: 404 })
       const taxonomies = await taxonomyOptions(ctx, url, req)
-      const all = (await ctx.call(
-        'website.listTaxonomyTerms',
-        { siteId: row.siteId, taxonomy: row.taxonomy },
-        url,
-        req,
-      )) as TaxonomyRow[]
+      const all = (await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', {
+        siteId: row.siteId,
+        taxonomy: row.taxonomy,
+      })) as TaxonomyRow[]
       const parents = all
         .filter((item) => item.id !== row.id)
         .map((item) => ({ value: item.id, label: item.name }))

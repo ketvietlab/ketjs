@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -64,8 +65,20 @@ export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
   },
 ]
 
-export const usersScreen = (_: Translator, frame: Frame, options: UsersListScreenOptions): TemplateResult =>
-  shell(
+export const usersScreen = (_: Translator, frame: Frame, options: UsersListScreenOptions): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      columns: userListColumns(_),
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('user_backend.users.title'),
     <ListPage
@@ -73,12 +86,10 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       frame={frame}
       title={_('user_backend.users.title')}
       description={_('user_backend.users.subtitle')}
+      headerActions={
+        <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />
+      }
       actions={inline([
-        <LinkButton
-          label={_('user_backend.action.createUser')}
-          href={options.createHref}
-          variant="primary"
-        />,
         <LinkButton
           label={
             options.includeArchived
@@ -103,14 +114,10 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
         options.rows.length
-          ? collectionTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-              columns: userListColumns(_),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('user_backend.users.empty'), _('user_backend.users.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

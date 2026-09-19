@@ -1,3 +1,4 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -94,8 +95,23 @@ export const casesListScreen = (
   const groups = options.groups ?? []
   const total = options.total ?? options.rows.length
   const selection = options.table?.selection ?? frame.chrome?.selection
-  const hasActions = options.createHref || selection || frame.extras?.['topbar.end'] !== undefined
+  const hasActions = selection || frame.extras?.['topbar.end'] !== undefined
 
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: caseListColumns(_),
+      rows: options.rows,
+      groups,
+      responsive: 'stack',
+      id: (row) => String(row.id),
+      rowHref: (row) => localized(`/admin/crm/cases/${String(row.id)}`, options.locale ?? ''),
+      ...options.table,
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     _('crm_backend.cases.title'),
@@ -105,21 +121,16 @@ export const casesListScreen = (
       context={pageTrailFromFrame(_('crm_backend.cases.title'), frame)}
       title={_('crm_backend.cases.title')}
       description={_('crm_backend.cases.subtitle')}
+      headerActions={
+        options.createHref ? (
+          <LinkButton label={_('crm_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : (
+          ''
+        )
+      }
       actions={
         hasActions
-          ? inline([
-              options.createHref ? (
-                <LinkButton
-                  label={_('crm_backend.action.create')}
-                  href={options.createHref}
-                  variant="primary"
-                />
-              ) : (
-                ''
-              ),
-              selection ? bulkActions(_, selection) : '',
-              frame.extras?.['topbar.end'] ?? '',
-            ])
+          ? inline([selection ? bulkActions(_, selection) : '', frame.extras?.['topbar.end'] ?? ''])
           : undefined
       }
       controls={
@@ -141,15 +152,7 @@ export const casesListScreen = (
       status={`${_('crm_backend.cases.title')}: ${String(total)}`}
       body={
         options.rows.length || groups.length
-          ? collectionTable(_, {
-              columns: caseListColumns(_),
-              rows: options.rows,
-              groups,
-              responsive: 'stack',
-              id: (row) => String(row.id),
-              rowHref: (row) => localized(`/admin/crm/cases/${String(row.id)}`, options.locale ?? ''),
-              ...options.table,
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('crm_backend.empty.title'), _('crm_backend.empty.hint'))
       }
     />,

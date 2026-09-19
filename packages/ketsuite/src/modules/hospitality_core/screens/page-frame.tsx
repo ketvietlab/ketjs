@@ -10,6 +10,7 @@ type PageFrameProps = {
   frame: Frame
   controls?: JSXChild
   body: JSXChild
+  headerActions?: JSXChild
   actions?: JSXChild
 }
 
@@ -21,6 +22,7 @@ export const ListScreenFrame = ({
   body,
   controls,
   actions,
+  headerActions,
 }: PageFrameProps): TemplateResult => {
   return shell(
     _,
@@ -30,8 +32,9 @@ export const ListScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
+      headerActions={headerActions}
       actions={collectionActions(_, frame, actions)}
-      controls={controls ?? collectionControls(_, title, frame)}
+      controls={collectionControls(_, title, frame, controls)}
       body={body}
     />,
     { ...frame, chrome: null, topbar: false },

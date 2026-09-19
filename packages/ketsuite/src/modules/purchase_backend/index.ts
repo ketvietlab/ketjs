@@ -1,4 +1,8 @@
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import {
+  collectionSearchFrame,
+  searchCollectionRows,
+  loadCollectionRows,
+} from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -744,16 +748,15 @@ export default defineModule({
         const requestedGroup = url.searchParams.get('group')
         const group = requestedGroup === 'state' || requestedGroup === 'vendor' ? requestedGroup : null
         const [orders, data] = await Promise.all([
-          ctx.call(
-            'purchase.listOrders',
-            {
-              states: ['draft', 'sent', 'to approve'],
-              ...(search ? { search } : {}),
-              limit: 2_000,
-            },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
+          loadCollectionRows(
+            (page) =>
+              ctx.call(
+                'purchase.listOrders',
+                { states: ['draft', 'sent', 'to approve'], ...(search ? { search } : {}), ...page },
+                url,
+                req,
+              ) as Promise<AnyRow[]>,
+          ),
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
@@ -871,12 +874,15 @@ export default defineModule({
         const invoice = url.searchParams.get('invoice')
         const group = url.searchParams.get('group') === 'vendor' ? 'vendor' : null
         const [orders, data] = await Promise.all([
-          ctx.call(
-            'purchase.listOrders',
-            { state: 'purchase', ...(search ? { search } : {}), limit: 2_000 },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
+          loadCollectionRows(
+            (page) =>
+              ctx.call(
+                'purchase.listOrders',
+                { state: 'purchase', ...(search ? { search } : {}), ...page },
+                url,
+                req,
+              ) as Promise<AnyRow[]>,
+          ),
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))

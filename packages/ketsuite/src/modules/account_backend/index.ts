@@ -78,8 +78,8 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
-/** How many rows an admin list renders before the reader has to narrow it down. */
-const LIST_PAGE = 200
+/** Seed the payment form picker; collection totals use complete sources. */
+const PAYMENT_PICKER_LIMIT = 200
 
 const succeeded = (result: unknown): boolean => (result as { ok?: boolean }).ok === true
 
@@ -2438,12 +2438,7 @@ export default defineModule({
             return seeOther(`/admin/accounting/entries/${encodeURIComponent(id)}${localeQuery(url)}`)
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const all = (await ctx.call(
-          'account.listMoves',
-          { moveType: 'entry', limit: LIST_PAGE },
-          url,
-          req,
-        )) as AnyRow[]
+        const all = (await ctx.call('account.listMoves', { moveType: 'entry' }, url, req)) as AnyRow[]
         const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
           ? url.searchParams.get('state')
           : null
@@ -2554,7 +2549,7 @@ export default defineModule({
           })
         const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: CUSTOMER_INVOICE_TYPES, limit: LIST_PAGE },
+          { moveTypes: CUSTOMER_INVOICE_TYPES },
           url,
           req,
         )) as AnyRow[]
@@ -2720,7 +2715,7 @@ export default defineModule({
           })
         const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: VENDOR_BILL_TYPES, limit: LIST_PAGE },
+          { moveTypes: VENDOR_BILL_TYPES },
           url,
           req,
         )) as AnyRow[]
@@ -2872,7 +2867,7 @@ export default defineModule({
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
-          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+          ctx.call('account.listOpenItems', { limit: PAYMENT_PICKER_LIMIT }, url, req) as Promise<AnyRow[]>,
         ])
         // Legacy collection POSTs still render the new full form when refused.
         if (rejected)
@@ -2888,7 +2883,7 @@ export default defineModule({
                 errors: rejected.messages,
               }),
           })
-        const all = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
+        const all = (await ctx.call('account.listPayments', {}, url, req)) as AnyRow[]
         const paymentType = PAYMENT_TYPES.includes(String(url.searchParams.get('type')) as never)
           ? url.searchParams.get('type')
           : null
@@ -3027,7 +3022,7 @@ export default defineModule({
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
-          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+          ctx.call('account.listOpenItems', { limit: PAYMENT_PICKER_LIMIT }, url, req) as Promise<AnyRow[]>,
         ])
         const returnTo = safePaymentReturnTo(url)
         return adminPage(ctx, url, req, {

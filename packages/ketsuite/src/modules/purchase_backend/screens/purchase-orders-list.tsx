@@ -1,8 +1,13 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { emptyState, icon, ListPage, linkButton, listChrome, shell } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
-import { purchaseOrderTable, type PurchaseOrderListRow } from './order-list-shared.tsx'
+import {
+  purchaseOrderListColumns,
+  purchaseOrderTable,
+  type PurchaseOrderListRow,
+} from './order-list-shared.tsx'
 
 export type PurchaseOrdersListScreenOptions = {
   frame: Frame
@@ -17,6 +22,12 @@ export const purchaseOrdersListScreen = (
   _: Translator,
   options: PurchaseOrdersListScreenOptions,
 ): TemplateResult => {
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    columns: purchaseOrderListColumns(_),
+    id: (row) => String(row.id),
+    ...options.table,
+  })
   const total = options.total ?? options.rows.length
   const summary = `${_('purchase_backend.dashboard.records')}: ${String(total)}`
 
@@ -25,15 +36,15 @@ export const purchaseOrdersListScreen = (
     _('purchase_backend.orders.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('purchase_backend.orders.title')}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('purchase_backend.orders.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -46,7 +57,7 @@ export const purchaseOrdersListScreen = (
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
-          ? purchaseOrderTable(_, options.rows, options.detailSuffix, options.table)
+          ? purchaseOrderTable(_, options.rows, options.detailSuffix, collection.table)
           : emptyState(_('purchase_backend.orders.empty'), _('purchase_backend.orders.emptyHint'), {
               icon: icon('shopping-cart'),
               actions: linkButton({
@@ -57,6 +68,6 @@ export const purchaseOrdersListScreen = (
             })
       }
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

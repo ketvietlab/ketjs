@@ -89,7 +89,17 @@ test('crm cases list: keeps filtered ListPage chrome, columns and localized row 
 
   assert.equal(rendered.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(rendered, /data-ui="topbar"/)
-  assert.match(rendered, /data-ui="list-page-actions"[\s\S]*?\/admin\/crm\/cases\/new\?lang=vi/)
+  const headerStart = rendered.indexOf('data-ui="list-page-header"')
+  const headerEnd = rendered.indexOf('</header>', headerStart)
+  assert.match(
+    rendered.slice(headerStart, headerEnd),
+    /data-ui="list-page-actions"[\s\S]*?\/admin\/crm\/cases\/new\?lang=vi/,
+  )
+  assert.doesNotMatch(rendered.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
+  assert.match(
+    rendered,
+    /data-ui="list-page-title-row"[\s\S]*?\/admin\/crm\/cases\/new\?lang=vi[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+  )
   assert.match(rendered, /data-ui="chrome-search-input"[^>]*value="May mặc"/)
   assert.match(rendered, /name="f.teamId"[^>]*value="north"/)
   assert.match(rendered, /name="preset"[^>]*value="open"/)
@@ -106,7 +116,13 @@ test('crm cases list: keeps filtered ListPage chrome, columns and localized row 
 })
 
 test('crm cases list: hides create without permission and keeps the empty state', () => {
-  const rendered = renderToString(casesListScreen(translate, {}, { rows: [], total: 0 }))
+  const rendered = renderToString(
+    casesListScreen(
+      translate,
+      { chrome: { create: { label: 'Unauthorized create', path: '/admin/crm/cases/new' } } },
+      { rows: [], total: 0 },
+    ),
+  )
 
   assert.match(rendered, /data-ui="empty"/)
   assert.match(rendered, /Chưa có hồ sơ/)

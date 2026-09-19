@@ -1,3 +1,4 @@
+import { installBulkSelection } from './bulk-selection.ts'
 import { installUserWorkflow } from './user-workflow.ts'
 import type { BrowserBehavior, BrowserNavigation } from '@ketvietlab/ketjs'
 import { attachDesignSystemInteractions } from '@ketvietlab/design-system'
@@ -104,11 +105,6 @@ const updateSelection = (table: Element): void => {
   if (all) {
     all.checked = rows.length > 0 && checked === rows.length
     all.indeterminate = checked > 0 && checked < rows.length
-  }
-  if (!checked) {
-    const shell = table.closest('[data-ui="app-shell"]')
-    for (const menu of shell?.querySelectorAll<HTMLDetailsElement>('[data-ui="bulk-actions"][open]') ?? [])
-      menu.removeAttribute('open')
   }
 }
 
@@ -519,12 +515,14 @@ export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
   const cleanupUserWorkflow = installUserWorkflow(lifetime)
   installThemeToggle(lifetime)
   installTableSelection(lifetime, navigation)
+  const cleanupBulkSelection = installBulkSelection(document, lifetime)
   installDropdownDismiss(lifetime)
   installGlobalFilter(lifetime)
   const cleanupRouteModal = installRouteModal(lifetime, navigation)
   const cleanupLiveRegion = installLiveRegion(lifetime, navigation)
   return () => {
     cleanupDesignSystem()
+    cleanupBulkSelection()
     cleanupLiveRegion?.()
     cleanupRouteModal()
     cleanupUserWorkflow()

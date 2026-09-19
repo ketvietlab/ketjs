@@ -13,7 +13,8 @@ may invoice a closed folio, but it does not own or rewrite the underlying stay a
 
 Primary reservation, stay, folio, property, room, room-type, rate-plan, housekeeping-task,
 amenity, policy, charge-rule, and billing lists use the shared KetTable collection boundary.
-The app shell and breadcrumbs precede the URL-backed filters, then tools and the collection.
+The app shell and breadcrumbs precede the title and Create action, then URL-backed filters,
+tools, and the collection.
 Property and housekeeping filters retain their submitted values; text search on reference,
 stay, folio, and billing lists searches the complete authorized collection using displayed
 names and codes. Existing modal actions and decimal money formatting remain server-owned.

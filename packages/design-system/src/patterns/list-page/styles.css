@@ -1,4 +1,9 @@
 @layer ket.app {
+  /* Hidden action slots retain their forms but contribute no layout space. */
+  :where([data-kv-design-system]) :is([data-ui="list-page-actions"], [data-ui="list-page-tools"])[hidden] {
+    display: none;
+  }
+
   :where([data-kv-design-system])
     :is(
       [data-ui="list-page"],
@@ -63,7 +68,7 @@
     line-height: var(--kv-leading-normal);
   }
 
-  :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+  :where([data-kv-design-system]) :is([data-ui="list-page-actions"], [data-ui="list-page-tools"]) {
     display: flex;
     flex: 0 0 auto;
     flex-wrap: wrap;
@@ -153,7 +158,7 @@
 
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
-    [data-ui="list-page-actions"] {
+    > [data-ui="list-page-actions"] {
     justify-content: flex-start;
     padding: var(--kv-space-2) var(--kv-page-padding-x);
   }

@@ -21,7 +21,7 @@ import {
 import { AppShell, Page } from '../layouts/shell.tsx'
 import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
-import { ListChrome } from '../patterns/list-chrome.tsx'
+import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
 import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
@@ -778,7 +778,12 @@ export const componentGroups: readonly ComponentGroup[] = [
                 context="Sales / Sales orders"
                 title="Sales orders"
                 description="Review demand, fulfillment and payment state from one operational list."
-                actions={<Button label="Create order" variant="primary" />}
+                headerActions={<Button label="Create order" variant="primary" />}
+                actionsPlacement="header"
+                actionsHidden
+                actions={
+                  <BulkActions selectedCount={0} actions={[{ id: 'archive', label: 'Archive selected' }]} />
+                }
                 controls={<ListDemoChrome id="app-shell" />}
                 body={<OrdersTable title="Order list" />}
               />
@@ -1170,7 +1175,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'list-page',
         name: 'List page',
         description:
-          'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
+          'The canonical collection hierarchy: identity with primary actions, URL-driven controls, tool actions and records.',
         render: () => (
           <ListPage
             variant="operational"
@@ -1178,7 +1183,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             eyebrow="Sales"
             title="Sales orders"
             description="Review demand, fulfillment and payment state from one operational list."
-            actions={<Button label="Create order" variant="primary" />}
+            headerActions={<Button label="Create order" variant="primary" />}
+            actions={<Button label="Export orders" variant="secondary" />}
             controls={
               <ListChrome
                 search={{

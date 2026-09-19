@@ -5,12 +5,19 @@ description: Scope and compatibility boundaries for Product-format collection ta
 
 # Collection KetTable migration
 
-Collection pages follow the application shell, navigation context, real query controls, tool actions,
-and KetTable. The public server `KetTable` and interactive Product/Partner islands share one grid
+Collection pages follow the application shell, navigation context, title with primary and collection
+actions, real query controls and table tools, and KetTable. The public server `KetTable` and interactive Product/Partner islands share one grid
 renderer and stylesheet. Server cells retain existing links, native forms and decimal text; callbacks
 are never serialized. Existing filter, sort, group, paging and optional-column URLs remain authoritative.
 This migration covers 77 primary collection screens. Product and Partner retain their existing islands
 and receive the shared operational layout ordering.
+
+The shared `ListPage`/`ListScreen` now places `frame.chrome.create` beside the title automatically.
+Explicit `headerActions` supplies the primary action in the same title slot. Secondary commands and
+selection-dependent bulk actions sit beside it; there is no separate action bar below filters.
+The mobile header stacks this action group beneath the title. This is the required pattern in
+`AGENTS.md` and the design-system catalogue, including for future screens. Existing creation forms
+such as period closing stay in their disclosure/body compatibility boundary.
 
 | Area | Primary collection screens |
 | --- | --- |
