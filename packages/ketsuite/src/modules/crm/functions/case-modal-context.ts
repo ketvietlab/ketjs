@@ -53,6 +53,7 @@ export const caseModalContextFunctions: Record<string, FnSpec> = {
           'case.merge',
           'case.refreshScore',
           'case.addMessage',
+          'case.logInteraction',
           'activity.schedule',
           'activity.complete',
           'activity.cancel',

@@ -97,6 +97,8 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       kind: 'text',
+      /** Immutable acquisition kind; null identifies legacy records. */
+      originKind: 'text?',
       name: 'text',
       partnerId: 'ref:partner.Partner?',
       contactName: 'text?',
@@ -130,6 +132,10 @@ export const models: Record<string, ModelDef> = {
       updatedAt: 'datetime',
       convertedAt: 'datetime?',
       closedAt: 'datetime?',
+      closedAssigneeUserId: 'ref:user.User?',
+      closedTeamId: 'ref:crm.Team?',
+      /** Distinguishes a recorded unassigned close from missing legacy history. */
+      closedOwnershipRecordedAt: 'datetime?',
     },
     indexes: {
       pipeline: { fields: ['companyId', 'kind', 'active', 'stageId', 'priority'] },
@@ -155,6 +161,7 @@ export const models: Record<string, ModelDef> = {
       expectedClosing: 'date?',
       forecastCategory: 'text',
       lostReason: 'text?',
+      lostReasonCode: 'text?',
       sourceLeadId: 'ref:crm.Case?',
     },
     indexes: { case: { fields: ['companyId', 'caseId'], unique: true } },

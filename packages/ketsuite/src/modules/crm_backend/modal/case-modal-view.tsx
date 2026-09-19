@@ -468,7 +468,7 @@ const timelineTab = (c: Context) => (
         c,
         rows(c.data.record.timeline).map((row) => ({
           ...row,
-          event: `${c.t(String(row.body || `crm.timeline.${row.eventType}`))}${(row.metadata as Row)?.reason ? ` · ${(row.metadata as Row).reason}` : ''}`,
+          event: `${row.eventType === 'interaction' ? `${t(c, `interaction.channel.${(row.metadata as Row)?.channel}`)} · ${t(c, `interaction.outcome.${(row.metadata as Row)?.outcome}`)} · ` : ''}${c.t(String(row.body || `crm.timeline.${row.eventType}`))}${(row.metadata as Row)?.reason ? ` · ${(row.metadata as Row).reason}` : ''}`,
         })),
         [
           { key: 'occurredAt', label: t(c, 'timeline.at') },
@@ -639,6 +639,9 @@ export const caseModalDefinition: RecordModalDefinition<CaseModalData> = {
         (can(c, 'case.markWon') || can(c, 'case.markLost'))
           ? [trigger(c, 'close', t(c, 'close.title'))]
           : []),
+        ...(!c.creating && can(c, 'case.logInteraction')
+          ? [trigger(c, 'interaction', t(c, 'interaction.title'))]
+          : []),
         ...(!c.creating && can(c, 'case.refreshScore')
           ? [
               <RecordCommandForm kind={c.kind} id="crm-case-score-form" />,
@@ -660,6 +663,31 @@ export const caseModalDefinition: RecordModalDefinition<CaseModalData> = {
     />
   ),
   dialogs: {
+    interaction: simpleDialog('interaction.title', 'interaction', (c) => [
+      select(
+        c,
+        'channel',
+        t(c, 'interaction.channel'),
+        ['phone', 'email', 'chat', 'meeting', 'other'].map((id) => ({
+          id,
+          name: t(c, `interaction.channel.${id}`),
+        })),
+        'phone',
+        true,
+      ),
+      select(
+        c,
+        'outcome',
+        t(c, 'interaction.outcome'),
+        ['reached', 'attempted', 'unreachable'].map((id) => ({
+          id,
+          name: t(c, `interaction.outcome.${id}`),
+        })),
+        '',
+        true,
+      ),
+      field(c, { name: 'note', label: t(c, 'field.note'), type: 'textarea' }),
+    ]),
     move: simpleDialog('action.move', 'move', (c) => [
       select(
         c,
@@ -726,6 +754,16 @@ export const caseModalDefinition: RecordModalDefinition<CaseModalData> = {
         <RecordModalForm
           kind={c.kind}
           fields={[
+            select(
+              c,
+              'lostReasonCode',
+              t(c, 'close.lostReasonCode'),
+              ['budget', 'fit', 'competitor', 'no_need', 'other'].map((id) => ({
+                id,
+                name: t(c, `close.lostReason.${id}`),
+              })),
+              'other',
+            ),
             field(c, { name: 'closeReason', label: t(c, 'close.reason'), type: 'textarea', required: true }),
             field(c, { name: 'confirm', label: t(c, 'close.confirm'), type: 'checkbox', required: true }),
           ]}
@@ -761,6 +799,16 @@ export const caseModalDefinition: RecordModalDefinition<CaseModalData> = {
     ]),
   },
   commands: {
+    interaction: {
+      fn: 'crm.case.logInteraction',
+      input: (f, c) => ({
+        ...versioned(c),
+        channel: text(f, 'channel'),
+        outcome: text(f, 'outcome'),
+        note: text(f, 'note'),
+      }),
+      after: 'reload',
+    },
     create: { fn: 'crm.case.save', input: saveInput, after: 'open', openTab: 'overview' },
     save: { fn: 'crm.case.save', input: saveInput, after: 'reload' },
     move: {
@@ -818,6 +866,7 @@ export const caseModalDefinition: RecordModalDefinition<CaseModalData> = {
         ...versioned(c),
         closeReason: text(f, 'closeReason'),
         lostReason: text(f, 'closeReason'),
+        lostReasonCode: text(f, 'lostReasonCode') || 'other',
       }),
       after: 'reload',
     },

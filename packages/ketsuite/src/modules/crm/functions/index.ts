@@ -1,6 +1,7 @@
 // The CRM function registry, assembled from one file per capability.
 import type { FnSpec } from '@ketvietlab/ketjs'
 import { accessFunctions } from './access.ts'
+import { reportingFunctions } from './reporting.ts'
 import { caseFunctions } from './cases.ts'
 import { activityFunctions } from './activities.ts'
 import { gamificationFunctions } from './gamification.ts'
@@ -12,6 +13,7 @@ import { previewFunctions } from './previews.ts'
 const groups: Record<string, Record<string, FnSpec>> = {
   accessFunctions,
   caseFunctions,
+  reportingFunctions,
   activityFunctions,
   gamificationFunctions,
   configurationFunctions,
