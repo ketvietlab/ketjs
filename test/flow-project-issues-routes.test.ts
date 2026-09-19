@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
+import { setImmediate } from 'node:timers/promises'
 import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { FIELD_FILTER_MATCHES } from '../packages/ketsuite/src/modules/flow/index.ts'
@@ -197,7 +198,11 @@ test('flow project issues route: a filter that stopped short reaches the screen 
       const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${columns
         .map((name) => adapter.quoteIdent(name))
         .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`
-      for (const row of rows) await adapter.run(sql, row as never[])
+      for (const [index, row] of rows.entries()) {
+        // Synchronous SQLite writes must leave time to retire idle HTTP sockets.
+        if (index % 100 === 0) await setImmediate()
+        await adapter.run(sql, row as never[])
+      }
     }
     const stamp = '2026-09-05T00:00:00.000Z'
     await insert(

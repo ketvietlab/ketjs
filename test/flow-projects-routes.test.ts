@@ -215,10 +215,10 @@ test('flow project routes: the list pages, and says how many there really are', 
   // The real total, not the length of what is on screen. Both numbers used to
   // be the same because the screen reported the second as the first.
   assert.match(first, /51/)
-  assert.match(first, /href="\/admin\/flow\/projects\?page=2"/)
+  assert.match(first, /href="\/admin\/flow\/projects\?lang=en&amp;page=2"/)
 
   const second = await (await app.client.get('/admin/flow/projects?page=2&lang=en')).text()
-  assert.match(second, /href="\/admin\/flow\/projects\?page=1"/)
+  assert.match(second, /href="\/admin\/flow\/projects\?page=1&amp;lang=en"/)
 
   // Asked structurally rather than by name: the list orders by name, so "Dự án
   // 50" sorts before "Dự án 9" and naming a project that "must" be on page two

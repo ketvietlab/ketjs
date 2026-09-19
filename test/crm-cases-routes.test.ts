@@ -206,6 +206,19 @@ test('crm record modal: large surfaces, commands preserve stage and version, sta
   })
   const payload = await call<CaseModalPayload>('crm.case.modalContext', { id: 'native', locale: 'en' })
   const context = caseContext(payload)
+  const sales = renderCaseModal(
+    {
+      ...payload,
+      data: {
+        ...payload.data,
+        quotations: ['draft', 'sent', 'sale'].map((state) => ({ id: `${state}/1`, state })),
+      },
+    },
+    'sales',
+  )
+  for (const state of ['draft', 'sent'])
+    assert.ok(sales.includes(`href="/admin/sales/quotations/${state}%2F1?lang=en"`))
+  assert.ok(sales.includes('href="/admin/sales/orders/sale%2F1?lang=en"'))
   assert.deepEqual(
     caseModalDefinition.tabs!.filter((tab) => !tab.visible || tab.visible(context)).map((tab) => tab.id),
     ['overview', 'sales', 'activities', 'timeline'],
