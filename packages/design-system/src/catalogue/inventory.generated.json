@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 132,
     "cssFiles": 76,
-    "cssLines": 14927
+    "cssLines": 14929
   },
   "rows": [
     {
@@ -11872,7 +11872,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1441,
+      "lines": 1443,
       "hooks": [
         "app-main",
         "app-shell",

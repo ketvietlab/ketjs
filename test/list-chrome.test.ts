@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { compose, translator } from '@ketvietlab/ketjs'
@@ -213,4 +214,12 @@ test('chrome: capped totals retain the standard pager and navigation beyond the 
   const escaped = render({ pager: { from: 1, to: 1, total: 1, totalLabel: '<b>1+</b>' } })
   assert.doesNotMatch(escaped, /<b>/u)
   assert.match(render({ pager: { from: 0, to: 0, total: 0 } }), />0</u)
+})
+
+test('command toolbar constrains its wrapping tail to the available width', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.match(
+    css,
+    /\[data-ui="list-chrome"\]\[data-layout="command"\] \[data-ui="chrome-tail"\] \{[^}]*max-inline-size: 100%;[^}]*justify-content: flex-end;/u,
+  )
 })
