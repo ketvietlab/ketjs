@@ -2981,6 +2981,8 @@ export const redirectsScreen = (
       'http://collection.local',
     )
     url.searchParams.set('site', siteId ?? '')
+    if (params.edit) return withParam(url, 'edit', params.edit, false)
+    url.searchParams.delete('edit')
     return withParam(url, 'state', params.state ?? null)
   }
   const collection = prepareCollectionTable(

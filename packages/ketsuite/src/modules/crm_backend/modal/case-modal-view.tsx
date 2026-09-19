@@ -6,6 +6,7 @@ import {
   DescriptionList,
   FileUpload,
   LinkButton,
+  Notice,
   Section,
   Stack,
 } from '@ketvietlab/design-system'
@@ -309,6 +310,15 @@ const details = (c: Context, items: Row[], columns: { key: string; label: string
 const overview = (c: Context) => (
   <Stack
     items={[
+      ...(c.creating && c.data.partnerIntent
+        ? [
+            <Notice
+              title={t(c, 'case.create.partnerHintTitle')}
+              message={t(c, 'case.create.partnerHint')}
+              tone="info"
+            />,
+          ]
+        : []),
       can(c, 'case.save') ? (
         <RecordModalForm
           id="crm-case-form"
@@ -381,7 +391,11 @@ const salesTab = (c: Context) => (
                   <LinkButton
                     variant="tertiary"
                     label={String(row.name ?? row.id)}
-                    href={`/admin/sales/${['draft', 'sent'].includes(String(row.state)) ? 'quotations' : 'orders'}/${encodeURIComponent(String(row.id))}?lang=${c.data.lang}`}
+                    href={
+                      ['draft', 'sent'].includes(String(row.state))
+                        ? `/admin/sales/quotations/${encodeURIComponent(String(row.id))}?lang=${c.data.lang}`
+                        : `/admin/sales/orders/${encodeURIComponent(String(row.id))}?lang=${c.data.lang}`
+                    }
                   />
                 ),
               },
