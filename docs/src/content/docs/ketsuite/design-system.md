@@ -74,6 +74,8 @@ Component styles remain aggregated through `styles.css`, but selector-bearing fi
 owning component directory. Density changes the shared control height, row height, and content gap.
 Layer, focus, reduced-motion, and container breakpoints use named tokens rather than local numbers.
 
+In a two-column `form-grid`, full-span fields share the label width of half-span fields, so their controls align. At the single-column breakpoint all fields use the same inline label contract. Modules must not compensate with local margins or label widths.
+
 Responsive behavior belongs to component and container contracts. Form fields remain inline, with the
 label on the left and the control on the right, including narrow panels; only the number of field pairs in
 a row collapses. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
@@ -136,6 +138,7 @@ collection screens use this same composition. Existing inline creation forms, su
 period closing, retain their disclosure below the filters rather than placing a form in the header.
 
 ```tsx
+// File: packages/ketsuite/src/modules/example_backend/screens/list.tsx (composition example)
 <ListPage
   variant="operational"
   frame={frame} // chrome.create contains the authorized { label, path }, if any

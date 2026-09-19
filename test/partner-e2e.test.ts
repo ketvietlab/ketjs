@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { renderCaseModal, type CaseModalPayload } from './crm-case-modal-helper.ts'
 
 async function bootPartner(t: TestContext) {
   const e2e = await createTestDeployment(ketsuite, { worker: false })
@@ -171,7 +172,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.match(partnerList, /data-ui="kt-select-persisted"/)
   assert.match(
     partnerList,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"/,
+    /data-ui="list-page-header"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"[\s\S]*?data-ui="list-page-controls"/,
   )
   assert.match(
     partnerList,
@@ -186,7 +187,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
   const partnerControls = partnerList.slice(
     partnerList.indexOf('data-ui="list-page-controls"'),
-    partnerList.indexOf('data-ui="list-page-actions"', partnerList.indexOf('data-ui="list-page-controls"')),
+    partnerList.indexOf('data-ui="list-page-body"'),
   )
   assert.doesNotMatch(partnerControls, /data-ui="bulk-form"/)
   for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {
@@ -217,17 +218,27 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     /href="\/admin\/crm\/cases\/new\?kind=lead&amp;partnerId=customer&amp;lang=vi"[\s\S]*?Tạo lead/,
   )
 
-  const leadCreate = await (
-    await e2e.client.get('/admin/crm/cases/new?kind=lead&partnerId=customer&lang=vi')
-  ).text()
-  assert.match(leadCreate, /data-ui="form-page-title"[^>]*>[\s\S]*?Tạo lead/)
+  const leadResponse = await e2e.client.get('/admin/crm/cases/new?kind=lead&partnerId=customer&lang=vi')
+  assert.equal(leadResponse.status, 200)
+  const leadUrl = new URL(leadResponse.url)
+  assert.equal(leadUrl.pathname, '/admin/partner/partners/customer')
+  assert.equal(leadUrl.searchParams.get('record'), 'crm.case:new')
+  assert.equal(leadUrl.searchParams.get('partnerId'), 'customer')
+  assert.equal(leadUrl.searchParams.get('lang'), 'vi')
+  await leadResponse.text()
+  const { value: leadPayload } = await call<CaseModalPayload>('crm.case.modalContext', {
+    kind: 'lead',
+    partnerId: 'customer',
+    locale: 'vi',
+  })
+  const leadCreate = renderCaseModal(leadPayload)
   assert.match(leadCreate, /Khách hàng không tự trở thành lead/)
   assert.match(leadCreate, /name="email"[^>]*value="hello@minhan\.example"/)
   assert.match(leadCreate, /name="phone"[^>]*value="0909000123"/)
-  assert.match(leadCreate, /name="partnerIntent"[^>]*value="1"/)
+  assert.equal(leadPayload.data.partnerIntent, true)
   assert.match(leadCreate, /name="utmSource"[\s\S]*?value="marketplace"[^>]*selected/)
   assert.match(leadCreate, /name="description"[^>]*required/)
-  assert.match(leadCreate, /href="\/admin\/partner\/partners\/customer\?lang=vi"/)
+  assert.equal(leadPayload.data.record.partnerId, 'customer')
 
   const refusedLead = await e2e.client.post(
     '/admin/crm/cases/new?lang=vi',

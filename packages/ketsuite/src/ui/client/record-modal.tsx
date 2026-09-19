@@ -378,11 +378,18 @@ type Status = 'idle' | 'loading' | 'ready' | 'error'
 type DraftState = {
   values: Record<string, string>
   checks: Record<string, boolean>
+  initialValues: Record<string, string>
+  initialChecks: Record<string, boolean>
 }
+
+/** Compare against the first render, including fields on tabs no longer mounted. */
+export const recordDraftHasChanges = (draft: DraftState): boolean =>
+  Object.entries(draft.values).some(([key, value]) => value !== draft.initialValues[key]) ||
+  Object.entries(draft.checks).some(([key, value]) => value !== draft.initialChecks[key])
 
 type DraftScope = 'record' | 'dialog'
 
-const emptyDraftState = (): DraftState => ({ values: {}, checks: {} })
+const emptyDraftState = (): DraftState => ({ values: {}, checks: {}, initialValues: {}, initialChecks: {} })
 const draftCheckKey = (name: string, value: string): string => `${name}\u0000${value}`
 
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
@@ -530,9 +537,17 @@ export const createRecordModal =
           const hit = issues().find((issue) => issue.field === name)
           return hit ? (hit.message ?? t(hit.code, hit.params)) : null
         },
-        draft: (name, fallback = '') => draftState().values[name] ?? fallback,
-        draftChecked: (name, value = '1', fallback = false) =>
-          draftState().checks[draftCheckKey(name, value)] ?? fallback,
+        draft: (name, fallback = '') => {
+          const draft = draftState()
+          draft.initialValues[name] ??= fallback
+          return draft.values[name] ?? fallback
+        },
+        draftChecked: (name, value = '1', fallback = false) => {
+          const draft = draftState()
+          const key = draftCheckKey(name, value)
+          draft.initialChecks[key] ??= fallback
+          return draft.checks[key] ?? fallback
+        },
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
@@ -600,6 +615,8 @@ export const createRecordModal =
       const kept: DraftState = {
         values: { ...previous.values },
         checks: { ...previous.checks },
+        initialValues: { ...previous.initialValues },
+        initialChecks: { ...previous.initialChecks },
       }
       for (const control of current.querySelectorAll<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -608,12 +625,23 @@ export const createRecordModal =
         if (control instanceof HTMLInputElement) {
           if (control.type === 'file' || control.type === 'hidden') continue
           if (control.type === 'checkbox' || control.type === 'radio') {
-            kept.checks[draftCheckKey(control.name, control.value)] = control.checked
+            const key = draftCheckKey(control.name, control.value)
+            kept.initialChecks[key] ??= control.defaultChecked
+            kept.checks[key] = control.checked
+            // Keep checkbox/radio values available to draft(), but compare these
+            // groups by checked state: several controls may share one name.
             if (control.type === 'checkbox') kept.values[control.name] = control.checked ? control.value : ''
             else if (control.checked) kept.values[control.name] = control.value
+            kept.initialValues[control.name] = kept.values[control.name] ?? ''
             continue
           }
         }
+        kept.initialValues[control.name] ??=
+          control instanceof HTMLSelectElement
+            ? ([...control.options].find((option) => option.defaultSelected)?.value ??
+              control.options[0]?.value ??
+              '')
+            : control.defaultValue
         kept.values[control.name] = control.value
       }
       if (scope === 'dialog') dialogDrafts.set(kept)
@@ -627,7 +655,14 @@ export const createRecordModal =
     }
 
     const mayDiscard = (current: HTMLElement | null): boolean => {
-      if (!current || !recordLayerHasDraft(current)) return true
+      if (!current) return true
+      const scope = dialog() && current === topLayer() ? 'dialog' : 'record'
+      keepDrafts(current, scope)
+      const draft = scope === 'dialog' ? dialogDrafts() : recordDrafts()
+      const hasFile = [...current.querySelectorAll<HTMLInputElement>('input[type="file"]')].some(
+        (field) => !field.disabled && Boolean(field.files?.length),
+      )
+      if (!recordDraftHasChanges(draft) && !hasFile) return true
       return globalThis.confirm(t('recordModal.unsaved'))
     }
 
@@ -1049,6 +1084,7 @@ export const createRecordModal =
               const opener = element?.closest<HTMLElement>(`[${RECORD_DIALOG_ATTRIBUTE}]`)
               if (opener) {
                 event.preventDefault()
+                keepDrafts(recordLayer(), 'record')
                 const focused = document.activeElement
                 dialogReturnFocus =
                   focused instanceof HTMLElement && opener.contains(focused)

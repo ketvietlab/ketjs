@@ -140,7 +140,7 @@ export function createCrmKanbanView(runtime, props, seed = {}) {
   const card = (entry) => html`<article data-ui="crm-kanban-card" draggable="true"
     on:dragstart=${() => dragId.set(entry.id)}
     data-kind=${entry.kind} data-priority=${String(entry.priority ?? '1')} data-busy=${busy() === entry.id}>
-    <h3 data-ui="crm-card-title"><a href=${`/admin/crm/cases/${entry.id}`}>${entry.name}</a></h3>
+    <h3 data-ui="crm-card-title"><a href=${entry.href ?? `/admin/crm/cases/${entry.id}`}>${entry.name}</a></h3>
     ${
       entry.party
         ? html`<p data-ui="crm-card-party">

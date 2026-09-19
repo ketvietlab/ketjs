@@ -96,7 +96,10 @@ test('company list HTTP searches code, display name and currency before exact pa
   const byCode = await (await e2e.client.get('/admin/companies?q=C05&lang=en')).text()
   assert.match(byCode, /Display Needle Holdings/)
   assert.match(byCode, /Companies: 1/)
-  assert.doesNotMatch(byCode, /data-ui="pager"/)
+  assert.match(byCode.replace(/<!--.*?-->/g, ''), /data-ui="pager-range">1-1 \/ 1</)
+  for (const direction of ['prev', 'next'])
+    assert.ok(byCode.includes(`data-ui="pager-step" data-dir="${direction}" aria-disabled="true"`))
+  assert.doesNotMatch(byCode, /<a data-ui="pager-step"/)
 
   const byName = await (await e2e.client.get('/admin/companies?q=needle&lang=en')).text()
   assert.match(byName, /C05/)
