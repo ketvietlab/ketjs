@@ -1,12 +1,12 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
   LinkButton,
   ListPage,
   listChrome,
@@ -114,15 +114,16 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
     `${_('account_backend.tax.summary.purchase')}: ${String(options.summary.purchase)}`,
     `${_('account_backend.tax.summary.included')}: ${String(options.summary.included)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: taxListColumns(_, accountCodes, options.currency),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: taxListColumns(_, accountCodes, options.currency),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -137,20 +138,20 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
     _('account_backend.taxes.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.taxes.title')}
       description={_('account_backend.tax.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('account_backend.taxes.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -160,9 +161,9 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

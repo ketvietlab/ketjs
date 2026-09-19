@@ -9,6 +9,19 @@ KetSuite Hospitality keeps reservations, stays, operational folios, and guest ch
 `hospitality_core` module. A folio is the operational source of truth for what a guest owes. Accounting
 may invoice a closed folio, but it does not own or rewrite the underlying stay activity.
 
+## Collection screens
+
+Primary reservation, stay, folio, property, room, room-type, rate-plan, housekeeping-task,
+amenity, policy, charge-rule, and billing lists use the shared KetTable collection boundary.
+The app shell and breadcrumbs precede the title and Create action, then URL-backed filters,
+tools, and the collection.
+Property and housekeeping filters retain their submitted values; text search on reference,
+stay, folio, and billing lists searches the complete authorized collection using displayed
+names and codes. Existing modal actions and decimal money formatting remain server-owned.
+
+Setup forms, property structure tables, record details, and operational boards keep their
+specialized composition. Their embedded tables are not primary collection tables.
+
 ## Least-privilege permission bundles
 
 Deployments can compose managed job roles from these focused `hospitality_core` bundles. The original

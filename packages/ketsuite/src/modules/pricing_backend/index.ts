@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route } from '@ketvietlab/ketjs'
 import { modalWorkspace } from '../../ui/index.ts'
@@ -89,7 +90,19 @@ export default defineModule({
           body: (_, frame) => {
             const closeHref = inLocale(url, '/admin/pricing/pricelists')
             const createHref = pathWith(url, '/admin/pricing/pricelists', { create: '1' })
-            const workspace = pricelistsScreen(_, frame, { rows, createHref })
+            const workspace = pricelistsScreen(
+              _,
+              collectionSearchFrame(url, frame, _('pricing_backend.title')),
+              {
+                rows: searchCollectionRows(
+                  url,
+                  rows,
+                  (row) =>
+                    `${row.name} ${row.currency} ${row.sequence} ${_(`pricing_backend.state.${row.state}`)}`,
+                ),
+                createHref,
+              },
+            )
             if (!rejected && url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(
               workspace,

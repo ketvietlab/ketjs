@@ -65,6 +65,8 @@ test('journal entries ListPage keeps command controls, lifecycle summary, row li
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/entries\?lang=vi&amp;state=draft&amp;create=1"/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="tham chiếu"/)

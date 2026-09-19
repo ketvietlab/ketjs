@@ -136,7 +136,11 @@ export const optionRows = async (
         String(a.name ?? '').localeCompare(String(b.name ?? '')) ||
         String(a.id).localeCompare(String(b.id)),
     )
-    .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+    .slice(
+      Math.max(0, Math.trunc(n(args.cursor ?? 0))),
+      Math.max(0, Math.trunc(n(args.cursor ?? 0))) +
+        Math.max(1, Math.min(200, Math.trunc(n(args.limit ?? 80)))),
+    )
 }
 
 export async function moveToTerminal(

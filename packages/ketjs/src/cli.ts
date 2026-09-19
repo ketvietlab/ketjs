@@ -198,8 +198,10 @@ const HELP = `ket — zero-dependency fullstack framework
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--deployment X]    write .ket/manifest.<deployment>.json for a later diff
 
-  ket serve [--deployment X]       boot and serve the deployment
-  ket worker [--deployment X]      run declared queues for the same deployment and manifest
+  ket serve [--deployment X] [--watch]
+                                  boot and serve the deployment; watch emitted artifacts when requested
+  ket worker [--deployment X] [--watch]
+                                  run declared queues and watch emitted artifacts when requested
   ket call FUNCTION         exercise a function through its real HTTP endpoint
     --against URL           call an already-running development server
     --input JSON|@FILE|-    function input (default: {})
@@ -231,6 +233,22 @@ Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, wor
 `
 
 const TEST_VALUE_OPTIONS = ['test-name-pattern', 'test-concurrency', 'reporter', 'out-dir'] as const
+
+/**
+ * Node owns the process restart while the project owns compilation. Keeping
+ * those responsibilities separate lets `npm run build:watch` replace emitted
+ * artifacts atomically without handing TypeScript source files to Node.
+ */
+const watchCommand = async (command: string, args: readonly string[]): Promise<never> => {
+  const child = spawn(
+    process.execPath,
+    ['--watch', new URL(import.meta.url).pathname, command, ...args.filter((item) => item !== '--watch')],
+    { stdio: 'inherit', env: { ...process.env, KET_DEV: '1' } },
+  )
+  child.on('exit', (code) => process.exit(code ?? 0))
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => child.kill(sig))
+  return new Promise<never>(() => {})
+}
 
 const formatSchemaVerification = (datastore: string, report: PhysicalSchemaVerification): string => {
   if (report.ok) return `ok    ${datastore.padEnd(24)} physical schema, marker and manifest agree`
@@ -423,17 +441,13 @@ try {
     // This watches emitted JavaScript only. The project owns the compiler watcher;
     // `ket new` wires both sides together without handing source files to Node.
     const childCommand = flag('all') ? 'all' : 'serve'
-    const argv = [
-      '--watch',
-      new URL(import.meta.url).pathname,
+    await watchCommand(
       childCommand,
-      ...rest.filter((item) => item !== '--all'),
-    ]
-    const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...process.env, KET_DEV: '1' } })
-    child.on('exit', (code) => process.exit(code ?? 0))
-    for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => child.kill(sig))
-    await new Promise(() => {})
+      rest.filter((item) => item !== '--all'),
+    )
   }
+
+  if ((cmd === 'serve' || cmd === 'worker') && flag('watch')) await watchCommand(cmd, rest)
 
   const { ws, deployments: specs, resolved } = await loadWorkspace()
   if (!(cmd === 'migrate' && flag('dry-run')) && cmd !== 'schema') mkdirSync('.ket', { recursive: true })

@@ -1,7 +1,8 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionTable,
   emptyState,
   inline,
   linkButton,
@@ -18,6 +19,8 @@ export type LeaderboardProfile = Record<string, unknown>
 
 export type LeaderboardScreenOptions = {
   profiles: LeaderboardProfile[]
+  total?: number
+  offset?: number
   errors?: string[]
   locale?: string
 }
@@ -91,7 +94,7 @@ export const leaderboardScreen = (
 ): TemplateResult => {
   const rows: LeaderboardProfile[] = options.profiles.map((profile, index) => ({
     ...profile,
-    rank: index + 1,
+    rank: profile.rank ?? (options.offset ?? 0) + index + 1,
   }))
   const title = _('crm_backend.leaderboard.title')
   const refresh = (
@@ -106,6 +109,20 @@ export const leaderboardScreen = (
     />
   )
 
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (profile) => String(profile.id),
+      responsive: 'stack',
+      columns: leaderboardColumns(_, options.locale),
+      rowHref: (profile) =>
+        localized(`/admin/users/${encodeURIComponent(String(profile.userId))}`, options.locale ?? ''),
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     title,
@@ -132,17 +149,10 @@ export const leaderboardScreen = (
             )
           : undefined
       }
-      status={`${title}: ${String(rows.length)}`}
+      status={`${title}: ${String(options.total ?? rows.length)}`}
       body={
         rows.length
-          ? dataTable(_, {
-              rows,
-              id: (profile) => String(profile.id),
-              responsive: 'stack',
-              columns: leaderboardColumns(_, options.locale),
-              rowHref: (profile) =>
-                localized(`/admin/users/${encodeURIComponent(String(profile.userId))}`, options.locale ?? ''),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('crm_backend.leaderboard.emptyTitle'), _('crm_backend.leaderboard.emptyHint'))
       }
     />,

@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, formatMoney } from '../../../ui/index.ts'
+import { badge, collectionTable, formatMoney } from '../../../ui/index.ts'
 import type { Column, DataTable } from '../../../ui/index.ts'
 import { labelOf, purchaseOrderPath } from './shared.tsx'
 
@@ -63,7 +63,7 @@ export const purchaseOrderTable = (
   detailSuffix: string,
   table?: Partial<DataTable<PurchaseOrderListRow>>,
 ): TemplateResult =>
-  dataTable(_, {
+  collectionTable(_, {
     rows,
     columns: purchaseOrderListColumns(_),
     id: (row) => String(row.id),

@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -303,19 +304,34 @@ export const routes: Record<string, RouteEntry> = {
           transfersListScreen(
             _,
             {
-              rows: pickings.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
-                source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
-                destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
-                scheduledDate: dateTimeLabel(row.scheduledDate, lang),
-                state: String(row.state),
-                href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
-              })),
+              rows: searchCollectionRows(
+                url,
+                pickings.map((row) => ({
+                  id: String(row.id),
+                  name: String(row.name),
+                  operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
+                  source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
+                  destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
+                  scheduledDate: dateTimeLabel(row.scheduledDate, lang),
+                  state: String(row.state),
+                  href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
+                })),
+                (row) =>
+                  String(row.name ?? '') +
+                  ' ' +
+                  String(row.operationType ?? '') +
+                  ' ' +
+                  String(row.source ?? '') +
+                  ' ' +
+                  String(row.destination ?? '') +
+                  ' ' +
+                  String(row.scheduledDate ?? '') +
+                  ' ' +
+                  String(row.state ?? ''),
+              ),
               createHref: inLocale(url, '/admin/stock/transfers/new'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.transfers')),
           ),
       })
     },
@@ -568,16 +584,27 @@ export const routes: Record<string, RouteEntry> = {
           const list = warehousesListScreen(
             _,
             {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                receptionSteps: String(row.receptionSteps),
-                deliverySteps: String(row.deliverySteps),
-              })),
+              rows: searchCollectionRows(
+                url,
+                rows.map((row) => ({
+                  id: String(row.id),
+                  name: String(row.name),
+                  code: String(row.code),
+                  receptionSteps: String(row.receptionSteps),
+                  deliverySteps: String(row.deliverySteps),
+                })),
+                (row) =>
+                  String(row.name ?? '') +
+                  ' ' +
+                  String(row.code ?? '') +
+                  ' ' +
+                  String(row.receptionSteps ?? '') +
+                  ' ' +
+                  String(row.deliverySteps ?? ''),
+              ),
               createHref: createModalHref(url, '/admin/stock/warehouses'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.warehouses')),
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -656,15 +683,19 @@ export const routes: Record<string, RouteEntry> = {
           const list = locationsListScreen(
             _,
             {
-              rows: data.locations.map((row) => ({
-                id: String(row.id),
-                completeName: completeLocationName(row, nameById),
-                usage: String(row.usage),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-              })),
+              rows: searchCollectionRows(
+                url,
+                data.locations.map((row) => ({
+                  id: String(row.id),
+                  completeName: completeLocationName(row, nameById),
+                  usage: String(row.usage),
+                  warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+                })),
+                (row) => `${row.completeName} ${selectionLabel(_, 'usage', row.usage)} ${row.warehouse}`,
+              ),
               createHref: createModalHref(url, '/admin/stock/locations'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.locations')),
           )
           if (!createModalOpen(url)) return list
           return modalWorkspace(
@@ -752,18 +783,29 @@ export const routes: Record<string, RouteEntry> = {
           const list = pickingTypesListScreen(
             _,
             {
-              rows: data.pickingTypes.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-                source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
-                destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
-                createBackorder: String(row.createBackorder ?? 'ask'),
-              })),
+              rows: searchCollectionRows(
+                url,
+                data.pickingTypes.map((row) => ({
+                  id: String(row.id),
+                  name: String(row.name),
+                  code: String(row.code),
+                  warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+                  source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
+                  destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
+                  createBackorder: String(row.createBackorder ?? 'ask'),
+                })),
+                (row) =>
+                  String(row.name ?? '') +
+                  ' ' +
+                  String(row.code ?? '') +
+                  ' ' +
+                  String(row.warehouse ?? '') +
+                  ' ' +
+                  `${row.source} ${row.destination}`,
+              ),
               createHref: createModalHref(url, '/admin/stock/picking-types'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.pickingTypes')),
           )
           if (!createModalOpen(url)) return list
           return modalWorkspace(
@@ -867,19 +909,30 @@ export const routes: Record<string, RouteEntry> = {
           const list = lotsListScreen(
             _,
             {
-              rows: lots.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                product: productById.get(String(row.productId)) ?? String(row.productId),
-                reference: String(row.ref ?? ''),
-                onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
-                onHandValue: onHandByLot.get(String(row.id)) ?? 0,
-                active: row.active !== false,
-                href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
-              })),
+              rows: searchCollectionRows(
+                url,
+                lots.map((row) => ({
+                  id: String(row.id),
+                  name: String(row.name),
+                  product: productById.get(String(row.productId)) ?? String(row.productId),
+                  reference: String(row.ref ?? ''),
+                  onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
+                  onHandValue: onHandByLot.get(String(row.id)) ?? 0,
+                  active: row.active !== false,
+                  href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
+                })),
+                (row) =>
+                  String(row.name ?? '') +
+                  ' ' +
+                  String(row.product ?? '') +
+                  ' ' +
+                  String(row.reference ?? '') +
+                  ' ' +
+                  String(row.onHand ?? ''),
+              ),
               createHref: createModalHref(url, '/admin/stock/lots'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.lots')),
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -1079,16 +1132,20 @@ export const routes: Record<string, RouteEntry> = {
           const list = stockRoutesListScreen(
             _,
             {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: localizedGeneratedRouteName(_, row),
-                sequence: Number(row.sequence),
-                ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
-                href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
-              })),
+              rows: searchCollectionRows(
+                url,
+                rows.map((row) => ({
+                  id: String(row.id),
+                  name: localizedGeneratedRouteName(_, row),
+                  sequence: Number(row.sequence),
+                  ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
+                  href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
+                })),
+                (row) => row.name,
+              ),
               createHref: createModalHref(url, '/admin/stock/routes'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.routes')),
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -1289,42 +1346,55 @@ export const routes: Record<string, RouteEntry> = {
           replenishmentListScreen(
             _,
             {
-              rows: points.map((row, index) => {
-                const forecasted = String(forecasts[index]?.forecasted ?? '0')
-                const baseUom = unitRecordById.get(productUomById.get(String(row.productId)) ?? '')
-                const replenishmentUom = unitRecordById.get(
-                  String(row.replenishmentUomId ?? productUomById.get(String(row.productId)) ?? ''),
-                )
-                const baseQuantity = Math.max(0, Number(row.maxQuantity) - Number(forecasted))
-                const rawQuantity =
-                  baseUom && replenishmentUom
-                    ? (baseQuantity * Number(baseUom.absoluteFactor)) /
-                      Number(replenishmentUom.absoluteFactor)
-                    : baseQuantity
-                const rounding = Math.max(Number(replenishmentUom?.rounding ?? 1), 1e-12)
-                const quantity =
-                  Number(forecasted) < Number(row.minQuantity)
-                    ? Math.ceil(rawQuantity / rounding - 1e-12) * rounding
-                    : 0
-                return {
-                  id: String(row.id),
-                  product: productById.get(String(row.productId)) ?? String(row.productId),
-                  warehouse: warehouseById.get(String(row.warehouseId)) ?? String(row.warehouseId),
-                  location: locationById.get(String(row.locationId)) ?? String(row.locationId),
-                  trigger: String(row.trigger),
-                  triggerLabel: selectionLabel(_, 'trigger', row.trigger),
-                  minQuantity: String(row.minQuantity),
-                  maxQuantity: String(row.maxQuantity),
-                  forecasted,
-                  toOrder: String(quantity),
-                  replenishmentUom:
-                    unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
-                  runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
-                }
-              }),
+              rows: searchCollectionRows(
+                url,
+                points.map((row, index) => {
+                  const forecasted = String(forecasts[index]?.forecasted ?? '0')
+                  const baseUom = unitRecordById.get(productUomById.get(String(row.productId)) ?? '')
+                  const replenishmentUom = unitRecordById.get(
+                    String(row.replenishmentUomId ?? productUomById.get(String(row.productId)) ?? ''),
+                  )
+                  const baseQuantity = Math.max(0, Number(row.maxQuantity) - Number(forecasted))
+                  const rawQuantity =
+                    baseUom && replenishmentUom
+                      ? (baseQuantity * Number(baseUom.absoluteFactor)) /
+                        Number(replenishmentUom.absoluteFactor)
+                      : baseQuantity
+                  const rounding = Math.max(Number(replenishmentUom?.rounding ?? 1), 1e-12)
+                  const quantity =
+                    Number(forecasted) < Number(row.minQuantity)
+                      ? Math.ceil(rawQuantity / rounding - 1e-12) * rounding
+                      : 0
+                  return {
+                    id: String(row.id),
+                    product: productById.get(String(row.productId)) ?? String(row.productId),
+                    warehouse: warehouseById.get(String(row.warehouseId)) ?? String(row.warehouseId),
+                    location: locationById.get(String(row.locationId)) ?? String(row.locationId),
+                    trigger: String(row.trigger),
+                    triggerLabel: selectionLabel(_, 'trigger', row.trigger),
+                    minQuantity: String(row.minQuantity),
+                    maxQuantity: String(row.maxQuantity),
+                    forecasted,
+                    toOrder: String(quantity),
+                    replenishmentUom:
+                      unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
+                    runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
+                  }
+                }),
+                (row) =>
+                  String(row.product ?? '') +
+                  ' ' +
+                  String(row.warehouse ?? '') +
+                  ' ' +
+                  String(row.location ?? '') +
+                  ' ' +
+                  String(row.triggerLabel ?? '') +
+                  ' ' +
+                  String(row.replenishmentUom ?? ''),
+              ),
               createHref: inLocale(url, '/admin/stock/replenishment/new'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('stock_backend.replenishment')),
           ),
       })
     },

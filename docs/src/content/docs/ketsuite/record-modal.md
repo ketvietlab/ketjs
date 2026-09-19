@@ -88,6 +88,17 @@ Views are render-pure. They read the context and return design-system markup (`R
 builds `TabbedView` and `TabPanel`; a module supplies the tab's label and view and must not create its own
 tab-body wrapper, padding, or scrolling contract.
 
+`RecordModalForm` accepts a `body` after its standard fields for composed controls such as an ordered
+value editor. Pass `dirty` when a structural edit changes the draft without leaving a changed visible
+input. The runtime combines that flag with native field checks when deciding whether closing needs a
+discard confirmation. A public `ReorderList` emits its ordered IDs through a native hidden input change;
+the record runtime captures all current fields before applying that view state.
+
+A command may supply `issueField(path, submittedForm, context)` to map server validation paths to stable
+native control names. Ordered editors map indexed paths using the submitted order snapshot, so an error
+stays with its row if the reader later changes the order. Matched native names display inline once;
+unmatched and general failures remain in the layer notice.
+
 ## Tabs other modules add
 
 A module that owns a record cannot know the tabs a module composed later wants on it. Such a record takes

@@ -1,6 +1,7 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { seeOther } from '../backend/forms.ts'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { catalogsScreen, countryScreen } from './screens/index.ts'
 import type { CatalogRow, DivisionRow } from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
@@ -37,8 +38,12 @@ export const routes: Record<string, RouteEntry> = {
         title: 'address_backend.title',
         active: '/admin/addresses',
         body: (_, frame) =>
-          catalogsScreen(_, frame, {
-            rows: rows.map((row) => ({
+          catalogsScreen(_, collectionSearchFrame(url, frame, _('address_backend.title')), {
+            rows: searchCollectionRows(
+              url,
+              rows,
+              (row) => `${row.countryCode} ${row.version} ${row.status ?? ''}`,
+            ).map((row) => ({
               ...row,
               detailHref: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}`),
               installAction: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`),

@@ -1,8 +1,10 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
+  collectionControls,
   designSystem,
   emptyState,
   ListPage,
@@ -249,6 +251,23 @@ export const configurationScreen = (
           _('crm_backend.configuration.emptyFilteredTitle'),
           _('crm_backend.configuration.emptyFilteredHint'),
         )
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => String(row.id),
+      columns: columnsFor(_, section, teamNames, userNames),
+      rowHref: (row) => recordModalHref(listHref, { kind, id: String(row.id) }),
+      // The whole row opens the record, and it is the only thing that
+      // does: a link around the name as well makes the name the target
+      // a reader aims for and leaves the rest of the row looking inert.
+      rowLink: false,
+      responsive: 'stack',
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
   return shell(
     _,
     _('crm_backend.configuration.title'),
@@ -258,20 +277,21 @@ export const configurationScreen = (
       context={pageTrailFromFrame(_('crm_backend.configuration.title'), frame)}
       title={_('crm_backend.configuration.title')}
       description={_('crm_backend.configuration.subtitle')}
-      actions={
+      headerActions={
         options.canCreate
           ? linkButton({
               href: recordModalCreateHref(listHref, { kind }),
               label: _('crm_backend.configuration.create'),
               variant: 'primary',
             })
-          : undefined
+          : null
       }
       controls={designSystem.Stack({
         // The catalogue tabs and the status facets are two rows of one control
         // group, so the stack owns the gap between them.
         gap: 'compact',
         items: [
+          collectionControls(_, _('crm_backend.configuration.title'), frame),
           <Tabs
             label={_('crm_backend.configuration.title')}
             items={CONFIGURATION_SECTIONS.map((id) => ({
@@ -295,21 +315,7 @@ export const configurationScreen = (
         ],
       })}
       status={`${_(`crm_backend.configuration.${section}`)} · ${options.rows.length}`}
-      body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => String(row.id),
-              columns: columnsFor(_, section, teamNames, userNames),
-              rowHref: (row) => recordModalHref(listHref, { kind, id: String(row.id) }),
-              // The whole row opens the record, and it is the only thing that
-              // does: a link around the name as well makes the name the target
-              // a reader aims for and leaves the rest of the row looking inert.
-              rowLink: false,
-              responsive: 'stack',
-            })
-          : empty
-      }
+      body={options.rows.length ? collectionTable(_, prepared.table) : empty}
     />,
     { ...frame, chrome: null, topbar: false },
   )

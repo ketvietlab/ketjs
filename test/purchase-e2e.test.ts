@@ -224,7 +224,7 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
     { headers: { accept: 'text/html' } },
   )
   const groupedRfqsHtml = await groupedRfqs.text()
-  assert.match(groupedRfqsHtml, /data-ui="group-row"/)
+  assert.match(groupedRfqsHtml, /data-ui="kt-group-row"/)
   assert.match(groupedRfqsHtml, /Nhà cung cấp ABC/)
   assert.match(groupedRfqsHtml, /data-ui="facet"/)
   const crossSiteCreate = await e2e.client.post(

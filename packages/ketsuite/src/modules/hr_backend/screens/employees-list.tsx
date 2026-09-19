@@ -1,11 +1,12 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionTable,
+  collectionControls,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
   RecordForm,
@@ -86,28 +87,37 @@ export const employeesListScreen = (
   _: Translator,
   options: EmployeesListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.editHref,
+      columns: employeeListColumns(_, options.action),
+    },
+    { paginate: true },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('hr_backend.employees.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('hr_backend.employees.title')}
-      actions={inline([
-        <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      controls={collectionControls(_, _('hr_backend.employees.title'), frame)}
+      headerActions={
+        <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />
+      }
+      actions={frame.extras?.['topbar.end']}
       body={
         options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.editHref,
-              columns: employeeListColumns(_, options.action),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('hr_backend.empty.employees'), _('hr_backend.empty.employeesHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

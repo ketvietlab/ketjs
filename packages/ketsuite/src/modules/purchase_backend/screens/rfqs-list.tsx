@@ -1,17 +1,13 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  emptyState,
-  icon,
-  inline,
-  LinkButton,
-  ListPage,
-  listChrome,
-  shell,
-  stack,
-} from '../../../ui/index.ts'
+import { emptyState, icon, LinkButton, ListPage, listChrome, shell, stack } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
-import { purchaseOrderTable, type PurchaseOrderListRow } from './order-list-shared.tsx'
+import {
+  purchaseOrderListColumns,
+  purchaseOrderTable,
+  type PurchaseOrderListRow,
+} from './order-list-shared.tsx'
 import { missingSetup } from './shared.tsx'
 
 export type RfqsListScreenOptions = {
@@ -25,10 +21,16 @@ export type RfqsListScreenOptions = {
 }
 
 export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): TemplateResult => {
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    columns: purchaseOrderListColumns(_),
+    id: (row) => String(row.id),
+    ...options.table,
+  })
   const total = options.total ?? options.rows.length
   const table =
     options.rows.length || options.table?.groups?.length
-      ? purchaseOrderTable(_, options.rows, options.detailSuffix, options.table)
+      ? purchaseOrderTable(_, options.rows, options.detailSuffix, collection.table)
       : options.setup && (!options.setup.vendors || !options.setup.pickingTypes)
         ? null
         : emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'), {
@@ -41,23 +43,23 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
     _('purchase_backend.rfqs.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('purchase_backend.rfqs.title')}
-      actions={inline([
+      headerActions={
         <LinkButton
           label={_('purchase_backend.action.createRfq')}
           href={options.createHref}
           variant="primary"
-        />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('purchase_backend.rfqs.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -67,9 +69,9 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
             )
           : undefined
       }
-      status={summary}
+      footer={summary}
       body={stack([options.setup ? missingSetup(_, options.setup) : null, table], 'loose')}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }
