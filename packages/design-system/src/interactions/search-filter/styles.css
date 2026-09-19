@@ -4,9 +4,16 @@
      ../menu/styles.css (widened below for its 3-column content) — only the hooks
      unique to this island get rules here. */
   :where([data-kv-design-system]) [data-ui="search-filter"] {
+    position: relative;
+    container: search-filter / inline-size;
+    min-inline-size: 0;
     display: flex;
     flex-direction: column;
     gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter"]:has([data-ui="menu"][open], [data-ui="search-filter-suggestions"]) {
+    z-index: var(--kv-layer-menu);
   }
   :where([data-kv-design-system]) [data-ui="search-filter"][data-busy="true"] {
     opacity: 0.75;
@@ -14,10 +21,16 @@
   :where([data-kv-design-system]) [data-ui="search-filter"] > [data-ui="notice"] {
     inline-size: 100%;
   }
+  /* Compact is intentionally limited to the bar itself: the result panel and
+     its controls retain their standard density and touch targets. */
+  :where([data-kv-design-system]) [data-ui="search-filter"][data-size="compact"] {
+    gap: var(--kv-space-1);
+  }
 
   /* One fused box — the search field and the single caret toggle share one
      border, like a single input-group rather than two adjacent controls. */
   :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
+    position: relative;
     display: flex;
     align-items: stretch;
     inline-size: 100%;
@@ -34,6 +47,11 @@
     gap: var(--kv-space-1);
     min-inline-size: 0;
     padding: 0.25rem 0.5rem;
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter"][data-size="compact"]
+    [data-ui="search-filter-field"] {
+    padding-block: 0.125rem;
   }
   :where([data-kv-design-system]) [data-ui="search-filter-facets"] {
     display: flex;
@@ -105,6 +123,12 @@
     background: transparent;
     color: var(--kv-text-main);
     font: inherit;
+  }
+  :where([data-kv-design-system])
+    [data-ui="search-filter"][data-size="compact"]
+    [data-ui="search-filter-input"] {
+    min-block-size: var(--kv-control-height-compact);
+    font-size: var(--kv-text-sm);
   }
   /* The reset (../../foundations/reset.css) puts a box-shadow ring on every
      `:focus-visible` form control, `<input>` included — override both
@@ -186,6 +210,12 @@
     cursor: pointer;
     list-style: none;
   }
+  :where([data-kv-design-system])
+    [data-ui="search-filter"][data-size="compact"]
+    [data-ui="search-filter-toggle"] {
+    min-inline-size: var(--kv-control-height-compact);
+    padding-inline: var(--kv-space-1);
+  }
   :where([data-kv-design-system]) [data-ui="search-filter-toggle"]::-webkit-details-marker {
     display: none;
   }
@@ -197,19 +227,24 @@
     color: var(--kv-accent-active);
   }
 
-  /* The Filters/Group By/Favorites panel: 3 columns side by side — but only
-     past a width the panel can actually afford. A `right: 0` panel is
-     anchored to the toggle, not the viewport (same as every other
-     [data-ui="menu-panel"] here), so a panel wide enough for 3 columns would
-     push past the left edge of the window on anything narrower than a very
-     wide, very-right-anchored trigger. This goes side-by-side only past a
-     wide breakpoint and stacks full-width below it, via a plain media
-     query. */
+  /* Anchor to the whole bar, never to its narrow caret or the app viewport.
+     Container queries also work inside a sidebar layout, modal or catalogue. */
+  :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] {
+    position: static;
+  }
+  :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] [data-ui="menu-panel"] {
+    left: auto;
+    right: 0;
+    width: min(52rem, 100%);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
   :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
     display: grid;
     gap: var(--kv-space-3);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-column"] {
+    min-inline-size: 0;
     display: grid;
     align-content: start;
     gap: 0.125rem;
@@ -218,18 +253,17 @@
     padding-block-start: var(--kv-space-2);
     border-block-start: 1px solid var(--kv-border-default);
   }
-  @media (min-width: 60rem) {
-    :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] [data-ui="menu-panel"] {
-      width: max-content;
-      max-width: min(52rem, calc(100vw - var(--kv-space-8)));
-    }
+  @container search-filter (min-width: 42rem) {
     :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
-      display: flex;
-      flex-wrap: wrap;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter-columns"][data-columns="1"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter-columns"][data-columns="2"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     :where([data-kv-design-system]) [data-ui="search-filter-column"] {
-      flex: 1 1 12rem;
-      min-inline-size: 11rem;
       padding-inline-end: var(--kv-space-3);
     }
     :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
@@ -243,6 +277,99 @@
     margin: 0 0 var(--kv-space-1);
     padding: 0 var(--kv-space-1);
     font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-bold);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping"] {
+    display: grid;
+    gap: var(--kv-space-1);
+    margin: 0;
+    padding: var(--kv-space-2);
+    border: 1px solid var(--kv-info-border);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-info-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-head"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-2);
+    color: var(--kv-info);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-bold);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-clear"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-list"] {
+    display: grid;
+    gap: var(--kv-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-item"] {
+    display: grid;
+    min-block-size: var(--kv-control-height);
+    grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-1);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-order"] {
+    display: grid;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    place-items: center;
+    border-radius: var(--kv-radius-full);
+    background: var(--kv-panel-bg);
+    color: var(--kv-info);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-bold);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-label"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-actions"] {
+    display: inline-flex;
+    gap: var(--kv-space-1);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-action"] {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: var(--kv-info);
+    font: inherit;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-action"]:is(:hover, :focus-visible),
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-clear"]:focus-visible {
+    background: var(--kv-interactive-hover);
+    outline: 2px solid var(--kv-focus-border);
+    outline-offset: 1px;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-action"][data-action="remove"] {
+    color: var(--kv-danger);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-grouping-add-label"] {
+    margin: var(--kv-space-2) var(--kv-space-1) var(--kv-space-1);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system])

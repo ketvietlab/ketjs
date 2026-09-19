@@ -26,6 +26,7 @@ export const functions: Record<string, FnSpec> = {
       favoriteId: 'text?',
       customFilters: 'json?',
       lang: 'text?',
+      cols: 'text?',
     },
     output: { href: 'text' },
     effects: [],
@@ -48,6 +49,7 @@ export const functions: Record<string, FnSpec> = {
       if (archived) params.set('archived', '1')
       if (group) params.set('groupBy', group)
       if (a.lang) params.set('lang', String(a.lang))
+      if (a.cols) params.set('cols', String(a.cols))
       const query = params.toString()
       return { href: query ? `${LIST_PATH}?${query}` : LIST_PATH }
     },

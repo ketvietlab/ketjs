@@ -62,6 +62,8 @@ test('stock warehouses list: keeps columns and search in the ListPage hierarchy'
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(

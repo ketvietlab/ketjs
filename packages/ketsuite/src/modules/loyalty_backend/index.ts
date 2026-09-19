@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { newProgramRoute, programWorkspaceRoute } from './program-workspace.tsx'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
@@ -795,21 +796,26 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.memberships.title',
         body: (_, frame) =>
-          tiersScreen(_, frame, tiers, {
-            action: url.pathname + url.search,
-            closeHref,
-            createHref: create.pathname + create.search,
-            tierHref: (row) => {
-              const target = new URL(closeHref, url.origin)
-              target.searchParams.set('modal', 'tier')
-              target.searchParams.set('tier', String(row.id))
-              return target.pathname + target.search
+          tiersScreen(
+            _,
+            collectionSearchFrame(url, frame, _('loyalty_backend.tiers.title')),
+            searchCollectionRows(url, tiers, (row) => `${row.name ?? ''}`),
+            {
+              action: url.pathname + url.search,
+              closeHref,
+              createHref: create.pathname + create.search,
+              tierHref: (row) => {
+                const target = new URL(closeHref, url.origin)
+                target.searchParams.set('modal', 'tier')
+                target.searchParams.set('tier', String(row.id))
+                return target.pathname + target.search
+              },
+              tierFields,
+              tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
+              tier,
+              modal,
             },
-            tierFields,
-            tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
-            tier,
-            modal,
-          }),
+          ),
       })
     },
 

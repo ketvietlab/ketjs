@@ -69,7 +69,7 @@ test('flow all pages route: ListPage preserves cross-project links, search state
   assert.match(firstHtml, /name="filter" value="project:platform"/)
   assert.match(firstHtml, /name="group" value="project"/)
   assert.match(firstHtml, /name="lang" value="en"/)
-  assert.equal(firstHtml.match(/data-ui="row"/g)?.length, 50)
+  assert.equal(firstHtml.match(/data-ui="kt-row"/g)?.length, 50)
   assert.match(firstText, /data-ui="pager-range">1-50 \/ 52/)
   assert.match(
     firstHtml,
@@ -83,7 +83,7 @@ test('flow all pages route: ListPage preserves cross-project links, search state
   const secondHtml = await second.text()
   const secondText = secondHtml.replace(/<!--k\[?-->/g, '')
   assert.equal(second.status, 200)
-  assert.equal(secondHtml.match(/data-ui="row"/g)?.length, 2)
+  assert.equal(secondHtml.match(/data-ui="kt-row"/g)?.length, 2)
   assert.match(secondText, /data-ui="pager-range">51-52 \/ 52/)
   assert.match(
     secondHtml,

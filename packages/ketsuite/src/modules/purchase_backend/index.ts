@@ -1,3 +1,8 @@
+import {
+  collectionSearchFrame,
+  searchCollectionRows,
+  loadCollectionRows,
+} from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -741,16 +746,15 @@ export default defineModule({
         const requestedGroup = url.searchParams.get('group')
         const group = requestedGroup === 'state' || requestedGroup === 'vendor' ? requestedGroup : null
         const [orders, data] = await Promise.all([
-          ctx.call(
-            'purchase.listOrders',
-            {
-              states: ['draft', 'sent', 'to approve'],
-              ...(search ? { search } : {}),
-              limit: 2_000,
-            },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
+          loadCollectionRows(
+            (page) =>
+              ctx.call(
+                'purchase.listOrders',
+                { states: ['draft', 'sent', 'to approve'], ...(search ? { search } : {}), ...page },
+                url,
+                req,
+              ) as Promise<AnyRow[]>,
+          ),
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
@@ -868,12 +872,15 @@ export default defineModule({
         const invoice = url.searchParams.get('invoice')
         const group = url.searchParams.get('group') === 'vendor' ? 'vendor' : null
         const [orders, data] = await Promise.all([
-          ctx.call(
-            'purchase.listOrders',
-            { state: 'purchase', ...(search ? { search } : {}), limit: 2_000 },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
+          loadCollectionRows(
+            (page) =>
+              ctx.call(
+                'purchase.listOrders',
+                { state: 'purchase', ...(search ? { search } : {}), ...page },
+                url,
+                req,
+              ) as Promise<AnyRow[]>,
+          ),
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
@@ -1001,29 +1008,34 @@ export default defineModule({
           title: 'purchase_backend.pricelists.title',
           body: (_, shell) =>
             vendorPricelistsListScreen(_, {
-              frame: shell,
+              frame: collectionSearchFrame(url, shell, _('purchase_backend.pricelists.title')),
               action: listPath,
               createHref: inLocale(url, '/admin/purchase/vendor-pricelists/new'),
               currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
               methodFields,
               invalid: url.searchParams.get('invalid'),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
-              rows: rows.map((row) => ({
-                ...row,
-                id: String(row.id),
-                partnerId: String(row.partnerId),
-                productTemplateId: String(row.productTemplateId),
-                minQty: String(row.minQty),
-                price: String(row.price),
-                discount: String(row.discount),
-                delay: String(row.delay),
-                partnerName: vendors.has(String(row.partnerId))
-                  ? String(vendors.get(String(row.partnerId)))
-                  : undefined,
-                productNameDisplay: templates.has(String(row.productTemplateId))
-                  ? String(templates.get(String(row.productTemplateId)))
-                  : undefined,
-              })),
+              rows: searchCollectionRows(
+                url,
+                rows.map((row) => ({
+                  ...row,
+                  id: String(row.id),
+                  partnerId: String(row.partnerId),
+                  productTemplateId: String(row.productTemplateId),
+                  minQty: String(row.minQty),
+                  price: String(row.price),
+                  discount: String(row.discount),
+                  delay: String(row.delay),
+                  partnerName: vendors.has(String(row.partnerId))
+                    ? String(vendors.get(String(row.partnerId)))
+                    : undefined,
+                  productNameDisplay: templates.has(String(row.productTemplateId))
+                    ? String(templates.get(String(row.productTemplateId)))
+                    : undefined,
+                })),
+                (row) =>
+                  `${row.partnerName ?? row.partnerId} ${row.productNameDisplay ?? row.productTemplateId} ${row.minQty} ${row.price}`,
+              ),
             }),
         })
       },

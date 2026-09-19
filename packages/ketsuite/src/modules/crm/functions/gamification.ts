@@ -1,6 +1,6 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { FnSpec, Row } from '@ketvietlab/ketjs'
-import { gamificationProfile, n } from '../operations.ts'
+import { gamificationProfile, n, normalized } from '../operations.ts'
 import { command } from './shared.ts'
 
 export const gamificationFunctions: Record<string, FnSpec> = {
@@ -45,19 +45,23 @@ export const gamificationFunctions: Record<string, FnSpec> = {
   }),
 
   'gamification.list': defineFn({
-    input: { limit: 'int?' },
-    output: { profiles: 'json' },
+    input: { limit: 'int?', cursor: 'int?', search: 'text?' },
+    output: { profiles: 'json', total: 'int' },
     effects: ['read:crm.GamificationProfile', 'read:user.User'],
     handler: async (ctx, args) => {
       const users = new Map((await ctx.db.select('user.User')).map((user) => [String(user.id), user]))
+      const needle = normalized(args.search)
+      const offset = Math.max(0, Math.trunc(n(args.cursor ?? 0)))
+      const limit = Math.max(1, Math.min(200, Math.trunc(n(args.limit ?? 50))))
       const profiles = (await ctx.db.select('crm.GamificationProfile'))
         .sort((a, b) => n(b.points) - n(a.points) || String(a.id).localeCompare(String(b.id)))
-        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 50))))
-        .map((profile) => ({
+        .map((profile, index) => ({
           ...profile,
+          rank: index + 1,
           userName: users.get(String(profile.userId))?.name ?? profile.userId,
         }))
-      return { profiles }
+        .filter((profile) => !needle || normalized(profile.userName).includes(needle))
+      return { profiles: profiles.slice(offset, offset + limit), total: profiles.length }
     },
   }),
 }

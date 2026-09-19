@@ -1,3 +1,4 @@
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -282,14 +283,19 @@ const bomsPage = async (
         _,
         {
           createHref: inLocale(url, '/admin/manufacturing/boms?create=1'),
-          rows: data.boms.map((row) => ({
-            id: String(row.id),
-            code: String(row.code ?? row.id),
-            product: productsById.get(String(row.productId)) ?? String(row.productId),
-            quantity: String(row.productQty),
-          })),
+          rows: searchCollectionRows(
+            url,
+            data.boms.map((row) => ({
+              id: String(row.id),
+              code: String(row.code ?? row.id),
+              product: productsById.get(String(row.productId)) ?? String(row.productId),
+              quantity: String(row.productQty),
+            })),
+            (row) =>
+              String(row.code ?? '') + ' ' + String(row.product ?? '') + ' ' + String(row.quantity ?? ''),
+          ),
         },
-        frame,
+        collectionSearchFrame(url, frame, _('manufacturing_backend.boms.title')),
       )
       if (url.searchParams.get('create') !== '1' && !errors.length) return list
       return modalWorkspace(
@@ -365,18 +371,31 @@ const workCentersPage = async (
         {
           action: collection,
           createHref: workCenterModalPath(url),
-          rows: rows.map((row) => ({
-            id: String(row.id),
-            code: String(row.code),
-            name: String(row.name),
-            capacity: String(row.capacity),
-            timeEfficiency: String(row.timeEfficiency),
-            costPerHour: String(row.costPerHour),
-            active: row.active !== false,
-            editHref: workCenterModalPath(url, String(row.id)),
-          })),
+          rows: searchCollectionRows(
+            url,
+            rows.map((row) => ({
+              id: String(row.id),
+              code: String(row.code),
+              name: String(row.name),
+              capacity: String(row.capacity),
+              timeEfficiency: String(row.timeEfficiency),
+              costPerHour: String(row.costPerHour),
+              active: row.active !== false,
+              editHref: workCenterModalPath(url, String(row.id)),
+            })),
+            (row) =>
+              String(row.name ?? '') +
+              ' ' +
+              String(row.code ?? '') +
+              ' ' +
+              String(row.capacity ?? '') +
+              ' ' +
+              String(row.timeEfficiency ?? '') +
+              ' ' +
+              String(row.costPerHour ?? ''),
+          ),
         },
-        frame,
+        collectionSearchFrame(url, frame, _('manufacturing_backend.workCenters.title')),
       )
       if (!forceModal && url.searchParams.get('create') !== '1' && !url.searchParams.get('edit')) return list
       return modalWorkspace(
@@ -468,17 +487,28 @@ export const routes: Record<string, RouteEntry> = {
           ordersListScreen(
             _,
             {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                product: productsById.get(String(row.productId)) ?? String(row.productId),
-                quantity: String(row.productQty),
-                state: String(row.state),
-                href: inLocale(url, `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`),
-              })),
+              rows: searchCollectionRows(
+                url,
+                rows.map((row) => ({
+                  id: String(row.id),
+                  name: String(row.name),
+                  product: productsById.get(String(row.productId)) ?? String(row.productId),
+                  quantity: String(row.productQty),
+                  state: String(row.state),
+                  href: inLocale(url, `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`),
+                })),
+                (row) =>
+                  String(row.name ?? '') +
+                  ' ' +
+                  String(row.product ?? '') +
+                  ' ' +
+                  String(row.quantity ?? '') +
+                  ' ' +
+                  String(row.state ?? ''),
+              ),
               createHref: inLocale(url, '/admin/manufacturing/new'),
             },
-            frame,
+            collectionSearchFrame(url, frame, _('manufacturing_backend.orders.title')),
           ),
       })
     },

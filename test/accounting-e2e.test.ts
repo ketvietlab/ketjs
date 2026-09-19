@@ -302,7 +302,7 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   })
   const filteredHtml = await filtered.text()
   assert.equal(filtered.status, 200)
-  assert.match(filteredHtml, /data-ui="group-row"/)
+  assert.match(filteredHtml, /data-ui="kt-group-row"/)
   assert.match(filteredHtml, /data-ui="facet"/)
   assert.match(filteredHtml, /ACC999/)
 

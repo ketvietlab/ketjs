@@ -30,6 +30,7 @@ const entry = (
 })
 
 export const componentRegistry: readonly ComponentRegistration[] = [
+  entry('ReorderList', 'Forms', 'interactions/reorder-list', 'fields', 'reorder-list'),
   entry('ActionGroup', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('Button', 'Actions', 'primitives/actions', 'actions', 'button', 'stable', [
     'default',
@@ -160,6 +161,7 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('searchFilter', 'Data operations', 'interactions/search-filter', 'interactions', 'search-filter'),
   entry('createKetTableView', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
   entry('ketTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry('KetTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
   entry(
     'createRelationSelectView',
     'Forms',

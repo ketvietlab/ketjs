@@ -1,7 +1,9 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionTable,
   dataTable,
   emptyState,
   icon,
@@ -58,46 +60,47 @@ export const paymentTermsListScreen = (
     `${_('account_backend.term.summary.configured')}: ${String(options.summary.configured)}`,
     `${_('account_backend.term.summary.lines')}: ${String(options.summary.lines)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: [
+      {
+        key: 'name',
+        label: _('account_backend.field.name'),
+        priority: 'primary',
+        width: 'wide',
+        cell: (row) => String(row.name),
+      },
+      {
+        key: 'lines',
+        label: _('account_backend.terms.lines'),
+        kind: 'number',
+        align: 'end',
+        cell: (row) => String(linesOf(row).length),
+      },
+      {
+        key: 'note',
+        label: _('account_backend.field.note'),
+        cell: (row) => String(row.note ?? '—'),
+      },
+      {
+        key: 'active',
+        label: _('account_backend.field.active'),
+        kind: 'status',
+        cell: (row) =>
+          badge(
+            row.active ? _('account_backend.active') : _('account_backend.archived'),
+            row.active ? 'positive' : 'neutral',
+            row.active ? 'active' : 'archived',
+          ),
+      },
+    ],
+    ...options.table,
+  })
   const terms =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: [
-          {
-            key: 'name',
-            label: _('account_backend.field.name'),
-            priority: 'primary',
-            width: 'wide',
-            cell: (row) => String(row.name),
-          },
-          {
-            key: 'lines',
-            label: _('account_backend.terms.lines'),
-            kind: 'number',
-            align: 'end',
-            cell: (row) => String(linesOf(row).length),
-          },
-          {
-            key: 'note',
-            label: _('account_backend.field.note'),
-            cell: (row) => String(row.note ?? '—'),
-          },
-          {
-            key: 'active',
-            label: _('account_backend.field.active'),
-            kind: 'status',
-            cell: (row) =>
-              badge(
-                row.active ? _('account_backend.active') : _('account_backend.archived'),
-                row.active ? 'positive' : 'neutral',
-                row.active ? 'active' : 'archived',
-              ),
-          },
-        ],
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -162,31 +165,37 @@ export const paymentTermsListScreen = (
     _('account_backend.terms.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.terms.title')}
       description={_('account_backend.term.subtitle')}
-      actions={inline([
+      headerActions={
         <LinkButton
           label={_('account_backend.action.createTerm')}
           href={options.createHref}
           variant="primary"
-        />,
-        options.lineCreateHref ? (
-          <LinkButton
-            label={_('account_backend.action.addTermLine')}
-            href={options.lineCreateHref}
-            variant="secondary"
-          />
-        ) : undefined,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={
+        options.lineCreateHref || collection.frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              options.lineCreateHref ? (
+                <LinkButton
+                  label={_('account_backend.action.addTermLine')}
+                  href={options.lineCreateHref}
+                  variant="secondary"
+                />
+              ) : undefined,
+              collection.frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('account_backend.terms.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -196,7 +205,7 @@ export const paymentTermsListScreen = (
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={stack(
         [
           <Section
@@ -213,6 +222,6 @@ export const paymentTermsListScreen = (
         'loose',
       )}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

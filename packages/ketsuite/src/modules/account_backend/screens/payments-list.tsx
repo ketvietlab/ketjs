@@ -1,12 +1,12 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
   LinkButton,
   ListPage,
   listChrome,
@@ -86,15 +86,16 @@ export const paymentsListScreen = (_: Translator, options: PaymentsListScreenOpt
     `${_('account_backend.payment.summary.outbound')}: ${String(options.summary.outbound)}`,
     `${_('account_backend.payment.summary.open')}: ${String(options.summary.open)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: paymentListColumns(_, options.partnerLabel),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: paymentListColumns(_, options.partnerLabel),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -109,24 +110,24 @@ export const paymentsListScreen = (_: Translator, options: PaymentsListScreenOpt
     _('account_backend.payments.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.payments.title')}
       description={_('account_backend.payment.subtitle')}
-      actions={inline([
+      headerActions={
         <LinkButton
           label={_('account_backend.action.registerPayment')}
           href={options.createHref}
           variant="primary"
-        />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collection.frame.extras?.['topbar.end']}
       controls={
-        options.frame.chrome
+        collection.frame.chrome
           ? listChrome(
               _,
               _('account_backend.payments.title'),
               {
-                ...options.frame.chrome,
+                ...collection.frame.chrome,
                 layout: 'command',
                 section: undefined,
                 create: null,
@@ -136,9 +137,9 @@ export const paymentsListScreen = (_: Translator, options: PaymentsListScreenOpt
             )
           : undefined
       }
-      status={status}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

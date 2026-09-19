@@ -120,22 +120,67 @@ export function createSerializedRunner(
   }
 }
 
-const run = async () => {
-  const noInitial = process.argv.slice(2).includes('--no-initial')
+export const runFrameworkWatch = async (
+  options: { root?: string; serveArgs?: string[]; serverEntry?: string; noInitial?: boolean } = {},
+) => {
+  const root = options.root ?? ROOT
+  const noInitial = options.noInitial === true && !options.serveArgs
   const watchers: FSWatcher[] = []
   let build: ChildProcess | undefined
+  let server: ChildProcess | undefined
+  let stopping = false
+
+  const stopServer = async () => {
+    const child = server
+    server = undefined
+    if (!child || child.exitCode !== null || child.signalCode !== null) return
+    await new Promise<void>((resolveExit) => {
+      const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000)
+      child.once('exit', () => {
+        clearTimeout(timeout)
+        resolveExit()
+      })
+      child.kill('SIGTERM')
+    })
+  }
+
+  const restartServer = async () => {
+    if (!options.serveArgs || stopping) return
+    await stopServer()
+    if (stopping) return
+    console.log('ketsuite: build succeeded; starting server')
+    const child = spawn(
+      process.execPath,
+      [options.serverEntry ?? join(root, 'packages/ketsuite/dist/cli.js'), ...options.serveArgs],
+      {
+        cwd: process.env.KET_WATCH_SERVE_CWD ?? root,
+        stdio: 'inherit',
+        env: { ...process.env, KET_DEV: '1' },
+      },
+    )
+    server = child
+    child.once('error', (error) => {
+      if (server === child) server = undefined
+      console.error(error.message)
+    })
+    child.once('exit', (code) => {
+      if (server !== child) return
+      server = undefined
+      if (!stopping) console.error(`ketsuite: server exited (${code}); waiting for source changes`)
+    })
+  }
 
   const buildOnce = () =>
     new Promise<void>((resolveBuild, rejectBuild) => {
-      build = spawn(process.execPath, [join(ROOT, 'tools/build.mjs')], {
-        cwd: ROOT,
+      build = spawn(process.execPath, [join(root, 'tools/build.mjs')], {
+        cwd: root,
         stdio: 'inherit',
       })
       build.once('error', rejectBuild)
       build.once('exit', (code, signal) => {
         build = undefined
         if (code === 0) {
-          writeFileSync(join(ROOT, READY_FILE), `${Date.now()}\n`)
+          writeFileSync(join(root, READY_FILE), `${Date.now()}\n`)
           resolveBuild()
         } else {
           rejectBuild(new Error(`KetJS build exited with ${signal ?? code ?? 'an unknown status'}`))
@@ -143,26 +188,32 @@ const run = async () => {
       })
     })
 
-  const runner = createSerializedRunner(buildOnce, {
-    onError: (error) => console.error(error instanceof Error ? error.message : error),
-  })
+  const runner = createSerializedRunner(
+    async () => {
+      await buildOnce()
+      await restartServer()
+    },
+    {
+      onError: (error) => console.error(error instanceof Error ? error.message : error),
+    },
+  )
   const changed = (path: string) => {
-    if (!isFrameworkBuildInput(path, readHeader(join(ROOT, path)))) return
+    if (!isFrameworkBuildInput(path, readHeader(join(root, path)))) return
     console.log(`ketjs: ${portable(path)} changed`)
     runner.trigger()
   }
 
-  for (const root of BUILD_ROOTS) {
-    const directory = join(ROOT, root)
+  for (const inputRoot of BUILD_ROOTS) {
+    const directory = join(root, inputRoot)
     if (!existsSync(directory)) continue
     watchers.push(
       watch(directory, { recursive: true }, (_event, filename) => {
-        if (filename) changed(join(root, filename.toString()))
+        if (filename) changed(join(inputRoot, filename.toString()))
       }),
     )
   }
   watchers.push(
-    watch(ROOT, (_event, filename) => {
+    watch(root, (_event, filename) => {
       if (filename && ROOT_INPUTS.has(filename.toString())) changed(filename.toString())
     }),
   )
@@ -170,13 +221,13 @@ const run = async () => {
   if (!noInitial) runner.trigger()
   console.log('ketjs: watching framework build inputs')
 
-  let stopping = false
   const stop = async (signal: NodeJS.Signals) => {
     if (stopping) return
     stopping = true
     for (const watcher of watchers) watcher.close()
     build?.kill(signal)
     await runner.close()
+    await stopServer()
     process.exit(0)
   }
   process.once('SIGINT', () => void stop('SIGINT'))
@@ -184,4 +235,11 @@ const run = async () => {
   await new Promise<void>(() => {})
 }
 
-if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) await run()
+if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2)
+  const serveIndex = args.indexOf('--serve-ketsuite')
+  await runFrameworkWatch({
+    noInitial: args.includes('--no-initial'),
+    serveArgs: serveIndex < 0 ? undefined : args.slice(serveIndex + 1),
+  })
+}
