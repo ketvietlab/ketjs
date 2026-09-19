@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 261,
+    "publicExports": 263,
     "runtimeExports": 130,
     "registeredComponents": 125,
     "compatibilityExports": 251,
     "compatibilityModules": 41,
     "plannedComponents": 0,
-    "publicGaps": 135,
+    "publicGaps": 137,
     "runtimeGaps": 5,
-    "typeGaps": 130,
+    "typeGaps": 132,
     "cssFiles": 76,
-    "cssLines": 14775
+    "cssLines": 14927
   },
   "rows": [
     {
@@ -3950,6 +3950,24 @@
     },
     {
       "scope": "public",
+      "name": "SearchFilterCustomRule",
+      "imported": "SearchFilterCustomRule",
+      "kind": "type",
+      "source": "./interactions/search-filter/index.tsx",
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-045"
+    },
+    {
+      "scope": "public",
       "name": "SearchFilterFieldType",
       "imported": "SearchFilterFieldType",
       "kind": "type",
@@ -4024,6 +4042,24 @@
       "scope": "public",
       "name": "SearchFilterOption",
       "imported": "SearchFilterOption",
+      "kind": "type",
+      "source": "./interactions/search-filter/index.tsx",
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-045"
+    },
+    {
+      "scope": "public",
+      "name": "SearchFilterSize",
+      "imported": "SearchFilterSize",
       "kind": "type",
       "source": "./interactions/search-filter/index.tsx",
       "owner": "Data operations",
@@ -5029,7 +5065,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/ket-table-navigation.test.tsx"],
       "gapTask": "DS-046"
     },
     {
@@ -5113,7 +5149,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/search-filter-grouping.test.tsx"],
       "gapTask": "DS-045"
     },
     {
@@ -5149,7 +5185,7 @@
       "specimen": "present",
       "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/product-list-screen.test.tsx"],
       "gapTask": "DS-046"
     },
     {
@@ -5206,7 +5242,7 @@
       "specimen": "present",
       "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-popup-dismiss.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-045"
     },
     {
@@ -5490,7 +5526,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5562,7 +5598,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -5659,7 +5695,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -7676,7 +7712,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7694,7 +7730,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8254,9 +8290,11 @@
         "test/island.test.ts",
         "test/joints.test.ts",
         "test/jsx.test.tsx",
+        "test/ket-table-navigation.test.tsx",
         "test/list-chrome.test.ts",
         "test/product-modal-view.test.tsx",
         "test/product-stock.test.ts",
+        "test/search-filter-grouping.test.tsx",
         "test/ssr.test.ts",
         "test/table.test.ts",
         "test/ui-record-modal.test.tsx",
@@ -8642,6 +8680,7 @@
         "test/flow-truthful-figures.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/identity.test.ts",
+        "test/ket-table-navigation.test.tsx",
         "test/multidb.test.ts",
         "test/partner-list-screen.test.tsx",
         "test/product-list-screen.test.tsx",
@@ -8737,7 +8776,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -8968,7 +9007,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 32,
+      "consumers": 31,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -8986,7 +9025,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 32,
+      "consumers": 31,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10236,7 +10275,8 @@
         "test/list-chrome.test.ts",
         "test/menu.test.ts",
         "test/partner-e2e.test.ts",
-        "test/product-stock-e2e.test.ts"
+        "test/product-stock-e2e.test.ts",
+        "test/search-filter-grouping.test.tsx"
       ],
       "gapTask": "DS-007"
     },
@@ -10487,7 +10527,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 81,
+      "consumers": 80,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10751,7 +10791,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/ket-table/styles.css",
-      "lines": 190,
+      "lines": 207,
       "hooks": [
         "badge",
         "ket-table",
@@ -10863,7 +10903,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 381,
+      "lines": 502,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -10889,6 +10929,16 @@
         "search-filter-facet-remove",
         "search-filter-facets",
         "search-filter-field",
+        "search-filter-grouping",
+        "search-filter-grouping-action",
+        "search-filter-grouping-actions",
+        "search-filter-grouping-add-label",
+        "search-filter-grouping-clear",
+        "search-filter-grouping-head",
+        "search-filter-grouping-item",
+        "search-filter-grouping-label",
+        "search-filter-grouping-list",
+        "search-filter-grouping-order",
         "search-filter-input",
         "search-filter-suggestion",
         "search-filter-suggestions",
@@ -11821,7 +11871,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1427,
+      "lines": 1441,
       "hooks": [
         "app-main",
         "app-shell",
@@ -11845,6 +11895,7 @@
         "chrome-search",
         "chrome-search-actions",
         "chrome-search-apply",
+        "chrome-search-content",
         "chrome-search-input",
         "chrome-search-menus",
         "chrome-search-modal",

@@ -23,6 +23,7 @@ import {
   favoriteModal,
   productDetailScreen,
   productsScreen,
+  templateColumns,
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
@@ -30,7 +31,11 @@ import {
 import { uomControl } from './relation-control.ts'
 import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
+import { searchFilterBar } from '../backend/search-filter.ts'
+import type { SearchFacet, SearchFilterConfig, SearchFilterCustomRule } from '../backend/search-filter.ts'
+import { tableGrid } from '../backend/ket-table.ts'
+import type { KetTableGroup } from '../backend/ket-table.ts'
+import type { SearchMenu, TableSelection } from '../../ui/index.ts'
 import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -179,7 +184,7 @@ type ProductListRow = {
   type: string
   categoryId: string | null
   uomId: string | null
-  listPrice: number
+  listPrice: number | string
   variants?: unknown[]
 }
 
@@ -392,6 +397,185 @@ const productFacets = (
   ]
 }
 
+const productFieldLabel = (
+  _: ReturnType<ServeContext['translate']>,
+  key: string,
+  fallback: string,
+): string => {
+  const message = (
+    {
+      type: 'product_backend.field.type',
+      categoryId: 'product_backend.field.category',
+      uomId: 'product_backend.field.uom',
+      active: 'product_backend.field.active',
+      saleOk: 'product_backend.field.saleOk',
+      purchaseOk: 'product_backend.field.purchaseOk',
+      createdAt: 'product_backend.field.createdAt',
+      updatedAt: 'product_backend.field.updatedAt',
+      name: 'product_backend.field.name',
+      description: 'product_backend.field.description',
+      listPrice: 'product_backend.field.listPrice',
+    } as Record<string, string>
+  )[key]
+  return message && _.resolves(message) ? _(message) : fallback
+}
+
+const productSearchFilterConfig = (
+  _: ReturnType<ServeContext['translate']>,
+  url: URL,
+  state: ListState,
+  spec: ReturnType<typeof productListSearch>,
+  favorites: SavedSearchRow[],
+): SearchFilterConfig => {
+  const presetLabel = (key: string): string =>
+    key === 'goods' || key === 'service'
+      ? _(`product_backend.type.${key}`)
+      : productFieldLabel(_, key === 'sale' ? 'saleOk' : 'purchaseOk', key)
+  const ruleLabel = (field: string, operator: string, value: unknown): string => {
+    const label = productFieldLabel(
+      _,
+      field,
+      spec.filterable?.find((candidate) => candidate.key === field)?.label ?? field,
+    )
+    const suffix =
+      value == null || value === '' ? '' : `: ${Array.isArray(value) ? value.join(', ') : String(value)}`
+    return `${label} ${operator}${suffix}`
+  }
+  const customFilters: SearchFilterCustomRule[] = state.filters.flatMap((filter, index) =>
+    filter.kind === 'rule'
+      ? [
+          {
+            id: `rule:${index}`,
+            field: filter.field,
+            operator: filter.operator,
+            value: Array.isArray(filter.value) ? filter.value.join(',') : String(filter.value ?? ''),
+            label: ruleLabel(filter.field, filter.operator, filter.value),
+          },
+        ]
+      : [],
+  )
+  const facets: SearchFacet[] = [
+    ...(state.q ? [{ id: 'query:current', type: 'field' as const, label: state.q }] : []),
+    ...state.presets.map((key) => ({
+      id: `preset:${key}`,
+      type: 'filter' as const,
+      label: presetLabel(key),
+    })),
+    ...(state.includeArchived
+      ? [{ id: 'archived', type: 'filter' as const, label: _('backend.chrome.includeArchived') }]
+      : []),
+    ...customFilters.map(({ id, label }) => ({ id, type: 'filter' as const, label })),
+    ...state.groupBy.map((group) => {
+      const field = spec.groupable?.find((candidate) => candidate.key === group.key)
+      const label = productFieldLabel(_, group.key, field?.label ?? group.key)
+      return {
+        id: `${group.key}${group.interval ? `:${group.interval}` : ''}`,
+        type: 'groupBy' as const,
+        label: `${label}${group.interval ? ` / ${group.interval}` : ''}`,
+      }
+    }),
+    ...(state.favoriteId
+      ? [
+          {
+            id: state.favoriteId,
+            type: 'favorite' as const,
+            label: favorites.find((favorite) => favorite.id === state.favoriteId)?.name ?? state.favoriteId,
+          },
+        ]
+      : []),
+  ]
+  return {
+    name: 'product-template-filter',
+    size: 'compact',
+    maxGroupBy: 4,
+    facets,
+    filters: [
+      ...(spec.presets ?? []).map((preset) => ({
+        id: `preset:${preset.key}`,
+        label: presetLabel(preset.key),
+        active: state.presets.includes(preset.key),
+        group: preset.group,
+      })),
+      {
+        id: 'archived',
+        label: _('backend.chrome.includeArchived'),
+        active: state.includeArchived,
+        group: 'state',
+      },
+    ],
+    groupBy: (spec.groupable ?? []).map((field) => {
+      const label = productFieldLabel(_, field.key, field.label)
+      return field.intervals?.length
+        ? {
+            id: field.key,
+            label,
+            active: false,
+            options: field.intervals.map((interval) => ({
+              id: `${field.key}:${interval}`,
+              label: `${label} / ${interval}`,
+              active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
+            })),
+          }
+        : {
+            id: field.key,
+            label,
+            active: state.groupBy.some((group) => group.key === field.key),
+          }
+    }),
+    favorites: favorites.map((favorite) => ({
+      id: favorite.id,
+      label: favorite.name,
+      isDefault: Boolean(favorite.defaultKey),
+      active: state.favoriteId === favorite.id,
+    })),
+    customFilterFields: (spec.filterable ?? []).map((field) => ({
+      value: field.key,
+      label: productFieldLabel(_, field.key, field.label),
+      type: field.type,
+    })),
+    customFilters,
+    labels: {
+      searchLabel: _('product_backend.search.label'),
+      searchPlaceholder: _('product_backend.chrome.search'),
+      toggleLabel: _('product_backend.search.toggle'),
+      filters: _('product_backend.search.filters'),
+      groupBy: _('product_backend.search.groupBy'),
+      groupByApplied: _('product_backend.search.groupByApplied'),
+      groupByAdd: _('product_backend.search.groupByAdd'),
+      groupByClear: _('product_backend.search.groupByClear'),
+      groupByMoveEarlier: _('product_backend.search.groupByMoveEarlier'),
+      groupByMoveLater: _('product_backend.search.groupByMoveLater'),
+      favorites: _('product_backend.search.favorites'),
+      searchGenericLabel: _('product_backend.search.genericLabel'),
+      searchFieldPrefix: _('product_backend.search.fieldPrefix'),
+      searchFieldPreposition: _('product_backend.search.fieldPreposition'),
+      customFilterField: _('product_backend.search.customFilterField'),
+      customFilterOperator: _('product_backend.search.customFilterOperator'),
+      customFilterValue: _('product_backend.search.customFilterValue'),
+      customFilterAdd: _('product_backend.search.customFilterAdd'),
+      customGroupByPlaceholder: _('product_backend.search.customGroupByPlaceholder'),
+      saveSearch: _('product_backend.search.saveSearch'),
+      favoriteName: _('product_backend.search.favoriteName'),
+      favoriteDefault: _('product_backend.search.favoriteDefault'),
+      favoriteSaveAction: _('product_backend.search.favoriteSaveAction'),
+      favoriteRemove: _('product_backend.search.favoriteRemove'),
+      favoriteSetDefault: _('product_backend.search.favoriteSetDefault'),
+      noFavorites: _('product_backend.search.noFavorites'),
+      clear: _('product_backend.search.clear'),
+      applyError: _('product_backend.search.applyError'),
+      retry: _('product_backend.search.retry'),
+    },
+    manager: {
+      applyFunction: 'product_backend.applySearchFilter',
+      bodyId: 'product-template-list',
+      applyInput: { returnTo: `${url.pathname}${url.search}` },
+      saveFavoriteFunction: 'product_backend.saveSearchFavorite',
+      deleteFavoriteFunction: 'product_backend.deleteSearchFavorite',
+      setDefaultFavoriteFunction: 'product_backend.setDefaultSearchFavorite',
+    },
+  }
+}
+
 const pathStartsWith = (path: unknown[], prefix: unknown[]): boolean =>
   prefix.every((value, index) => JSON.stringify(path[index]) === JSON.stringify(value))
 
@@ -408,7 +592,7 @@ const loadProductGroups = async (
     decorate: (rows: ProductListRow[]) => Promise<TemplateRow[]>
   },
   path: unknown[] = [],
-): Promise<TableGroup<TemplateRow>[]> => {
+): Promise<KetTableGroup[]> => {
   const groups = (await ctx.call(
     'product.groupTemplates',
     { state, path, timezone, limit: PAGE_SIZE },
@@ -483,7 +667,6 @@ const loadProductGroups = async (
         id: JSON.stringify(nextPath),
         label,
         count: Number(group.count),
-        depth: path.length,
         open,
         href: encodeListState(next, url),
         children: childGroups,
@@ -647,8 +830,8 @@ export const routes: Record<string, RouteEntry> = {
           const attachmentId = images.get(String(row.id))
           return {
             ...templateRow(row),
-            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
-            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? row.uomId) : '—',
+            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? row.categoryId) : '—',
             isStorable: canReadStock ? (inventory.get(String(row.id)) ?? false) : null,
             image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
           }
@@ -677,11 +860,66 @@ export const routes: Record<string, RouteEntry> = {
       const extensionActions = await ctx.joint(url, req, 'product_backend:catalogue.actions', {
         locale: localeQuery(url),
       })
-
       return adminPage(ctx, url, req, {
         title: 'KetSuite',
         translate: false,
-        body: (_, frame) => {
+        body: async (_, frame) => {
+          const filterBar = await searchFilterBar(
+            ctx,
+            url,
+            req,
+            'product-template-filter',
+            productSearchFilterConfig(_, url, state, spec, favorites),
+          )
+          const shown = colsOf(url)
+          const columns = templateColumns(_)
+            .filter((column) => column.key !== 'id' || shown.includes('id'))
+            .map((column) => {
+              if (!spec.sortable?.some((field) => field.key === column.key)) return column
+              const next = cloneState(state)
+              next.sort = [
+                {
+                  key: column.key,
+                  dir: state.sort[0]?.key === column.key && state.sort[0].dir === 'asc' ? 'desc' : 'asc',
+                },
+              ]
+              next.page = 1
+              next.groupPages = {}
+              return { ...column, sortHref: encodeListState(next, url) }
+            })
+          const grid =
+            view === 'list'
+              ? await tableGrid(ctx, url, req, 'product-template-table', {
+                  columns,
+                  rows: decoratedRows,
+                  total: count,
+                  idField: 'id',
+                  locale: _.locale === 'qps' ? 'en' : _.locale,
+                  rowHrefTemplate: recordModalHref(url, {
+                    kind: 'product.template',
+                    id: '__ROW_ID__',
+                  }).replace('__ROW_ID__', '{id}'),
+                  groupBy: state.groupBy.map((group) => group.key),
+                  groups,
+                  selection,
+                  page: current,
+                  sort: state.sort[0] ? { field: state.sort[0].key, direction: state.sort[0].dir } : null,
+                  pager: false,
+                  labels: {
+                    selectAll: _('backend.table.selectAll'),
+                    selectRow: _('backend.table.selectRow'),
+                    sortedAscending: _('product_backend.table.sortAscending'),
+                    sortedDescending: _('product_backend.table.sortDescending'),
+                    previousPage: _('backend.chrome.previous'),
+                    nextPage: _('backend.chrome.next'),
+                    loading: _('backend.relation.loading'),
+                    loadError: _('backend.error.failed.title'),
+                    retry: _('backend.relation.retry'),
+                    empty: _('product_backend.screen.empty.message'),
+                    emptyHint: _('product_backend.screen.empty.hint'),
+                  },
+                })
+              : null
           const workspace = productsScreen(
             _,
             decoratedRows,
@@ -695,25 +933,37 @@ export const routes: Record<string, RouteEntry> = {
                   path: recordModalCreateHref(url, { kind: 'product.template' }),
                 },
                 selection,
-                search: {
-                  name: 'q',
-                  value: state.q ?? '',
-                  placeholder: _('product_backend.chrome.search'),
-                  keep: keepForSearch(url),
-                  facets: productFacets(_, url, state, spec),
-                  menus: productMenus(_, url, state, spec, favorites),
-                },
+                searchContent: filterBar,
                 pager: grouped ? null : pager(url, current, rows.length, count),
-                views: VIEWS.map((v) => ({
-                  id: v,
-                  label: _(`backend.chrome.view.${v}`),
-                  icon: v === 'kanban' ? 'layout-grid' : 'list',
-                  path: withParam(url, 'view', v),
-                  active: v === view,
+                tailMenus:
+                  view === 'list'
+                    ? [
+                        {
+                          id: 'columns',
+                          label: _('backend.table.columns'),
+                          items: [
+                            {
+                              id: 'id',
+                              label: _('backend.table.id'),
+                              active: shown.includes('id'),
+                              path: colsHref(url)(
+                                shown.includes('id') ? shown.filter((key) => key !== 'id') : [...shown, 'id'],
+                              ),
+                            },
+                          ],
+                        },
+                      ]
+                    : [],
+                views: VIEWS.map((candidate) => ({
+                  id: candidate,
+                  label: _(`backend.chrome.view.${candidate}`),
+                  icon: candidate === 'kanban' ? 'layout-grid' : 'list',
+                  path: withParam(url, 'view', candidate),
+                  active: candidate === view,
                 })),
               },
             },
-            { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
+            grid,
             count,
             extensionActions,
           )

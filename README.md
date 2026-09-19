@@ -86,6 +86,7 @@ DATABASE_URL=postgres://… npm start         # …or on Postgres
 npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
 npm run build:watch                         # rebuild dist for a linked consumer
+npm run start -- --watch                    # restart the emitted server as build artifacts change
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + full tests + type proof
 npm run test:groups                         # list auto-discovered CI test groups
@@ -106,6 +107,8 @@ complete schema, and serves. The runtime never installs or removes modules.
 this checkout and consumes package `dist` artifacts. It debounces changes, serializes
 builds, and writes the gitignored `.ket-build-watch-ready` marker only after a
 successful build so the consumer can safely rebuild against the new declarations.
+Pair it with `ket serve --watch` (or `npm run start -- --watch`) to restart the
+server after each emitted-artifact update.
 
 The production worker is a separate process role of the same deployment artifact:
 `ket worker --deployment ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued

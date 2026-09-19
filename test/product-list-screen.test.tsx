@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { html, renderToString } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { productsScreen } from '../packages/ketsuite/src/modules/product_backend/screens/list.tsx'
+import {
+  productsScreen,
+  templateColumns,
+} from '../packages/ketsuite/src/modules/product_backend/screens/list.tsx'
+import { ketTable } from '../packages/ketsuite/src/ui/client/ket-table-view.tsx'
+import { ketTableDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
 
 const messages: Record<string, string> = {
   'product_backend.menu.app': 'Sản phẩm',
@@ -61,6 +66,24 @@ const rows = [
   },
 ]
 
+const grid = (items = rows) =>
+  ketTable({
+    id: 'product-table',
+    config: {
+      ...ketTableDemoConfig,
+      columns: templateColumns(translate),
+      rows: items,
+      total: items.length,
+      pager: false,
+      rowHrefTemplate: recordHref('{id}'),
+      labels: {
+        ...ketTableDemoConfig.labels,
+        empty: translate('product_backend.screen.empty.message'),
+        emptyHint: translate('product_backend.screen.empty.hint'),
+      },
+    },
+  }).view()
+
 test('product list: follows the design-system list hierarchy without a duplicate topbar', () => {
   const html = renderToString(
     productsScreen(
@@ -88,6 +111,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
             actions: [{ id: 'archive', label: 'Lưu trữ' }],
           },
           search: { name: 'q', placeholder: 'Tìm sản phẩm…' },
+          searchContent: <div data-ui="search-filter-test-marker">Bộ lọc mới</div>,
           pager: { from: 1, to: 1, total: 24 },
           views: [
             { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: true },
@@ -95,8 +119,9 @@ test('product list: follows the design-system list hierarchy without a duplicate
           ],
         },
       },
-      {},
+      grid(),
       24,
+      undefined,
     ),
   )
 
@@ -120,8 +145,16 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.match(html, /href="\/admin\/product\/templates\/new\?lang=vi"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-controls"[\s\S]*?search-filter-test-marker/,
   )
+  assert.match(
+    html,
+    /data-ui="chrome-search-content"[\s\S]*?search-filter-test-marker[\s\S]*?data-ui="chrome-tail"/,
+  )
+  assert.doesNotMatch(html, /data-ui="chrome-search"/)
+  assert.match(html, /data-ui="ket-table"/)
+  assert.doesNotMatch(html, /data-ui="table"/)
+  assert.match(html, /data-ui="list-chrome"[\s\S]*?data-ui="pager"[\s\S]*?data-ui="view-switch"/)
   assert.doesNotMatch(html, /data-ui="list-page-status"/)
   assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?24 sản phẩm/)
   const controls = html.slice(
@@ -135,13 +168,13 @@ test('product list: follows the design-system list hierarchy without a duplicate
 })
 
 test('product list: keeps empty and kanban states inside the same page baseline', () => {
-  const empty = renderToString(productsScreen(translate, [], 'list', recordHref, {}, {}, 0))
+  const empty = renderToString(productsScreen(translate, [], 'list', recordHref, {}, grid([]), 0))
   assert.match(empty, /data-ui="list-page"/)
   assert.match(empty, /data-ui="empty"/)
   assert.match(empty, /Chưa có sản phẩm nào/)
   assert.match(empty, /0 sản phẩm/)
 
-  const kanban = renderToString(productsScreen(translate, rows, 'kanban', recordHref, {}, {}, 1))
+  const kanban = renderToString(productsScreen(translate, rows, 'kanban', recordHref, {}, null, 1))
   assert.match(kanban, /data-ui="kanban"/)
   assert.match(kanban, /data-ui="list-page-body"/)
   assert.match(
@@ -158,7 +191,7 @@ test('product list: renders contributed catalogue actions beside native actions'
       'list',
       recordHref,
       {},
-      {},
+      grid(),
       1,
       html`<a data-ui="action" href="/admin/channels/products">Kênh bán</a>`,
     ),

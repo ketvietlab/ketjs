@@ -15,6 +15,16 @@ export const HOOKS = [
   'search-filter-columns',
   'search-filter-column',
   'search-filter-column-title',
+  'search-filter-grouping',
+  'search-filter-grouping-head',
+  'search-filter-grouping-list',
+  'search-filter-grouping-item',
+  'search-filter-grouping-order',
+  'search-filter-grouping-label',
+  'search-filter-grouping-actions',
+  'search-filter-grouping-action',
+  'search-filter-grouping-clear',
+  'search-filter-grouping-add-label',
   'custom-filter',
   'custom-filter-row',
   'custom-filter-add',
@@ -56,6 +66,9 @@ export type SearchFilterOperator =
   | 'isFalse'
   | 'isSet'
   | 'isNotSet'
+
+/** The density of the search bar; `compact` uses the small control-height token. */
+export type SearchFilterSize = 'default' | 'compact'
 
 const defaultOperators: Record<SearchFilterFieldType, readonly SearchFilterOperator[]> = {
   text: ['contains', 'notContains', 'equals', 'notEquals', 'startsWith', 'isSet', 'isNotSet'],
@@ -116,6 +129,13 @@ export type SearchGroupByOption = {
 }
 
 export type SearchFavorite = { id: string; label: string; isDefault: boolean; active: boolean }
+export type SearchFilterCustomRule = {
+  id: string
+  field: string
+  operator: SearchFilterOperator
+  value: string
+  label: string
+}
 
 export type SearchFilterManager = {
   applyFunction: string
@@ -134,6 +154,11 @@ export type SearchFilterLabels = {
   toggleLabel: string
   filters: string
   groupBy: string
+  groupByApplied?: string
+  groupByAdd?: string
+  groupByClear?: string
+  groupByMoveEarlier?: string
+  groupByMoveLater?: string
   favorites: string
   /** The field-less suggestion: `${searchGenericLabel}: "query"`. */
   searchGenericLabel: string
@@ -159,12 +184,18 @@ export type SearchFilterLabels = {
 
 export type SearchFilterConfig = {
   name: string
+  /** Keeps the standard interaction while reducing the search bar's visual density. */
+  size?: SearchFilterSize
   query?: string
   facets: SearchFacet[]
   filters: SearchFilterOption[]
   groupBy: SearchGroupByOption[]
+  /** Maximum simultaneous grouping levels supported by the consumer. */
+  maxGroupBy?: number
   favorites: SearchFavorite[]
   customFilterFields: CustomFilterField[]
+  /** Rules already encoded in the server-rendered list state. */
+  customFilters?: SearchFilterCustomRule[]
   labels: SearchFilterLabels
   manager?: SearchFilterManager
 }
@@ -196,7 +227,14 @@ const flatten = <Option extends { id: string; label: string; options?: Option[] 
 
 export function createSearchFilterView(props: SearchFilterIslandProps): IslandController {
   const { config } = props
-  const labels = config.labels
+  const labels = {
+    groupByApplied: config.labels.groupBy,
+    groupByAdd: config.labels.customGroupByPlaceholder,
+    groupByClear: config.labels.clear,
+    groupByMoveEarlier: 'Move earlier',
+    groupByMoveLater: 'Move later',
+    ...config.labels,
+  }
   const manager = config.manager
   const groupByOptions = flatten(config.groupBy)
   // A free-text query against a boolean field has no natural meaning, so it is
@@ -205,7 +243,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
 
   const facets = signal<SearchFacet[]>(config.facets)
   const favorites = signal<SearchFavorite[]>(config.favorites)
-  const customFilterRules = signal<Record<string, CustomFilterRule>>({})
+  const customFilterRules = signal<Record<string, CustomFilterRule>>(
+    Object.fromEntries(
+      (config.customFilters ?? []).map((rule) => [
+        rule.id,
+        { field: rule.field, operator: rule.operator, value: rule.value },
+      ]),
+    ),
+  )
   const query = signal(config.query ?? '')
   const suggestionsOpen = signal(false)
   const customFilterField = signal('')
@@ -222,6 +267,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const countOf = (kind: SearchFacet['type']): number =>
     facets().filter((facet) => facet.type === kind).length
   const activeFavoriteId = (): string => facets().find((facet) => facet.type === 'favorite')?.id ?? ''
+  const groupByFacets = (): SearchFacet[] => facets().filter((facet) => facet.type === 'groupBy')
   const operatorsFor = (fieldValue: string): readonly SearchFilterOperator[] => {
     const field = config.customFilterFields.find((entry) => entry.value === fieldValue)
     return field ? defaultOperators[field.type] : []
@@ -241,14 +287,17 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     customFilters: Object.entries(customFilterRules()).map(([id, rule]) => ({ id, ...rule })),
   })
 
+  let applyVersion = 0
   const apply = async (): Promise<void> => {
     if (!manager?.applyFunction) return
+    const version = ++applyVersion
     pending.set(true)
     error.set('')
     try {
       const value = (await callApi(manager.applyFunction, applyPayload())) as
         | { html?: unknown; href?: unknown }
         | undefined
+      if (version !== applyVersion) return
       const body = document.getElementById(manager.bodyId)
       if (body && typeof value?.html === 'string') body.innerHTML = value.html
       // A bare `pushState` only edits the address bar — nothing reads the URL back
@@ -263,13 +312,19 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       }
       if (typeof value?.href === 'string') history.pushState(null, '', value.href)
     } catch (caught) {
+      if (version !== applyVersion) return
       error.set(caught instanceof Error ? caught.message : labels.applyError)
     } finally {
-      pending.set(false)
+      if (version === applyVersion) pending.set(false)
     }
   }
 
+  const clearFavorite = (): void => {
+    if (activeFavoriteId()) facets.set(facets().filter((facet) => facet.type !== 'favorite'))
+  }
+
   const removeFacet = (facet: SearchFacet): void => {
+    if (facet.type !== 'favorite') clearFavorite()
     facets.set(facets().filter((held) => held.id !== facet.id))
     if (customFilterRules()[facet.id]) {
       const next = { ...customFilterRules() }
@@ -280,6 +335,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   }
 
   const toggleFilter = (option: SearchFilterOption): void => {
+    clearFavorite()
     if (isActive('filter', option.id)) {
       removeFacet({ id: option.id, type: 'filter', label: option.label })
       return
@@ -289,6 +345,8 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   }
 
   const toggleGroupBy = (option: SearchGroupByOption): void => {
+    if (!isActive('groupBy', option.id) && groupByFacets().length >= (config.maxGroupBy ?? Infinity)) return
+    clearFavorite()
     if (isActive('groupBy', option.id)) {
       removeFacet({ id: option.id, type: 'groupBy', label: option.label })
       return
@@ -305,6 +363,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     const label = isValuelessOperator(operator)
       ? `${field.label} ${operatorLabels[operator]}`
       : `${field.label} ${operatorLabels[operator]}${value ? ` "${value}"` : ''}`
+    clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
     customFilterRules.set({ ...customFilterRules(), [id]: { field: field.value, operator, value } })
     facets.set([...facets(), { id, type: 'filter', label }])
@@ -323,7 +382,11 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const selectGenericSuggestion = (): void => {
     const value = query().trim()
     if (!value) return
-    facets.set([...facets(), { id: `query:${crypto.randomUUID()}`, type: 'field', label: value }])
+    clearFavorite()
+    facets.set([
+      ...facets().filter((facet) => facet.type !== 'field'),
+      { id: `query:${crypto.randomUUID()}`, type: 'field', label: value },
+    ])
     query.set('')
     suggestionsOpen.set(false)
     void apply()
@@ -333,6 +396,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     const value = query().trim()
     if (!value) return
     const operator = defaultSearchOperator(field.type)
+    clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
     customFilterRules.set({ ...customFilterRules(), [id]: { field: field.value, operator, value } })
     facets.set([...facets(), { id, type: 'filter', label: `${field.label}: "${value}"` }])
@@ -356,6 +420,25 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       ...facets().filter((held) => held.type !== 'favorite'),
       { id: favorite.id, type: 'favorite', label: favorite.label },
     ])
+    void apply()
+  }
+
+  const moveGroupBy = (facet: SearchFacet, direction: -1 | 1): void => {
+    const grouped = groupByFacets()
+    const from = grouped.findIndex((entry) => entry.id === facet.id)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= grouped.length) return
+    const next = [...grouped]
+    ;[next[from], next[to]] = [next[to]!, next[from]!]
+    clearFavorite()
+    facets.set([...facets().filter((entry) => entry.type !== 'groupBy'), ...next])
+    void apply()
+  }
+
+  const clearGroupBy = (): void => {
+    if (!groupByFacets().length) return
+    clearFavorite()
+    facets.set(facets().filter((facet) => facet.type !== 'groupBy'))
     void apply()
   }
 
@@ -397,7 +480,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     pending.set(true)
     error.set('')
     try {
-      await callApi(manager.deleteFavoriteFunction, { id: favorite.id })
+      await callApi(manager.deleteFavoriteFunction, { ...(manager.applyInput ?? {}), id: favorite.id })
       favorites.set(favorites().filter((entry) => entry.id !== favorite.id))
       if (activeFavoriteId() === favorite.id)
         removeFacet({ id: favorite.id, type: 'favorite', label: favorite.label })
@@ -413,7 +496,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     pending.set(true)
     error.set('')
     try {
-      await callApi(manager.setDefaultFavoriteFunction, { id: favorite.id })
+      await callApi(manager.setDefaultFavoriteFunction, { ...(manager.applyInput ?? {}), id: favorite.id })
       favorites.set(favorites().map((entry) => ({ ...entry, isDefault: entry.id === favorite.id })))
     } catch (caught) {
       error.set(caught instanceof Error ? caught.message : labels.applyError)
@@ -469,8 +552,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         <button
           data-ui="menu-item"
           type="button"
-          role="menuitemcheckbox"
-          aria-checked={String(active)}
+          aria-pressed={String(active)}
           onClick={() => toggleFilter(option)}
         >
           <span data-ui="menu-item-check" aria-hidden="true">
@@ -510,14 +592,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         </>
       )
     const active = isActive('groupBy', option.id)
+    if (active) return <></>
     return (
       <>
         {divider}
         <button
           data-ui="menu-item"
           type="button"
-          role="menuitemcheckbox"
-          aria-checked={String(active)}
+          disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
           onClick={() => toggleGroupBy(option)}
         >
           <span data-ui="menu-item-check" aria-hidden="true">
@@ -573,6 +655,67 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     </h3>
   )
 
+  const groupByPipeline = (): TemplateResult => {
+    const grouped = groupByFacets()
+    if (!grouped.length) return <></>
+    return (
+      <section data-ui="search-filter-grouping" aria-label={labels.groupByApplied}>
+        <div data-ui="search-filter-grouping-head">
+          <span>{labels.groupByApplied}</span>
+          <button data-ui="search-filter-grouping-clear" type="button" onClick={clearGroupBy}>
+            {labels.groupByClear}
+          </button>
+        </div>
+        <ol data-ui="search-filter-grouping-list">
+          {each(
+            grouped,
+            (facet) => facet.id,
+            (facet, index) => (
+              <li data-ui="search-filter-grouping-item">
+                <span data-ui="search-filter-grouping-order">{String(index + 1)}</span>
+                <span data-ui="search-filter-grouping-label">{facet.label}</span>
+                <span data-ui="search-filter-grouping-actions">
+                  {index > 0 && (
+                    <button
+                      data-ui="search-filter-grouping-action"
+                      type="button"
+                      aria-label={`${labels.groupByMoveEarlier}: ${facet.label}`}
+                      title={`${labels.groupByMoveEarlier}: ${facet.label}`}
+                      onClick={() => moveGroupBy(facet, -1)}
+                    >
+                      ↑
+                    </button>
+                  )}
+                  {index + 1 < grouped.length && (
+                    <button
+                      data-ui="search-filter-grouping-action"
+                      type="button"
+                      aria-label={`${labels.groupByMoveLater}: ${facet.label}`}
+                      title={`${labels.groupByMoveLater}: ${facet.label}`}
+                      onClick={() => moveGroupBy(facet, 1)}
+                    >
+                      ↓
+                    </button>
+                  )}
+                  <button
+                    data-ui="search-filter-grouping-action"
+                    data-action="remove"
+                    type="button"
+                    aria-label={`${labels.clear}: ${facet.label}`}
+                    title={`${labels.clear}: ${facet.label}`}
+                    onClick={() => removeFacet(facet)}
+                  >
+                    ×
+                  </button>
+                </span>
+              </li>
+            ),
+          )}
+        </ol>
+      </section>
+    )
+  }
+
   return {
     view: () => (
       <div
@@ -580,6 +723,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         role="search"
         aria-label={labels.searchLabel}
         data-name={config.name}
+        data-size={config.size ?? 'default'}
         data-busy={pending() ? 'true' : null}
       >
         {error() ? (
@@ -594,8 +738,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         ) : null}
         <div data-ui="search-filter-bar">
           <div data-ui="search-filter-field">
-            {facets().length ? (
-              <ul data-ui="search-filter-facets">{each(facets(), (facet) => facet.id, facetChip)}</ul>
+            {facets().some((facet) => facet.type !== 'groupBy') ? (
+              <ul data-ui="search-filter-facets">
+                {each(
+                  facets().filter((facet) => facet.type !== 'groupBy'),
+                  (facet) => facet.id,
+                  facetChip,
+                )}
+              </ul>
             ) : null}
             <input
               data-ui="search-filter-input"
@@ -611,13 +761,8 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
               }}
             />
             {suggestionsOpen() && query().trim() ? (
-              <div data-ui="search-filter-suggestions" role="listbox" aria-label={labels.searchGenericLabel}>
-                <button
-                  data-ui="search-filter-suggestion"
-                  type="button"
-                  role="option"
-                  onClick={selectGenericSuggestion}
-                >
+              <div data-ui="search-filter-suggestions" role="group" aria-label={labels.searchGenericLabel}>
+                <button data-ui="search-filter-suggestion" type="button" onClick={selectGenericSuggestion}>
                   {labels.searchGenericLabel}: <b>"{query().trim()}"</b>
                 </button>
                 {each(
@@ -627,7 +772,6 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
                     <button
                       data-ui="search-filter-suggestion"
                       type="button"
-                      role="option"
                       onClick={() => selectFieldSuggestion(field)}
                     >
                       {labels.searchFieldPrefix} <b>{field.label}</b> {labels.searchFieldPreposition}:{' '}
@@ -650,14 +794,13 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
           >
             <summary
               data-ui="search-filter-toggle"
-              aria-haspopup="menu"
               aria-label={labels.toggleLabel}
               title={labels.toggleLabel}
             >
               <span aria-hidden="true">▾</span>
               {facets().length ? <span data-ui="menu-trigger-count">{String(facets().length)}</span> : null}
             </summary>
-            <div data-ui="menu-panel" role="menu" aria-label={labels.toggleLabel}>
+            <div data-ui="menu-panel" role="group" aria-label={labels.toggleLabel}>
               <div data-ui="search-filter-columns">
                 <div data-ui="search-filter-column" data-facet-type="filter">
                   {columnTitle(labels.filters, countOf('filter'))}
@@ -738,6 +881,10 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
                 </div>
                 <div data-ui="search-filter-column" data-facet-type="groupBy">
                   {columnTitle(labels.groupBy, countOf('groupBy'))}
+                  {groupByPipeline()}
+                  {config.groupBy.length ? (
+                    <p data-ui="search-filter-grouping-add-label">{labels.groupByAdd}</p>
+                  ) : null}
                   {each(
                     config.groupBy,
                     (option) => option.id,
@@ -748,6 +895,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
                   {groupByOptions.length ? (
                     <select
                       data-ui="custom-group-by"
+                      disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
                       aria-label={labels.customGroupByPlaceholder}
                       onChange={(event) => {
                         if (!(event.currentTarget instanceof HTMLSelectElement)) return
@@ -823,7 +971,24 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         </div>
       </div>
     ),
+    mount: ({ root, lifetime }) => {
+      // Autocomplete is an island-owned popup rather than a native <details>
+      // disclosure, so the shared details-menu dismissor cannot see it. Keep
+      // the boundary local to the component: an outside click abandons the
+      // suggestions without changing the query the reader has entered.
+      document.addEventListener(
+        'click',
+        (event) => {
+          if (!suggestionsOpen()) return
+          const target = event.target
+          if (target instanceof Node && (root as unknown as Node).contains(target)) return
+          suggestionsOpen.set(false)
+        },
+        { signal: lifetime },
+      )
+    },
     dispose: () => {
+      applyVersion++
       pending.set(false)
     },
   }

@@ -79,6 +79,33 @@ label on the left and the control on the right, including narrow panels; only th
 a row collapses. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
 screens.
 
+### SearchFilter and KetTable
+
+SearchFilter owns its popup geometry. The panel anchors to the search bar, fits its container, and
+switches from stacked sections to three columns using the component's container query. Consumers
+must not compensate with sidebar-width calculations or raise the entire application main layer.
+`size: 'compact'` changes the bar density. `maxGroupBy` optionally limits grouping depth while leaving
+removal and reordering available. The added grouping labels are optional for existing consumers.
+
+KetTable supports two delivery modes through the same public `createKetTableView` contract:
+
+- **RPC:** supply `manager` for client-driven sorting, paging and group loading.
+- **URL-driven:** supply server-rendered rows and groups, column `sortHref`, and group `href`/`open`.
+  Nested group expansion is explicit at every depth. Group `pager` accepts `label`, `prev` and `next`.
+  `page` and `sort` seed the current state. `pager: false` leaves paging to the existing page toolbar;
+  otherwise `pager: { prev, next }` renders native links (page size comes from `manager.pageSize`,
+  default 50). Native navigation preserves bookmarks, server permissions and record-modal links.
+
+Both modes share row selection and external bulk forms. The primary `kt-row-link` has
+`data-primary="true"`; its hit area spans the row while checkboxes and cell controls remain separate.
+An empty grouped result uses the same empty-state contract as a flat result.
+`locale` controls formatted cells. Currency cells and `FormattedMoney` accept decimal strings without
+coercing them through a floating-point number, preserving database precision.
+
+Custom cells register through `KetTableExtensions` in one shared SSR/client adapter, not through
+callbacks serialized in island props. KetSuite's `thumbnail-label` renderer intentionally reuses the
+existing backend thumbnail compatibility primitive pending that primitive's public promotion.
+
 ### Record and workspace composition
 
 Wave 5 adds description lists, people, avatar groups, status, formatted values, record summaries,

@@ -71,11 +71,13 @@ export type {
   CustomFilterField,
   SearchFacet,
   SearchFavorite,
+  SearchFilterCustomRule,
   SearchFilterConfig,
   SearchFilterFieldType,
   SearchFilterLabels,
   SearchFilterManager,
   SearchFilterOperator,
+  SearchFilterSize,
   SearchFilterOption,
   SearchGroupByOption,
 } from './interactions/search-filter/index.tsx'

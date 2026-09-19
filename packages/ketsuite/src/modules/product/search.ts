@@ -66,4 +66,8 @@ export const productListSearch = (T: Table) =>
       { key: 'purchase', label: 'Can be purchased', group: 'purchase', expr: eq(T.purchaseOk!, true) },
     ],
     defaultSort: [{ key: 'name', dir: 'asc' }],
+    // Product managers often classify across category, availability, sales and
+    // purchase status together. The generic list default is three levels; this
+    // catalogue deliberately supports the four-stage pipeline the UI exposes.
+    limits: { maxGroups: 4 },
   })

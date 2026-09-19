@@ -57,6 +57,105 @@ async function seedProduct(call: HttpCall) {
   })
 }
 
+test('product catalogue: uses SearchFilter and preserves a four-field group pipeline in the URL', async (t) => {
+  const { e2e, call } = await bootSuite(t)
+  await seedProduct(call)
+
+  const page = await e2e.client.get('/admin/product/templates?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(page.status, 200)
+  const html = await page.text()
+  assert.match(html, /data-island="backend\.search-filter"/)
+  assert.match(html, /data-ui="search-filter"/)
+  assert.match(html, /data-island="backend\.ket-table"/)
+  assert.match(html, /data-ui="kt-row" data-row="tpl"/)
+  assert.match(html, /data-col="listPrice"[^>]*>[\s\S]*?100/)
+  assert.doesNotMatch(html, /data-ui="table"/)
+  assert.doesNotMatch(html, /data-ui="chrome-search"/)
+
+  const href = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates?lang=vi',
+      facets: [],
+      groupBy: ['categoryId', 'active', 'saleOk', 'purchaseOk'],
+      customFilters: [],
+    })
+  ).value.href
+  const grouped = new URL(href, 'http://ket.local')
+  assert.deepEqual(grouped.searchParams.getAll('group'), ['categoryId', 'active', 'saleOk', 'purchaseOk'])
+  assert.equal(grouped.searchParams.get('lang'), 'vi')
+  let groupHref = href
+  for (let depth = 0; depth < 4; depth++) {
+    const response = await e2e.client.get(groupHref, { headers: { accept: 'text/html' } })
+    assert.equal(response.status, 200)
+    const groupHtml = await response.text()
+    const closed = groupHtml.match(/data-ui="kt-group-toggle" href="([^"]+)" aria-expanded="false"/)
+    assert.ok(closed, `grouping level ${depth + 1} must be expandable`)
+    groupHref = closed[1]!.replaceAll('&amp;', '&')
+  }
+  const leaf = await e2e.client.get(groupHref, { headers: { accept: 'text/html' } })
+  assert.match(await leaf.text(), /data-ui="kt-row" data-row="tpl"/)
+
+  const favorite = await call<{ id: string }>('product_backend.saveSearchFavorite', {
+    name: 'Nhóm sản phẩm để kiểm thử',
+    isDefault: true,
+    state: {
+      returnTo: '/admin/product/templates?lang=vi',
+      facets: [],
+      groupBy: ['categoryId', 'active', 'saleOk', 'purchaseOk'],
+      customFilters: [],
+    },
+  })
+  const favoriteHref = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates?lang=vi',
+      favoriteId: favorite.value.id,
+      facets: [],
+      groupBy: [],
+      customFilters: [],
+    })
+  ).value.href
+  assert.deepEqual(new URL(favoriteHref, 'http://ket.local').searchParams.getAll('group'), [
+    'categoryId',
+    'active',
+    'saleOk',
+    'purchaseOk',
+  ])
+
+  const cleared = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: favoriteHref,
+      facets: [],
+      groupBy: [],
+      customFilters: [],
+    })
+  ).value.href
+  const clearedPage = await e2e.client.get(cleared, { headers: { accept: 'text/html' } })
+  assert.doesNotMatch(await clearedPage.text(), /data-ui="kt-group-row"/)
+
+  const typed = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates',
+      query: 'Áo thun',
+      facets: [],
+      groupBy: ['type'],
+    })
+  ).value.href
+  assert.equal(new URL(typed, 'http://ket.local').searchParams.get('q'), 'Áo thun')
+
+  await call('product_backend.deleteSearchFavorite', { id: favorite.value.id })
+  const deletedFavorite = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates',
+      favoriteId: favorite.value.id,
+      facets: [],
+      groupBy: [],
+    })
+  ).value.href
+  assert.deepEqual(new URL(deletedFavorite, 'http://ket.local').searchParams.getAll('group'), [])
+})
+
 test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', async (t) => {
   const { e2e, call } = await bootSuite(t)
   await seedProduct(call)
