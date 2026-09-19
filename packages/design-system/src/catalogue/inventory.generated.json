@@ -8823,6 +8823,7 @@
         "test/flow-e2e.test.ts",
         "test/flow-productization.test.ts",
         "test/hospitality-stay-notices.test.ts",
+        "test/ketsuite-watch.test.ts",
         "test/pg-live.test.ts",
         "test/queue.test.ts"
       ],

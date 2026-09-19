@@ -87,6 +87,7 @@ npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
 npm run build:watch                         # rebuild dist for a linked consumer
 npm run start -- --watch                    # restart the emitted server as build artifacts change
+npx tsx packages/ketsuite/src/cli.ts serve --demo-data --watch # build source/assets and restart KetSuite
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + full tests + type proof
 npm run test:groups                         # list auto-discovered CI test groups
@@ -109,6 +110,14 @@ builds, and writes the gitignored `.ket-build-watch-ready` marker only after a
 successful build so the consumer can safely rebuild against the new declarations.
 Pair it with `ket serve --watch` (or `npm run start -- --watch`) to restart the
 server after each emitted-artifact update.
+
+In this source checkout, `ketsuite serve --watch` owns both steps: it runs the initial
+build, watches authored TypeScript/templates/CSS, and restarts the emitted KetSuite
+server only after a successful build. Do not run `build:watch` alongside this command.
+Build failures are logged and the watcher remains active; Ctrl-C stops its build and
+server children. The same command accepts `--dev-admin` and `--demo-data`. This
+checkout-only mode requires the repository development dependencies; it does not
+provide automatic browser reload and is not available in an npm-installed package.
 
 The production worker is a separate process role of the same deployment artifact:
 `ket worker --deployment ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
