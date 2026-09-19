@@ -269,6 +269,8 @@ const sources = {
       'bootstrap.defaults': ['configure', 'configure', 'crm.configuration-audit'],
       'calendar.list': ['read', 'view'],
       'case.addMessage': ['operate', 'agent-operate'],
+      'case.logInteraction': ['operate', 'agent-operate'],
+      'report.sales': ['read', 'report'],
       'case.assign': ['approve', 'assignment', 'crm.assignment-policy'],
       'case.convertLead': ['operate', 'agent-operate'],
       'case.count': ['read', 'view'],
