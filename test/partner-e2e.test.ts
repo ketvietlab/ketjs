@@ -169,9 +169,11 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   // check, not by this SSR-only fetch.
   assert.match(partnerList, /data-ui="kt-row-select"[^>]*aria-label="Chọn dòng: customer"/)
   assert.match(partnerList, /data-ui="kt-select-persisted"/)
+  // Since the collection controls moved into ListPage, bulk actions share the
+  // identity band with Create rather than sitting in a strip under the toolbar.
   assert.match(
     partnerList,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"/,
+    /data-ui="list-page-tools"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"/,
   )
   assert.match(
     partnerList,

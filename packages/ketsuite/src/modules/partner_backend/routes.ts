@@ -10,7 +10,7 @@ import type { AnyRow, Req } from '../backend/screen.ts'
 import type { TableSelection } from '../../ui/index.ts'
 import { tableGrid } from '../backend/ket-table.ts'
 import type { KetTableColumn, KetTableGroup } from '../backend/ket-table.ts'
-import { searchFilterBar } from '../backend/search-filter.ts'
+import { searchFilterBar, searchFilterLabels } from '../backend/search-filter.ts'
 import type { SearchFacet, SearchFilterConfig } from '../backend/search-filter.ts'
 
 /** The only two fields the partner list can currently be grouped by. */
@@ -481,37 +481,10 @@ export const routes: Record<string, RouteEntry> = {
         ],
         favorites: [],
         customFilterFields: [],
-        labels: {
+        labels: searchFilterLabels(_, {
           searchLabel: _('partner_backend.search.label'),
           searchPlaceholder: _('partner_backend.search.placeholder'),
-          toggleLabel: _('partner_backend.search.toggle'),
-          filters: _('partner_backend.search.filters'),
-          groupBy: _('partner_backend.search.groupBy'),
-          groupByApplied: _('partner_backend.search.groupByApplied'),
-          groupByAdd: _('partner_backend.search.groupByAdd'),
-          groupByClear: _('partner_backend.search.groupByClear'),
-          groupByMoveEarlier: _('partner_backend.search.groupByMoveEarlier'),
-          groupByMoveLater: _('partner_backend.search.groupByMoveLater'),
-          favorites: _('partner_backend.search.favorites'),
-          searchGenericLabel: _('partner_backend.search.genericLabel'),
-          searchFieldPrefix: _('partner_backend.search.fieldPrefix'),
-          searchFieldPreposition: _('partner_backend.search.fieldPreposition'),
-          customFilterField: _('partner_backend.search.customFilterField'),
-          customFilterOperator: _('partner_backend.search.customFilterOperator'),
-          customFilterValue: _('partner_backend.search.customFilterValue'),
-          customFilterAdd: _('partner_backend.search.customFilterAdd'),
-          customGroupByPlaceholder: _('partner_backend.search.customGroupByPlaceholder'),
-          saveSearch: _('partner_backend.search.saveSearch'),
-          favoriteName: _('partner_backend.search.favoriteName'),
-          favoriteDefault: _('partner_backend.search.favoriteDefault'),
-          favoriteSaveAction: _('partner_backend.search.favoriteSaveAction'),
-          favoriteRemove: _('partner_backend.search.favoriteRemove'),
-          favoriteSetDefault: _('partner_backend.search.favoriteSetDefault'),
-          noFavorites: _('partner_backend.search.noFavorites'),
-          clear: _('partner_backend.search.clear'),
-          applyError: _('partner_backend.search.applyError'),
-          retry: _('partner_backend.search.retry'),
-        },
+        }),
         manager: {
           applyFunction: 'partner_backend.applyFilter',
           bodyId: 'partner-directory-table',
