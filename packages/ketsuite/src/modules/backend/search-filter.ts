@@ -1,5 +1,5 @@
 import { validateListState } from '@ketvietlab/ketjs'
-import type { ListSearchSpec, ListState, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
+import type { ListSearchShape, ListState, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import type {
   SearchFacet,
@@ -79,7 +79,7 @@ export type ListSearchFilterOptions = {
   /** The bar's own name, and the id of the body its apply replaces. */
   name: string
   bodyId: string
-  spec: ListSearchSpec
+  spec: ListSearchShape
   state: ListState
   favorites: readonly ListFavorite[]
   /** The module's word for a spec field, given the spec's English fallback. */
@@ -98,7 +98,7 @@ export type ListSearchFilterOptions = {
 }
 
 /**
- * The bar a `ListSearchSpec` describes.
+ * The bar a `ListSearchShape` describes.
  *
  * Every list's bar is the same shape — presets as filters, groupable fields as
  * group-by options, filterable fields as custom-rule fields, the state's own
@@ -245,7 +245,7 @@ export const loadListFavorites = async (
   ctx: ServeContext,
   url: URL,
   req: Req,
-  spec: ListSearchSpec,
+  spec: ListSearchShape,
   state: ListState,
 ): Promise<ListFavorite[]> => {
   const loaded = (await ctx.callUnchecked(

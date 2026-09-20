@@ -1,4 +1,7 @@
 import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { warehouseListSearch } from './search.ts'
+
 import { randomUUID } from 'node:crypto'
 import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -54,6 +57,14 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
 import { adminPage, frameOf, inLocale, printGroup } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+
+/** Every stock list shares one set of search-filter functions; see `functions.ts`. */
+const stockSearchFunctions = {
+  apply: 'stock_backend.applySearchFilter',
+  saveFavorite: 'stock_backend.saveSearchFavorite',
+  deleteFavorite: 'stock_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'stock_backend.setDefaultSearchFavorite',
+}
 
 const options = (rows: AnyRow[]) => rows.map((row) => ({ value: String(row.id), label: String(row.name) }))
 /** A stable stock code in the reader's language; the code itself survives as data. */
@@ -579,32 +590,32 @@ export const routes: Record<string, RouteEntry> = {
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: 'stock_backend.warehouses',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/warehouses')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: warehouseListSearch,
+            frame,
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              code: String(row.code),
+              receptionSteps: String(row.receptionSteps),
+              deliverySteps: String(row.deliverySteps),
+            })),
+            name: 'stock-warehouse-filter',
+            bodyId: 'stock-warehouse-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.warehouses') },
+            groupLabel: (key, value) => _(`stock_backend.${key}.${String(value)}`),
+          })
           const list = warehousesListScreen(
             _,
             {
-              rows: searchCollectionRows(
-                url,
-                rows.map((row) => ({
-                  id: String(row.id),
-                  name: String(row.name),
-                  code: String(row.code),
-                  receptionSteps: String(row.receptionSteps),
-                  deliverySteps: String(row.deliverySteps),
-                })),
-                (row) =>
-                  String(row.name ?? '') +
-                  ' ' +
-                  String(row.code ?? '') +
-                  ' ' +
-                  String(row.receptionSteps ?? '') +
-                  ' ' +
-                  String(row.deliverySteps ?? ''),
-              ),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/warehouses'),
             },
-            collectionSearchFrame(url, frame, _('stock_backend.warehouses')),
+            search.frame,
           )
           return createModalOpen(url)
             ? modalWorkspace(

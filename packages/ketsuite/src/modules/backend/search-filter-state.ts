@@ -2,7 +2,7 @@
 //
 // The bar talks to four functions: one that turns the viewer's facets into a
 // href, and three that manage saved searches. None of that reads a domain — it
-// is `ListSearchSpec` in, `ListState` out — yet `product_backend` carried 290
+// is `ListSearchShape` in, `ListState` out — yet `product_backend` carried 290
 // lines of it for one list. A second list would have copied them, and a third
 // would have copied the copy, so the logic lives here and a module declares
 // only which lists it owns.
@@ -12,7 +12,7 @@
 // backend one, and `backend` is a headless module with no bundles to grant.
 import { randomUUID } from 'node:crypto'
 import { defineFn, encodeListState, eq, from, parseListState, validateListState } from '@ketvietlab/ketjs'
-import type { Ctx, FilterOperator, FnSpec, ListSearchSpec, ListState } from '@ketvietlab/ketjs'
+import type { Ctx, FilterOperator, FnSpec, ListSearchShape, ListState } from '@ketvietlab/ketjs'
 
 /** One list the search-filter bar can drive: its key, its page, and its spec. */
 export type ListSearchBinding = {
@@ -21,7 +21,7 @@ export type ListSearchBinding = {
   /** The list's own path. A payload may only ever return the viewer here. */
   path: string
   /** Built per request, because a spec's columns come from the live manifest. */
-  spec: (ctx: Ctx) => ListSearchSpec
+  spec: (ctx: Ctx) => ListSearchShape
 }
 
 type Facet = { id: string; type: string; label: string }
@@ -37,7 +37,7 @@ export type SearchPayload = {
 }
 
 /** The state a list starts from: nothing selected, sorted the way the spec says. */
-export const emptyListState = (spec: ListSearchSpec): ListState => ({
+export const emptyListState = (spec: ListSearchShape): ListState => ({
   presets: [],
   filters: [],
   groupBy: [],

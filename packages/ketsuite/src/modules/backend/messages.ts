@@ -132,6 +132,7 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'chrome.filters': 'Bộ lọc',
     'chrome.groupBy': 'Nhóm theo',
+    'chrome.groupEmpty': 'Chưa đặt',
     'chrome.favorites': 'Yêu thích',
     'chrome.includeArchived': 'Bao gồm đã lưu trữ',
     'chrome.operator.contains': 'chứa',
@@ -275,6 +276,7 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'chrome.filters': 'Filters',
     'chrome.groupBy': 'Group By',
+    'chrome.groupEmpty': 'Not set',
     'chrome.favorites': 'Favorites',
     'chrome.includeArchived': 'Include archived',
     'chrome.operator.contains': 'contains',
