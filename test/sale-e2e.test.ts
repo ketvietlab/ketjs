@@ -219,7 +219,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   const salesDashboardHtml = await salesDashboard.text()
   assert.match(salesDashboardHtml, /Tạo báo giá/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
-  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=draft"/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;preset=draft"/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/orders\?lang=vi"/)
 
   const legacyInvalidRedirect = await e2e.client.post(
