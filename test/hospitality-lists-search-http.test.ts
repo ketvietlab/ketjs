@@ -177,3 +177,26 @@ test('hospitality amenities HTTP: the scope preset narrows what the list shows',
   assert.match(searched, /data-row="pool"/)
   assert.doesNotMatch(searched, /data-row="balcony"/)
 })
+
+test('hospitality billing HTTP: the charge-rule list narrows on what is set and what is missing', async (t) => {
+  const app = await boot(t)
+  const path = '/admin/hospitality/billing/rules'
+
+  const all = await app.client.get(`${path}?lang=vi`)
+  const allHtml = await all.text()
+  assert.equal(all.status, 200)
+  assert.match(allHtml, /data-island="backend\.search-filter"/)
+  // Nothing is configured in a fresh company, so every charge type is missing.
+  assert.match(allHtml, /data-row="room"/)
+  const configured = await (await app.client.get(`${path}?lang=vi&preset=configured`)).text()
+  assert.doesNotMatch(configured, /data-row="room"/)
+  const missing = await (await app.client.get(`${path}?lang=vi&preset=missing`)).text()
+  assert.match(missing, /data-row="room"/)
+
+  const grouped = await (await app.client.get(`${path}?lang=vi&group=configured`)).text()
+  assert.match(grouped, /data-ui="kt-group-toggle"/)
+
+  const billing = await app.client.get('/admin/hospitality/billing?lang=vi')
+  assert.equal(billing.status, 200)
+  assert.match(await billing.text(), /data-island="backend\.search-filter"/)
+})
