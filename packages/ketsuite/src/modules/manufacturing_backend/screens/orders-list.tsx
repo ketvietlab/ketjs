@@ -11,7 +11,7 @@ import {
 } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type ManufacturingOrderListRow = {
   id: string
@@ -24,6 +24,8 @@ export type ManufacturingOrderListRow = {
 }
 
 export type OrdersListScreenOptions = {
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<ManufacturingOrderListRow>>
   rows: ManufacturingOrderListRow[]
   /** Locale-aware `/admin/manufacturing/new` URL supplied by the route. */
   createHref: string
@@ -80,8 +82,9 @@ export const ordersListScreen = (
       id: (row) => row.id,
       rowHref: (row) => row.href,
       columns: manufacturingOrderListColumns(_),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   return shell(
     _,
@@ -101,7 +104,7 @@ export const ordersListScreen = (
       actions={collectionActions(_, collection.frame)}
       footer={`${_('manufacturing_backend.orders.title')}: ${String(collection.total)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, collection.table)
           : emptyState(_('manufacturing_backend.empty.orders'), _('manufacturing_backend.empty.ordersHint'))
       }

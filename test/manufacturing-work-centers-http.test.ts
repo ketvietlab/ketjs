@@ -117,7 +117,12 @@ test('manufacturing work centers HTTP: modal CRUD keeps locale, numeric semantic
   )
   assert.equal(archived.status, 303)
   assert.equal(archived.headers.get('location'), '/admin/manufacturing/work-centers?lang=vi')
-  const archivedList = await (await e2e.client.get('/admin/manufacturing/work-centers?lang=vi')).text()
+  // An archived work center is out of the way until the bar is asked for it.
+  const activeOnly = await (await e2e.client.get('/admin/manufacturing/work-centers?lang=vi')).text()
+  assert.doesNotMatch(activeOnly, /PACK/)
+  const archivedList = await (
+    await e2e.client.get('/admin/manufacturing/work-centers?lang=vi&archived=1')
+  ).text()
   assert.match(archivedList, /PACK/)
   assert.match(archivedList, /data-ui="badge" data-tone="neutral"[\s\S]*?Đã lưu trữ/)
   assert.match(archivedList, /name="action" value="restore"/)

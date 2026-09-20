@@ -13,7 +13,7 @@ import {
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type WorkCenterListRow = {
   id: string
@@ -27,6 +27,8 @@ export type WorkCenterListRow = {
 }
 
 export type WorkCentersListScreenOptions = {
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<WorkCenterListRow>>
   rows: WorkCenterListRow[]
   /** Locale-aware URL that opens the create modal. */
   createHref: string
@@ -108,8 +110,9 @@ export const workCentersListScreen = (
       id: (row) => row.id,
       rowHref: (row) => row.editHref,
       columns: workCenterListColumns(_, options.action),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   return shell(
     _,
@@ -129,7 +132,7 @@ export const workCentersListScreen = (
       actions={collectionActions(_, collection.frame)}
       footer={`${_('manufacturing_backend.workCenters.title')}: ${String(collection.total)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, collection.table)
           : emptyState(
               _('manufacturing_backend.empty.workCenters'),
