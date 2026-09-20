@@ -35,8 +35,6 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
         ],
         total: 31,
         createHref: '/admin/users/new?lang=en',
-        toggleHref: '/admin/users?q=Ada&lang=en',
-        includeArchived: true,
       },
     ),
   )
@@ -47,9 +45,11 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   assert.match(html, /31-31 \/ 31/)
   assert.match(html, /data-row-href="\/admin\/users\/user%2Fa\?lang=en"/)
   assert.match(html, /href="\/admin\/users\/new\?lang=en"/)
+  // The search-filter bar owns the archived toggle, so the header keeps only
+  // the create action before the controls and the table.
   assert.match(
     html,
-    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/users\/new\?lang=en"[\s\S]*?data-ui="list-page-tools"[\s\S]*?href="\/admin\/users\?q=Ada&amp;lang=en"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/users\/new\?lang=en"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
   )
   assert.doesNotMatch(
     html.slice(html.indexOf('data-ui="list-page-toolbar"')),
@@ -69,8 +69,6 @@ test('users list keeps ListPage identity and empty state without decorative page
         rows: [],
         total: 0,
         createHref: '/admin/users/new',
-        toggleHref: '/admin/users?archived=1',
-        includeArchived: false,
       },
     ),
   )
