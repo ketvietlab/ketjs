@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { parseListState, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager } from '../backend/paging.ts'
 import {
   contentScreen,
   entryFormScreen,

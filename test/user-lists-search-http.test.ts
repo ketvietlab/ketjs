@@ -89,9 +89,15 @@ test('identity lists HTTP: roles carry the bar and read its presets', async (t) 
   assert.equal(roles.status, 200)
   assert.match(html, /data-island="backend\.search-filter"/)
   assert.match(html, /data-row="manager"/)
-  assert.doesNotMatch(await (await app.client.get(`${ROLES}?lang=vi&preset=managed`)).text(), /data-row="manager"/)
+  assert.doesNotMatch(
+    await (await app.client.get(`${ROLES}?lang=vi&preset=managed`)).text(),
+    /data-row="manager"/,
+  )
   assert.match(await (await app.client.get(`${ROLES}?lang=vi&preset=custom`)).text(), /data-row="manager"/)
-  assert.match(await (await app.client.get(`${ROLES}?lang=vi&preset=unassigned`)).text(), /data-row="manager"/)
+  assert.match(
+    await (await app.client.get(`${ROLES}?lang=vi&preset=unassigned`)).text(),
+    /data-row="manager"/,
+  )
 })
 
 test('identity lists HTTP: the bar applies and saves searches through the shared functions', async (t) => {
