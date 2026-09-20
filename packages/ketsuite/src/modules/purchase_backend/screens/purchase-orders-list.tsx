@@ -29,12 +29,17 @@ export const purchaseOrdersListScreen = (
   _: Translator,
   options: PurchaseOrdersListScreenOptions,
 ): TemplateResult => {
-  const collection = prepareCollectionTable(_, options.frame, {
-    rows: options.rows,
-    columns: purchaseOrderListColumns(_),
-    id: (row) => String(row.id),
-    ...options.table,
-  })
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      columns: purchaseOrderListColumns(_),
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const summary = `${_('purchase_backend.dashboard.records')}: ${String(total)}`
 
