@@ -270,6 +270,19 @@ const sources = {
       contextLabels: ['internal-route', 'company.trusted-route-worker-or-service'],
     },
   },
+  company_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      // The bar reads what the reader may already read, and writes only their
+      // own saved searches.
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   crm: {
     posture: 'permission-bearing',
     bundles: ['agent-operate', 'analytics', 'approve', 'assignment', 'configure', 'merge', 'report', 'view'],
