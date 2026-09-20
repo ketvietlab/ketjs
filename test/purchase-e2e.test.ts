@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+
+/** A `purchase_backend.*` key where the reader would see it, rather than in props. */
+const VISIBLE_KEY = /(?:>|placeholder="|aria-label="|title=")[^<"]*purchase_backend\.[A-Za-z]/u
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 async function bootPurchase(t: TestContext) {
@@ -161,7 +164,7 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
     assert.equal(response.status, 200, path)
     const html = await response.text()
     assert.match(html, expected, path)
-    assert.doesNotMatch(html, /purchase_backend\.[A-Za-z]/, path)
+    assert.doesNotMatch(html, VISIBLE_KEY, path)
   }
   const purchaseDashboard = await e2e.client.get('/admin/purchase?lang=vi', {
     headers: { accept: 'text/html' },
@@ -178,7 +181,8 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   assert.match(rfqsHtml, /data-ui="list-page"/)
   assert.doesNotMatch(rfqsHtml, /id="purchase-rfq-create"/)
   assert.match(rfqsHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=vi&amp;returnTo=/)
-  assert.match(rfqsHtml, /data-ui="chrome-search"/)
+  // The search-filter bar owns the query and the state filters now.
+  assert.match(rfqsHtml, /data-island="backend\.search-filter"/)
   assert.doesNotMatch(rfqsHtml, /data-island="mail\.chatter"/)
 
   const rfqCreatePage = await e2e.client.get('/admin/purchase/rfqs/new?lang=vi', {
@@ -219,14 +223,14 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   assert.match(createdRfq, /data-ui="list-page"/)
   assert.match(createdRfq, /Nhà cung cấp ABC/)
   assert.match(createdRfq, /HTTP\/RFQ|PO0000/)
+  // The bar's own URL: a query, a state preset and a grouping by vendor.
   const groupedRfqs = await e2e.client.get(
-    '/admin/purchase/rfqs?lang=vi&q=HTTP%2FRFQ&state=draft&group=vendor',
+    '/admin/purchase/rfqs?lang=vi&q=ABC&preset=draft&group=partnerName',
     { headers: { accept: 'text/html' } },
   )
   const groupedRfqsHtml = await groupedRfqs.text()
-  assert.match(groupedRfqsHtml, /data-ui="kt-group-row"/)
+  assert.match(groupedRfqsHtml, /data-ui="kt-group-toggle"/)
   assert.match(groupedRfqsHtml, /Nhà cung cấp ABC/)
-  assert.match(groupedRfqsHtml, /data-ui="facet"/)
   const crossSiteCreate = await e2e.client.post(
     '/admin/purchase/rfqs/new?lang=vi',
     new URLSearchParams({ partnerId: 'vendor', pickingTypeId: 'incoming' }),
@@ -252,5 +256,5 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   assert.equal(english.status, 200)
   const html = await english.text()
   assert.match(html, /Purchase Order/)
-  assert.doesNotMatch(html, /purchase_backend\.[A-Za-z]/)
+  assert.doesNotMatch(html, VISIBLE_KEY)
 })

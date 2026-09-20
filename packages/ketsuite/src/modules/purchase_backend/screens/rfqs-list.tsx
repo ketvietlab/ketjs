@@ -30,12 +30,17 @@ export type RfqsListScreenOptions = {
 }
 
 export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): TemplateResult => {
-  const collection = prepareCollectionTable(_, options.frame, {
-    rows: options.rows,
-    columns: purchaseOrderListColumns(_),
-    id: (row) => String(row.id),
-    ...options.table,
-  })
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      columns: purchaseOrderListColumns(_),
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const table =
     options.rows.length || options.table?.groups?.length
