@@ -71,7 +71,7 @@ test('experience collection frames put Create and collection actions beside the 
   }
 })
 
-test('Website content retains the combined site/status/search GET form and localized row destination', () => {
+test('Website content keeps the site GET form and the localized row destination', () => {
   const html = renderToString(
     contentScreen(
       translate,
@@ -92,7 +92,6 @@ test('Website content retains the combined site/status/search GET form and local
       '?lang=vi',
       undefined,
       null,
-      { search: 'Home', status: 'draft' },
     ),
   )
   ordered(html, [
@@ -104,9 +103,9 @@ test('Website content retains the combined site/status/search GET form and local
     'data-ui="ket-table"',
   ])
   assert.match(html, /method="get"/)
-  assert.match(html, /name="q"[^>]*value="Home"/)
   assert.match(html, /name="site"/)
-  assert.match(html, /name="status"/)
+  // The query and the publication state belong to the search-filter bar now.
+  assert.doesNotMatch(html, /name="q"|name="status"/u)
   assert.match(html, /href="\/admin\/website\/pages\/page1\?lang=vi"/)
   const embedded = renderToString(
     entryTermsSection(

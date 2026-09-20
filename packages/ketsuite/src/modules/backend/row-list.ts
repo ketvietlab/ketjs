@@ -19,9 +19,9 @@ import type {
   Route,
   ServeContext,
 } from '@ketvietlab/ketjs'
-import { encodeListState, parseListState } from '@ketvietlab/ketjs'
+import { encodeListState } from '@ketvietlab/ketjs'
 import type { Frame, TableGroup } from '../../ui/index.ts'
-import { listSearchFilterConfig, loadListFavorites, searchFilterBar } from './search-filter.ts'
+import { listSearchChrome } from './search-filter.ts'
 import type { ListSearchFilterOptions } from './search-filter.ts'
 
 export type AnyRow = Record<string, unknown>
@@ -320,8 +320,15 @@ export const rowListSearch = async <R extends AnyRow>(
 }> => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   const { spec } = options
-  const { state } = parseListState(spec, url)
-  const favorites = await loadListFavorites(ctx, url, req, spec, state)
+  const chrome = await listSearchChrome(ctx, url, req, {
+    spec,
+    frame: options.frame,
+    name: options.name,
+    bodyId: options.bodyId,
+    functions: options.functions,
+    ...(options.labels ? { labels: options.labels } : {}),
+  })
+  const { state } = chrome
   const rows = applyRowListState(spec, state, options.rows)
   const label =
     options.groupLabel ??
@@ -330,28 +337,8 @@ export const rowListSearch = async <R extends AnyRow>(
       return _.resolves(message) ? _(message) : text(value) || _('backend.chrome.groupEmpty')
     })
   const groups = state.groupBy.length ? rowListGroups(spec, state, rows, url, label) : undefined
-  const bar = await searchFilterBar(
-    ctx,
-    url,
-    req,
-    options.name,
-    listSearchFilterConfig(_, {
-      name: options.name,
-      bodyId: options.bodyId,
-      spec,
-      state,
-      favorites,
-      labels: options.labels,
-      applyInput: { listKey: spec.key, returnTo: `${url.pathname}${url.search}` },
-      functions: options.functions,
-    }),
-  )
   return {
-    frame: {
-      ...options.frame,
-      collectionUrl: `${url.pathname}${url.search}`,
-      chrome: { ...options.frame.chrome, search: null, searchContent: bar },
-    },
+    frame: chrome.frame,
     rows: groups ? [] : rows,
     state,
     ...(groups ? { groups } : {}),

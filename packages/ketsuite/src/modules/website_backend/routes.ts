@@ -1,7 +1,15 @@
 import { readWebsiteCollection } from './collection.ts'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { listSearchChrome } from '../backend/search-filter.ts'
+import {
+  entryListSearch,
+  revisionListSearch,
+  siteDomainListSearch,
+  siteHealthListSearch,
+  siteMemberListSearch,
+} from './search.ts'
 import { randomUUID } from 'node:crypto'
-import { text, withHeaders } from '@ketvietlab/ketjs'
+import { parseListState, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf } from '../backend/paging.ts'
@@ -60,6 +68,34 @@ import type {
 import { csvOf, safeFilename } from './csv.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
+
+/**
+ * A page's revisions, narrowed. Both content kinds and the legacy content path
+ * render the same list, so they ask for it the same way.
+ */
+const revisionSearch = (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  frame: Parameters<typeof rowListSearch>[3]['frame'],
+  rows: RevisionRow[],
+) =>
+  rowListSearch(ctx, url, req, {
+    spec: revisionListSearch,
+    frame,
+    rows,
+    name: 'website-revision-filter',
+    bodyId: 'website-revision-list',
+    functions: websiteSearchFunctions,
+  })
+
+/** Every website list shares one set of search-filter functions. */
+const websiteSearchFunctions = {
+  apply: 'website_backend.applySearchFilter',
+  saveFavorite: 'website_backend.saveSearchFavorite',
+  deleteFavorite: 'website_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'website_backend.setDefaultSearchFavorite',
+}
 
 const sitesOf = (ctx: ServeContext, url: URL, req: Req) =>
   ctx.call('website.listSites', {}, url, req) as Promise<SiteRow[]>
@@ -299,13 +335,16 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       // `listEntries` and `countEntries` have taken both of these since they
       // were written and no screen passed either, so a site with three hundred
       // pages could only be read one page of thirty at a time, in date order.
-      const search = searchOf(url)
-      const status = url.searchParams.get('status')
+      // The bar owns the query and the publication state; `listEntries` takes
+      // one status, so the first the reader picked is the one that applies.
+      const { state } = parseListState(entryListSearch, url)
+      const search = state.q ?? ''
+      const status = state.presets[0] ?? 'all'
       const filter = {
         siteId,
         type,
         ...(search ? { search } : {}),
-        ...(status && status !== 'all' ? { status } : {}),
+        ...(status !== 'all' ? { status } : {}),
       }
       const [rows, total] = siteId
         ? await Promise.all([
@@ -321,18 +360,26 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       return adminPage(ctx, url, req, {
         title: _(`website_backend.${kind.titleKey}.title`),
         translate: false,
-        body: (_, frame) =>
-          contentScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: entryListSearch,
+            frame,
+            name: 'website-content-filter',
+            bodyId: 'website-content-list',
+            functions: websiteSearchFunctions,
+            labels: { searchPlaceholder: _(`website_backend.${kind.titleKey}.title`) },
+          })
+          return contentScreen(
             _,
             rows,
             siteOptions(sites),
             siteId,
-            collectionSearchFrame(url, frame, _(`website_backend.${kind.titleKey}.title`)),
+            chrome.frame,
             localeQuery(url),
             kind,
             pager(url, current, rows.length, total.count),
-            { search, status: status ?? 'all' },
-          ),
+          )
+        },
       })
     },
 
@@ -429,17 +476,19 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const diff = await revisionDiffOf(ctx, url, req, params.id, rows)
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) =>
-          revisionsScreen(
+        body: async (_, frame) => {
+          const search = await revisionSearch(ctx, url, req, frame, rows)
+          return revisionsScreen(
             _,
             detail.entry,
             rows,
-            collectionSearchFrame(url, frame, _('website_backend.revisions.title')),
+            search.frame,
             localeQuery(url),
             kind.basePath,
             diff,
-            searchCollectionRows(url, rows, (row) => `${row.version} ${row.kind} ${row.authorId ?? ''}`),
-          ),
+            search.rows,
+          )
+        },
       })
     },
 
@@ -878,17 +927,19 @@ export const routes: Record<string, RouteEntry> = {
       }>
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) =>
-          revisionsScreen(
+        body: async (_, frame) => {
+          const search = await revisionSearch(ctx, url, req, frame, rows)
+          return revisionsScreen(
             _,
             detail.entry,
             rows,
-            collectionSearchFrame(url, frame, _('website_backend.revisions.title')),
+            search.frame,
             localeQuery(url),
             undefined,
             undefined,
-            searchCollectionRows(url, rows, (row) => `${row.version} ${row.kind} ${row.authorId ?? ''}`),
-          ),
+            search.rows,
+          )
+        },
       })
     },
 
@@ -1182,14 +1233,18 @@ export const routes: Record<string, RouteEntry> = {
       )
       return adminPage(ctx, url, req, {
         title: 'website_backend.health.title',
-        body: (_, frame) =>
-          siteHealthScreen(
-            _,
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: siteHealthListSearch,
+            frame,
             rows,
-            collectionSearchFrame(url, frame, _('website_backend.health.title')),
-            localeQuery(url),
-            searchCollectionRows(url, rows, (row) => `${row.title} ${row.primaryHost ?? ''}`),
-          ),
+            name: 'website-health-filter',
+            bodyId: 'website-health-list',
+            functions: websiteSearchFunctions,
+            labels: { searchPlaceholder: _('website_backend.health.title') },
+          })
+          return siteHealthScreen(_, rows, search.frame, localeQuery(url), search.rows)
+        },
       })
     },
 
@@ -1270,18 +1325,22 @@ export const routes: Record<string, RouteEntry> = {
         )) as MemberRow[]
         return adminPage(ctx, url, req, {
           title: 'website_backend.members.title',
-          body: (_, frame) =>
-            siteMembersScreen(
-              _,
-              site,
-              searchCollectionRows(
-                url,
-                rows,
-                (row) => `${row.userId} ${_(`website_backend.role.${row.role}`)}`,
-              ),
-              collectionSearchFrame(url, frame, _('website_backend.members.title')),
-              { values, errors, locale: localeQuery(url) },
-            ),
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: siteMemberListSearch,
+              frame,
+              rows,
+              name: 'website-member-filter',
+              bodyId: 'website-member-list',
+              functions: websiteSearchFunctions,
+              labels: { searchPlaceholder: _('website_backend.members.title') },
+            })
+            return siteMembersScreen(_, site, search.rows, search.frame, {
+              values,
+              errors,
+              locale: localeQuery(url),
+            })
+          },
         })
       }
       if (req.method === 'GET') return render()
@@ -1326,20 +1385,24 @@ export const routes: Record<string, RouteEntry> = {
         const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
           title: 'website_backend.domains.title',
-          body: (_, frame) =>
-            siteDomainsScreen(
-              _,
-              site,
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: siteDomainListSearch,
+              frame,
               rows,
-              collectionSearchFrame(url, frame, _('website_backend.domains.title')),
-              {
-                tableRows: searchCollectionRows(url, rows, (row) => row.host),
-                values,
-                errors,
-                locale: localeQuery(url),
-                editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
-              },
-            ),
+              name: 'website-domain-filter',
+              bodyId: 'website-domain-list',
+              functions: websiteSearchFunctions,
+              labels: { searchPlaceholder: _('website_backend.domains.title') },
+            })
+            return siteDomainsScreen(_, site, rows, search.frame, {
+              tableRows: search.rows,
+              values,
+              errors,
+              locale: localeQuery(url),
+              editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
+            })
+          },
         })
       }
       if (req.method === 'GET') return render()

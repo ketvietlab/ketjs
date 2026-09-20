@@ -18,8 +18,16 @@ import type { Ctx, FilterOperator, FnSpec, ListSearchShape, ListState } from '@k
 export type ListSearchBinding = {
   /** The spec key, which is also the saved-search `listKey`. */
   key: string
-  /** The list's own path. A payload may only ever return the viewer here. */
+  /**
+   * Where the bar returns the viewer when the payload names nothing usable.
+   * A payload may only name a path this binding accepts.
+   */
   path: string
+  /**
+   * Which paths this list lives at, when it is not just `path` — a list of one
+   * site's domains is reached through that site's id, which is the reader's own.
+   */
+  accepts?: RegExp
   /** Built per request, because a spec's columns come from the live manifest. */
   spec: (ctx: Ctx) => ListSearchShape
 }
@@ -58,7 +66,8 @@ const bindingOf = (bindings: readonly ListSearchBinding[], listKey: unknown): Li
 /** A payload names where to go back to, so it may only name this list's page. */
 const safeUrl = (binding: ListSearchBinding, value: unknown): URL => {
   const url = new URL(typeof value === 'string' ? value : binding.path, 'http://ket.local')
-  return url.pathname === binding.path ? url : new URL(binding.path, 'http://ket.local')
+  const allowed = binding.accepts ? binding.accepts.test(url.pathname) : url.pathname === binding.path
+  return allowed ? url : new URL(binding.path, 'http://ket.local')
 }
 
 const facetsOf = (value: unknown): Facet[] =>

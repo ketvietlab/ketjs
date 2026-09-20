@@ -103,28 +103,20 @@ test('Website SQL paging remains one command pager and does not repaginate retur
     },
   ]
   const html = renderToString(
-    contentScreen(
-      translate,
-      rows,
-      [{ value: 's1', label: 'Site' }],
-      's1',
-      frame,
-      '?lang=vi',
-      undefined,
-      {
-        from: 31,
-        to: 31,
-        total: 31,
-        prev: '/admin/website/pages?lang=vi&site=s1&status=draft&q=Home&page=1',
-      },
-      { search: 'Home', status: 'draft' },
-    ),
+    contentScreen(translate, rows, [{ value: 's1', label: 'Site' }], 's1', frame, '?lang=vi', undefined, {
+      from: 31,
+      to: 31,
+      total: 31,
+      prev: '/admin/website/pages?lang=vi&site=s1&status=draft&q=Home&page=1',
+    }),
   )
   assert.match(html, /data-row="p31"/)
   assert.equal((html.match(/data-ui="pager-range"/g) ?? []).length, 1)
   assert.ok(html.indexOf('data-ui="pager-range"') < html.indexOf('data-ui="ket-table"'))
   assert.doesNotMatch(html, /data-ui="list-page-footer"/)
-  assert.match(html, /name="status"[\s\S]*value="draft"[^>]*selected/)
+  // Which site's content this is survives paging; the query and the state live
+  // in the search-filter bar the route builds, not in this form.
+  assert.match(html, /name="site"/u)
 })
 
 test('billing pagination preserves the collection-wide eligible invoice action', () => {
