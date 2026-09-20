@@ -539,8 +539,6 @@ export const contentScreen = (
   locale = '',
   kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
   pager: Pager | null = null,
-  /** What the URL asked for, so the controls come back showing it. */
-  query: { search?: string; status?: string } = {},
 ): TemplateResult => {
   const collection = prepareCollectionTable(
     _,
@@ -584,9 +582,11 @@ export const contentScreen = (
             <RecordForm
               action={`${kind.basePath}${locale}`}
               method="get"
+              // The bar owns the query and the publication state now; what is
+              // left is which site's content this is, which is not a filter.
               hidden={collectionQueryKeep(
                 new URL(frame.collectionUrl ?? `${kind.basePath}${locale}`, 'http://collection.local'),
-                ['site', 'q', 'status'],
+                ['site'],
               )}
               layout="inline"
               fields={[
@@ -596,26 +596,6 @@ export const contentScreen = (
                   type: 'select',
                   value: siteId,
                   options: sites,
-                },
-                {
-                  name: 'q',
-                  label: _('website_backend.field.search'),
-                  value: query.search ?? '',
-                },
-                {
-                  name: 'status',
-                  label: _('website_backend.field.status'),
-                  type: 'select',
-                  value: query.status ?? 'all',
-                  options: [
-                    { value: 'all', label: _('website_backend.state.all') },
-                    { value: 'draft', label: _('website_backend.state.draft') },
-                    { value: 'scheduled', label: _('website_backend.state.scheduled') },
-                    { value: 'published', label: _('website_backend.state.published') },
-                    // Only by asking: the list leaves the bin out otherwise, the
-                    // way every other reader in the module already does.
-                    { value: 'trash', label: _('website_backend.state.trash') },
-                  ],
                 },
               ]}
               submit={_('website_backend.action.apply')}

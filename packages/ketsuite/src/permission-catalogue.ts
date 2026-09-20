@@ -1370,6 +1370,17 @@ const sources = {
     functions: {},
     exemptions: {},
   },
+  website_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   website_form: {
     posture: 'permission-bearing',
     bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],

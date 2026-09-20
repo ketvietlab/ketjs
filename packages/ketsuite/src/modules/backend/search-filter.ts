@@ -1,6 +1,7 @@
-import { validateListState } from '@ketvietlab/ketjs'
+import { parseListState, validateListState } from '@ketvietlab/ketjs'
 import type { ListSearchShape, ListState, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
+import type { Frame } from '../../ui/index.ts'
 import type {
   SearchFacet,
   SearchFilterConfig,
@@ -269,4 +270,57 @@ export const loadListFavorites = async (
       return false
     }
   })
+}
+
+/**
+ * The bar itself, on a frame, for a list that narrows its own rows.
+ *
+ * A list whose source pages and filters server-side maps the state onto its
+ * own arguments; a list holding the whole collection uses `rowListSearch`,
+ * which is this plus the filter evaluated over the rows.
+ */
+export const listSearchChrome = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  options: {
+    spec: ListSearchShape
+    frame: Frame
+    name: string
+    bodyId: string
+    functions: ListSearchFilterOptions['functions']
+    labels?: Partial<SearchFilterLabels>
+    fieldLabel?: ListSearchFilterOptions['fieldLabel']
+    presetLabel?: ListSearchFilterOptions['presetLabel']
+  },
+): Promise<{ frame: Frame; state: ListState }> => {
+  const _ = ctx.translate(ctx.localeOf(url, req))
+  const { state } = parseListState(options.spec, url)
+  const favorites = await loadListFavorites(ctx, url, req, options.spec, state)
+  const bar = await searchFilterBar(
+    ctx,
+    url,
+    req,
+    options.name,
+    listSearchFilterConfig(_, {
+      name: options.name,
+      bodyId: options.bodyId,
+      spec: options.spec,
+      state,
+      favorites,
+      labels: options.labels,
+      ...(options.fieldLabel ? { fieldLabel: options.fieldLabel } : {}),
+      ...(options.presetLabel ? { presetLabel: options.presetLabel } : {}),
+      applyInput: { listKey: options.spec.key, returnTo: `${url.pathname}${url.search}` },
+      functions: options.functions,
+    }),
+  )
+  return {
+    frame: {
+      ...options.frame,
+      collectionUrl: `${url.pathname}${url.search}`,
+      chrome: { ...options.frame.chrome, search: null, searchContent: bar },
+    },
+    state,
+  }
 }
