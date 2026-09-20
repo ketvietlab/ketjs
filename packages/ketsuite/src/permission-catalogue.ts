@@ -835,8 +835,13 @@ const sources = {
   },
   manufacturing_backend: {
     posture: 'permission-bearing',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   oauth: {

@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'manufacturing_backend',
@@ -9,6 +10,7 @@ export default defineModule({
   summary: 'Điều hành định mức và lệnh sản xuất.',
   category: 'Sản xuất',
   routes,
+  functions: searchFilterFunctions,
   menus: {
     manufacturing: {
       label: 'menu.app',
@@ -77,6 +79,12 @@ export default defineModule({
       'action.finish': 'Hoàn tất công đoạn',
       'action.complete': 'Hoàn tất sản xuất',
       'action.cancel': 'Hủy',
+      'state.draft': 'Nháp',
+      'state.confirmed': 'Đã xác nhận',
+      'state.in_progress': 'Đang sản xuất',
+      'state.to_close': 'Chờ chốt',
+      'state.done': 'Hoàn tất',
+      'state.cancelled': 'Đã hủy',
       'state.active': 'Đang hoạt động',
       'state.archived': 'Đã lưu trữ',
       'empty.orders': 'Chưa có lệnh sản xuất',
@@ -131,6 +139,12 @@ export default defineModule({
       'action.finish': 'Finish operation',
       'action.complete': 'Complete production',
       'action.cancel': 'Cancel',
+      'state.draft': 'Draft',
+      'state.confirmed': 'Confirmed',
+      'state.in_progress': 'In progress',
+      'state.to_close': 'To close',
+      'state.done': 'Done',
+      'state.cancelled': 'Cancelled',
       'state.active': 'Active',
       'state.archived': 'Archived',
       'empty.orders': 'No production orders',
