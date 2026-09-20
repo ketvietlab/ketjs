@@ -434,9 +434,13 @@ test('live pg: a database per tenant, migrated as a fleet', live, async () => {
   // Provisioned here rather than assumed. Expecting a developer's own databases
   // to exist is what kept this one from running anywhere but one laptop.
   const admin = postgresAdapter(URL, { max: 1 })
-  await admin.open()
-  for (const db of ['ketjs_t1', 'ketjs_t2']) await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
-  await admin.close()
+  try {
+    await admin.open()
+    for (const db of ['ketjs_t1', 'ketjs_t2'])
+      await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
+  } finally {
+    await admin.close().catch(() => {})
+  }
   const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 4 })
   try {
     for (const db of ['ketjs_t1', 'ketjs_t2']) {
