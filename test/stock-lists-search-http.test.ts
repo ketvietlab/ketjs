@@ -140,3 +140,23 @@ test('stock warehouses HTTP: the bar applies and saves searches through the shar
   const withoutFavorite = await (await app.client.get(`${PATH}?lang=vi`)).text()
   assert.doesNotMatch(withoutFavorite, /Kho giao nhiều bước/)
 })
+
+test('stock lists HTTP: every stock list carries the bar and no legacy search box', async (t) => {
+  const app = await bootWarehouses(t)
+  const paths = [
+    '/admin/stock/warehouses',
+    '/admin/stock/transfers',
+    '/admin/stock/locations',
+    '/admin/stock/picking-types',
+    '/admin/stock/lots',
+    '/admin/stock/routes',
+    '/admin/stock/replenishment',
+  ]
+  for (const path of paths) {
+    const response = await app.client.get(`${path}?lang=vi`)
+    const html = await response.text()
+    assert.equal(response.status, 200, path)
+    assert.match(html, /data-island="backend\.search-filter"/, path)
+    assert.doesNotMatch(html, /name="q"[^>]*data-ui="chrome-search-input"/, path)
+  }
+})
