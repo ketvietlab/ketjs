@@ -176,6 +176,17 @@ const sources = {
       installCatalog: ['internal-route', 'address.trusted-route-worker-or-service'],
     },
   },
+  address_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   attendance: {
     posture: 'permission-bearing',
     bundles: ['configure', 'operate', 'sensitive'],
@@ -998,8 +1009,13 @@ const sources = {
   },
   pos_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   pos_channel: {
@@ -1013,6 +1029,17 @@ const sources = {
       listDeviceSyncCommands: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
       priceBook: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
     },
+  },
+  pricing_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
   },
   pricing: {
     posture: 'permission-bearing',
