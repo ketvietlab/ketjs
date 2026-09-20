@@ -1,7 +1,8 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { seeOther } from '../backend/forms.ts'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { catalogListSearch } from './search.ts'
 import { catalogsScreen, countryScreen } from './screens/index.ts'
 import type { CatalogRow, DivisionRow } from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
@@ -37,18 +38,36 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'address_backend.title',
         active: '/admin/addresses',
-        body: (_, frame) =>
-          catalogsScreen(_, collectionSearchFrame(url, frame, _('address_backend.title')), {
-            rows: searchCollectionRows(
-              url,
-              rows,
-              (row) => `${row.countryCode} ${row.version} ${row.status ?? ''}`,
-            ).map((row) => ({
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: catalogListSearch,
+            rows: rows.map((row) => ({
               ...row,
               detailHref: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}`),
               installAction: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`),
             })),
-          }),
+            frame,
+            name: 'address-catalog-filter',
+            bodyId: 'address-catalog-list',
+            functions: {
+              apply: 'address_backend.applySearchFilter',
+              saveFavorite: 'address_backend.saveSearchFavorite',
+              deleteFavorite: 'address_backend.deleteSearchFavorite',
+              setDefaultFavorite: 'address_backend.setDefaultSearchFavorite',
+            },
+            labels: { searchPlaceholder: _('address_backend.title') },
+            groupLabel: (key, value) => {
+              const raw = value == null ? '' : String(value)
+              if (key === 'installed')
+                return _(`address_backend.state.${raw === 'false' ? 'available' : 'installed'}`)
+              return raw || _('backend.chrome.groupEmpty')
+            },
+          })
+          return catalogsScreen(_, search.frame, {
+            rows: search.rows,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
+          })
+        },
       })
     },
 

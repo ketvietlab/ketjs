@@ -12,13 +12,15 @@ import {
   prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import { pricingSelectionLabel } from './shared.ts'
 import type { PricelistRow } from './shared.ts'
 
 export type PricelistsScreenOptions = {
   rows: readonly PricelistRow[]
   createHref: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<PricelistRow>>
 }
 
 export const pricelistColumns = (_: Translator): Array<Column<PricelistRow>> => [
@@ -47,8 +49,9 @@ export const pricelistsScreen = (
       rows: options.rows,
       id: (row) => row.id,
       rowHref: (row) => row.detailHref,
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -66,7 +69,7 @@ export const pricelistsScreen = (
       actions={collectionActions(_, frame)}
       status={`${_('pricing_backend.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, prepared.table)
           : emptyState(_('pricing_backend.empty'), _('pricing_backend.emptyHint'))
       }
