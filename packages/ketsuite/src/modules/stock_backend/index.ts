@@ -1,4 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { functions } from './functions.ts'
 import { islands } from './islands.ts'
 import { routes } from './routes.ts'
 
@@ -8,6 +9,7 @@ export default defineModule({
   depends: ['stock', 'backend'],
   assets: new URL('./client/', import.meta.url),
   islands,
+  functions,
   behaviors: {
     'stock.editor': {
       client: 'stock.mjs',
@@ -449,6 +451,8 @@ export default defineModule({
       'kind.pull_push': 'Kéo và đẩy hàng',
       'kind.auto': 'Tự động',
       'kind.manual': 'Thủ công',
+      'warehouse.filter.stagedReception': 'Nhận hàng qua nhiều bước',
+      'warehouse.filter.stagedDelivery': 'Giao hàng qua nhiều bước',
       'receptionSteps.one_step': 'Nhận hàng trực tiếp',
       'receptionSteps.two_steps': 'Nhập qua khu vực đầu vào',
       'receptionSteps.three_steps': 'Đầu vào, kiểm tra chất lượng, nhập kho',
@@ -854,6 +858,8 @@ export default defineModule({
       'kind.pull_push': 'Pull and push',
       'kind.auto': 'Automatic',
       'kind.manual': 'Manual',
+      'warehouse.filter.stagedReception': 'Staged reception',
+      'warehouse.filter.stagedDelivery': 'Staged delivery',
       'receptionSteps.one_step': 'Receive goods directly',
       'receptionSteps.two_steps': 'Receive goods in input and then stock',
       'receptionSteps.three_steps': 'Input, quality, then stock',
