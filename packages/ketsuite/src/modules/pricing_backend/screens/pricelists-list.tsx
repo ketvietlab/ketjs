@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  collectionControls,
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
@@ -62,7 +63,7 @@ export const pricelistsScreen = (
       headerActions={
         <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       status={`${_('pricing_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length

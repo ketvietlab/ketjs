@@ -1,15 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
@@ -85,33 +86,27 @@ export const companiesListScreen = (
       headerActions={
         <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      actions={inline([
-        <LinkButton
-          label={_('company_backend.action.hierarchy')}
-          href={options.hierarchyHref}
-          variant="secondary"
-        />,
-        <LinkButton
-          label={
-            options.includeArchived
-              ? _('company_backend.filter.activeOnly')
-              : _('company_backend.filter.includeArchived')
-          }
-          href={options.toggleHref}
-          variant="tertiary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('company_backend.screen.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(
+        _,
+        frame,
+        inline([
+          <LinkButton
+            label={_('company_backend.action.hierarchy')}
+            href={options.hierarchyHref}
+            variant="secondary"
+          />,
+          <LinkButton
+            label={
+              options.includeArchived
+                ? _('company_backend.filter.activeOnly')
+                : _('company_backend.filter.includeArchived')
+            }
+            href={options.toggleHref}
+            variant="tertiary"
+          />,
+        ]),
+      )}
+      controls={collectionControls(_, _('company_backend.screen.title'), frame)}
       status={`${_('company_backend.screen.title')}: ${String(options.total)}`}
       body={
         options.rows.length

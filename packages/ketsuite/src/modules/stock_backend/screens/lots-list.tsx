@@ -1,8 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
+import {
+  badge,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  icon,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, collectionTable, emptyState, icon, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type LotListRow = {
@@ -96,7 +105,7 @@ export const lotsListScreen = (
       headerActions={
         <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       footer={`${_('stock_backend.lot.list.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length

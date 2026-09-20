@@ -3,11 +3,11 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
-  inline,
   ListPage,
-  listChrome,
   Notice,
   RecordActions,
   shell,
@@ -136,17 +136,8 @@ export const leavesListScreen = (
       frame={frame}
       title={_('hr_backend.leaves.title')}
       description={_('hr_backend.leaves.subtitle')}
-      actions={frame.extras?.['topbar.end'] !== undefined ? inline([frame.extras['topbar.end']]) : undefined}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('hr_backend.leaves.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, _('hr_backend.leaves.title'), frame)}
       status={`${_('hr_backend.leaves.title')}: ${String(options.total)}`}
       body={body}
     />,

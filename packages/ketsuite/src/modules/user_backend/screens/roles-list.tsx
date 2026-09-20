@@ -1,13 +1,13 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
   collectionControls,
   collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
@@ -82,14 +82,15 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       headerActions={
         <LinkButton label={_('user_backend.action.createRole')} href={options.createHref} variant="primary" />
       }
-      actions={inline([
+      actions={collectionActions(
+        _,
+        frame,
         <LinkButton
           label={_('user_backend.action.presets')}
           href={options.presetsHref}
           variant="secondary"
         />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      )}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length
