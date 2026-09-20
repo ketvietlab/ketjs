@@ -33,7 +33,7 @@ import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import type { AttributeListRow } from './screens/attributes.tsx'
 import { attributeSearchFilterConfig } from './attributes-search.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import { searchFilterBar } from '../backend/search-filter.ts'
+import { searchFilterBar, searchFilterLabels } from '../backend/search-filter.ts'
 import type { SearchFacet, SearchFilterConfig, SearchFilterCustomRule } from '../backend/search-filter.ts'
 import { tableGrid } from '../backend/ket-table.ts'
 import type { KetTableGroup } from '../backend/ket-table.ts'
@@ -536,37 +536,10 @@ const productSearchFilterConfig = (
       type: field.type,
     })),
     customFilters,
-    labels: {
+    labels: searchFilterLabels(_, {
       searchLabel: _('product_backend.search.label'),
       searchPlaceholder: _('product_backend.chrome.search'),
-      toggleLabel: _('product_backend.search.toggle'),
-      filters: _('product_backend.search.filters'),
-      groupBy: _('product_backend.search.groupBy'),
-      groupByApplied: _('product_backend.search.groupByApplied'),
-      groupByAdd: _('product_backend.search.groupByAdd'),
-      groupByClear: _('product_backend.search.groupByClear'),
-      groupByMoveEarlier: _('product_backend.search.groupByMoveEarlier'),
-      groupByMoveLater: _('product_backend.search.groupByMoveLater'),
-      favorites: _('product_backend.search.favorites'),
-      searchGenericLabel: _('product_backend.search.genericLabel'),
-      searchFieldPrefix: _('product_backend.search.fieldPrefix'),
-      searchFieldPreposition: _('product_backend.search.fieldPreposition'),
-      customFilterField: _('product_backend.search.customFilterField'),
-      customFilterOperator: _('product_backend.search.customFilterOperator'),
-      customFilterValue: _('product_backend.search.customFilterValue'),
-      customFilterAdd: _('product_backend.search.customFilterAdd'),
-      customGroupByPlaceholder: _('product_backend.search.customGroupByPlaceholder'),
-      saveSearch: _('product_backend.search.saveSearch'),
-      favoriteName: _('product_backend.search.favoriteName'),
-      favoriteDefault: _('product_backend.search.favoriteDefault'),
-      favoriteSaveAction: _('product_backend.search.favoriteSaveAction'),
-      favoriteRemove: _('product_backend.search.favoriteRemove'),
-      favoriteSetDefault: _('product_backend.search.favoriteSetDefault'),
-      noFavorites: _('product_backend.search.noFavorites'),
-      clear: _('product_backend.search.clear'),
-      applyError: _('product_backend.search.applyError'),
-      retry: _('product_backend.search.retry'),
-    },
+    }),
     manager: {
       applyFunction: 'product_backend.applySearchFilter',
       bodyId: 'product-template-list',
