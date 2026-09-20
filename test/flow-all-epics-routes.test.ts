@@ -75,10 +75,10 @@ test('flow all epics route: ListPage preserves stable cross-project paging, loca
   )
   assert.match(firstText, /data-ui="list-page-title"[^>]*>All epics/)
   assert.match(firstText, /data-ui="list-page-footer">All epics: 52/)
-  assert.match(firstHtml, /name="q"[^>]*value="Release"/)
-  assert.match(firstHtml, /name="filter" value="project:platform"/)
-  assert.match(firstHtml, /name="group" value="project"/)
-  assert.match(firstHtml, /name="lang" value="en"/)
+  // The search-filter bar replaced the GET search form; what the URL says is
+  // still what the page renders, and the old input is gone.
+  assert.match(firstHtml, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(firstHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.equal(firstHtml.match(/data-ui="kt-row"/g)?.length, 50)
   assert.match(firstText, /data-ui="pager-range">1-50 \/ 52/)
   assert.match(
