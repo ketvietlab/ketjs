@@ -10,7 +10,7 @@ import {
   Notice,
   RecordActions,
 } from '../../../ui/index.ts'
-import type { FormField, Frame } from '../../../ui/index.ts'
+import type { DataTable, FormField, Frame } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty, sprintStateBadge, when } from './shared.tsx'
 
@@ -43,6 +43,8 @@ export type SprintsScreenOptions = {
   /** The sprint whose close dialog is open, and where its unfinished work can go. */
   closing?: { sprint: AnyRow; targets: readonly AnyRow[]; idempotencyKey: string }
   closeSprintHref: (sprint: AnyRow) => string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<AnyRow>>
 }
 
 export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScreenOptions): TemplateResult => {
@@ -140,8 +142,9 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
             ),
         },
       ],
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   const workspace = (
@@ -162,7 +165,9 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
               message={options.errors.join(' · ')}
             />
           ) : null}
-          {options.sprints.length ? collectionTable(_, prepared.table) : empty(_)}
+          {options.sprints.length || options.table?.groups?.length
+            ? collectionTable(_, prepared.table)
+            : empty(_)}
         </>
       }
     />
