@@ -12,17 +12,17 @@ import {
   prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { UserRow } from './types.ts'
 
 export type UserListRow = UserRow & { detailHref: string }
 
 export type UsersListScreenOptions = {
-  rows: UserListRow[]
+  rows: readonly UserListRow[]
   total: number
   createHref: string
-  toggleHref: string
-  includeArchived: boolean
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<UserListRow>>
 }
 
 export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
@@ -74,8 +74,9 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       id: (row) => row.id,
       rowHref: (row) => row.detailHref,
       columns: userListColumns(_),
+      ...options.table,
     },
-    { paginate: false },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -89,23 +90,11 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       headerActions={
         <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />
       }
-      actions={collectionActions(
-        _,
-        frame,
-        <LinkButton
-          label={
-            options.includeArchived
-              ? _('user_backend.filter.activeOnly')
-              : _('user_backend.filter.includeArchived')
-          }
-          href={options.toggleHref}
-          variant="tertiary"
-        />,
-      )}
+      actions={collectionActions(_, frame)}
       controls={collectionControls(_, _('user_backend.users.title'), frame)}
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, prepared.table)
           : emptyState(_('user_backend.users.empty'), _('user_backend.users.emptyHint'))
       }

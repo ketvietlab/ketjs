@@ -10,7 +10,7 @@ import {
   prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { RoleRow } from './types.ts'
 
 export type RoleListRow = RoleRow & { detailHref: string }
@@ -19,6 +19,8 @@ export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
   createHref: string
   presetsHref: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<RoleListRow>>
 }
 
 export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
@@ -66,8 +68,9 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       id: (row) => row.id,
       rowHref: (row) => row.detailHref,
       columns: roleListColumns(_),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -93,7 +96,7 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       )}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, prepared.table)
           : emptyState(_('user_backend.roles.empty'), _('user_backend.roles.emptyHint'))
       }
