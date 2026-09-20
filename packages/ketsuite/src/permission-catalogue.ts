@@ -129,8 +129,13 @@ const sources = {
   },
   account_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   account_staff_channel: {
