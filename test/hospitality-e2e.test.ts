@@ -114,7 +114,9 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(propertyList.status, 200, propertyListHtml)
   assert.match(propertyListHtml, /Tạo cơ sở/)
   assert.match(propertyListHtml, /\/admin\/hospitality\/properties\/hotel\?lang=vi/)
-  assert.doesNotMatch(propertyListHtml, /hospitality_core\./)
+  // No message key reaches the reader as text. The search-filter bar names the
+  // functions it calls in its island props, which is data, not a key.
+  assert.doesNotMatch(propertyListHtml, /(?:>|placeholder="|aria-label="|title=")[^<"]*hospitality_core\./u)
 
   const preservedProperty = await e2e.client.post(
     '/admin/hospitality/properties/hotel?lang=en',
@@ -1117,7 +1119,8 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     const response = await e2e.client.get(path)
     assert.equal(response.status, 200, path)
     const html = await response.text()
-    assert.doesNotMatch(html, /hospitality_core\./, path)
+    // As above: a bar's island props name functions, which are not keys.
+    assert.doesNotMatch(html, /(?:>|placeholder="|aria-label="|title=")[^<"]*hospitality_core\./u, path)
     assert.match(html, new RegExp(title), path)
     assert.doesNotMatch(html, /data-route-modal="true"/, path)
   }
