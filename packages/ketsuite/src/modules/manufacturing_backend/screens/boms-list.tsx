@@ -1,8 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
+import {
+  code,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { code, collectionTable, emptyState, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
 
 export type BomListRow = {
@@ -72,7 +80,7 @@ export const bomsListScreen = (
           variant="primary"
         />
       }
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       footer={`${_('manufacturing_backend.boms.title')}: ${String(collection.total)}`}
       body={
         options.rows.length

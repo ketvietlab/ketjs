@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -125,7 +126,7 @@ export const workCentersListScreen = (
           variant="primary"
         />
       }
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       footer={`${_('manufacturing_backend.workCenters.title')}: ${String(collection.total)}`}
       body={
         options.rows.length

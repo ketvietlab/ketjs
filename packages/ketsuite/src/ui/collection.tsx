@@ -4,18 +4,23 @@ import type { Frame } from './layout.tsx'
 import { bulkActions, listChrome } from './chrome.tsx'
 import { inline } from './primitives.tsx'
 import { Disclosure } from '@ketvietlab/design-system'
-import type { DataTable } from './table.tsx'
+import type { DataTable, TableSelection } from './table.tsx'
 import { collectionQueryKeep, paginateCollectionRows } from './collection-state.ts'
 
-/** Collection tools only. ListPage places frame.chrome.create beside the title. */
-export const collectionActions = (_: Translator, frame: Frame, extra?: JSXChild): JSXChild =>
-  frame.chrome?.selection || extra !== undefined || frame.extras?.['topbar.end'] !== undefined
-    ? inline([
-        frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
-        extra ?? '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])
+/** Collection tools only. ListPage places frame.chrome.create beside the title.
+ * A screen whose table owns the selection passes it explicitly; otherwise the
+ * frame's chrome is authoritative. */
+export const collectionActions = (
+  _: Translator,
+  frame: Frame,
+  extra?: JSXChild,
+  selection?: TableSelection | null,
+): JSXChild => {
+  const active = selection ?? frame.chrome?.selection
+  return active || extra !== undefined || frame.extras?.['topbar.end'] !== undefined
+    ? inline([active ? bulkActions(_, active) : '', extra ?? '', frame.extras?.['topbar.end'] ?? ''])
     : undefined
+}
 
 export const collectionControls = (
   _: Translator,
@@ -57,7 +62,7 @@ export const prepareCollectionTable = <R,>(
     url.searchParams.delete('tab')
   }
   let rows = table.rows
-  let chrome = { ...frame.chrome }
+  const chrome = { ...frame.chrome }
   if (options.searchText) {
     const query = (url.searchParams.get('q') ?? '').trim().toLocaleLowerCase()
     if (query) rows = rows.filter((row) => options.searchText!(row).toLocaleLowerCase().includes(query))

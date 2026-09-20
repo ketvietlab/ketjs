@@ -1,7 +1,14 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
+import {
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  linkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { collectionTable, linkButton, ListPage, listChrome, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
@@ -81,23 +88,8 @@ export const allEpicsScreen = (
       frame={frame}
       title={options.title}
       description={_('flow_backend.menu.epics')}
-      actions={frame.extras?.['topbar.end']}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              options.title,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, options.title, frame)}
       status={`${options.title}: ${String(options.total ?? options.epics.length)}`}
       body={options.epics.length ? collectionTable(_, prepared.table) : empty(_)}
     />,

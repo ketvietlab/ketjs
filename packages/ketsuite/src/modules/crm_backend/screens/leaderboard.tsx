@@ -1,14 +1,14 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
-  inline,
   linkButton,
   ListPage,
-  listChrome,
   pageTrailFromFrame,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -132,23 +132,8 @@ export const leaderboardScreen = (
       context={pageTrailFromFrame(title, frame)}
       title={title}
       description={_('crm_backend.leaderboard.subtitle')}
-      actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              title,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame, refresh)}
+      controls={collectionControls(_, title, frame)}
       status={`${title}: ${String(options.total ?? rows.length)}`}
       body={
         rows.length

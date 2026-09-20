@@ -1,18 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
+  linkButton,
   LinkButton,
   ListPage,
-  linkButton,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -136,30 +135,8 @@ export const quotationsListScreen = (
       headerActions={
         <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('sale_backend.quotation.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('sale_backend.quotation.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length

@@ -1,15 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, Frame } from '../../../ui/index.ts'
@@ -89,7 +89,9 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       headerActions={
         <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />
       }
-      actions={inline([
+      actions={collectionActions(
+        _,
+        frame,
         <LinkButton
           label={
             options.includeArchived
@@ -99,18 +101,8 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
           href={options.toggleHref}
           variant="tertiary"
         />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('user_backend.users.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
-      }
+      )}
+      controls={collectionControls(_, _('user_backend.users.title'), frame)}
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
         options.rows.length

@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  collectionTable,
+  collectionActions,
   collectionControls,
+  collectionTable,
   emptyState,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -111,7 +112,7 @@ export const employeesListScreen = (
       headerActions={
         <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />
       }
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={
         options.rows.length
           ? collectionTable(_, prepared.table)

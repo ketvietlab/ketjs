@@ -1,17 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
-  ListPage,
   linkButton,
-  listChrome,
+  ListPage,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -145,30 +144,8 @@ export const salesOrdersListScreen = (
       frame={collection.frame}
       title={_('sale_backend.orderList.title')}
       description={_('sale_backend.orderList.subtitle')}
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('sale_backend.orderList.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('sale_backend.orderList.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length

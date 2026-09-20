@@ -1,17 +1,18 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  Disclosure,
+  collectionActions,
+  collectionControls,
   collectionTable,
   dataTable,
+  Disclosure,
   emptyState,
-  RecordScreen,
   icon,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
+  RecordScreen,
   RecordWorkspace,
   Section,
   shell,
@@ -92,7 +93,7 @@ export const periodClosesListScreen = (
       controls={collectionControls(_, _('account_backend.close.title'), collection.frame)}
       description={_('account_backend.close.subtitle')}
       footer={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       body={stack([
         <Disclosure
           summary={_('account_backend.close.create')}

@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   icon,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -84,17 +85,8 @@ export const invoicingPoliciesListScreen = (
       headerActions={
         <LinkButton label={_('sale_backend.action.savePolicy')} href={options.createHref} variant="primary" />
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('sale_backend.policies.title'),
-              { ...collection.frame.chrome, layout: 'command', section: undefined, create: null },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('sale_backend.policies.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length
