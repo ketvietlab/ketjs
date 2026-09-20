@@ -655,6 +655,17 @@ const sources = {
     },
     exemptions: {},
   },
+  hr_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   inventory_staff_channel: {
     posture: 'projection/bridge',
     bundles: [],

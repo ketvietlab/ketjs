@@ -14,7 +14,7 @@ import {
   shell,
   stack,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type LeaveListRow = {
   id: string
@@ -32,6 +32,8 @@ export type LeavesListScreenOptions = {
   errors?: readonly string[]
   rows: LeaveListRow[]
   total: number
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<LeaveListRow>>
 }
 
 const stateBadge = (_: Translator, state: string) =>
@@ -111,15 +113,22 @@ export const leavesListScreen = (
   frame: Frame,
   options: LeavesListScreenOptions,
 ): TemplateResult => {
-  const collection = prepareCollectionTable(_, frame, {
-    rows: options.rows,
-    id: (row) => row.id,
-    columns: leaveListColumns(_),
-  })
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      columns: leaveListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   frame = collection.frame
-  const table = options.rows.length
-    ? collectionTable(_, collection.table)
-    : emptyState(_('hr_backend.empty.leaves'), _('hr_backend.empty.leavesHint'))
+  const table =
+    options.rows.length || options.table?.groups?.length
+      ? collectionTable(_, collection.table)
+      : emptyState(_('hr_backend.empty.leaves'), _('hr_backend.empty.leavesHint'))
   const body = options.errors?.length
     ? stack([
         <Notice
