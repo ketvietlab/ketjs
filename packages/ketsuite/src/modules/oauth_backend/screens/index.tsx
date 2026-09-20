@@ -23,7 +23,7 @@ import {
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import type { DataTable, FormOption, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 
 export type ProviderRow = {
@@ -69,6 +69,8 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<ProviderRow>>,
 ): TemplateResult => {
   const prepared = prepareCollectionTable(
     _,
@@ -111,8 +113,9 @@ export const providersScreen = (
             ),
         },
       ],
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -388,6 +391,8 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<IdentityRow>>,
 ): TemplateResult => {
   const prepared = prepareCollectionTable(
     _,
@@ -432,8 +437,9 @@ export const identitiesScreen = (
           ),
         },
       ],
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   frame = prepared.frame
   return shell(
