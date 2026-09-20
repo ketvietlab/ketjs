@@ -9,6 +9,7 @@ import {
   emptyState,
   ListPage,
   Notice,
+  prepareCollectionTable,
   RecordActions,
   shell,
   stack,
@@ -110,12 +111,14 @@ export const leavesListScreen = (
   frame: Frame,
   options: LeavesListScreenOptions,
 ): TemplateResult => {
+  const collection = prepareCollectionTable(_, frame, {
+    rows: options.rows,
+    id: (row) => row.id,
+    columns: leaveListColumns(_),
+  })
+  frame = collection.frame
   const table = options.rows.length
-    ? collectionTable(_, {
-        rows: options.rows,
-        id: (row) => row.id,
-        columns: leaveListColumns(_),
-      })
+    ? collectionTable(_, collection.table)
     : emptyState(_('hr_backend.empty.leaves'), _('hr_backend.empty.leavesHint'))
   const body = options.errors?.length
     ? stack([
