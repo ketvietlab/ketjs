@@ -1,5 +1,7 @@
 import { loadSaleOrderCollection, loadSalePartnerNames } from './order-collection.ts'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { invoicingPolicyListSearch, quotationListSearch, saleOrderListSearch } from './search.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -787,6 +789,22 @@ const en = {
   'invoicePolicy.order': 'Ordered quantities',
   'invoicePolicy.delivery': 'Delivered quantities',
 }
+/** Every sales list shares one set of functions; see `search-functions.ts`. */
+const saleSearchFunctions = {
+  apply: 'sale_backend.applySearchFilter',
+  saveFavorite: 'sale_backend.saveSearchFavorite',
+  deleteFavorite: 'sale_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'sale_backend.setDefaultSearchFavorite',
+}
+
+/** A sales state or status in the reader's language; the value survives as data. */
+const saleGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `sale_backend.${key}.${raw}`
+  return _.resolves(message) ? _(message) : raw
+}
+
 export default defineModule({
   name: 'sale_backend',
   version: '0.1.0',
@@ -808,6 +826,7 @@ export default defineModule({
     },
     'order.editor': { props: { identity: 'text', orderId: 'id', lang: 'text?' } },
   },
+  functions: searchFilterFunctions,
   title: 'Bán hàng trong quản trị',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
@@ -900,36 +919,33 @@ export default defineModule({
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
-          body: async (_, shell) =>
-            quotationsListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: quotationListSearch,
+              rows: rows
+                .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-quotation-filter',
+              bodyId: 'sale-quotation-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.quotations.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return quotationsListScreen(
               _,
               {
                 createHref: createPath,
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
-                rows: searchCollectionRows(
-                  url,
-                  rows
-                    .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                    .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-                  (row: AnyRow) =>
-                    String(row.name ?? '') +
-                    ' ' +
-                    String(row.partnerName ?? '') +
-                    ' ' +
-                    String(row.dateOrder ?? '') +
-                    ' ' +
-                    String(row.validityDate ?? '') +
-                    ' ' +
-                    String(row.state ?? '') +
-                    ' ' +
-                    String(row.amountTotal ?? ''),
-                ),
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
                 detailSuffix,
               },
-              collectionSearchFrame(url, shell, _('sale_backend.quotations.title')),
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/new':
@@ -973,31 +989,30 @@ export default defineModule({
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
-          body: async (_, shell) =>
-            salesOrdersListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: saleOrderListSearch,
+              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-order-filter',
+              bodyId: 'sale-order-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.orders.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return salesOrdersListScreen(
               _,
               {
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: searchCollectionRows(
-                  url,
-                  rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-                  (row: AnyRow) =>
-                    String(row.name ?? '') +
-                    ' ' +
-                    String(row.partnerName ?? '') +
-                    ' ' +
-                    String(row.dateOrder ?? '') +
-                    ' ' +
-                    String(row.state ?? '') +
-                    ' ' +
-                    String(row.amountTotal ?? ''),
-                ),
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
                 detailSuffix,
               },
-              collectionSearchFrame(url, shell, _('sale_backend.orders.title')),
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/{id}': detail,
@@ -1017,17 +1032,24 @@ export default defineModule({
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
           body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: invoicingPolicyListSearch,
+              rows,
+              frame: shell,
+              name: 'sale-invoicing-policy-filter',
+              bodyId: 'sale-invoicing-policy-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.policies.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
             const workspace = invoicingPoliciesListScreen(
               _,
               {
                 createHref: invoicingPolicyModalPath(url),
-                rows: searchCollectionRows(
-                  url,
-                  rows,
-                  (row: AnyRow) => String(row.name ?? '') + ' ' + String(row.invoicePolicy ?? ''),
-                ),
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
               },
-              collectionSearchFrame(url, shell, _('sale_backend.policies.title')),
+              search.frame,
             )
             if (url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(
