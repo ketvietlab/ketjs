@@ -1,15 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
-  inline,
-  LinkButton,
   linkButton,
+  LinkButton,
   ListPage,
-  listChrome,
   modalForm,
+  prepareCollectionTable,
   Progress,
   shell,
   stack,
@@ -77,7 +77,7 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
   const groups = options.groups ?? []
   const fields = options.fields ?? []
   const locale = options.locale ?? ''
-  const hasActions = options.archivedHref || frame.extras?.['topbar.end'] !== undefined
+  const _hasActions = options.archivedHref || frame.extras?.['topbar.end'] !== undefined
 
   const prepared = prepareCollectionTable(
     _,
@@ -171,43 +171,20 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
           ''
         )
       }
-      actions={
-        hasActions
-          ? inline([
-              options.archivedHref ? (
-                <LinkButton
-                  label={_(
-                    options.showingArchived
-                      ? 'flow_backend.issue.hideArchived'
-                      : 'flow_backend.issue.showArchived',
-                  )}
-                  href={options.archivedHref}
-                  variant="secondary"
-                />
-              ) : (
-                ''
-              ),
-
-              frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              options.projectName,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(
+        _,
+        frame,
+        options.archivedHref ? (
+          <LinkButton
+            label={_(
+              options.showingArchived ? 'flow_backend.issue.hideArchived' : 'flow_backend.issue.showArchived',
+            )}
+            href={options.archivedHref}
+            variant="secondary"
+          />
+        ) : undefined,
+      )}
+      controls={collectionControls(_, options.projectName, frame)}
       status={`${options.projectName}: ${String(options.total)}`}
       body={stack([
         options.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,

@@ -400,8 +400,19 @@ const orderTableConfig = (_: Translator, rows: AnyRow[]): DataTable<AnyRow> => (
   ],
 })
 
-export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => {
-  const collection = prepareCollectionTable(_, frame, orderTableConfig(_, rows), { paginate: true })
+export const ordersScreen = (
+  _: Translator,
+  frame: Frame,
+  rows: AnyRow[],
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<AnyRow>>,
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    { ...orderTableConfig(_, rows), ...table },
+    { paginate: !table?.groups },
+  )
   return shell(
     _,
     _('pos_backend.orders.title'),
@@ -411,7 +422,7 @@ export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): Templ
       title={_('pos_backend.orders.title')}
       controls={collectionControls(_, _('pos_backend.orders.title'), collection.frame)}
       actions={collectionActions(_, collection.frame)}
-      body={rows.length ? collectionTable(_, collection.table) : empty(_)}
+      body={rows.length || table?.groups?.length ? collectionTable(_, collection.table) : empty(_)}
     />,
     { ...frame, chrome: null, topbar: false },
   )

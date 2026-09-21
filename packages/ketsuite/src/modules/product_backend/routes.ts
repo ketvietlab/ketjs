@@ -7,7 +7,6 @@ import {
   parseListState,
   table,
   text,
-  validateListState,
   withHeaders,
 } from '@ketvietlab/ketjs'
 import type {
@@ -33,11 +32,10 @@ import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import type { AttributeListRow } from './screens/attributes.tsx'
 import { attributeSearchFilterConfig } from './attributes-search.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import { searchFilterBar } from '../backend/search-filter.ts'
-import type { SearchFacet, SearchFilterConfig, SearchFilterCustomRule } from '../backend/search-filter.ts'
+import { listSearchFilterConfig, loadListFavorites, searchFilterBar } from '../backend/search-filter.ts'
 import { tableGrid } from '../backend/ket-table.ts'
 import type { KetTableGroup } from '../backend/ket-table.ts'
-import type { SearchMenu, TableSelection } from '../../ui/index.ts'
+import type { TableSelection } from '../../ui/index.ts'
 import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -55,12 +53,6 @@ type MediaRow = {
   attachment?: { name?: string; mimetype?: string }
 }
 type AnyVariant = Record<string, unknown> | null
-type SavedSearchRow = {
-  id: string
-  name: string
-  state: Partial<ListState>
-  defaultKey?: string | null
-}
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -210,17 +202,6 @@ const cloneState = (state: ListState): ListState => ({
   groupPages: { ...state.groupPages },
 })
 
-const keepForSearch = (url: URL): Record<string, string | string[]> => {
-  const keep: Record<string, string | string[]> = {}
-  for (const [key, value] of url.searchParams) {
-    if (['q', 'page', 'filterField', 'filterOp', 'filterValue', 'applyFilter'].includes(key)) continue
-    const current = keep[key]
-    keep[key] =
-      current === undefined ? value : Array.isArray(current) ? [...current, value] : [current, value]
-  }
-  return keep
-}
-
 const customRuleOf = (url: URL, spec: ReturnType<typeof productListSearch>): FilterRule | null => {
   if (url.searchParams.get('applyFilter') !== '1') return null
   const field = spec.filterable?.find((candidate) => candidate.key === url.searchParams.get('filterField'))
@@ -241,162 +222,6 @@ const customRuleOf = (url: URL, spec: ReturnType<typeof productListSearch>): Fil
           ? Number(raw)
           : raw
   return { kind: 'rule', field: field.key, operator, ...(noValue ? {} : { value }) }
-}
-
-const productMenus = (
-  _: ReturnType<ServeContext['translate']>,
-  url: URL,
-  state: ListState,
-  spec: ReturnType<typeof productListSearch>,
-  favorites: SavedSearchRow[],
-): SearchMenu[] => {
-  const stateHref = (change: (next: ListState) => void): string => {
-    const next = cloneState(state)
-    change(next)
-    next.page = 1
-    return encodeListState(next, url)
-  }
-  const presetItems = (spec.presets ?? []).map((preset) => ({
-    id: `preset:${preset.key}`,
-    label:
-      preset.key === 'goods' || preset.key === 'service'
-        ? _(`product_backend.type.${preset.key}`)
-        : preset.label,
-    active: state.presets.includes(preset.key),
-    path: stateHref((next) => {
-      next.presets = next.presets.includes(preset.key)
-        ? next.presets.filter((key) => key !== preset.key)
-        : [...next.presets, preset.key]
-    }),
-  }))
-  const groupItems = (spec.groupable ?? []).map((field) => {
-    const active = state.groupBy.some((group) => group.key === field.key)
-    const add = (interval?: NonNullable<(typeof state.groupBy)[number]['interval']>) =>
-      stateHref((next) => {
-        next.groupBy = next.groupBy.filter((group) => group.key !== field.key)
-        if (!active || interval) next.groupBy.push({ key: field.key, ...(interval ? { interval } : {}) })
-        next.openGroups = []
-      })
-    return field.intervals?.length
-      ? {
-          id: `group:${field.key}`,
-          label: field.label,
-          children: field.intervals.map((interval) => ({
-            id: `group:${field.key}:${interval}`,
-            label: interval,
-            active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
-            path: add(interval),
-          })),
-        }
-      : { id: `group:${field.key}`, label: field.label, active, path: add() }
-  })
-  const favoriteItems = favorites.map((favorite) => {
-    const next: ListState = {
-      ...cloneState(state),
-      ...favorite.state,
-      presets: [...(favorite.state.presets ?? [])],
-      filters: [...(favorite.state.filters ?? [])],
-      groupBy: [...(favorite.state.groupBy ?? [])],
-      sort: [...(favorite.state.sort ?? spec.defaultSort ?? [])],
-      page: 1,
-      openGroups: [],
-      groupPages: {},
-      favoriteId: favorite.id,
-    }
-    return {
-      id: `favorite:${favorite.id}`,
-      label: `${favorite.defaultKey ? '★ ' : ''}${favorite.name}`,
-      active: state.favoriteId === favorite.id,
-      path: encodeListState(next, url),
-    }
-  })
-  const returnTo = encodeListState({ ...cloneState(state), favoriteId: undefined }, url)
-  const saveUrl = new URL(returnTo, url)
-  saveUrl.searchParams.set('modal', 'favorite')
-  return [
-    {
-      id: 'filters',
-      label: _('backend.chrome.filters'),
-      items: [
-        ...presetItems,
-        {
-          id: 'archived',
-          label: _('backend.chrome.includeArchived'),
-          active: state.includeArchived,
-          path: stateHref((next) => {
-            next.includeArchived = !next.includeArchived
-          }),
-        },
-      ],
-      customFilter: {
-        fields: (spec.filterable ?? []).map((field) => ({ value: field.key, label: field.label })),
-        operators: [
-          { value: 'contains', label: _('backend.chrome.operator.contains') },
-          { value: 'equals', label: '=' },
-          { value: 'notEquals', label: '≠' },
-          { value: 'gte', label: '≥' },
-          { value: 'lte', label: '≤' },
-          { value: 'isSet', label: _('backend.chrome.operator.isSet') },
-          { value: 'isNotSet', label: _('backend.chrome.operator.isNotSet') },
-        ],
-        fieldLabel: _('backend.chrome.customField'),
-        operatorLabel: _('backend.chrome.customOperator'),
-        valueLabel: _('backend.chrome.customValue'),
-        applyLabel: _('backend.chrome.apply'),
-      },
-    },
-    { id: 'group', label: _('backend.chrome.groupBy'), items: groupItems },
-    {
-      id: 'favorites',
-      label: _('backend.chrome.favorites'),
-      items: [
-        ...favoriteItems,
-        {
-          id: 'favorite:new',
-          label: _('product_backend.favorite.create'),
-          path: `${saveUrl.pathname}${saveUrl.search}`,
-        },
-      ],
-    },
-  ]
-}
-
-const productFacets = (
-  _: ReturnType<ServeContext['translate']>,
-  url: URL,
-  state: ListState,
-  spec: ReturnType<typeof productListSearch>,
-) => {
-  const href = (change: (next: ListState) => void) => {
-    const next = cloneState(state)
-    change(next)
-    next.page = 1
-    return encodeListState(next, url)
-  }
-  return [
-    ...(state.q
-      ? [{ label: `${_('backend.chrome.searchFacet')}: ${state.q}`, without: href((next) => delete next.q) }]
-      : []),
-    ...state.presets.map((key) => ({
-      label: spec.presets?.find((preset) => preset.key === key)?.label ?? key,
-      without: href((next) => {
-        next.presets = next.presets.filter((preset) => preset !== key)
-      }),
-    })),
-    ...state.filters.map((filter, index) => ({
-      label: filter.kind === 'rule' ? `${filter.field} ${filter.operator}` : `${filter.op.toUpperCase()} (…)`,
-      without: href((next) => {
-        next.filters.splice(index, 1)
-      }),
-    })),
-    ...state.groupBy.map((group, index) => ({
-      label: `${_('backend.chrome.groupBy')}: ${group.key}${group.interval ? ` / ${group.interval}` : ''}`,
-      without: href((next) => {
-        next.groupBy.splice(index, 1)
-        next.openGroups = []
-      }),
-    })),
-  ]
 }
 
 const productFieldLabel = (
@@ -420,162 +245,6 @@ const productFieldLabel = (
     } as Record<string, string>
   )[key]
   return message && _.resolves(message) ? _(message) : fallback
-}
-
-const productSearchFilterConfig = (
-  _: ReturnType<ServeContext['translate']>,
-  url: URL,
-  state: ListState,
-  spec: ReturnType<typeof productListSearch>,
-  favorites: SavedSearchRow[],
-): SearchFilterConfig => {
-  const presetLabel = (key: string): string =>
-    key === 'goods' || key === 'service'
-      ? _(`product_backend.type.${key}`)
-      : productFieldLabel(_, key === 'sale' ? 'saleOk' : 'purchaseOk', key)
-  const ruleLabel = (field: string, operator: string, value: unknown): string => {
-    const label = productFieldLabel(
-      _,
-      field,
-      spec.filterable?.find((candidate) => candidate.key === field)?.label ?? field,
-    )
-    const suffix =
-      value == null || value === '' ? '' : `: ${Array.isArray(value) ? value.join(', ') : String(value)}`
-    return `${label} ${operator}${suffix}`
-  }
-  const customFilters: SearchFilterCustomRule[] = state.filters.flatMap((filter, index) =>
-    filter.kind === 'rule'
-      ? [
-          {
-            id: `rule:${index}`,
-            field: filter.field,
-            operator: filter.operator,
-            value: Array.isArray(filter.value) ? filter.value.join(',') : String(filter.value ?? ''),
-            label: ruleLabel(filter.field, filter.operator, filter.value),
-          },
-        ]
-      : [],
-  )
-  const facets: SearchFacet[] = [
-    ...(state.q ? [{ id: 'query:current', type: 'field' as const, label: state.q }] : []),
-    ...state.presets.map((key) => ({
-      id: `preset:${key}`,
-      type: 'filter' as const,
-      label: presetLabel(key),
-    })),
-    ...(state.includeArchived
-      ? [{ id: 'archived', type: 'filter' as const, label: _('backend.chrome.includeArchived') }]
-      : []),
-    ...customFilters.map(({ id, label }) => ({ id, type: 'filter' as const, label })),
-    ...state.groupBy.map((group) => {
-      const field = spec.groupable?.find((candidate) => candidate.key === group.key)
-      const label = productFieldLabel(_, group.key, field?.label ?? group.key)
-      return {
-        id: `${group.key}${group.interval ? `:${group.interval}` : ''}`,
-        type: 'groupBy' as const,
-        label: `${label}${group.interval ? ` / ${group.interval}` : ''}`,
-      }
-    }),
-    ...(state.favoriteId
-      ? [
-          {
-            id: state.favoriteId,
-            type: 'favorite' as const,
-            label: favorites.find((favorite) => favorite.id === state.favoriteId)?.name ?? state.favoriteId,
-          },
-        ]
-      : []),
-  ]
-  return {
-    name: 'product-template-filter',
-    size: 'compact',
-    maxGroupBy: 4,
-    facets,
-    filters: [
-      ...(spec.presets ?? []).map((preset) => ({
-        id: `preset:${preset.key}`,
-        label: presetLabel(preset.key),
-        active: state.presets.includes(preset.key),
-        group: preset.group,
-      })),
-      {
-        id: 'archived',
-        label: _('backend.chrome.includeArchived'),
-        active: state.includeArchived,
-        group: 'state',
-      },
-    ],
-    groupBy: (spec.groupable ?? []).map((field) => {
-      const label = productFieldLabel(_, field.key, field.label)
-      return field.intervals?.length
-        ? {
-            id: field.key,
-            label,
-            active: false,
-            options: field.intervals.map((interval) => ({
-              id: `${field.key}:${interval}`,
-              label: `${label} / ${interval}`,
-              active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
-            })),
-          }
-        : {
-            id: field.key,
-            label,
-            active: state.groupBy.some((group) => group.key === field.key),
-          }
-    }),
-    favorites: favorites.map((favorite) => ({
-      id: favorite.id,
-      label: favorite.name,
-      isDefault: Boolean(favorite.defaultKey),
-      active: state.favoriteId === favorite.id,
-    })),
-    customFilterFields: (spec.filterable ?? []).map((field) => ({
-      value: field.key,
-      label: productFieldLabel(_, field.key, field.label),
-      type: field.type,
-    })),
-    customFilters,
-    labels: {
-      searchLabel: _('product_backend.search.label'),
-      searchPlaceholder: _('product_backend.chrome.search'),
-      toggleLabel: _('product_backend.search.toggle'),
-      filters: _('product_backend.search.filters'),
-      groupBy: _('product_backend.search.groupBy'),
-      groupByApplied: _('product_backend.search.groupByApplied'),
-      groupByAdd: _('product_backend.search.groupByAdd'),
-      groupByClear: _('product_backend.search.groupByClear'),
-      groupByMoveEarlier: _('product_backend.search.groupByMoveEarlier'),
-      groupByMoveLater: _('product_backend.search.groupByMoveLater'),
-      favorites: _('product_backend.search.favorites'),
-      searchGenericLabel: _('product_backend.search.genericLabel'),
-      searchFieldPrefix: _('product_backend.search.fieldPrefix'),
-      searchFieldPreposition: _('product_backend.search.fieldPreposition'),
-      customFilterField: _('product_backend.search.customFilterField'),
-      customFilterOperator: _('product_backend.search.customFilterOperator'),
-      customFilterValue: _('product_backend.search.customFilterValue'),
-      customFilterAdd: _('product_backend.search.customFilterAdd'),
-      customGroupByPlaceholder: _('product_backend.search.customGroupByPlaceholder'),
-      saveSearch: _('product_backend.search.saveSearch'),
-      favoriteName: _('product_backend.search.favoriteName'),
-      favoriteDefault: _('product_backend.search.favoriteDefault'),
-      favoriteSaveAction: _('product_backend.search.favoriteSaveAction'),
-      favoriteRemove: _('product_backend.search.favoriteRemove'),
-      favoriteSetDefault: _('product_backend.search.favoriteSetDefault'),
-      noFavorites: _('product_backend.search.noFavorites'),
-      clear: _('product_backend.search.clear'),
-      applyError: _('product_backend.search.applyError'),
-      retry: _('product_backend.search.retry'),
-    },
-    manager: {
-      applyFunction: 'product_backend.applySearchFilter',
-      bodyId: 'product-template-list',
-      applyInput: { returnTo: `${url.pathname}${url.search}` },
-      saveFavoriteFunction: 'product_backend.saveSearchFavorite',
-      deleteFavoriteFunction: 'product_backend.deleteSearchFavorite',
-      setDefaultFavoriteFunction: 'product_backend.setDefaultSearchFavorite',
-    },
-  }
 }
 
 const pathStartsWith = (path: unknown[], prefix: unknown[]): boolean =>
@@ -722,27 +391,7 @@ export const routes: Record<string, RouteEntry> = {
       const view: View = (VIEWS as readonly string[]).includes(asked ?? '') ? (asked as View) : 'list'
       const spec = productListSearch(table(ctx.manifest, 'product.Template'))
       const parsed = parseListState(spec, url)
-      const loadedFavorites = (await ctx.callUnchecked(
-        'backend.listSavedSearches',
-        { listKey: spec.key },
-        url,
-        req,
-      )) as SavedSearchRow[]
-      const favorites = loadedFavorites.filter((favorite) => {
-        try {
-          validateListState(spec, {
-            ...cloneState(parsed.state),
-            ...favorite.state,
-            presets: [...(favorite.state.presets ?? [])],
-            filters: [...(favorite.state.filters ?? [])],
-            groupBy: [...(favorite.state.groupBy ?? [])],
-            sort: [...(favorite.state.sort ?? spec.defaultSort ?? [])],
-          })
-          return true
-        } catch {
-          return false
-        }
-      })
+      const favorites = await loadListFavorites(ctx, url, req, spec, cloneState(parsed.state))
       const hasExpandedState = ['q', 'preset', 'filter', 'group', 'sort', 'archived'].some((key) =>
         url.searchParams.has(key),
       )
@@ -871,7 +520,29 @@ export const routes: Record<string, RouteEntry> = {
             url,
             req,
             'product-template-filter',
-            productSearchFilterConfig(_, url, state, spec, favorites),
+            listSearchFilterConfig(_, {
+              name: 'product-template-filter',
+              bodyId: 'product-template-list',
+              spec,
+              state,
+              favorites,
+              fieldLabel: (key, fallback) => productFieldLabel(_, key, fallback),
+              presetLabel: (key, fallback) =>
+                key === 'goods' || key === 'service'
+                  ? _(`product_backend.type.${key}`)
+                  : productFieldLabel(_, key === 'sale' ? 'saleOk' : 'purchaseOk', fallback),
+              labels: {
+                searchLabel: _('product_backend.search.label'),
+                searchPlaceholder: _('product_backend.chrome.search'),
+              },
+              applyInput: { listKey: spec.key, returnTo: `${url.pathname}${url.search}` },
+              functions: {
+                apply: 'product_backend.applySearchFilter',
+                saveFavorite: 'product_backend.saveSearchFavorite',
+                deleteFavorite: 'product_backend.deleteSearchFavorite',
+                setDefaultFavorite: 'product_backend.setDefaultSearchFavorite',
+              },
+            }),
           )
           const shown = colsOf(url)
           const columns = templateColumns(_)

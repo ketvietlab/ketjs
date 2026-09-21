@@ -1,4 +1,5 @@
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { bomListSearch, productionListSearch, workCenterListSearch } from './search.ts'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -263,6 +264,23 @@ const saveBom = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], v
   )
 }
 
+/** Every manufacturing list shares one set of functions; see `search-functions.ts`. */
+const manufacturingSearchFunctions = {
+  apply: 'manufacturing_backend.applySearchFilter',
+  saveFavorite: 'manufacturing_backend.saveSearchFavorite',
+  deleteFavorite: 'manufacturing_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'manufacturing_backend.setDefaultSearchFavorite',
+}
+
+/** A production state, or an archived work center, in the reader's language. */
+const manufacturingGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return _(`manufacturing_backend.state.${raw === 'false' ? 'archived' : 'active'}`)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `manufacturing_backend.state.${raw}`
+  return key === 'state' && _.resolves(message) ? _(message) : raw
+}
+
 const bomsPage = async (
   ctx: ServeContext,
   url: URL,
@@ -274,28 +292,34 @@ const bomsPage = async (
   adminPage(ctx, url, req, {
     title: 'manufacturing_backend.boms.title',
     active: '/admin/manufacturing/boms',
-    body: (_: Translator, frame: Frame) => {
+    body: async (_: Translator, frame: Frame) => {
       const collection = inLocale(url, '/admin/manufacturing/boms')
       const productsById = new Map(
         data.variants.map((row) => [String(row.id), String(row.templateName ?? row.name ?? row.id)]),
       )
+      const search = await rowListSearch(ctx, url, req, {
+        spec: bomListSearch,
+        rows: data.boms.map((row) => ({
+          id: String(row.id),
+          code: String(row.code ?? row.id),
+          product: productsById.get(String(row.productId)) ?? String(row.productId),
+          quantity: String(row.productQty),
+        })),
+        frame,
+        name: 'manufacturing-bom-filter',
+        bodyId: 'manufacturing-bom-list',
+        functions: manufacturingSearchFunctions,
+        labels: { searchPlaceholder: _('manufacturing_backend.boms.title') },
+        groupLabel: (key, value) => manufacturingGroupLabel(_, key, value),
+      })
       const list = bomsListScreen(
         _,
         {
           createHref: inLocale(url, '/admin/manufacturing/boms?create=1'),
-          rows: searchCollectionRows(
-            url,
-            data.boms.map((row) => ({
-              id: String(row.id),
-              code: String(row.code ?? row.id),
-              product: productsById.get(String(row.productId)) ?? String(row.productId),
-              quantity: String(row.productQty),
-            })),
-            (row) =>
-              String(row.code ?? '') + ' ' + String(row.product ?? '') + ' ' + String(row.quantity ?? ''),
-          ),
+          rows: search.rows,
+          ...(search.groups ? { table: { groups: search.groups } } : {}),
         },
-        collectionSearchFrame(url, frame, _('manufacturing_backend.boms.title')),
+        search.frame,
       )
       if (url.searchParams.get('create') !== '1' && !errors.length) return list
       return modalWorkspace(
@@ -364,38 +388,36 @@ const workCentersPage = async (
   adminPage(ctx, url, req, {
     title: 'manufacturing_backend.workCenters.title',
     active: '/admin/manufacturing/work-centers',
-    body: (_, frame) => {
+    body: async (_, frame) => {
       const collection = workCenterListPath(url)
+      const search = await rowListSearch(ctx, url, req, {
+        spec: workCenterListSearch,
+        rows: rows.map((row) => ({
+          id: String(row.id),
+          code: String(row.code),
+          name: String(row.name),
+          capacity: String(row.capacity),
+          timeEfficiency: String(row.timeEfficiency),
+          costPerHour: String(row.costPerHour),
+          active: row.active !== false,
+          editHref: workCenterModalPath(url, String(row.id)),
+        })),
+        frame,
+        name: 'manufacturing-work-center-filter',
+        bodyId: 'manufacturing-work-center-list',
+        functions: manufacturingSearchFunctions,
+        labels: { searchPlaceholder: _('manufacturing_backend.workCenters.title') },
+        groupLabel: (key, value) => manufacturingGroupLabel(_, key, value),
+      })
       const list = workCentersListScreen(
         _,
         {
           action: collection,
           createHref: workCenterModalPath(url),
-          rows: searchCollectionRows(
-            url,
-            rows.map((row) => ({
-              id: String(row.id),
-              code: String(row.code),
-              name: String(row.name),
-              capacity: String(row.capacity),
-              timeEfficiency: String(row.timeEfficiency),
-              costPerHour: String(row.costPerHour),
-              active: row.active !== false,
-              editHref: workCenterModalPath(url, String(row.id)),
-            })),
-            (row) =>
-              String(row.name ?? '') +
-              ' ' +
-              String(row.code ?? '') +
-              ' ' +
-              String(row.capacity ?? '') +
-              ' ' +
-              String(row.timeEfficiency ?? '') +
-              ' ' +
-              String(row.costPerHour ?? ''),
-          ),
+          rows: search.rows,
+          ...(search.groups ? { table: { groups: search.groups } } : {}),
         },
-        collectionSearchFrame(url, frame, _('manufacturing_backend.workCenters.title')),
+        search.frame,
       )
       if (!forceModal && url.searchParams.get('create') !== '1' && !url.searchParams.get('edit')) return list
       return modalWorkspace(
@@ -483,33 +505,34 @@ export const routes: Record<string, RouteEntry> = {
       )
       return adminPage(ctx, url, req, {
         title: 'manufacturing_backend.orders.title',
-        body: (_, frame) =>
-          ordersListScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: productionListSearch,
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              product: productsById.get(String(row.productId)) ?? String(row.productId),
+              quantity: String(row.productQty),
+              state: String(row.state),
+              href: inLocale(url, `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`),
+            })),
+            frame,
+            name: 'manufacturing-order-filter',
+            bodyId: 'manufacturing-order-list',
+            functions: manufacturingSearchFunctions,
+            labels: { searchPlaceholder: _('manufacturing_backend.orders.title') },
+            groupLabel: (key, value) => manufacturingGroupLabel(_, key, value),
+          })
+          return ordersListScreen(
             _,
             {
-              rows: searchCollectionRows(
-                url,
-                rows.map((row) => ({
-                  id: String(row.id),
-                  name: String(row.name),
-                  product: productsById.get(String(row.productId)) ?? String(row.productId),
-                  quantity: String(row.productQty),
-                  state: String(row.state),
-                  href: inLocale(url, `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`),
-                })),
-                (row) =>
-                  String(row.name ?? '') +
-                  ' ' +
-                  String(row.product ?? '') +
-                  ' ' +
-                  String(row.quantity ?? '') +
-                  ' ' +
-                  String(row.state ?? ''),
-              ),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: inLocale(url, '/admin/manufacturing/new'),
             },
-            collectionSearchFrame(url, frame, _('manufacturing_backend.orders.title')),
-          ),
+            search.frame,
+          )
+        },
       })
     },
 

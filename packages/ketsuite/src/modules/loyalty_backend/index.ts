@@ -1,11 +1,21 @@
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { listSearchChrome } from '../backend/search-filter.ts'
+import { searchFilterFunctions } from './search-functions.ts'
+import {
+  ledgerListSearch,
+  membershipListSearch,
+  programListSearch,
+  tierListSearch,
+  walletListSearch,
+} from './search.ts'
+import { parseListState } from '@ketvietlab/ketjs'
 import { newProgramRoute, programWorkspaceRoute } from './program-workspace.tsx'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, SearchMenu } from '../../ui/index.ts'
 import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager, withParam } from '../backend/paging.ts'
 import { LEDGER_OPERATIONS, PROGRAM_TYPES } from '../loyalty/types.ts'
 import { tierFormSchema } from '../loyalty/admin-functions.ts'
 import { messages } from './messages.ts'
@@ -30,6 +40,24 @@ import type { AnyRow, Req } from '../backend/screen.ts'
  * can always be undone from the same place it was set. The URL is the state, so
  * the back button and a pasted link both do the obvious thing.
  */
+/** Every loyalty list shares one set of functions; see `search-functions.ts`. */
+const loyaltySearchFunctions = {
+  apply: 'loyalty_backend.applySearchFilter',
+  saveFavorite: 'loyalty_backend.saveSearchFavorite',
+  deleteFavorite: 'loyalty_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'loyalty_backend.setDefaultSearchFavorite',
+}
+
+/**
+ * The first preset the reader picked from one group.
+ *
+ * These lists are paged and filtered by their domain functions, and each of
+ * those takes a single value per dimension, so alternatives within a group
+ * cannot accumulate the way they do over an in-memory collection.
+ */
+const presetIn = (presets: readonly string[], group: readonly string[]): string | undefined =>
+  presets.find((preset) => group.includes(preset))
+
 const filterMenu = (
   url: URL,
   id: string,
@@ -48,18 +76,6 @@ const filterMenu = (
   })),
 })
 
-/** The chips above the table saying which filters are on, each one removable. */
-const filterFacets = (
-  url: URL,
-  active: Array<{ param: string; label: string | null }>,
-): Array<{ label: string; without: string }> =>
-  active
-    .filter((entry): entry is { param: string; label: string } => Boolean(entry.label))
-    .map((entry) => ({
-      label: entry.label,
-      without: withParam(url, entry.param, null),
-    }))
-
 /**
  * A window over a ledger, chosen by name rather than by date.
  *
@@ -69,6 +85,9 @@ const filterFacets = (
  * control the shared chrome does not have yet.
  */
 const PERIODS = ['month', 'quarter', 'year', 'all'] as const
+const PROGRAM_STATE_PRESETS = ['draft', 'running', 'upcoming', 'archived', 'ended'] as const
+const WALLET_STATE_PRESETS = ['active', 'locked', 'expired'] as const
+const MEMBERSHIP_STATE_PRESETS = ['active', 'dormant'] as const
 
 const periodWindow = (period: string): { from?: string; to?: string } => {
   const at = new Date()
@@ -193,9 +212,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       if (req.method === 'POST') return seeOther(inLocale(url, '/admin/loyalty/programs/new'))
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const page = pageOf(url)
-      const search = searchOf(url)
-      const state = url.searchParams.get('state') ?? undefined
-      const programType = url.searchParams.get('type') ?? undefined
+      const { state: listState } = parseListState(programListSearch, url)
+      const search = listState.q ?? ''
+      const state = presetIn(listState.presets, PROGRAM_STATE_PRESETS)
+      const programType = presetIn(listState.presets, PROGRAM_TYPES)
       const [rows, totals] = await Promise.all([
         ctx.call(
           'loyalty.program.list',
@@ -214,71 +234,29 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       ])
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.programs.title',
-        body: (_, frame) =>
-          programsScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: programListSearch,
+            frame,
+            name: 'loyalty-program-filter',
+            bodyId: 'loyalty-program-list',
+            functions: loyaltySearchFunctions,
+            labels: { searchPlaceholder: _('loyalty_backend.chrome.searchPrograms') },
+          })
+          return programsScreen(
             _,
             {
-              ...frame,
+              ...chrome.frame,
               chrome: {
-                section: _('loyalty_backend.menu.app'),
-                search: {
-                  name: 'q',
-                  value: search ?? '',
-                  placeholder: _('loyalty_backend.chrome.searchPrograms'),
-                  keep: {
-                    ...(state ? { state } : {}),
-                    ...(programType ? { type: programType } : {}),
-                  },
-                  facets: filterFacets(url, [
-                    {
-                      param: 'state',
-                      label: state ? _(`loyalty_backend.state.${state}`) : null,
-                    },
-                    {
-                      param: 'type',
-                      label: programType ? _(`loyalty_backend.programType.${programType}`) : null,
-                    },
-                  ]),
-                  menus: [
-                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
-                      {
-                        value: 'draft',
-                        label: _('loyalty_backend.state.draft'),
-                      },
-                      {
-                        value: 'running',
-                        label: _('loyalty_backend.state.running'),
-                      },
-                      {
-                        value: 'upcoming',
-                        label: _('loyalty_backend.state.upcoming'),
-                      },
-                      {
-                        value: 'archived',
-                        label: _('loyalty_backend.state.archived'),
-                      },
-                      {
-                        value: 'ended',
-                        label: _('loyalty_backend.state.ended'),
-                      },
-                    ]),
-                    filterMenu(
-                      url,
-                      'type',
-                      _('loyalty_backend.field.programType'),
-                      'type',
-                      programType,
-                      options(_, PROGRAM_TYPES, 'programType'),
-                    ),
-                  ],
-                },
+                ...chrome.frame.chrome,
                 pager: pager(url, page, rows.length, Number(totals.total ?? 0)),
               },
             },
             rows,
             totals,
             createProgramFields(_),
-          ),
+          )
+        },
       })
     },
 
@@ -311,8 +289,12 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const page = pageOf(url)
-      const search = searchOf(url)
-      const state = url.searchParams.get('state') ?? undefined
+      const { state: listState } = parseListState(walletListSearch, url)
+      const search = listState.q ?? ''
+      const state = presetIn(listState.presets, WALLET_STATE_PRESETS)
+      // Which program's wallets these are stays the screen's own selector: a
+      // program is chosen by name out of however many exist, which is not
+      // something a fixed list of presets can offer.
       const programId = url.searchParams.get('program') ?? undefined
       const [wallets, totals] = await Promise.all([
         ctx.call(
@@ -339,59 +321,34 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const programNames = new Map(data.programs.map((program) => [String(program.id), String(program.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.wallets.title',
-        body: (_, frame) =>
-          walletsScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: walletListSearch,
+            frame,
+            name: 'loyalty-wallet-filter',
+            bodyId: 'loyalty-wallet-list',
+            functions: loyaltySearchFunctions,
+            labels: { searchPlaceholder: _('loyalty_backend.chrome.searchWallets') },
+          })
+          return walletsScreen(
             _,
             {
-              ...frame,
+              ...chrome.frame,
               chrome: {
-                section: _('loyalty_backend.menu.app'),
-                search: {
-                  name: 'q',
-                  value: search ?? '',
-                  placeholder: _('loyalty_backend.chrome.searchWallets'),
-                  keep: {
-                    ...(state ? { state } : {}),
-                    ...(programId ? { program: programId } : {}),
-                  },
-                  facets: filterFacets(url, [
-                    {
-                      param: 'state',
-                      label: state ? _(`loyalty_backend.state.${state}`) : null,
-                    },
-                    {
-                      param: 'program',
-                      label: programId ? (programNames.get(programId) ?? null) : null,
-                    },
-                  ]),
-                  menus: [
-                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
-                      {
-                        value: 'active',
-                        label: _('loyalty_backend.state.running'),
-                      },
-                      {
-                        value: 'locked',
-                        label: _('loyalty_backend.state.locked'),
-                      },
-                      {
-                        value: 'expired',
-                        label: _('loyalty_backend.state.expired'),
-                      },
-                    ]),
-                    filterMenu(
-                      url,
-                      'program',
-                      _('loyalty_backend.field.program'),
-                      'program',
-                      programId,
-                      data.programs.map((program) => ({
-                        value: String(program.id),
-                        label: String(program.name),
-                      })),
-                    ),
-                  ],
-                },
+                ...chrome.frame.chrome,
+                tailMenus: [
+                  filterMenu(
+                    url,
+                    'program',
+                    _('loyalty_backend.field.program'),
+                    'program',
+                    programId,
+                    data.programs.map((program) => ({
+                      value: String(program.id),
+                      label: String(program.name),
+                    })),
+                  ),
+                ],
                 pager: pager(url, page, wallets.length, Number(totals.total ?? 0)),
               },
             },
@@ -429,7 +386,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               },
             ],
             errors,
-          ),
+          )
+        },
       })
     },
 
@@ -509,11 +467,16 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const page = pageOf(url)
-      const period = PERIODS.includes((url.searchParams.get('period') ?? '') as (typeof PERIODS)[number])
-        ? (url.searchParams.get('period') as string)
-        : 'month'
+      const { state: listState } = parseListState(ledgerListSearch, url)
+      const periodPreset = presetIn(
+        listState.presets,
+        PERIODS.map((value) => `period-${value}`),
+      )
+      const period = periodPreset ? periodPreset.slice('period-'.length) : 'month'
       const window = periodWindow(period)
-      const operation = url.searchParams.get('operation') ?? undefined
+      const operation = presetIn(listState.presets, LEDGER_OPERATIONS)
+      // A program and a wallet are chosen by name out of however many exist, so
+      // they stay the screen's own selectors beside the bar.
       const programId = url.searchParams.get('program') ?? undefined
       const walletId = url.searchParams.get('wallet') ?? undefined
       const filters = {
@@ -534,77 +497,44 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         ctx.call('loyalty.wallet.list', { includeArchived: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
       ])
       const codes = new Map(wallets.map((wallet) => [String(wallet.id), String(wallet.code)]))
-      const programNames = new Map(programs.map((program) => [String(program.id), String(program.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.ledger.title',
-        body: (_, frame) =>
-          ledgerScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: ledgerListSearch,
+            frame,
+            name: 'loyalty-ledger-filter',
+            bodyId: 'loyalty-ledger-list',
+            functions: loyaltySearchFunctions,
+            labels: { searchPlaceholder: _('loyalty_backend.chrome.searchLedger') },
+          })
+          return ledgerScreen(
             _,
             {
-              ...frame,
+              ...chrome.frame,
               chrome: {
-                section: _('loyalty_backend.menu.app'),
-                search: {
-                  name: 'q',
-                  value: '',
-                  placeholder: _('loyalty_backend.chrome.searchLedger'),
-                  keep: {
-                    period,
-                    ...(operation ? { operation } : {}),
-                    ...(programId ? { program: programId } : {}),
-                    ...(walletId ? { wallet: walletId } : {}),
-                  },
-                  facets: filterFacets(url, [
-                    {
-                      param: 'period',
-                      label: _(`loyalty_backend.period.${period}`),
-                    },
-                    {
-                      param: 'operation',
-                      label: operation ? _(`loyalty_backend.operation.${operation}`) : null,
-                    },
-                    {
-                      param: 'program',
-                      label: programId ? (programNames.get(programId) ?? null) : null,
-                    },
-                    {
-                      param: 'wallet',
-                      label: walletId ? (codes.get(walletId) ?? null) : null,
-                    },
-                  ]),
-                  menus: [
-                    filterMenu(
-                      url,
-                      'period',
-                      _('loyalty_backend.field.period'),
-                      'period',
-                      period,
-                      PERIODS.map((value) => ({
-                        value,
-                        label: _(`loyalty_backend.period.${value}`),
-                      })),
-                    ),
-                    filterMenu(
-                      url,
-                      'operation',
-                      _('loyalty_backend.field.operation'),
-                      'operation',
-                      operation,
-                      options(_, LEDGER_OPERATIONS, 'operation'),
-                    ),
-                    filterMenu(
-                      url,
-                      'program',
-                      _('loyalty_backend.field.program'),
-                      'program',
-                      programId,
-                      programs.map((program) => ({
-                        value: String(program.id),
-                        label: String(program.name),
-                      })),
-                    ),
-                  ],
-                },
+                ...chrome.frame.chrome,
+                tailMenus: [
+                  filterMenu(
+                    url,
+                    'program',
+                    _('loyalty_backend.field.program'),
+                    'program',
+                    programId,
+                    programs.map((program) => ({
+                      value: String(program.id),
+                      label: String(program.name),
+                    })),
+                  ),
+                  filterMenu(
+                    url,
+                    'wallet',
+                    _('loyalty_backend.field.wallet'),
+                    'wallet',
+                    walletId,
+                    wallets.map((wallet) => ({ value: String(wallet.id), label: String(wallet.code) })),
+                  ),
+                ],
                 pager: pager(url, page, rows.length, Number(totals.entries ?? 0)),
               },
             },
@@ -613,7 +543,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               walletCode: codes.get(String(row.walletId)),
             })),
             totals,
-          ),
+          )
+        },
       })
     },
 
@@ -622,8 +553,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const page = pageOf(url)
+      // A tier is chosen by name, so it stays the screen's own selector.
       const tierId = url.searchParams.get('tier') ?? undefined
-      const state = url.searchParams.get('state') ?? undefined
+      const { state: listState } = parseListState(membershipListSearch, url)
+      const state = presetIn(listState.presets, MEMBERSHIP_STATE_PRESETS)
       const filters = {
         ...(tierId ? { tierId } : {}),
         ...(state ? { state } : {}),
@@ -641,18 +574,21 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const tierNames = new Map(tiers.map((tier) => [String(tier.id), String(tier.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.members.title',
-        body: (_, frame) =>
-          membershipsScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: membershipListSearch,
+            frame,
+            name: 'loyalty-membership-filter',
+            bodyId: 'loyalty-membership-list',
+            functions: loyaltySearchFunctions,
+          })
+          return membershipsScreen(
             _,
             {
-              ...frame,
+              ...chrome.frame,
               chrome: {
-                section: _('loyalty_backend.menu.app'),
+                ...chrome.frame.chrome,
                 tailMenus: [
-                  filterMenu(url, 'state', _('loyalty_backend.field.activity'), 'state', state, [
-                    { value: 'active', label: _('loyalty_backend.state.active') },
-                    { value: 'dormant', label: _('loyalty_backend.state.dormant') },
-                  ]),
                   filterMenu(
                     url,
                     'tier',
@@ -670,7 +606,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               tierName: row.tierName ?? tierNames.get(String(row.tierId)),
             })),
             totals,
-          ),
+          )
+        },
       })
     },
 
@@ -795,27 +732,32 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const closeHref = baseHref()
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.memberships.title',
-        body: (_, frame) =>
-          tiersScreen(
-            _,
-            collectionSearchFrame(url, frame, _('loyalty_backend.tiers.title')),
-            searchCollectionRows(url, tiers, (row) => `${row.name ?? ''}`),
-            {
-              action: url.pathname + url.search,
-              closeHref,
-              createHref: create.pathname + create.search,
-              tierHref: (row) => {
-                const target = new URL(closeHref, url.origin)
-                target.searchParams.set('modal', 'tier')
-                target.searchParams.set('tier', String(row.id))
-                return target.pathname + target.search
-              },
-              tierFields,
-              tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
-              tier,
-              modal,
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: tierListSearch,
+            rows: tiers,
+            frame,
+            name: 'loyalty-tier-filter',
+            bodyId: 'loyalty-tier-list',
+            functions: loyaltySearchFunctions,
+            labels: { searchPlaceholder: _('loyalty_backend.tiers.title') },
+          })
+          return tiersScreen(_, search.frame, search.rows, {
+            action: url.pathname + url.search,
+            closeHref,
+            createHref: create.pathname + create.search,
+            tierHref: (row) => {
+              const target = new URL(closeHref, url.origin)
+              target.searchParams.set('modal', 'tier')
+              target.searchParams.set('tier', String(row.id))
+              return target.pathname + target.search
             },
-          ),
+            tierFields,
+            tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
+            tier,
+            modal,
+          })
+        },
       })
     },
 
@@ -925,6 +867,7 @@ export default defineModule({
   name: 'loyalty_backend',
   version: '0.1.0',
   depends: ['loyalty', 'loyalty_sale', 'loyalty_pos', 'sale_backend', 'pos_backend', 'backend', 'user'],
+  functions: searchFilterFunctions,
   title: 'Khách hàng thân thiết trong quản trị',
   summary: 'Cấu hình, báo cáo, tích hợp đơn hàng và tóm tắt portal Loyalty.',
   category: 'Bán hàng',
