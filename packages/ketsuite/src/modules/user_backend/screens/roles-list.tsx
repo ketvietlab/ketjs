@@ -1,16 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
   collectionControls,
   collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { RoleRow } from './types.ts'
 
 export type RoleListRow = RoleRow & { detailHref: string }
@@ -19,6 +19,8 @@ export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
   createHref: string
   presetsHref: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<RoleListRow>>
 }
 
 export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
@@ -66,8 +68,9 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       id: (row) => row.id,
       rowHref: (row) => row.detailHref,
       columns: roleListColumns(_),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -82,17 +85,18 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       headerActions={
         <LinkButton label={_('user_backend.action.createRole')} href={options.createHref} variant="primary" />
       }
-      actions={inline([
+      actions={collectionActions(
+        _,
+        frame,
         <LinkButton
           label={_('user_backend.action.presets')}
           href={options.presetsHref}
           variant="secondary"
         />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      )}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, prepared.table)
           : emptyState(_('user_backend.roles.empty'), _('user_backend.roles.emptyHint'))
       }

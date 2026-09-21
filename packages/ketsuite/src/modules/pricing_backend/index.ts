@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { pricelistListSearch } from './search.ts'
+import { pricingSelectionLabel } from './screens/shared.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route } from '@ketvietlab/ketjs'
 import { modalWorkspace } from '../../ui/index.ts'
@@ -44,6 +47,7 @@ export default defineModule({
   title: 'Bảng giá trong quản trị',
   summary: 'Danh sách bảng giá theo company.',
   category: 'Hệ thống',
+  functions: searchFilterFunctions,
   menus: {
     pricing: { label: 'menu.app', icon: 'tag', sequence: 21 },
     'pricing.lists': {
@@ -87,22 +91,33 @@ export default defineModule({
         return adminPage(ctx, url, req, {
           title: 'pricing_backend.title',
           active: '/admin/pricing/pricelists',
-          body: (_, frame) => {
+          body: async (_, frame) => {
             const closeHref = inLocale(url, '/admin/pricing/pricelists')
             const createHref = pathWith(url, '/admin/pricing/pricelists', { create: '1' })
-            const workspace = pricelistsScreen(
-              _,
-              collectionSearchFrame(url, frame, _('pricing_backend.title')),
-              {
-                rows: searchCollectionRows(
-                  url,
-                  rows,
-                  (row) =>
-                    `${row.name} ${row.currency} ${row.sequence} ${_(`pricing_backend.state.${row.state}`)}`,
-                ),
-                createHref,
+            const search = await rowListSearch(ctx, url, req, {
+              spec: pricelistListSearch,
+              rows,
+              frame,
+              name: 'pricing-pricelist-filter',
+              bodyId: 'pricing-pricelist-list',
+              functions: {
+                apply: 'pricing_backend.applySearchFilter',
+                saveFavorite: 'pricing_backend.saveSearchFavorite',
+                deleteFavorite: 'pricing_backend.deleteSearchFavorite',
+                setDefaultFavorite: 'pricing_backend.setDefaultSearchFavorite',
               },
-            )
+              labels: { searchPlaceholder: _('pricing_backend.title') },
+              groupLabel: (key, value) => {
+                const raw = value == null ? '' : String(value)
+                if (!raw) return _('backend.chrome.groupEmpty')
+                return key === 'state' ? pricingSelectionLabel(_, 'state', raw) : raw
+              },
+            })
+            const workspace = pricelistsScreen(_, search.frame, {
+              rows: search.rows,
+              createHref,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
+            })
             if (!rejected && url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(
               workspace,

@@ -1,15 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
   icon,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
   Surface,
 } from '../../../ui/index.ts'
@@ -144,23 +145,8 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('account_backend.taxes.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('account_backend.taxes.title'), collection.frame)}
       footer={status}
       body={table}
     />,

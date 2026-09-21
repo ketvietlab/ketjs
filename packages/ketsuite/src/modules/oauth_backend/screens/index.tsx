@@ -1,13 +1,13 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   CardGrid,
   code,
-  ContentCard,
-  collectionTable,
+  collectionActions,
   collectionControls,
+  collectionTable,
+  ContentCard,
   DefinitionList,
   emptyState,
   FormPage,
@@ -15,6 +15,7 @@ import {
   linkButton,
   ListPage,
   Notice,
+  prepareCollectionTable,
   RecordActions,
   RecordForm,
   Section,
@@ -22,7 +23,7 @@ import {
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import type { DataTable, FormOption, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 
 export type ProviderRow = {
@@ -68,6 +69,8 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<ProviderRow>>,
 ): TemplateResult => {
   const prepared = prepareCollectionTable(
     _,
@@ -110,8 +113,9 @@ export const providersScreen = (
             ),
         },
       ],
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -292,7 +296,7 @@ export const providerFormScreen = (
             )
           : undefined
       }
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={stack([
         ...(existing
           ? [
@@ -387,6 +391,8 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<IdentityRow>>,
 ): TemplateResult => {
   const prepared = prepareCollectionTable(
     _,
@@ -431,8 +437,9 @@ export const identitiesScreen = (
           ),
         },
       ],
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -486,7 +493,7 @@ export const identityFormScreen = (
       scope="oauth-identity-form"
       title={_('oauth_backend.identities.link')}
       description={_('oauth_backend.identities.linkHint')}
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={
         <Section
           title={_('oauth_backend.identities.verifiedSubject')}
@@ -563,7 +570,7 @@ export const linkProviderScreen = (
       scope="oauth-link-provider"
       title={_('oauth_backend.link.title')}
       description={_('oauth_backend.link.hint')}
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={
         <Section
           title={_('oauth_backend.link.choose')}

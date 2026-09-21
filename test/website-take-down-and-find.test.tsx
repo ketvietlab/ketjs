@@ -185,7 +185,7 @@ test('publish screen: the takedown says what it does not reach', () => {
   assert.match(form(entry({ status: 'published' })), /publish\.downHint/u)
 })
 
-test('content list: search and status come back showing what was asked for', () => {
+test('content list: the site selector is what is left once the bar owns the query', () => {
   const html = renderToString(
     contentScreen(
       translate,
@@ -196,14 +196,12 @@ test('content list: search and status come back showing what was asked for', () 
       '',
       { basePath: '/admin/website/pages', titleKey: 'pages' },
       null,
-      { search: 'gioi', status: 'published' },
     ),
   )
-  assert.match(html, /name="q"/u)
-  assert.match(html, /value="gioi"/u)
-  assert.match(html, /name="status"/u)
-  // One GET form, so applying a status does not drop the site or the search.
+  // Which site's content this is remains a choice the screen makes; the query
+  // and the publication state moved to the search-filter bar the route builds.
   assert.match(html, /name="site"/u)
+  assert.doesNotMatch(html, /name="q"|name="status"/u)
 })
 
 test('routes: taking a page down does not answer a GET', async () => {
