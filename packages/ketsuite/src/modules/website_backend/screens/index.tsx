@@ -576,32 +576,28 @@ export const contentScreen = (
       title={_(`website_backend.${kind.titleKey}.title`)}
       frame={collection.frame}
       controls={
-        <Surface
-          padding="compact"
-          body={
-            <RecordForm
-              action={`${kind.basePath}${locale}`}
-              method="get"
-              // The bar owns the query and the publication state now; what is
-              // left is which site's content this is, which is not a filter.
-              hidden={collectionQueryKeep(
-                new URL(frame.collectionUrl ?? `${kind.basePath}${locale}`, 'http://collection.local'),
-                ['site'],
-              )}
-              layout="inline"
-              fields={[
-                {
-                  name: 'site',
-                  label: _('website_backend.field.site'),
-                  type: 'select',
-                  value: siteId,
-                  options: sites,
-                },
-              ]}
-              submit={_('website_backend.action.apply')}
-              submitVariant="secondary"
-            />
-          }
+        <RecordForm
+          action={`${kind.basePath}${locale}`}
+          method="get"
+          // The bar owns the query and the publication state now; what is
+          // left is which site's content this is, which is not a filter. The
+          // chrome draws the panel, so the form brings no card of its own.
+          hidden={collectionQueryKeep(
+            new URL(frame.collectionUrl ?? `${kind.basePath}${locale}`, 'http://collection.local'),
+            ['site'],
+          )}
+          layout="inline"
+          fields={[
+            {
+              name: 'site',
+              label: _('website_backend.field.site'),
+              type: 'select',
+              value: siteId,
+              options: sites,
+            },
+          ]}
+          submit={_('website_backend.action.apply')}
+          submitVariant="secondary"
         />
       }
       headerActions={linkButton({
@@ -1289,30 +1285,27 @@ const siteSwitcher = (
   locale: string,
   frame: Frame = {},
 ): TemplateResult => (
-  <Surface
-    padding="compact"
-    body={
-      <RecordForm
-        action={`${action}${locale}`}
-        method="get"
-        hidden={collectionQueryKeep(
-          new URL(frame.collectionUrl ?? `${action}${locale}`, 'http://collection.local'),
-          ['site'],
-        )}
-        layout="inline"
-        fields={[
-          {
-            name: 'site',
-            label: _('website_backend.field.site'),
-            type: 'select',
-            value: siteId,
-            options: sites,
-          },
-        ]}
-        submit={_('website_backend.action.switchSite')}
-        submitVariant="secondary"
-      />
-    }
+  // The chrome draws the panel around this now, so the form does not bring a
+  // card of its own.
+  <RecordForm
+    action={`${action}${locale}`}
+    method="get"
+    hidden={collectionQueryKeep(
+      new URL(frame.collectionUrl ?? `${action}${locale}`, 'http://collection.local'),
+      ['site'],
+    )}
+    layout="inline"
+    fields={[
+      {
+        name: 'site',
+        label: _('website_backend.field.site'),
+        type: 'select',
+        value: siteId,
+        options: sites,
+      },
+    ]}
+    submit={_('website_backend.action.switchSite')}
+    submitVariant="secondary"
   />
 )
 
@@ -2500,38 +2493,34 @@ export const submissionsScreen = (
       controls={stack([
         ...(options.formId
           ? [
-              <Surface
-                padding="compact"
-                body={
-                  <RecordForm
-                    action={`/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`}
-                    method="get"
-                    hidden={collectionQueryKeep(
-                      new URL(
-                        frame.collectionUrl ??
-                          `/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`,
-                        'http://collection.local',
-                      ),
-                      ['status'],
-                    )}
-                    layout="inline"
-                    fields={[
-                      {
-                        name: 'status',
-                        label: _('website_backend.field.status'),
-                        type: 'select',
-                        value: options.status ?? 'all',
-                        options: [
-                          { value: 'all', label: _('website_backend.state.all') },
-                          { value: 'new', label: _('website_backend.state.new') },
-                          { value: 'purged', label: _('website_backend.state.purged') },
-                        ],
-                      },
-                    ]}
-                    submit={_('website_backend.action.apply')}
-                    submitVariant="secondary"
-                  />
-                }
+              // The chrome draws the panel around this, so no card of its own.
+              <RecordForm
+                action={`/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`}
+                method="get"
+                hidden={collectionQueryKeep(
+                  new URL(
+                    frame.collectionUrl ??
+                      `/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`,
+                    'http://collection.local',
+                  ),
+                  ['status'],
+                )}
+                layout="inline"
+                fields={[
+                  {
+                    name: 'status',
+                    label: _('website_backend.field.status'),
+                    type: 'select',
+                    value: options.status ?? 'all',
+                    options: [
+                      { value: 'all', label: _('website_backend.state.all') },
+                      { value: 'new', label: _('website_backend.state.new') },
+                      { value: 'purged', label: _('website_backend.state.purged') },
+                    ],
+                  },
+                ]}
+                submit={_('website_backend.action.apply')}
+                submitVariant="secondary"
               />,
             ]
           : []),
@@ -2955,13 +2944,19 @@ export const redirectsScreen = (
 ): TemplateResult => {
   const editing = options.editing ?? null
   const values = options.values ?? {}
+  // Two callers with two questions: the state links set `state`, the row's
+  // edit button sets `edit`. Forwarding only one of them left the edit button
+  // pointing back at the plain list.
   const query = (params: Record<string, string>) => {
     const url = new URL(
       frame.collectionUrl ?? `/admin/website/redirects${options.locale ?? ''}`,
       'http://collection.local',
     )
     url.searchParams.set('site', siteId ?? '')
-    return withParam(url, 'state', params.state ?? null)
+    for (const key of ['state', 'edit'])
+      if (params[key] !== undefined) url.searchParams.set(key, params[key])
+      else url.searchParams.delete(key)
+    return `${url.pathname}${url.search}`
   }
   const collection = prepareCollectionTable(
     _,
@@ -3295,41 +3290,37 @@ export const publicationsScreen = (
         stack([
           ...(siteId
             ? [
-                <Surface
-                  padding="compact"
-                  body={
-                    <RecordForm
-                      action={`/admin/website/publications${options.locale ?? ''}`}
-                      method="get"
-                      layout="inline"
-                      hidden={{
-                        ...collectionQueryKeep(
-                          new URL(
-                            frame.collectionUrl ?? `/admin/website/publications${options.locale ?? ''}`,
-                            'http://collection.local',
-                          ),
-                          ['state', 'site'],
-                        ),
-                        site: siteId,
-                      }}
-                      fields={[
-                        {
-                          name: 'state',
-                          label: _('website_backend.field.status'),
-                          type: 'select',
-                          value: options.state ?? 'all',
-                          options: [
-                            { value: 'all', label: _('website_backend.state.all') },
-                            { value: 'prepared', label: _('website_backend.pubstate.prepared') },
-                            { value: 'active', label: _('website_backend.pubstate.active') },
-                            { value: 'superseded', label: _('website_backend.pubstate.superseded') },
-                          ],
-                        },
-                      ]}
-                      submit={_('website_backend.action.apply')}
-                      submitVariant="secondary"
-                    />
-                  }
+                // The chrome draws the panel around this, so no card of its own.
+                <RecordForm
+                  action={`/admin/website/publications${options.locale ?? ''}`}
+                  method="get"
+                  layout="inline"
+                  hidden={{
+                    ...collectionQueryKeep(
+                      new URL(
+                        frame.collectionUrl ?? `/admin/website/publications${options.locale ?? ''}`,
+                        'http://collection.local',
+                      ),
+                      ['state', 'site'],
+                    ),
+                    site: siteId,
+                  }}
+                  fields={[
+                    {
+                      name: 'state',
+                      label: _('website_backend.field.status'),
+                      type: 'select',
+                      value: options.state ?? 'all',
+                      options: [
+                        { value: 'all', label: _('website_backend.state.all') },
+                        { value: 'prepared', label: _('website_backend.pubstate.prepared') },
+                        { value: 'active', label: _('website_backend.pubstate.active') },
+                        { value: 'superseded', label: _('website_backend.pubstate.superseded') },
+                      ],
+                    },
+                  ]}
+                  submit={_('website_backend.action.apply')}
+                  submitVariant="secondary"
                 />,
               ]
             : []),
