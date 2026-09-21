@@ -279,7 +279,7 @@ trong HTML.
 | `[data-ui="chrome-search"]` | form tìm kiếm; style trạng thái gõ bằng `:focus-within` |
 | `[data-ui="chrome-search-input"]` | ô nhập bên trong nó |
 | `[data-ui="facet"]`, `[data-ui="facet-label"]`, `[data-ui="facet-remove"]` | một bộ lọc đang bật, và dấu × để bỏ |
-| `[data-ui="pager"]`, `[data-ui="pager-range"]` | “1-30 / 84” |
+| `[data-ui="pager"]`, `[data-ui="pager-range"]` | “1-30 / 84”; collection rỗng thì cả cụm pager không render |
 | `[data-ui="pager-step"][data-dir][aria-disabled]` | mũi tên; hết đường thì **vẫn nằm đó**, chỉ mờ đi — nếu biến mất thì thanh công cụ đổi chiều rộng |
 | `[data-ui="view-switch"]`, `[data-ui="view-kind"][data-active]` | đổi kiểu xem |
 | `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
