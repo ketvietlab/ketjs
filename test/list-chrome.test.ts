@@ -121,9 +121,10 @@ test('chrome: an exhausted arrow stays in place, disabled, so the toolbar does n
   assert.match(html, /data-ui="pager-range">[\s\S]*1-30 \/ 84/)
 })
 
-test('chrome: an empty list says nothing rather than "1-0 / 0"', () => {
+test('chrome: an empty list drops the pager rather than printing "1-0 / 0"', () => {
   const html = render({ ...base, pager: { from: 1, to: 0, total: 0, prev: null, next: null } })
-  assert.match(html, /data-ui="pager-range">[\s\S]*>0</)
+  assert.doesNotMatch(html, /data-ui="pager"/)
+  assert.doesNotMatch(html, /data-ui="pager-step"/)
 })
 
 test('chrome: navigation stays URL-driven while compact search uses an accessible modal', () => {
