@@ -203,7 +203,9 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   assert.match(englishHtml, /href="\/admin\/hr\?create=1&amp;lang=en"/)
   assert.doesNotMatch(englishHtml, /id="hr-employee-form"|data-ui="modal-layer"/)
   assert.doesNotMatch(englishHtml, /name="partnerId"|Partner ID/)
-  assert.doesNotMatch(englishHtml, /hr_backend\.[A-Za-z]/)
+  // The search-filter bar names its own functions in island props, so what must
+  // never leak is an untranslated key the reader can see.
+  assert.doesNotMatch(englishHtml, /(?:>|placeholder="|aria-label="|title=")[^<"]*hr_backend\.[A-Za-z]/u)
 
   const createdHtml = await e2e.client.form<string>('/admin/hr?lang=en', {
     code: 'NV002',

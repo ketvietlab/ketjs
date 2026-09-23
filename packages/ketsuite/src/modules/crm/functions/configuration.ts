@@ -41,7 +41,7 @@ export const configurationFunctions: Record<string, FnSpec> = {
   }),
 
   'tag.list': defineFn({
-    input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    input: { search: 'text?', limit: 'int?', cursor: 'int?', includeArchived: 'bool?' },
     output: { id: 'id', name: 'text', color: 'text?', active: 'bool' },
     effects: ['read:crm.Tag'],
     agent: true,

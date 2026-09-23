@@ -134,7 +134,13 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     const html = await response.text()
     assert.equal(response.status, 200, `${path}: ${html}`)
     assert.match(html, expected, path)
-    assert.doesNotMatch(html, /account_backend\.[A-Za-z]/, path)
+    // The search-filter bar names its own functions in island props, so what
+    // must never leak is an untranslated key the reader can actually see.
+    assert.doesNotMatch(
+      html,
+      /(?:>|placeholder="|aria-label="|title=")[^<"]*account_backend\.[A-Za-z]/u,
+      path,
+    )
     if (path === '/admin/accounting/customer-invoices/invoice-1') {
       assert.match(html, /data-ui="form-page"[^>]*data-has-aside="true"/)
       assert.match(html, /data-ui="form-page-aside"/)
@@ -297,13 +303,15 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   assert.equal(create.status, 303)
   assert.equal(create.headers.get('location'), '/admin/accounting/accounts?lang=vi')
 
-  const filtered = await e2e.client.get(`${path}?lang=vi&q=ACC999&status=active&family=asset&group=type`, {
+  const filtered = await e2e.client.get(`${path}?lang=vi&q=ACC999&preset=asset&group=accountType`, {
     headers: { accept: 'text/html' },
   })
   const filteredHtml = await filtered.text()
   assert.equal(filtered.status, 200)
-  assert.match(filteredHtml, /data-ui="group-row"/)
-  assert.match(filteredHtml, /data-ui="facet"/)
+  // Grouping is the bar's now, and it renders openable groups rather than the
+  // old group rows; the archived toggle replaced the status facet.
+  assert.match(filteredHtml, /data-ui="kt-group-toggle"/)
+  assert.match(filteredHtml, /data-island="backend\.search-filter"/)
   assert.match(filteredHtml, /ACC999/)
 
   // Editing stays URL-addressable while preserving the list underneath the modal.
@@ -414,13 +422,13 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
   const sequenceNumber = target.sequenceNumber
   assert.equal(target.defaultAccountId, defaultAccount.id)
 
-  const filtered = await e2e.client.get(`${path}?lang=vi&q=HTTPJ&status=active&type=bank`, {
+  const filtered = await e2e.client.get(`${path}?lang=vi&q=HTTPJ&preset=bank`, {
     headers: { accept: 'text/html' },
   })
   const filteredHtml = await filtered.text()
   assert.equal(filtered.status, 200)
   assert.match(filteredHtml, /data-ui="list-page"/)
-  assert.match(filteredHtml, /data-ui="facet"/)
+  assert.match(filteredHtml, /data-island="backend\.search-filter"/)
   assert.match(filteredHtml, /HTTPJ/)
   assert.match(filteredHtml, new RegExp(`${String(defaultAccount.code)} · ${String(defaultAccount.name)}`))
 
@@ -558,13 +566,13 @@ test('e2e accounting: tax list and form preserve computation, account, ordering 
   assert.equal(target.sequence, 25)
 
   const filtered = await e2e.client.get(
-    `${path}?lang=vi&q=${encodeURIComponent('Thuế HTTP')}&status=active&use=sale&computation=fixed&included=1`,
+    `${path}?lang=vi&q=${encodeURIComponent('Thuế HTTP')}&preset=sale&preset=fixed&preset=included`,
     { headers: { accept: 'text/html' } },
   )
   const filteredHtml = await filtered.text()
   assert.equal(filtered.status, 200)
   assert.match(filteredHtml, /data-ui="list-page"/)
-  assert.match(filteredHtml, /data-ui="facet"/)
+  assert.match(filteredHtml, /data-island="backend\.search-filter"/)
   assert.match(filteredHtml, /Thuế HTTP cố định/)
   assert.match(filteredHtml, new RegExp(String(taxAccount.code)))
 

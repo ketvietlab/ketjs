@@ -1,7 +1,9 @@
 import { accessRoutes, renderAccess } from './access-routes.tsx'
+import { rowListSearch } from '../backend/row-list.ts'
+import { roleListSearch, userListSearch } from './search.ts'
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
-import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext, SessionContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   presetsScreen,
@@ -22,7 +24,6 @@ import type {
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -279,6 +280,25 @@ const desired = (form: Record<string, string>, prefix: string): string[] =>
     .filter((key) => key.startsWith(`${prefix}.`))
     .map((key) => key.slice(prefix.length + 1))
 
+const userSearchFunctions = {
+  apply: 'user_backend.applySearchFilter',
+  saveFavorite: 'user_backend.saveSearchFavorite',
+  deleteFavorite: 'user_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'user_backend.setDefaultSearchFavorite',
+}
+
+/** An access kind, a role source, or a boolean column, in the reader's language. */
+const userGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return _(`user_backend.state.${raw === 'false' ? 'archived' : 'active'}`)
+  if (key === 'passwordReady')
+    return _(`user_backend.state.${raw === 'false' ? 'invitationPending' : 'passwordReady'}`)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  if (key === 'accessKind' && _.resolves(`user_backend.access.${raw}`)) return _(`user_backend.access.${raw}`)
+  if (key === 'mode' && _.resolves(`user_backend.role.${raw}`)) return _(`user_backend.role.${raw}`)
+  return raw
+}
+
 const failure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =>
   text(translatedErrors(ctx, url, req, result).join('\n'), { status: 400 })
 
@@ -295,59 +315,39 @@ export const routes: Record<string, RouteEntry> = {
       const deploymentCreatesAccounts = !!live.routes[accountCreationRoute]
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
-      const search = searchOf(url) ?? ''
-      const currentPage = pageOf(url)
-      const locale = ctx.localeOf(url, req)
-      const needle = search.toLocaleLowerCase(locale)
       const allRows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
-      const matching = (
-        needle
-          ? allRows.filter((row) =>
-              [row.name, row.login, row.email, row.accessKind].some((value) =>
-                String(value ?? '')
-                  .toLocaleLowerCase(locale)
-                  .includes(needle),
-              ),
-            )
-          : allRows
-      ).sort(
-        (left, right) =>
-          left.name.localeCompare(right.name, locale) || left.login.localeCompare(right.login, locale),
-      )
-      const rows = matching.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'user_backend.users.title',
         active: '/admin/users',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: _('user_backend.search.users'),
-              keep: {
-                ...(includeArchived ? { archived: '1' } : {}),
-                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-              },
-            },
-            pager: pager(url, currentPage, rows.length, matching.length),
-          }
+        body: async (_, frame) => {
           const returnTo = safeUserReturnTo(url, `${url.pathname}${url.search}`)
-          return usersScreen(_, frame, {
-            rows: rows.map((row) => ({
+          const search = await rowListSearch(ctx, url, req, {
+            spec: userListSearch,
+            rows: allRows.map((row) => ({
               ...row,
               // A row opens the person in the record modal; the collection behind it
-              // keeps its search, page and archive state.
+              // keeps its query, page and archive state.
               detailHref: recordModalHref(`${url.pathname}${url.search}`, {
                 kind: 'user.user',
                 id: row.id,
               }),
             })),
-            total: matching.length,
+            frame,
+            name: 'user-people-filter',
+            bodyId: 'user-people-list',
+            functions: userSearchFunctions,
+            labels: { searchPlaceholder: _('user_backend.search.users') },
+            groupLabel: (key, value) => userGroupLabel(_, key, value),
+          })
+          return usersScreen(_, search.frame, {
+            rows: search.rows,
+            total: search.groups
+              ? search.groups.reduce((sum, group) => sum + group.count, 0)
+              : search.rows.length,
             createHref: deploymentCreatesAccounts
               ? withUserReturnTo(url, '/admin/users/new', returnTo)
               : recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.user' }),
-            toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
-            includeArchived,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
       })
@@ -750,15 +750,27 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'user_backend.roles.title',
         active: '/admin/roles',
-        body: async (_, frame) =>
-          rolesScreen(_, frame, {
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: roleListSearch,
             rows: (await rolesOf(ctx, url, req)).map((row) => ({
               ...row,
               detailHref: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
             })),
+            frame,
+            name: 'user-role-filter',
+            bodyId: 'user-role-list',
+            functions: userSearchFunctions,
+            labels: { searchPlaceholder: _('user_backend.roles.title') },
+            groupLabel: (key, value) => userGroupLabel(_, key, value),
+          })
+          return rolesScreen(_, search.frame, {
+            rows: search.rows,
             createHref: inLocale(url, '/admin/roles/new'),
             presetsHref: inLocale(url, '/admin/permission-presets'),
-          }),
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
+          })
+        },
       })
     },
 

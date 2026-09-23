@@ -2,14 +2,15 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
   Surface,
 } from '../../../ui/index.ts'
@@ -109,15 +110,16 @@ export const customerInvoicesListScreen = (
     `${_('account_backend.customerInvoice.summary.posted')}: ${String(options.summary.posted)}`,
     `${_('account_backend.customerInvoice.summary.unpaid')}: ${String(options.summary.unpaid)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: customerInvoiceListColumns(_, options.partnerLabel),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: customerInvoiceListColumns(_, options.partnerLabel),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -134,32 +136,17 @@ export const customerInvoicesListScreen = (
     _('account_backend.customerInvoices.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.customerInvoices.title')}
       description={_('account_backend.customerInvoice.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        options.frame.chrome
-          ? listChrome(
-              _,
-              _('account_backend.customerInvoices.title'),
-              {
-                ...options.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      status={status}
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('account_backend.customerInvoices.title'), collection.frame)}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

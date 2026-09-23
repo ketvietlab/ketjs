@@ -25,7 +25,7 @@ const options = {
 
 test('sprint collection remains specialized and opens short creation in a modal', () => {
   const closed = renderToString(sprintsScreen(translate, {}, options))
-  assert.match(closed, /data-ui="table"/)
+  assert.match(closed, /data-ui="kt-grid"/)
   assert.match(closed, /name="action" value="start"/)
   assert.match(closed, /name="idempotencyKey" value="transition-key"/)
   assert.match(closed, /data-ui="list-page"[^>]*data-variant="operational"/)

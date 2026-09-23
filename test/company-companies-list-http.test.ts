@@ -83,11 +83,11 @@ test('company list HTTP keeps stable order, exact archived inclusion, paging and
   }
 
   const stateful = await (await e2e.client.get('/admin/companies?q=Company&archived=1&page=2&lang=en')).text()
-  assert.match(stateful, /name="q"[^>]*value="Company"/)
-  assert.match(stateful, /type="hidden" name="archived" value="1"/)
-  assert.match(stateful, /type="hidden" name="lang" value="en"/)
-  assert.match(stateful, /href="\/admin\/companies\?q=Company&amp;lang=en"/)
-  assert.doesNotMatch(stateful, /href="\/admin\/companies\?q=Company&amp;page=2&amp;lang=en"/)
+  // The search-filter bar owns the query and the archived toggle; both stay in
+  // the URL the bar reads and returns to, rather than in hidden form fields.
+  assert.match(stateful, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(stateful, /name="q"[^>]*data-ui="chrome-search-input"/)
+  assert.match(stateful, /Special Archived Company/)
   assert.equal((await e2e.client.request('/admin/companies?lang=en', { method: 'PUT' })).status, 405)
 })
 
@@ -96,7 +96,9 @@ test('company list HTTP searches code, display name and currency before exact pa
   const byCode = await (await e2e.client.get('/admin/companies?q=C05&lang=en')).text()
   assert.match(byCode, /Display Needle Holdings/)
   assert.match(byCode, /Companies: 1/)
-  assert.doesNotMatch(byCode, /data-ui="pager"/)
+  // One page of one row: a range, and nowhere further to go.
+  assert.match(byCode, /data-ui="pager-range"[^>]*>[\s\S]*?1-1 \/ 1/)
+  assert.doesNotMatch(byCode, /data-ui="pager-next"/)
 
   const byName = await (await e2e.client.get('/admin/companies?q=needle&lang=en')).text()
   assert.match(byName, /C05/)

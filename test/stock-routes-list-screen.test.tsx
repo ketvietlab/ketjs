@@ -67,6 +67,8 @@ test('stock routes list: keeps localized create, search and row navigation in Li
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(
@@ -82,7 +84,7 @@ test('stock routes list: keeps localized create, search and row navigation in Li
   assert.match(html, /data-col="sequence"[\s\S]*?>10</)
   assert.match(html, /data-col="ruleCount"[\s\S]*?>2</)
   assert.match(html, /href="\/admin\/stock\/routes\/route-two-step-receipt\?lang=vi"/)
-  assert.match(html, /data-ui="row-select"[^>]*form="stock-route-bulk"/)
+  assert.match(html, /data-ui="kt-row-select"[^>]*form="stock-route-bulk"/)
   assert.doesNotMatch(html, /stock-route-create-form/)
 })
 

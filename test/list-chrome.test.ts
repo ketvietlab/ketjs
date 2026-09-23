@@ -122,9 +122,10 @@ test('chrome: an exhausted arrow stays in place, disabled, so the toolbar does n
   assert.match(html, /data-ui="pager-range">[\s\S]*1-30 \/ 84/)
 })
 
-test('chrome: an empty list says nothing rather than "1-0 / 0"', () => {
+test('chrome: an empty list drops the pager rather than printing "1-0 / 0"', () => {
   const html = render({ ...base, pager: { from: 1, to: 0, total: 0, prev: null, next: null } })
-  assert.match(html, /data-ui="pager-range">[\s\S]*>0</)
+  assert.doesNotMatch(html, /data-ui="pager"/)
+  assert.doesNotMatch(html, /data-ui="pager-step"/)
 })
 
 test('chrome: navigation stays URL-driven while compact search uses an accessible modal', () => {
@@ -213,7 +214,7 @@ test('chrome: capped totals retain the standard pager and navigation beyond the 
   assert.equal((html.match(/data-ui="pager"/gu) ?? []).length, 1)
   const escaped = render({ pager: { from: 1, to: 1, total: 1, totalLabel: '<b>1+</b>' } })
   assert.doesNotMatch(escaped, /<b>/u)
-  assert.match(render({ pager: { from: 0, to: 0, total: 0 } }), />0</u)
+  assert.doesNotMatch(render({ pager: { from: 0, to: 0, total: 0 } }), /data-ui="pager"/u)
 })
 
 test('command toolbar constrains its wrapping tail to the available width', () => {

@@ -4,6 +4,7 @@ import { HOOKS as fieldHooks } from '../primitives/field/index.tsx'
 import { HOOKS as statusHooks } from '../primitives/status/index.tsx'
 import { HOOKS as navigationHooks } from '../primitives/navigation/index.tsx'
 import { HOOKS as progressHooks } from '../primitives/progress/index.tsx'
+import { HOOKS as reorderListHooks } from '../interactions/reorder-list/index.tsx'
 import { HOOKS as menuHooks } from '../interactions/menu/index.tsx'
 import { HOOKS as popoverHooks } from '../interactions/popover/index.tsx'
 import { HOOKS as tooltipHooks } from '../interactions/tooltip/index.tsx'
@@ -55,6 +56,7 @@ const GROUPS = {
   navigation: navigationHooks,
   progress: progressHooks,
   menu: menuHooks,
+  reorderList: reorderListHooks,
   popover: popoverHooks,
   tooltip: tooltipHooks,
   dialog: dialogHooks,

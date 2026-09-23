@@ -436,6 +436,7 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
             <label data-ui="variant-editor-image-upload">
               <input
                 type="file"
+                autocomplete="off"
                 accept={IMAGE_TYPES}
                 disabled={busy}
                 onChange={(event) => {
@@ -574,6 +575,7 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
               <span data-ui="field-label">{t('priceExtra')}</span>
               <input
                 type="text"
+                autocomplete="off"
                 inputmode="decimal"
                 value={value.priceExtra}
                 disabled={!editable}
@@ -726,6 +728,7 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
         <span data-ui="field-label">{t(field)}</span>
         <input
           type="text"
+          autocomplete="off"
           inputmode={decimalField ? 'decimal' : null}
           value={value}
           disabled={!editable}

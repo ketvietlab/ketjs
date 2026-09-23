@@ -3,15 +3,14 @@ import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import type { KetTableColumn } from '@ketvietlab/design-system'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   emptyState,
   icon,
   inline,
   KanbanCard,
   KanbanGrid,
-  LinkButton,
   ListPage,
-  listChrome,
   PageContext,
   shell,
   thumbnail,
@@ -177,6 +176,7 @@ export const productsScreen = (
     _('product_backend.screen.title'),
     <ListPage
       variant="operational"
+      frame={frame}
       context={
         <PageContext
           label={_('product_backend.screen.title')}
@@ -186,44 +186,8 @@ export const productsScreen = (
       }
       title={_('product_backend.screen.title')}
       description={_('product_backend.screen.description')}
-      actions={
-        frame.chrome?.create ||
-        frame.chrome?.selection ||
-        extensionActions !== undefined ||
-        frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              frame.chrome?.create ? (
-                <LinkButton
-                  label={frame.chrome.create.label}
-                  href={frame.chrome.create.path}
-                  variant="primary"
-                  leading={icon('plus')}
-                />
-              ) : (
-                ''
-              ),
-              frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
-              extensionActions ?? '',
-              frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('product_backend.screen.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame, extensionActions)}
+      controls={collectionControls(_, _('product_backend.screen.title'), frame)}
       body={
         view === 'list'
           ? table

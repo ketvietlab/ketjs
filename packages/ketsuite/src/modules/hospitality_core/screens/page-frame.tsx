@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { FormPage, inline, ListPage, shell } from '../../../ui/index.ts'
+import { collectionActions, collectionControls, FormPage, ListPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 type PageFrameProps = {
@@ -8,7 +8,9 @@ type PageFrameProps = {
   title: string
   subtitle?: string | null
   frame: Frame
+  controls?: JSXChild
   body: JSXChild
+  headerActions?: JSXChild
   actions?: JSXChild
 }
 
@@ -18,9 +20,10 @@ export const ListScreenFrame = ({
   subtitle,
   frame,
   body,
+  controls,
   actions,
+  headerActions,
 }: PageFrameProps): TemplateResult => {
-  const frameActions = frame.extras?.['topbar.end']
   return shell(
     _,
     title,
@@ -29,11 +32,9 @@ export const ListScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
-      actions={
-        actions !== undefined || frameActions !== undefined
-          ? inline([actions ?? '', frameActions ?? ''])
-          : undefined
-      }
+      headerActions={headerActions}
+      actions={collectionActions(_, frame, actions)}
+      controls={collectionControls(_, title, frame, controls)}
       body={body}
     />,
     { ...frame, chrome: null, topbar: false },
@@ -55,7 +56,7 @@ export const FormScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={body}
     />,
     { ...frame, chrome: null, topbar: false },

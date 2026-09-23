@@ -24,6 +24,7 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'state.blocked': 'Thiếu quy tắc: {types}',
     'state.unbilled': 'Chưa xuất hoá đơn',
+    'filter.blocked': 'Đang bị chặn',
     'state.owing': 'Còn nợ',
     'state.paid': 'Đã thu đủ',
 
@@ -119,6 +120,7 @@ export const messages: Record<string, Record<string, Message>> = {
 
     'state.blocked': 'No rule for {types}',
     'state.unbilled': 'Not invoiced',
+    'filter.blocked': 'Blocked',
     'state.owing': 'Owing',
     'state.paid': 'Paid',
 
