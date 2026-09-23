@@ -188,6 +188,17 @@ test('design system: foundations expose reference, semantic and component tokens
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   assert.match(tokens, /--kv-ref-bg-main: #1b1f24/)
   assert.match(tokens, /--kv-ref-primary: #5968df/)
+  assert.match(tokens, /--kv-ref-primary-50: #eef0fb/)
+  assert.match(tokens, /--kv-ref-primary-100: #dde2f7/)
+  assert.match(tokens, /--kv-ref-primary-200: #c3cdf0/)
+  assert.match(tokens, /--kv-ref-primary-300: #aab6ed/)
+  assert.match(tokens, /--kv-ref-primary-400: #7485e8/)
+  assert.match(tokens, /--kv-ref-primary-500: #5968df/)
+  assert.match(tokens, /--kv-ref-primary-600: #4f5ed0/)
+  assert.match(tokens, /--kv-ref-primary-700: #4557bc/)
+  assert.match(tokens, /--kv-ref-primary-800: #394985/)
+  assert.match(tokens, /--kv-ref-primary-900: #2f3a5f/)
+  assert.match(tokens, /--kv-ref-info: #aab6ed/)
   assert.match(tokens, /--kv-page-bg:/)
   assert.match(tokens, /--kv-panel-bg:/)
   assert.match(tokens, /--kv-accent:/)
@@ -2115,4 +2126,17 @@ test('design system: table selection checkboxes sit at 14px', () => {
     )?.[0] ?? ''
   assert.match(rule, /width: 0\.875rem;/u)
   assert.match(rule, /height: 0\.875rem;/u)
+})
+
+test('design system: indigo information text remains legible on dark surfaces', () => {
+  const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const color = (token: string) => css.match(new RegExp(`${token}: #(\\w{6})`))![1]!
+  const luminance = (hex: string) => {
+    const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+    const linear = rgb.map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+    return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722
+  }
+  const text = luminance(color('--kv-ref-info'))
+  const surface = luminance(color('--kv-ref-bg-main'))
+  assert.ok((text + 0.05) / (surface + 0.05) >= 4.5)
 })
