@@ -152,17 +152,55 @@ test('a legacy scoped assignment can be removed directly from its row, with one 
   const access = await (await app.client.get('/admin/users/staff/access')).text()
   assert.match(access, /Cashier/)
   assert.match(access, /data-row-href=/)
+  assert.match(access, /data-ui="inline"[\s\S]{0,500}Gán vai trò/)
+  const assignPath = '/admin/users/staff/assign'
+  const assignForm = await (await app.client.get(assignPath)).text()
+  const assignRefused = await app.client.post(
+    assignPath,
+    new URLSearchParams({
+      command: 'preview',
+      scopeKind: 'company',
+      companyId: 'acme',
+      branchId: '',
+      reason: '   ',
+      idempotencyKey: hidden(assignForm, 'idempotencyKey'),
+      expectedAuthorizationRevision: hidden(assignForm, 'expectedAuthorizationRevision'),
+    }),
+    post,
+  )
+  const assignRefusedHtml = await assignRefused.text()
+  assert.equal(assignRefused.status, 200)
+  assert.match(assignRefusedHtml, /name="reason"[^>]*aria-invalid="true"/)
+  assert.match(assignRefusedHtml, /<textarea[^>]*name="reason"[^>]*> {3}<\/textarea>/)
   const removePath = '/admin/users/staff/remove/cashier-assignment'
   const form = await (await app.client.get(removePath)).text()
   assert.match(form, /Xác nhận gỡ vai trò/)
   assert.doesNotMatch(form, /name="command" value="preview"/)
+  const refused = await app.client.post(
+    removePath,
+    new URLSearchParams({
+      command: 'confirm',
+      reason: '   ',
+      idempotencyKey: hidden(form, 'idempotencyKey'),
+      expectedAuthorizationRevision: hidden(form, 'expectedAuthorizationRevision'),
+    }),
+    post,
+  )
+  const refusedHtml = await refused.text()
+  assert.equal(refused.status, 200)
+  assert.match(refusedHtml, /name="reason"[^>]*aria-invalid="true"/)
+  assert.match(refusedHtml, /<textarea[^>]*name="reason"[^>]*> {3}<\/textarea>/)
+  assert.equal(
+    (await app.adapter!.all('SELECT * FROM user_assignment WHERE id = ?', ['cashier-assignment'])).length,
+    1,
+  )
   const removed = await app.client.post(
     removePath,
     new URLSearchParams({
       command: 'confirm',
       reason: 'taken back',
-      idempotencyKey: hidden(form, 'idempotencyKey'),
-      expectedAuthorizationRevision: hidden(form, 'expectedAuthorizationRevision'),
+      idempotencyKey: hidden(refusedHtml, 'idempotencyKey'),
+      expectedAuthorizationRevision: hidden(refusedHtml, 'expectedAuthorizationRevision'),
     }),
     post,
   )
