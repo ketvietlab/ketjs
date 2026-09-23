@@ -81,7 +81,8 @@ export type {
   SearchFilterOption,
   SearchGroupByOption,
 } from './interactions/search-filter/index.tsx'
-export { createKetTableView, ketTable } from './interactions/ket-table/index.tsx'
+export { createKetTableView, ketTable, KetTable } from './interactions/ket-table/index.tsx'
+export type { KetTableServerProps } from './interactions/ket-table/index.tsx'
 export type {
   KetTableCellFormat,
   KetTableColumn,
@@ -248,3 +249,6 @@ export { RecordForm } from './patterns/record-form/index.tsx'
 export type { RecordFormProps } from './patterns/record-form/index.tsx'
 
 export { HOOKS, OWNERS } from './contract/index.ts'
+
+export { ReorderList } from './interactions/reorder-list/index.tsx'
+export type { ReorderListProps } from './interactions/reorder-list/index.tsx'

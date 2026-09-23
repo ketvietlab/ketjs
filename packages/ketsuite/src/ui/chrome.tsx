@@ -101,6 +101,8 @@ export type TailMenu = SearchMenu & {
 }
 
 export type ListChrome = {
+  /** Additional native filter controls, composed by the shared collection bar. */
+  advancedControls?: JSXChild
   /** Optional visual treatment for catalogue topbars or in-page command bars. */
   layout?: 'catalogue' | 'command'
   /** Small section label above the list title. */
@@ -126,8 +128,7 @@ export type ListChrome = {
   views?: ViewKind[]
 }
 
-const pagerLabel = (pager: Pager): string =>
-  pager.total === 0 ? '0' : `${pager.from}-${pager.to} / ${pager.totalLabel ?? pager.total}`
+const pagerLabel = (pager: Pager): string => `${pager.from}-${pager.to} / ${pager.totalLabel ?? pager.total}`
 
 const GLOBAL_FILTER_ID = 'backend-global-filter'
 type SearchConfig = NonNullable<ListChrome['search']>
@@ -341,6 +342,7 @@ export const listChrome = (
         ) : (
           !!chrome.search && topbarSearch(_, chrome)
         )}
+        {chrome.advancedControls}
         {chromeTail(_, chrome)}
       </div>
     </div>
@@ -348,12 +350,12 @@ export const listChrome = (
 )
 
 /**
- * Selection actions belong with page actions, not with query controls. Keeping
- * this renderer public lets a self-titled ListPage place More directly beside
- * Create while legacy topbars can continue to render the same form in chrome.
+ * Selection actions join primary actions in the shared list header. The native form
+ * stays mounted while hidden so external row checkboxes retain their association;
+ * the shared client reveals it only when that form has selected rows.
  */
 export const bulkActions = (_: Translator, selection: TableSelection): TemplateResult => (
-  <form data-ui="bulk-form" id={selection.formId} method="post" action={selection.action}>
+  <form data-ui="bulk-form" id={selection.formId} method="post" action={selection.action} hidden>
     {each(
       Object.entries(selection.hidden ?? {}),
       ([key]) => key,
@@ -419,14 +421,19 @@ const pagerStep = (
  * A screen whose frame carries no chrome - the Website backend's, for one -
  * still has a collection that runs past one page, and puts this in the list's
  * footer instead.
+ *
+ * An empty collection gets nothing at all. There is no page to be on and no
+ * page to step to, so a lone "0" between two dead arrows only asked the reader
+ * to work out that the list they can already see is empty.
  */
-export const pagerBar = (_: Translator, pager: Pager): TemplateResult => (
-  <div data-ui="pager">
-    <span data-ui="pager-range">{pagerLabel(pager)}</span>
-    {pagerStep('prev', pager.prev, _('backend.chrome.previous'))}
-    {pagerStep('next', pager.next, _('backend.chrome.next'))}
-  </div>
-)
+export const pagerBar = (_: Translator, pager: Pager): TemplateResult | undefined =>
+  pager.total === 0 ? undefined : (
+    <div data-ui="pager">
+      <span data-ui="pager-range">{pagerLabel(pager)}</span>
+      {pagerStep('prev', pager.prev, _('backend.chrome.previous'))}
+      {pagerStep('next', pager.next, _('backend.chrome.next'))}
+    </div>
+  )
 
 const chromeTail = (_: Translator, chrome: ListChrome): TemplateResult => (
   <div data-ui="chrome-tail">

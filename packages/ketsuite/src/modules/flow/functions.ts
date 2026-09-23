@@ -187,28 +187,28 @@ const optionRows = async (
     )
 }
 
-/**
- * How many rows `optionRows` would have to choose from, before the page.
- *
- * The same read and the same filter, stopping short of the slice. Separate
- * rather than folded into `optionRows` because every caller of that wants an
- * array and only the list screens want a figure — and a screen that shows the
- * length of its own page as the total is a screen that lies the moment there
- * is a second page (FLW-039).
- */
-const optionCount = async (
-  ctx: Ctx,
-  model: string,
-  args: Record<string, unknown>,
-  keep: (row: Row) => boolean = () => true,
-): Promise<number> => {
-  const rows = await ctx.db.select(model, args.includeArchived === true ? {} : { active: true })
+/** Project visibility and collection filters must run before either paging or counting. */
+const matchingProjects = async (ctx: Ctx, args: Record<string, unknown>): Promise<Row[]> => {
+  const visible = await visibleProjects(ctx)
+  if (visible !== null && !visible.length) return []
+  const visibleIds = visible === null ? null : new Set(visible)
+  const mine = args.mine === true ? await projectsWithMyWork(ctx) : null
   const needle = normalized(args.search)
-  return rows.filter(
-    (row) =>
-      keep(row) &&
-      (!needle || normalized(row.name).includes(needle) || normalized(row.code).includes(needle)),
-  ).length
+  const rows = await ctx.db.select(
+    'flow.Project',
+    args.archivedOnly === true ? { active: false } : args.includeArchived === true ? {} : { active: true },
+  )
+  return rows
+    .filter(
+      (row) =>
+        (visibleIds === null || visibleIds.has(String(row.id))) &&
+        (mine === null || mine.has(String(row.id))) &&
+        (!needle || normalized(row.name).includes(needle) || normalized(row.key).includes(needle)),
+    )
+    .sort(
+      (a, b) =>
+        String(a.name ?? '').localeCompare(String(b.name ?? '')) || String(a.id).localeCompare(String(b.id)),
+    )
 }
 
 /** Plain upsert for the entities with no CAS field — no concurrent editor to race against. */
@@ -275,6 +275,7 @@ export const functions: Record<string, FnSpec> = {
       search: 'text?',
       limit: 'int?',
       includeArchived: 'bool?',
+      archivedOnly: 'bool?',
       /** Where in the ordered list this page starts — see project.count. */
       cursor: 'int?',
       /** Only projects the caller has an issue in — see the note on projectsWithMyWork. */
@@ -290,16 +291,10 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx, args) => {
-      // Membership first, then the caller's own `mine` filter. They answer
-      // different questions — "which projects exist for me" and "which of those
-      // am I carrying work in" — and only the first one is a rule.
-      const visible = await visibleProjects(ctx)
-      const rows = (await optionRows(ctx, 'flow.Project', args)).filter(
-        (row) => visible === null || visible.includes(String(row.id)),
-      )
-      if (args.mine !== true) return rows
-      const mine = await projectsWithMyWork(ctx)
-      return rows.filter((row) => mine.has(String(row.id)))
+      const rows = await matchingProjects(ctx, args)
+      const offset = Math.max(0, Math.trunc(n(args.cursor ?? 0)))
+      const limit = Math.max(1, Math.min(200, Math.trunc(n(args.limit ?? 80))))
+      return rows.slice(offset, offset + limit)
     },
   }),
 
@@ -436,7 +431,7 @@ export const functions: Record<string, FnSpec> = {
    * (FLW-039).
    */
   'project.count': defineFn({
-    input: { search: 'text?', includeArchived: 'bool?', mine: 'bool?' },
+    input: { search: 'text?', includeArchived: 'bool?', archivedOnly: 'bool?', mine: 'bool?' },
     output: { total: 'int' },
     effects: [
       'read:flow.Project',
@@ -446,30 +441,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.User',
     ],
     agent: true,
-    handler: async (ctx, args) => {
-      const visible = await visibleProjects(ctx)
-      if (visible !== null && !visible.length) return { total: 0 }
-      // Counted over the rows themselves rather than with a SQL count, because
-      // `optionRows` matches a normalised name in JS: a count in the database
-      // would answer a different, larger question for exactly the searches
-      // people type. Reading every project is what the list already does.
-      const rows = await optionCount(
-        ctx,
-        'flow.Project',
-        args,
-        (row) => visible === null || visible.includes(String(row.id)),
-      )
-      if (args.mine !== true) return { total: rows }
-      const mine = await projectsWithMyWork(ctx)
-      return {
-        total: await optionCount(
-          ctx,
-          'flow.Project',
-          args,
-          (row) => (visible === null || visible.includes(String(row.id))) && mine.has(String(row.id)),
-        ),
-      }
-    },
+    handler: async (ctx, args) => ({ total: (await matchingProjects(ctx, args)).length }),
   }),
 
   /**

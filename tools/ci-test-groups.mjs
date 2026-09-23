@@ -2,6 +2,10 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 
+// A test that stops making progress must fail rather than stall the run, and a
+// leaked handle must not keep the child alive after the last test has reported.
+const RUNNER_FLAGS = ['--test', '--test-timeout=120000', '--test-force-exit']
+
 /** @typedef {'framework' | 'identity' | 'collaboration' | 'catalog' | 'orders' | 'accounting' | 'crm-loyalty' | 'hospitality' | 'website' | 'manufacturing'} TestGroup */
 /** @typedef {readonly [RegExp, TestGroup]} GroupRule */
 
@@ -206,7 +210,7 @@ function runGroup(group) {
       `Skipping ${skippedLive.length} live-Postgres/S3 test file(s) outside CI: ${skippedLive.join(', ')}`,
     )
   console.log(`Running ${group}: ${tests.length} test files`)
-  const result = spawnSync(process.execPath, ['--test', ...tests.map(emittedPath)], {
+  const result = spawnSync(process.execPath, [...RUNNER_FLAGS, ...tests.map(emittedPath)], {
     stdio: 'inherit',
   })
   if (result.error) throw result.error

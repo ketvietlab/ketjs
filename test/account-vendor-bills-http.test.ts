@@ -49,19 +49,21 @@ test('vendor bill HTTP separates filtered ListPage from the stable full FormPage
   })
 
   const list = await app.client.get(
-    `${path}?lang=vi&state=draft&payment=not_paid&type=in_invoice&q=Nh%C3%A0+cung+c%E1%BA%A5p+HTTP`,
+    `${path}?lang=vi&preset=draft&preset=not_paid&q=Nh%C3%A0+cung+c%E1%BA%A5p+HTTP`,
   )
   const listHtml = await list.text()
   assert.equal(list.status, 200)
   assert.match(listHtml, /data-ui="list-page"/)
   assert.match(listHtml, /Nhà cung cấp HTTP/)
   assert.match(listHtml, /data-row-href="\/admin\/accounting\/vendor-bills\/bill-search-http\?lang=vi"/)
-  assert.match(listHtml, /data-ui="facet"[\s\S]*?Nháp/)
-  assert.match(listHtml, /data-ui="facet"[\s\S]*?Chưa thanh toán/)
+  // The search-filter bar owns the query and the presets now; the old GET
+  // search input and its facet menus are gone.
+  assert.match(listHtml, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(listHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(listHtml, /href="\/admin\/accounting\/vendor-bills\/new\?lang=vi&amp;returnTo=/)
   assert.doesNotMatch(listHtml, /id="vendor-bill-create-form"|data-ui="modal-layer"|mail\.chatter/)
 
-  const returnTo = `${path}?lang=vi&state=draft&payment=not_paid&type=in_invoice&q=Nh%C3%A0+cung+c%E1%BA%A5p+HTTP`
+  const returnTo = `${path}?lang=vi&preset=draft&preset=not_paid&q=Nh%C3%A0+cung+c%E1%BA%A5p+HTTP`
   const create = await app.client.get(`${path}/new?lang=vi&returnTo=${encodeURIComponent(returnTo)}`)
   const createHtml = await create.text()
   assert.equal(create.status, 200)
@@ -89,7 +91,7 @@ test('vendor bill HTTP separates filtered ListPage from the stable full FormPage
     assert.match(createHtml, new RegExp(`name="${name}"`), `missing ${name}`)
   assert.equal((createHtml.match(/data-island="backend\.relation-select"/g) ?? []).length, 4)
   assert.match(createHtml, /type="hidden" name="id" value="[^"]+"/)
-  assert.match(createHtml, /href="\/admin\/accounting\/vendor-bills\?lang=vi&amp;state=draft/)
+  assert.match(createHtml, /href="\/admin\/accounting\/vendor-bills\?lang=vi&amp;preset=draft/)
   assert.doesNotMatch(createHtml, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
 
   const unsafe = await (await app.client.get(`${path}/new?lang=en&returnTo=https://evil.example/`)).text()
@@ -127,7 +129,7 @@ test('vendor bill POST preserves rejected relations and retries the same record 
   const paymentTermId = String(terms[0]?.id)
 
   const rejected = await app.client.post(
-    `${path}/new?lang=vi&returnTo=${encodeURIComponent(`${path}?lang=vi&state=draft`)}`,
+    `${path}/new?lang=vi&returnTo=${encodeURIComponent(`${path}?lang=vi&preset=draft`)}`,
     new URLSearchParams({
       id: 'bill-retry-token',
       journalId: purchaseJournalId,
@@ -154,7 +156,7 @@ test('vendor bill POST preserves rejected relations and retries the same record 
   assert.match(rejectedHtml, /name="description"[^>]*value="Chi phí nhập dở"/)
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;vendor-retry&quot;/)
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;missing-expense-account&quot;/)
-  assert.match(rejectedHtml, /href="\/admin\/accounting\/vendor-bills\?lang=vi&amp;state=draft"/)
+  assert.match(rejectedHtml, /href="\/admin\/accounting\/vendor-bills\?lang=vi&amp;preset=draft"/)
 
   const body = new URLSearchParams({
     id: 'bill-retry-token',

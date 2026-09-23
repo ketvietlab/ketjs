@@ -74,10 +74,16 @@ test('partner list: follows the shared ListPage hierarchy and places the filter 
     html,
     /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"[\s\S]*?href="\/admin\/partner\/partners\/new"/,
   )
+  const headerStart = html.indexOf('data-ui="list-page-header"')
+  const headerEnd = html.indexOf('</header>', headerStart)
+  const header = html.slice(headerStart, headerEnd)
   assert.match(
-    html,
-    /data-ui="list-page-actions"[\s\S]*?data-ui="action"[\s\S]*?data-ui="bulk-form"[\s\S]*?data-ui="list-page-toolbar"/,
+    header,
+    /href="\/admin\/partner\/partners\/new"[\s\S]*?data-ui="list-page-tools"[^>]* hidden[\s\S]*?data-ui="bulk-form" id="partner-directory-bulk"/,
   )
+  assert.match(header, /action="\/admin\/partner\/partners\/bulk"/)
+  assert.match(header, /name="returnTo" value="\/admin\/partner\/partners\?lang=vi"/)
+  assert.doesNotMatch(html.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
   assert.match(
     html,
     /data-ui="list-page-controls"[\s\S]*?search-filter-test-marker[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?24 đối tác/,
@@ -106,4 +112,52 @@ test('partner list: still renders the filter bar and count when a filtered resul
   assert.match(html, /data-ui="search-filter-test-marker"/)
   assert.match(html, /data-ui="empty"/)
   assert.match(html, /0 đối tác/)
+})
+
+test('partner list keeps search, URL paging and column choices in one command bar', () => {
+  const html = renderToString(
+    partnersScreen(
+      translate,
+      {
+        chrome: {
+          selection,
+          pager: {
+            from: 31,
+            to: 60,
+            total: 84,
+            prev: '/admin/partner/partners?q=Minh&role=customer&lang=vi',
+            next: '/admin/partner/partners?q=Minh&role=customer&lang=vi&page=3',
+          },
+          tailMenus: [
+            {
+              id: 'columns',
+              label: 'Cột',
+              items: [
+                {
+                  id: 'id',
+                  label: 'ID',
+                  path: '/admin/partner/partners?q=Minh&role=customer&lang=vi&page=2&cols=id',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      <div data-ui="search-filter-test-marker">Bộ lọc</div>,
+      <div data-ui="ket-table-test-marker">Công ty Minh An</div>,
+      84,
+    ),
+  )
+  assert.match(html, /data-ui="list-chrome" data-layout="command"/)
+  assert.match(
+    html,
+    /data-ui="chrome-search-content"[\s\S]*?search-filter-test-marker[\s\S]*?data-ui="chrome-tail"[\s\S]*?31-60 \/ 84/,
+  )
+  assert.match(html, /href="\/admin\/partner\/partners\?q=Minh&amp;role=customer&amp;lang=vi&amp;page=3"/)
+  assert.match(
+    html,
+    /href="\/admin\/partner\/partners\?q=Minh&amp;role=customer&amp;lang=vi&amp;page=2&amp;cols=id"/,
+  )
+  assert.equal(html.match(/data-ui="bulk-form"/g)?.length, 1)
+  assert.doesNotMatch(html, /data-ui="view-switch"/)
 })

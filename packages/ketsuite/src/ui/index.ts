@@ -83,7 +83,9 @@ export {
   contentCard,
   metric,
 } from './surfaces.tsx'
-export { dataTable, visibleColumns } from './table.tsx'
+export { collectionTable, dataTable, visibleColumns } from './table.tsx'
+export { collectionActions, collectionControls, prepareCollectionTable } from './collection.tsx'
+export { paginateCollectionRows, collectionQueryKeep } from './collection-state.ts'
 export type { Cell, Column, DataTable, TableGroup, TableSelection } from './table.tsx'
 export { scheduleBoard } from './schedule.tsx'
 export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './schedule.tsx'

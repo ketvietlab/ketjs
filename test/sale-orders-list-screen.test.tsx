@@ -102,6 +102,8 @@ test('sales orders list: keeps status filters, navigation, print and ListPage co
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(
@@ -117,7 +119,7 @@ test('sales orders list: keeps status filters, navigation, print and ListPage co
   assert.match(html, /data-col="total"/)
   assert.match(html, /href="\/admin\/sales\/orders\/so-001\?lang=vi"/)
   assert.match(html, /href="\/reports\/sale\.salesOrder\/so-001\?lang=vi"/)
-  assert.match(html, /data-ui="row-select"[^>]*form="sale-order-bulk"/)
+  assert.match(html, /data-ui="kt-row-select"[^>]*form="sale-order-bulk"/)
   assert.doesNotMatch(html, /sale_backend\.action\.create|quotation-create-form/)
   assert.doesNotMatch(html, /data-island="mail\.chatter"|data-ui="form-page-aside"/)
 })

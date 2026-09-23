@@ -1,11 +1,13 @@
+import { collectionQueryKeep, prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CardGrid,
   choices,
+  dateTime,
   cleaningTaskColumns,
   type CleaningTaskRow,
   type CleaningTaskSummary,
-  dataTable,
+  collectionTable,
   cleaningTone,
   emptyState,
   type Frame,
@@ -70,12 +72,36 @@ export const cleaningTasksScreen = (
       />
     ) : null
 
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: cleaningTaskColumns(_, locale, timezone),
+      rows: visibleRows,
+      id: (row) => row.id,
+      rowHref: (row) =>
+        `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+    },
+    {
+      paginate: true,
+      searchText: (row) =>
+        [
+          row.code,
+          row.room?.name ?? row.room?.code ?? '',
+          _(`hospitality_core.cleaningState.${row.state}`),
+          _(`hospitality_core.cleaningPriority.${row.priority}`),
+          _(`hospitality_core.cleaningType.${row.taskType}`),
+          row.assigneeId ?? '',
+          dateTime(row.requestedAt, locale, timezone),
+        ].join(' '),
+    },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.cleaningTasks.title')}
-      frame={frame}
-      actions={
+      frame={collection.frame}
+      headerActions={
         canCreate && data.rooms.length
           ? linkButton({
               label: _('hospitality_core.housekeeping.action.create'),
@@ -84,15 +110,20 @@ export const cleaningTasksScreen = (
             })
           : undefined
       }
-      body={stack([
-        feedback,
+      controls={
         <RecordForm
           action="/admin/hospitality/housekeeping"
           method="get"
           layout="inline"
           submit={_('hospitality_core.action.select')}
           submitVariant="secondary"
-          hidden={{ lang: locale }}
+          hidden={{
+            ...collectionQueryKeep(
+              new URL(frame.collectionUrl ?? '/admin/hospitality/housekeeping', 'http://collection.local'),
+              ['property', 'state'],
+            ),
+            lang: locale,
+          }}
           fields={[
             {
               name: 'property',
@@ -113,7 +144,11 @@ export const cleaningTasksScreen = (
               })),
             },
           ]}
-        />,
+        />
+      }
+      body={stack([
+        feedback,
+
         <CardGrid
           items={['todo', 'in_progress', 'done'].map((state) => ({
             state,
@@ -143,14 +178,8 @@ export const cleaningTasksScreen = (
           title={_('hospitality_core.housekeeping.section.queue')}
           description={_('hospitality_core.housekeeping.section.queueHint')}
           body={
-            visibleRows.length
-              ? dataTable(_, {
-                  columns: cleaningTaskColumns(_, locale, timezone),
-                  rows: visibleRows,
-                  id: (row) => row.id,
-                  rowHref: (row) =>
-                    `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
-                })
+            collection.table.rows.length
+              ? collectionTable(_, collection.table)
               : emptyState(
                   _('hospitality_core.screen.cleaningTasks.empty'),
                   _('hospitality_core.screen.cleaningTasks.emptyHint'),

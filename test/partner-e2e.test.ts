@@ -105,6 +105,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     (
       await call<{ href: string }>('partner_backend.applyFilter', {
         lang: 'en',
+        cols: 'id',
         facets: [
           { id: 'search:old', type: 'field', label: 'old query' },
           { id: 'customer', type: 'filter', label: 'Customers' },
@@ -116,9 +117,9 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
       })
     ).value,
     {
-      href: '/admin/partner/partners?q=new+query&role=supplier&groupBy=state&lang=en',
+      href: '/admin/partner/partners?q=new+query&role=supplier&groupBy=state&lang=en&cols=id',
     },
-    'filter navigation preserves locale and applies the newest replacement facet',
+    'filter navigation preserves locale and columns and applies the newest replacement facet',
   )
 
   const pages: Array<[string, RegExp]> = [
@@ -168,9 +169,11 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   // check, not by this SSR-only fetch.
   assert.match(partnerList, /data-ui="kt-row-select"[^>]*aria-label="Chọn dòng: customer"/)
   assert.match(partnerList, /data-ui="kt-select-persisted"/)
+  // Since the collection controls moved into ListPage, bulk actions share the
+  // identity band with Create rather than sitting in a strip under the toolbar.
   assert.match(
     partnerList,
-    /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"[\s\S]*?data-ui="list-page-toolbar"/,
+    /data-ui="list-page-tools"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"/,
   )
   assert.match(
     partnerList,
@@ -185,7 +188,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
   const partnerControls = partnerList.slice(
     partnerList.indexOf('data-ui="list-page-controls"'),
-    partnerList.indexOf('data-ui="list-page-body"'),
+    partnerList.indexOf('data-ui="list-page-actions"', partnerList.indexOf('data-ui="list-page-controls"')),
   )
   assert.doesNotMatch(partnerControls, /data-ui="bulk-form"/)
   for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {

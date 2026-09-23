@@ -86,6 +86,8 @@ test('tax ListPage keeps command controls, computation columns, account relation
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/taxes\/new\?lang=vi&amp;returnTo=/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="VAT"/)

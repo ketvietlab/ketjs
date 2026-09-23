@@ -106,6 +106,47 @@ Custom cells register through `KetTableExtensions` in one shared SSR/client adap
 callbacks serialized in island props. KetSuite's `thumbnail-label` renderer intentionally reuses the
 existing backend thumbnail compatibility primitive pending that primitive's public promotion.
 
+The public `KetTable<Row>` server component renders through this same grid engine. Use it when a
+URL-owned collection has semantic cell callbacks, record links or inline command forms. Its
+`KetTableServerProps<Row>` accepts `columns[].cell`, rows, recursive groups, sort state, caption,
+responsive mode and external-form selection. These callbacks execute only on the server; they never
+cross an island JSON boundary. Native checkboxes submit `fieldName.id=1` to the supplied form.
+`rowLink: false` retains keyboard row navigation when the first cell already contains a link.
+KetSuite's `collectionTable` adapts its existing column/selection metadata to that public component;
+the legacy column visibility menu remains an explicit compatibility slot until its own promotion.
+
+KétSuite operational lists order context, page identity with collection actions, query controls and table tools, then collection body.
+This is the required pattern for new collection screens. The KétSuite `ListPage` and `ListScreen`
+wrappers automatically render `frame.chrome.create` beside the title, above filters. Supply
+`headerActions` only when the screen has a specialised primary action; it replaces the automatic
+create link, so authorization remains the caller's responsibility. Omitting both leaves no creation
+control; an explicit `headerActions={null}` suppresses a frame's default create link. On narrow
+screens the action stacks beneath the heading, still before filters.
+Keep bulk and secondary collection commands in `actions`; the KétSuite wrapper places them beside
+the primary action in the header and removes the separate action bar. Bulk controls appear only
+when rows belonging to their form are selected. The primary action remains visible. Do not position
+buttons with module-local CSS or put creation links into `actions`. The
+application `collectionControls` and `collectionActions` helpers split existing list chrome into
+those slots without changing command or permission decisions. `searchCollectionRows` is reserved
+for complete authorized catalogues: its explicit callback searches reader-visible fields. Paged
+collections continue using their existing server query/search contracts.
+
+The catalogue's List page specimen demonstrates the shared header action composition. Product, Partner and the other
+collection screens use this same composition. Existing inline creation forms, such as accounting
+period closing, retain their disclosure below the filters rather than placing a form in the header.
+
+```tsx
+// File: packages/ketsuite/src/modules/product_backend/screens/list.tsx
+<ListPage
+  variant="operational"
+  frame={frame} // chrome.create contains the authorized { label, path }, if any
+  title={title}
+  controls={collectionControls(_, title, frame)}
+  actions={collectionActions(_, frame)}
+  body={collectionTable(_, table)}
+/>
+```
+
 ### Record and workspace composition
 
 Wave 5 adds description lists, people, avatar groups, status, formatted values, record summaries,
@@ -198,3 +239,9 @@ for optional/deferred capabilities. On feature branches it also rejects newly ad
 This check establishes release readiness; it does not publish. Publication must run from a commit
 reachable from `master`. Private Két Việt pinning, cohort migrations, zero-consumer deletion, and rollback
 evidence follow the released exact SHA.
+
+Public operational `ListPage.actionsPlacement="header"` places `actions` in the `list-page-tools` subgroup beside `headerActions`, without a separate action row. The KétSuite wrapper selects this placement for every operational list. `actionsHidden` hides only the tools subgroup in this mode, preserving the primary action and external form associations. Bulk-only tools initially stay hidden, including when extensions render empty fragments. The client follows each form's enabled row checkboxes and KetTable island persisted selection inputs. Clearing selection closes that form's menu and hides its tools when no other commands remain. The public component retains its default body placement for compatibility. Complete inline creation/configuration forms belong in the body above the table, not in the header tools.
+
+`ReorderList` owns ordered editable row layout, drag handles, add/remove and accessible move controls. It emits the ordered stable ids as JSON through its hidden native field and a bubbling `change` event; its controlled parent supplies updated row content. The record-modal runtime captures textual drafts before consuming this field into view state. `RecordModalForm.body` composes the editor inside the single submission form; `dirty` keeps structural and retained edits subject to the existing close guard.
+
+`SearchFilterConfig.capabilities` can disable `groupBy`, `favorites`, or `customFilters` for a consumer that does not support those operations; omitted flags preserve the complete existing interaction. The component owns `search-filter-columns[data-columns]` and fits the panel to its supported sections. Product attributes reuse this compact SearchFilter island via `frame.chrome.searchContent`, with URL-backed display-type and variant-policy facets; there is no legacy search-menu fallback.
