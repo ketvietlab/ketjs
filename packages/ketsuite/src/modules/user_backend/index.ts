@@ -32,3 +32,5 @@ export default defineModule({
 
 export { routes } from './routes.ts'
 export { profileScreen, rolesScreen, sessionsScreen, usersScreen } from './screens/index.ts'
+
+export { accessError, accessOptions } from './access-options.ts'
