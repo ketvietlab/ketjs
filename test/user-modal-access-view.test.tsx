@@ -364,3 +364,14 @@ test('the commands send the selection the person made, and the revision they wer
   assert.equal(unassign.reason, 'Chuyển sang tổ chăm sóc')
   assert.equal(unassign.expectedAuthorizationRevision, 7)
 })
+
+test('the sign-in tab links provider identities only when the viewer may list them', () => {
+  const allowed = render(
+    tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities: true } }))),
+  )
+  assert.match(allowed, /href="\/admin\/oauth\/identities\?user=trang&amp;lang=vi"/)
+  const denied = render(
+    tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities: false } }))),
+  )
+  assert.doesNotMatch(denied, /\/admin\/oauth\/identities/)
+})
