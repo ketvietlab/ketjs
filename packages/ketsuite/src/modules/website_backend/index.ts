@@ -1,4 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { functions } from './functions.ts'
 import { menus } from './menus.ts'
 import { routes } from './routes.ts'
 
@@ -10,6 +11,7 @@ export default defineModule({
   summary: 'Quản trị đa website, nội dung, revision, taxonomy, media, menu và biểu mẫu.',
   category: 'Hệ thống',
   routes,
+  functions,
   menus,
   messages: {
     vi: {

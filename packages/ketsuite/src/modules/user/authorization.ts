@@ -807,6 +807,85 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Bring every role template this deployment declares into the tenant as a
+   * managed role, and bring stale ones up to date.
+   *
+   * Without this a template is a declaration nobody can use: assignment accepts
+   * only managed roles, a managed role exists only once a template is applied, and
+   * nothing applied one. A fresh install therefore had no role to give, and every
+   * template change silently stripped its holders (`stale-managed-role`) until an
+   * operator re-applied it by hand. `ketsuite serve` runs this before it listens,
+   * so both a new and an upgraded install are complete.
+   *
+   * A role a template already backs is kept at its id; a new one takes the
+   * template key as its id. A role at a newer version than the code is left
+   * alone, and so is a custom role, whatever its id.
+   */
+  syncRoleTemplates: defineFn({
+    exposure: 'internal',
+    input: {},
+    output: { ok: 'bool', applied: 'json?', errors: 'json?' },
+    effects: AUTHORIZATION_EFFECTS,
+    handler: async (ctx: Ctx) => {
+      if (!String(ctx.actor ?? '').startsWith('system:'))
+        return invalid([issue('actor', 'user.error.provisionActor')])
+      const applied: string[] = []
+      const skipped: Array<{ roleId: string; errors: unknown }> = []
+      const R = ctx.table('user.Role')
+      const templates = Object.values(ctx.manifest.permissions.roleTemplates).sort((a, b) =>
+        a.key.localeCompare(b.key),
+      )
+      for (const template of templates) {
+        const backing = (await ctx.db.all(from(R).where(eq(R.templateKey, template.key)))).filter(
+          (role) => String(role.mode ?? 'custom') === 'managed',
+        )
+        const targets = backing.length ? backing : [null]
+        for (const role of targets) {
+          const roleId = role ? String(role.id) : template.key
+          if (!role) {
+            const taken = await ctx.db.one(from(R).where(eq(R.id, roleId)))
+            // A custom role already holds the key as its id: never overwrite a local decision.
+            if (taken) continue
+          } else {
+            if (Number(role.templateVersion ?? 0) > template.version) continue
+            const G = ctx.table('user.Grant')
+            const S = ctx.table('user.GrantSource')
+            const current =
+              Number(role.templateVersion) === template.version &&
+              role.templateDigest === template.digest &&
+              managedRoleHealthIssues(
+                ctx.manifest,
+                role,
+                await ctx.db.all(from(G).where(eq(G.roleId, roleId))),
+                await ctx.db.all(from(S).where(eq(S.roleId, roleId))),
+              ).length === 0
+            if (current) continue
+          }
+          const expectedRoleRevision = Number(role?.revision ?? 0)
+          const expectedAuthorizationRevision = await authorizationRevisionOf(ctx)
+          const result = (await authorizationFunctions.applyRoleTemplate!.handler(ctx, {
+            roleId,
+            templateKey: template.key,
+            expectedRoleRevision,
+            expectedAuthorizationRevision,
+            // Keyed on the state being repaired, not only the template: a role that
+            // drifts again after a sync must be applied again, not answered with the
+            // earlier replay. The authorization revision moves with every write.
+            idempotencyKey: `sync:${roleId}:${template.version}:${template.digest}:${expectedRoleRevision}:${expectedAuthorizationRevision}`,
+            reason: 'Áp dụng mẫu vai trò của hệ thống',
+          })) as { ok?: boolean; errors?: unknown }
+          // One template that cannot land — a local role already carries its name, say —
+          // must not keep every other job out of the tenant, nor keep the server down.
+          // It is reported, and the rest are applied.
+          if (result?.ok !== true) skipped.push({ roleId, errors: result?.errors ?? result })
+          else applied.push(roleId)
+        }
+      }
+      return skipped.length ? { ok: true, applied, errors: skipped } : { ok: true, applied }
+    },
+  }),
+
   assignScopedRole: defineFn({
     input: {
       id: 'id',
@@ -1577,14 +1656,17 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
         })
         if (!('dryRun' in inserted) && !inserted.inserted) required('login', 'user.error.loginUnique')
 
+        // A person may be created before any role exists for them. They hold their
+        // workplace and nothing else — no role means no function — until one is
+        // assigned on the access tab. Requiring a role here made hiring impossible
+        // wherever no role template had been applied yet.
         const selection = parseSelection({ ...args, userId, addMembership: true })
-        if (!selection.roleIds.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
         const added = await addSelectedRoles(tx, selection)
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
           required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
         await recordAuthorizationAudit(tx, {
-          event: 'authorization.assignment.created',
+          event: selection.roleIds.length ? 'authorization.assignment.created' : 'authorization.user.created',
           targetKind: 'user',
           targetId: userId,
           userId,
@@ -1601,6 +1683,229 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           },
         })
         const result = { ok: true, id: userId, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  /**
+   * Where a person works, decided in one go.
+   *
+   * The screen asks for the whole answer — which companies, which branches, and
+   * which of them is the one they land in — so this settles it in one commit. The
+   * older path granted and revoked one workplace per call from a route loop, which
+   * could fail halfway and leave a person holding half a decision.
+   *
+   * Holding a company implies holding its root branch: that is what makes a company
+   * membership usable, and every grant has always written it.
+   */
+  setWorkplaces: defineFn({
+    input: {
+      userId: 'id',
+      companyIds: 'json',
+      branchIds: 'json',
+      defaultCompanyId: 'id',
+      defaultBranchId: 'id',
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.User',
+      'write:user.User',
+      'read:company.Company',
+      'read:company.Branch',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-workplaces:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const userId = String(args.userId)
+        const U = tx.table('user.User')
+        const person = await tx.db.one(from(U).where(eq(U.id, userId)))
+        if (!person) required('userId', 'user.error.userMissing')
+
+        const companyIds = [...new Set((args.companyIds as string[]).map(String))]
+        if (!companyIds.length) required('companyIds', 'user.error.companyRequired')
+        const C = tx.table('company.Company')
+        const B = tx.table('company.Branch')
+        const roots = new Map<string, string>()
+        for (const companyId of companyIds) {
+          if (!(await tx.db.one(from(C).where(eq(C.id, companyId), eq(C.active, true)))))
+            required('companyIds', 'user.error.companyMissing')
+          const root = await tx.db.one(from(B).where(eq(B.rootKey, companyId), eq(B.active, true)))
+          if (!root) required('companyIds', 'user.error.rootBranchMissing')
+          roots.set(companyId, String(root!.id))
+        }
+
+        // A branch is only a workplace if its company is one too.
+        const held = new Set(companyIds)
+        const branchIds = new Set<string>(roots.values())
+        for (const branchId of new Set((args.branchIds as string[]).map(String))) {
+          const branch = await tx.db.one(from(B).where(eq(B.id, branchId), eq(B.active, true)))
+          if (!branch) required('branchIds', 'user.error.branchMissing')
+          if (!held.has(String(branch!.companyId)))
+            required('branchIds', 'user.error.branchCompanyMembership')
+          branchIds.add(branchId)
+        }
+
+        // Where they land has to be somewhere they work.
+        const defaultCompanyId = String(args.defaultCompanyId)
+        const defaultBranchId = String(args.defaultBranchId)
+        if (!held.has(defaultCompanyId)) required('defaultCompanyId', 'user.error.defaultCompanyRevoke')
+        if (!branchIds.has(defaultBranchId)) required('defaultBranchId', 'user.error.branchMissing')
+        const defaultBranch = await tx.db.one(from(B).where(eq(B.id, defaultBranchId)))
+        if (String(defaultBranch?.companyId ?? '') !== defaultCompanyId)
+          required('defaultBranchId', 'user.error.branchCompanyMembership')
+
+        const M = tx.table('user.Membership')
+        const BM = tx.table('user.BranchMembership')
+        const beforeCompanies = (await tx.db.all(from(M).where(eq(M.userId, userId)))).map((row) =>
+          String(row.companyId),
+        )
+        const beforeBranches = (await tx.db.all(from(BM).where(eq(BM.userId, userId)))).map((row) =>
+          String(row.branchId),
+        )
+
+        for (const companyId of companyIds)
+          await tx.db.insertIfAbsent('user.Membership', {
+            id: `membership:${userId}:${companyId}`,
+            userId,
+            companyId,
+          })
+        for (const branchId of branchIds)
+          await tx.db.insertIfAbsent('user.BranchMembership', {
+            id: `branch:${userId}:${branchId}`,
+            userId,
+            branchId,
+          })
+        const goneCompanies = beforeCompanies.filter((id) => !held.has(id))
+        if (goneCompanies.length)
+          await tx.db.del(deleteFrom(M).where(eq(M.userId, userId), inArray(M.companyId, goneCompanies)))
+        const goneBranches = beforeBranches.filter((id) => !branchIds.has(id))
+        if (goneBranches.length)
+          await tx.db.del(deleteFrom(BM).where(eq(BM.userId, userId), inArray(BM.branchId, goneBranches)))
+
+        await tx.db.update('user.User', { id: userId }, { defaultCompanyId, defaultBranchId })
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.updated',
+          targetKind: 'user',
+          targetId: userId,
+          scopeKey: `company:${defaultCompanyId}`,
+          source: 'membership',
+          reason,
+          userId,
+          before: { companies: beforeCompanies, branches: beforeBranches },
+          after: { companies: companyIds, branches: [...branchIds], defaultCompanyId, defaultBranchId },
+          revision: revision!,
+          metadata: { companyIds, branchIds: [...branchIds], defaultCompanyId, defaultBranchId },
+        })
+        const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  /**
+   * What a custom role is allowed to do, decided by area rather than by key.
+   *
+   * The screen offers the catalogue's bundles, because that is the vocabulary a
+   * business has; this turns the chosen bundles into the function keys they stand
+   * for and makes the role hold exactly those. Areas dropped from the selection go
+   * with their grants, so the form is the whole answer rather than an addition.
+   *
+   * A managed role is refused: its authority comes from a template this deployment
+   * ships, and editing it here would put a local decision where everyone reads the
+   * shipped one. Copy it first.
+   */
+  setRoleBundles: defineFn({
+    input: {
+      roleId: 'id',
+      bundleKeys: 'json',
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.Role',
+      'read:user.Grant',
+      'write:user.Grant',
+      'read:user.GrantSource',
+      'write:user.GrantSource',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-role-bundles:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const roleId = String(args.roleId)
+        const R = tx.table('user.Role')
+        const role = await tx.db.one(from(R).where(eq(R.id, roleId)))
+        if (!role) required('roleId', 'user.error.roleMissing')
+        if (String(role!.mode ?? '') === 'managed') required('roleId', 'E_ROLE_NOT_ASSIGNABLE')
+
+        const catalogue = tx.manifest.permissions.bundles ?? {}
+        const wanted = new Set<string>()
+        for (const key of new Set((args.bundleKeys as string[]).map(String))) {
+          const bundle = catalogue[key] as { functions?: string[] } | undefined
+          if (!bundle) required('bundleKeys', 'user.error.bundleMissing')
+          for (const fnKey of bundle!.functions ?? []) if (tx.manifest.functions[fnKey]) wanted.add(fnKey)
+        }
+
+        const G = tx.table('user.Grant')
+        const S = tx.table('user.GrantSource')
+        const before = (await tx.db.all(from(G).where(eq(G.roleId, roleId)))).map((row) => String(row.fnKey))
+        const gone = before.filter((fnKey) => !wanted.has(fnKey))
+        for (const fnKey of wanted) {
+          await tx.db.insertIfAbsent('user.GrantSource', {
+            id: `custom:${roleId}:${fnKey}`,
+            roleId,
+            fnKey,
+            sourceKind: 'custom',
+            sourceKey: 'direct',
+            sourceVersion: null,
+          })
+          await tx.db.insertIfAbsent('user.Grant', { id: `grant:${roleId}:${fnKey}`, roleId, fnKey })
+        }
+        if (gone.length) {
+          await tx.db.del(deleteFrom(G).where(eq(G.roleId, roleId), inArray(G.fnKey, gone)))
+          await tx.db.del(deleteFrom(S).where(eq(S.roleId, roleId), inArray(S.fnKey, gone)))
+        }
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.role.updated',
+          targetKind: 'role',
+          targetId: roleId,
+          source: 'bundles',
+          reason,
+          before: { functions: before },
+          after: { functions: [...wanted] },
+          revision: revision!,
+          metadata: { bundleKeys: [...new Set((args.bundleKeys as string[]).map(String))] },
+        })
+        const result = { ok: true, revision }
         await completeOperation(tx, op, result)
         return result
       }),

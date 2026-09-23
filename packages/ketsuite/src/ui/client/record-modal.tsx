@@ -122,6 +122,11 @@ export type RecordModalContext<Data> = {
   /** Whether a checkbox/radio value was selected before the view re-rendered. */
   draftChecked: (name: string, value?: string, fallback?: boolean) => boolean
   /**
+   * What a preview command answered, for the view to render. Null until that
+   * command has run in this layer, and again as soon as anything moves.
+   */
+  outcome: <T>(command: string) => T | null
+  /**
    * A submit has been in flight long enough to be worth saying so. A command the
    * server answers at once never sets it, so a button bound to it does not flash
    * its spinner; the runtime stops a second submit either way.
@@ -135,6 +140,22 @@ export type RecordModalContext<Data> = {
 
 /** Attachments a command uploaded before its function ran, by form field. */
 export type RecordUploads = Record<string, { id: string; name: string | null }>
+
+/** Read-only context routes compose permission-checked function calls on the server. */
+export const readRecordContextRoute = async <Data,>(
+  href: string,
+  signal?: AbortSignal,
+): Promise<RecordCallResult<Data | null>> => {
+  const url = new URL(href, location.href)
+  if (url.origin !== location.origin) throw new Error('Record context must stay same-origin')
+  const response = await fetch(url.href, {
+    credentials: 'same-origin',
+    signal,
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) return { ok: false, issues: [], message: null, status: response.status }
+  return { ok: true, value: (await response.json()) as Data | null }
+}
 
 /** One extra call of a multi-step command — see `RecordModalCommand.also`. */
 export type RecordModalCommandStep<Data> = {
@@ -150,6 +171,10 @@ export type RecordModalCommandStep<Data> = {
 
 export type RecordModalCommand<Data> = {
   fn: string
+  /** Same-origin destination after a successful command; evaluated by the runtime. */
+  navigate?: (value: unknown, context: RecordModalContext<Data>) => string
+  /** Map server paths to stable native field names using the submitted snapshot. */
+  issueField?: (field: string, form: FormData, context: RecordModalContext<Data>) => string
   /** Map the submitted form to the function's input. */
   input: (
     form: FormData,
@@ -182,6 +207,15 @@ export type RecordModalCommand<Data> = {
    * `openTab`, replacing the `:new` history entry.
    */
   after?: 'close' | 'reload' | 'refresh' | 'stay' | 'open' | { tab: string } | { dialog: string | null }
+  /**
+   * The command asks what would happen instead of making it happen: its function
+   * writes nothing, so the record is not re-read, the collection is not told and
+   * what was typed stays on screen. The answer reaches the view through
+   * `context.outcome`, beside the very form that asked for it, so the person can
+   * read the consequence and then submit the command that commits it. `after` is
+   * not consulted — a preview always stays in its layer.
+   */
+  preview?: boolean
   /** The id of the record a create command made, read from the function's value. */
   created?: (value: unknown) => string | null
   /** Tab to open on the created record when `after` is `open`. */
@@ -199,6 +233,8 @@ export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
   size?: 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
+  /** Fixed actions for this dialog layer, outside its scrolling body. */
+  actions?: (context: RecordModalContext<Data>) => JSXChild
 }
 
 export type RecordModalDefinition<Data> = {
@@ -216,7 +252,9 @@ export type RecordModalDefinition<Data> = {
    * the default input is `{}` (no id): the read returns the empty record's defaults,
    * the choices its form needs and the viewer's permissions.
    */
-  context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+  context:
+    | { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+    | { route: (id: string, creating: boolean) => string; query?: readonly string[] }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
   /**
@@ -331,6 +369,7 @@ const focusablesIn = (element: HTMLElement): HTMLElement[] =>
 
 /** Whether anything in a layer was typed into since it rendered. Same rule as route modals. */
 export const recordLayerHasDraft = (layer: HTMLElement): boolean => {
+  if (layer.querySelector('[data-record-dirty="true"]')) return true
   for (const field of layer.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')) {
     if (field.disabled) continue
     if (field.type === 'checkbox' || field.type === 'radio') {
@@ -375,12 +414,22 @@ type Status = 'idle' | 'loading' | 'ready' | 'error'
 type DraftState = {
   values: Record<string, string>
   checks: Record<string, boolean>
+  initialValues: Record<string, string>
+  initialChecks: Record<string, boolean>
 }
+
+/** Compare against the first render, including fields on tabs no longer mounted. */
+export const recordDraftHasChanges = (draft: DraftState): boolean =>
+  Object.entries(draft.values).some(([key, value]) => value !== draft.initialValues[key]) ||
+  Object.entries(draft.checks).some(([key, value]) => value !== draft.initialChecks[key])
 
 type DraftScope = 'record' | 'dialog'
 
-const emptyDraftState = (): DraftState => ({ values: {}, checks: {} })
+const emptyDraftState = (): DraftState => ({ values: {}, checks: {}, initialValues: {}, initialChecks: {} })
 const draftCheckKey = (name: string, value: string): string => `${name}\u0000${value}`
+
+/** Name prefix of a checkbox that ticks every checkbox of its form sharing the rest of its name. */
+export const CHECK_ALL = '__all:'
 
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
@@ -473,6 +522,10 @@ export const createRecordModal =
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
+    // What the last preview command answered. One at a time: a second preview
+    // replaces the first, and anything that moves the layer clears it, so a
+    // consequence is never read beside a selection it was not computed from.
+    const outcome = signal<{ command: string; value: unknown } | null>(null)
 
     // Contexts this island has read, newest last: reopening a record (or the create
     // form) renders immediately and revalidates in place. Bounded and page-scoped;
@@ -527,9 +580,21 @@ export const createRecordModal =
           const hit = issues().find((issue) => issue.field === name)
           return hit ? (hit.message ?? t(hit.code, hit.params)) : null
         },
-        draft: (name, fallback = '') => draftState().values[name] ?? fallback,
-        draftChecked: (name, value = '1', fallback = false) =>
-          draftState().checks[draftCheckKey(name, value)] ?? fallback,
+        draft: (name, fallback = '') => {
+          const draft = draftState()
+          draft.initialValues[name] ??= fallback
+          return draft.values[name] ?? fallback
+        },
+        draftChecked: (name, value = '1', fallback = false) => {
+          const draft = draftState()
+          const key = draftCheckKey(name, value)
+          draft.initialChecks[key] ??= fallback
+          return draft.checks[key] ?? fallback
+        },
+        outcome: <T,>(command: string) => {
+          const held = outcome()
+          return held?.command === command ? (held.value as T) : null
+        },
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
@@ -557,18 +622,17 @@ export const createRecordModal =
       failure.set(null)
       try {
         const creating = id === RECORD_NEW_ID
-        const input = definition.context.input
-          ? definition.context.input(id, creating)
-          : creating
-            ? {}
-            : { id }
-        const result = await callRecordFunction<RecordContextEnvelope<Data> | null>(
-          definition.context.fn,
-          input,
-          {
-            signal: controller.signal,
-          },
-        )
+        const result =
+          'route' in definition.context
+            ? await readRecordContextRoute<RecordContextEnvelope<Data>>(
+                definition.context.route(id, creating),
+                controller.signal,
+              )
+            : await callRecordFunction<RecordContextEnvelope<Data> | null>(
+                definition.context.fn,
+                definition.context.input ? definition.context.input(id, creating) : creating ? {} : { id },
+                { signal: controller.signal },
+              )
         if (controller.signal.aborted) return
         if (!result.ok || !result.value) {
           failure.set(result.ok ? 'recordModal.notFound' : (result.message ?? 'recordModal.loadFailed'))
@@ -597,6 +661,8 @@ export const createRecordModal =
       const kept: DraftState = {
         values: { ...previous.values },
         checks: { ...previous.checks },
+        initialValues: { ...previous.initialValues },
+        initialChecks: { ...previous.initialChecks },
       }
       for (const control of current.querySelectorAll<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -605,12 +671,23 @@ export const createRecordModal =
         if (control instanceof HTMLInputElement) {
           if (control.type === 'file' || control.type === 'hidden') continue
           if (control.type === 'checkbox' || control.type === 'radio') {
-            kept.checks[draftCheckKey(control.name, control.value)] = control.checked
+            const key = draftCheckKey(control.name, control.value)
+            kept.initialChecks[key] ??= control.defaultChecked
+            kept.checks[key] = control.checked
+            // Keep checkbox/radio values available to draft(), but compare these
+            // groups by checked state: several controls may share one name.
             if (control.type === 'checkbox') kept.values[control.name] = control.checked ? control.value : ''
             else if (control.checked) kept.values[control.name] = control.value
+            kept.initialValues[control.name] = kept.values[control.name] ?? ''
             continue
           }
         }
+        kept.initialValues[control.name] ??=
+          control instanceof HTMLSelectElement
+            ? ([...control.options].find((option) => option.defaultSelected)?.value ??
+              control.options[0]?.value ??
+              '')
+            : control.defaultValue
         kept.values[control.name] = control.value
       }
       if (scope === 'dialog') dialogDrafts.set(kept)
@@ -624,7 +701,14 @@ export const createRecordModal =
     }
 
     const mayDiscard = (current: HTMLElement | null): boolean => {
-      if (!current || !recordLayerHasDraft(current)) return true
+      if (!current) return true
+      const scope = dialog() && current === topLayer() ? 'dialog' : 'record'
+      keepDrafts(current, scope)
+      const draft = scope === 'dialog' ? dialogDrafts() : recordDrafts()
+      const hasFile = [...current.querySelectorAll<HTMLInputElement>('input[type="file"]')].some(
+        (field) => !field.disabled && Boolean(field.files?.length),
+      )
+      if (!recordDraftHasChanges(draft) && !hasFile) return true
       return globalThis.confirm(t('recordModal.unsaved'))
     }
 
@@ -663,6 +747,7 @@ export const createRecordModal =
         recordDrafts.set(emptyDraftState())
         dialogDrafts.set(emptyDraftState())
         viewState.set({})
+        outcome.set(null)
         dialog.set(null)
         dialogReturnFocus = null
         envelope.set(null)
@@ -696,6 +781,7 @@ export const createRecordModal =
       recordDrafts.set(emptyDraftState())
       dialogDrafts.set(emptyDraftState())
       viewState.set({})
+      outcome.set(null)
       status.set('idle')
       envelope.set(null)
       releaseInert?.()
@@ -721,6 +807,7 @@ export const createRecordModal =
         dialog.set(null)
         dialogDrafts.set(emptyDraftState())
         issues.set([])
+        outcome.set(null)
         afterRender(() => (target?.isConnected ? target : null))
         return
       }
@@ -787,9 +874,17 @@ export const createRecordModal =
         }
         if (!result.ok) {
           // The layer was snapshotted before the busy state rendered, including unchecked controls.
+          // A refused submit leaves an answer that was computed from something else.
+          outcome.set(null)
           issues.set(
             result.issues.length
-              ? result.issues
+              ? result.issues.map((issue) => ({
+                  ...issue,
+                  field:
+                    issue.field && command.issueField
+                      ? command.issueField(issue.field, formData, context)
+                      : issue.field,
+                }))
               : [
                   {
                     field: null,
@@ -801,8 +896,20 @@ export const createRecordModal =
           )
           return
         }
+        if (command.preview) {
+          // Nothing changed, so nothing is dropped, re-read or announced — and the
+          // drafts snapshotted before this submit stay, so the selection is still on
+          // screen beside the answer it produced.
+          outcome.set({ command: name, value: result.value })
+          version.set(version() + 1)
+          return
+        }
         if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
         else recordDrafts.set(emptyDraftState())
+        // A command that stays in its layer leaves its answer for the view, which is
+        // how something the server can only say once — a one-time credential — reaches
+        // the reader. Every other `after` replaces the layer, so the answer goes.
+        outcome.set(after_(command) === 'stay' ? { command: name, value: result.value } : null)
         form.reset()
         const value = result.value as { id?: unknown } | null | undefined
         const createdId =
@@ -819,6 +926,14 @@ export const createRecordModal =
               detail: { kind: definition.kind, ids: [createdId ?? current.id] },
             }),
           )
+        }
+        if (command.navigate) {
+          const destination = new URL(command.navigate(result.value, context), location.href)
+          if (destination.origin !== location.origin)
+            throw new Error('Record navigation must stay same-origin')
+          hide('none')
+          location.assign(destination.href)
+          return
         }
         const after = after_(command)
         // A modal that closes says so by closing; one that stays owes an answer.
@@ -950,6 +1065,7 @@ export const createRecordModal =
         presentation: 'dialog',
         size: spec.size ?? 'default',
         title: spec.title(context),
+        actions: spec.actions?.(context),
         closeLabel: t('recordModal.close'),
         body: (
           <>
@@ -1040,6 +1156,7 @@ export const createRecordModal =
               const opener = element?.closest<HTMLElement>(`[${RECORD_DIALOG_ATTRIBUTE}]`)
               if (opener) {
                 event.preventDefault()
+                keepDrafts(recordLayer(), 'record')
                 const focused = document.activeElement
                 dialogReturnFocus =
                   focused instanceof HTMLElement && opener.contains(focused)
@@ -1051,6 +1168,7 @@ export const createRecordModal =
                   if (key.startsWith('recordParam') && value !== undefined)
                     params[key.slice('recordParam'.length).replace(/^./u, (c) => c.toLowerCase())] = value
                 issues.set([])
+                outcome.set(null)
                 dialog.set({ name: opener.getAttribute(RECORD_DIALOG_ATTRIBUTE) ?? '', params })
                 afterRender()
                 return
@@ -1070,12 +1188,31 @@ export const createRecordModal =
             if (!target || target.kind !== definition.kind) return
             event.preventDefault()
             const current = open()
+            const contextQuery = 'route' in definition.context ? (definition.context.query ?? []) : []
+            const previousUrl = new URL(location.href)
+            const changedContext = contextQuery.some(
+              (key) => previousUrl.searchParams.get(key) !== url.searchParams.get(key),
+            )
+            if (changedContext) {
+              // These keys belong to the context reader (for example item pagination).
+              // Preserve collection filters and record drafts while replacing this slice.
+              keepDrafts(recordLayer(), 'record')
+              for (const key of contextQuery) {
+                const value = url.searchParams.get(key)
+                if (value === null) previousUrl.searchParams.delete(key)
+                else previousUrl.searchParams.set(key, value)
+              }
+              history.replaceState(history.state ?? {}, '', previousUrl.href)
+              if (current?.id === target.id) void load(current.id)
+            }
             if (current?.id === target.id) {
               if ((target.tab ?? '') === current.tab) return
               // Switching tab is not discarding: what was typed rides along as drafts,
               // which the views read back, so no prompt stands between two tabs.
               keepDrafts(recordLayer(), 'record')
               issues.set([])
+              // The answer belonged to the tab that asked for it.
+              outcome.set(null)
               show(
                 target.id,
                 target.tab ?? null,
@@ -1169,20 +1306,44 @@ export const createRecordModal =
 
         // An input or select carrying `data-record-state` feeds view state as it
         // changes; a file chosen in a `data-record-submit` input submits its form.
+        // A design-system `RelationSelect`'s own hidden native select carries no
+        // such marker (the package knows nothing of this runtime), but it fires a
+        // real `change` too — keyed by its `name`, which every field in this kit
+        // already sets to the same key `state()` reads it back under.
         document.addEventListener(
           'change',
           (event) => {
             const control = event.target instanceof Element ? event.target : null
             if (!control || !root?.contains(control)) return
-            if (
-              (control instanceof HTMLSelectElement || control instanceof HTMLInputElement) &&
-              control.hasAttribute('data-record-state')
-            ) {
+            // A checkbox named `__all:<prefix>` ticks or clears every checkbox of its
+            // form whose name starts with that prefix, so one control stands for a
+            // row or a whole section. Any tick in such a form is kept as a draft, so
+            // the view re-renders and each "all" box reads whether it is now full.
+            if (control instanceof HTMLInputElement && control.type === 'checkbox' && control.form) {
+              const form = control.form
+              if (form.querySelector(`input[type="checkbox"][name^="${CHECK_ALL}"]`)) {
+                if (control.name.startsWith(CHECK_ALL)) {
+                  const prefix = control.name.slice(CHECK_ALL.length)
+                  for (const target of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+                    if (
+                      !target.disabled &&
+                      !target.name.startsWith(CHECK_ALL) &&
+                      target.name.startsWith(prefix)
+                    )
+                      target.checked = control.checked
+                }
+                keepAllDrafts()
+                return
+              }
+            }
+            const stateKey =
+              control.getAttribute('data-record-state') ??
+              (['relation-native', 'reorder-list-value'].includes(control.getAttribute('data-ui') ?? '')
+                ? control.getAttribute('name')
+                : null)
+            if ((control instanceof HTMLSelectElement || control instanceof HTMLInputElement) && stateKey) {
               keepAllDrafts()
-              viewState.set({
-                ...viewState(),
-                [control.getAttribute('data-record-state') ?? '']: control.value,
-              })
+              viewState.set({ ...viewState(), [stateKey]: control.value })
               return
             }
             if (
@@ -1319,3 +1480,12 @@ export {
   recordModalClosedHref,
   readRecordModalTarget,
 }
+
+export {
+  RecordModalForm,
+  RecordActionForm,
+  RecordCloseTrigger,
+  RecordDialogTrigger,
+  RecordCommandForm,
+  recordStateSelectControl,
+} from './record-modal-form.tsx'

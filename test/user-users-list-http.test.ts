@@ -39,6 +39,7 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   const app = await boot(t)
   const first = await (await app.client.get('/admin/users?lang=en')).text()
   assert.match(first, /data-ui="list-page"/)
+  assert.match(first, /data-island="backend\.search-filter"/)
   assert.match(first, /1-30 \/ 31/)
   assert.doesNotMatch(first, /user-31/)
 
@@ -58,10 +59,10 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   assert.match(byName, /needle@example\.test|login-08/)
 
   const stateful = await (await app.client.get('/admin/users?q=user&archived=1&page=2&lang=en')).text()
-  assert.match(stateful, /name="q"[^>]*value="user"/)
-  assert.match(stateful, /type="hidden" name="archived" value="1"/)
-  assert.match(stateful, /type="hidden" name="lang" value="en"/)
-  assert.match(stateful, /href="\/admin\/users\?q=user&amp;lang=en"/)
+  // The search-filter bar owns the query and the archived toggle now, so what
+  // the page must keep is the state the URL names, not a GET form.
+  assert.match(stateful, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(stateful, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.equal((await app.client.request('/admin/users?lang=en', { method: 'PUT' })).status, 405)
 })
 
@@ -82,4 +83,33 @@ test('the create action opens a person in the record modal, keeping the list sta
     /data-row-href="\/admin\/users\?q=user&amp;archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3A[^"]+"/,
   )
   assert.doesNotMatch(page, /data-row-href="\/admin\/users\/[^"?]+\?/)
+})
+
+test('the list narrows by where people work and what they hold, and says so removably', async (t) => {
+  const app = await boot(t)
+  const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
+  await fixture('user.saveRole', { id: 'cashier', name: 'Thu ngân' })
+  await fixture('user.assignRole', { id: 'a-01', userId: 'user-01', roleId: 'cashier' })
+
+  // Both questions are offered beside paging.
+  const plain = await (await app.client.get('/admin/users?lang=en')).text()
+  assert.match(plain, /Thu ngân/)
+
+  // Only the person who works at that company is left, and the chip drops it again.
+  const byCompany = await (await app.client.get('/admin/users?company=acme&lang=en')).text()
+  assert.match(byCompany, /Users: 1/)
+  assert.match(byCompany, /login-00/)
+  assert.match(byCompany, /href="\/admin\/users\?lang=en"/)
+
+  // Only the person holding that role is left.
+  const byRole = await (await app.client.get('/admin/users?role=cashier&lang=en')).text()
+  assert.match(byRole, /Users: 1/)
+  assert.match(byRole, /login-01/)
+
+  // Asked for both at once nobody qualifies, and the way out is dropping the question.
+  const neither = await (await app.client.get('/admin/users?company=acme&role=cashier&lang=en')).text()
+  assert.match(neither, /Users: 0/)
+  assert.match(neither, /Clear the filters/)
 })

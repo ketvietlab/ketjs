@@ -1,7 +1,16 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import {
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { RoleRow } from './types.ts'
 
 export type RoleListRow = RoleRow & { detailHref: string }
@@ -9,7 +18,9 @@ export type RoleListRow = RoleRow & { detailHref: string }
 export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
   createHref: string
-  presetsHref: string
+  presetsHref?: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<RoleListRow>>
 }
 
 export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
@@ -48,39 +59,40 @@ export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
   },
 ]
 
-export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScreenOptions): TemplateResult =>
-  shell(
+export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScreenOptions): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      columns: roleListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('user_backend.roles.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('user_backend.roles.title')}
+      controls={collectionControls(_, _('user_backend.roles.title'), frame)}
       description={_('user_backend.roles.subtitle')}
-      actions={inline([
-        <LinkButton
-          label={_('user_backend.action.createRole')}
-          href={options.createHref}
-          variant="primary"
-        />,
-        <LinkButton
-          label={_('user_backend.action.presets')}
-          href={options.presetsHref}
-          variant="secondary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('user_backend.action.createRole')} href={options.createHref} variant="primary" />
+      }
+      actions={collectionActions(_, frame)}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-              columns: roleListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : emptyState(_('user_backend.roles.empty'), _('user_backend.roles.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

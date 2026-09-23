@@ -3,7 +3,7 @@
 // The catalogue collection opens a template — and its create action — in a
 // client-side modal. One permission-checked read hands that modal the General and
 // Variants tabs need: the record or its defaults, the option lists their fields
-// offer, the template's variants and attribute lines, and what the viewer may do.
+// offer, the template's attributes-and-variants setup, and what the viewer may do.
 // Media (the gallery, uploads) and the description's rich-text controller stay on
 // the server-rendered detail page for now — this context does not answer for them.
 
@@ -11,14 +11,15 @@ import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { recordTabsFor } from './product-record-tabs.ts'
 import { AUTHORIZATION_EFFECTS, effectiveFunctionKeys } from '../user/authorization.ts'
-import { attributeLinesOf, describeVariants } from './functions.ts'
 import { PRODUCT_TYPES } from './types.ts'
+import { variantSetupOf } from './variant-setup.ts'
+import { hasProductMedia, templateImagesOf } from './record-images.ts'
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
 
 /** Message prefixes the product views read. */
-const MESSAGE_PREFIXES = ['product_backend.', 'product.']
+const MESSAGE_PREFIXES = ['product_backend.', 'product.', 'backend.relation.']
 
 const messagesFor = (ctx: Ctx, lang: Lang): Record<string, string> => {
   const catalog = ctx.manifest.messages?.[lang] ?? {}
@@ -82,6 +83,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
       'read:product.Attribute',
       'read:account.ProductTax',
       'read:account.Tax',
+      'read:product_media.Media',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
@@ -93,12 +95,14 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
         save: can('product.saveTemplate'),
         archive: can('product.archiveTemplate'),
         delete: can('product.deleteTemplates'),
-        generateVariants: can('product.generateVariants'),
-        saveAttributeLine: can('product.saveAttributeLine'),
-        removeAttributeLine: can('product.removeAttributeLine'),
-        saveVariant: can('product.saveVariant'),
+        saveVariantSetup: can('product.saveVariantSetup'),
         setCost: can('product.setCost'),
         setProductUom: can('product.setProductUom'),
+        // An image is two calls — the upload stores an attachment, then the gallery
+        // links it — so the viewer needs both, and the gallery module composed at all.
+        uploadImage:
+          hasProductMedia(ctx) && can('storage.createAttachment') && can('product_media.attachMedia'),
+        removeImage: hasProductMedia(ctx) && can('product_media.removeMedia'),
         configureStock: hasStock && can('stock.configureProduct'),
         setTax: hasTax && can('account.setProductTax'),
       }
@@ -111,35 +115,24 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
         ? newTemplateRecord()
         : (await ctx.db.select('product.Template', { id: args.id }))[0]
       if (!record) return null
-      const [categoryRows, unitRows, brandRows, taxRows, taxLink, attributeRows, valueRows] =
-        await Promise.all([
-          ctx.db.select('product.Category'),
-          ctx.db.select('uom.Unit'),
-          ctx.db.select('product.Brand', { active: true }),
-          hasTax ? ctx.db.select('account.Tax', { typeTaxUse: 'sale' }) : Promise.resolve([]),
-          hasTax && !creating
-            ? ctx.db.select('account.ProductTax', { templateId: args.id })
-            : Promise.resolve([]),
-          ctx.db.select('product.Attribute'),
-          ctx.db.select('product.AttributeValue'),
-        ])
+      const [categoryRows, unitRows, brandRows, taxRows, taxLink] = await Promise.all([
+        ctx.db.select('product.Category'),
+        ctx.db.select('uom.Unit'),
+        ctx.db.select('product.Brand', { active: true }),
+        hasTax ? ctx.db.select('account.Tax', { typeTaxUse: 'sale' }) : Promise.resolve([]),
+        hasTax && !creating
+          ? ctx.db.select('account.ProductTax', { templateId: args.id })
+          : Promise.resolve([]),
+      ])
       const products = creating ? [] : await ctx.db.select('product.Product', { templateId: args.id })
       const defaultVariant = products.find((product) => String(product.combinationKey ?? '') === '')
-      const realVariants = products.filter((product) => String(product.combinationKey ?? '') !== '')
-      const variants = creating ? [] : await describeVariants(ctx, realVariants)
-      const attributeLines = creating ? [] : await attributeLinesOf(ctx, args.id)
-      // Only attributes that actually generate variants belong in the "add an
-      // attribute" picker; a `no_variant` one (used for descriptive tags) has no
-      // place on this tab.
-      const variantAttributes = attributeRows.filter((row) => row.createVariant !== 'no_variant')
-      const attributeValuesByAttribute: Record<string, Row[]> = {}
-      for (const value of valueRows) {
-        const attributeId = String(value.attributeId)
-        ;(attributeValuesByAttribute[attributeId] ??= []).push({
-          value: String(value.id),
-          label: String(value.name),
-        })
-      }
+      // Archived combinations do not count: once every variant is archived the
+      // default one sells again, and General shows its code and barcode.
+      const sellingVariants = products.filter(
+        (product) => String(product.combinationKey ?? '') !== '' && product.active !== false,
+      )
+      const variantSetup = creating ? null : await variantSetupOf(ctx, String(args.id))
+      const images = creating ? [] : await templateImagesOf(ctx, String(args.id))
       const lang: Lang = args.locale === 'en' ? 'en' : 'vi'
       return {
         data: {
@@ -162,11 +155,9 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
             tracking: hasStock ? String(record.tracking ?? 'none') : 'none',
             taxId: taxLink[0]?.taxId ? String(taxLink[0].taxId) : null,
           },
-          variants,
-          hasVariants: realVariants.length > 0,
-          attributeLines,
-          attributes: options(variantAttributes),
-          attributeValuesByAttribute,
+          images,
+          hasVariants: sellingVariants.length > 0,
+          variantSetup,
           types: [...PRODUCT_TYPES],
           categories: options(categoryRows),
           uoms: options(unitRows),

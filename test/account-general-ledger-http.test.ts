@@ -85,9 +85,12 @@ test('general ledger HTTP keeps exact totals while paging and searching the incl
     html,
     /href="\/admin\/accounting\/general-ledger\?lang=en&amp;dateFrom=2026-06-30&amp;dateTo=2026-06-30&amp;page=2"/,
   )
-  assert.match(html, /name="dateFrom" value="2026-06-30"/)
-  assert.match(html, /name="dateTo" value="2026-06-30"/)
+  // The report's own range lives in its filter form; the bar carries the
+  // query and the locale, so the range is no longer repeated as hidden inputs.
+  assert.match(html, /name="dateFrom" autocomplete="off" value="2026-06-30"/)
+  assert.match(html, /name="dateTo" autocomplete="off" value="2026-06-30"/)
   assert.match(html, /type="hidden" name="lang" value="en"/)
+  assert.match(html, /data-island="backend\.search-filter"/)
   assert.match(html, /href="\/admin\/accounting\/entries\/ledger%3A00\?lang=en"/)
 
   const secondHtml = clean(await (await app.client.get(`${base}&page=2`)).text())
@@ -99,8 +102,10 @@ test('general ledger HTTP keeps exact totals while paging and searching the incl
   const searchedHtml = clean(await (await app.client.get(`${base}&q=marker-15`)).text())
   assert.equal((searchedHtml.match(/data-ui="row"/g) ?? []).length, 2)
   assert.match(searchedHtml, /data-ui="record-fact-value">2</)
-  assert.match(searchedHtml, /name="q" value="marker-15"/)
+  // The query reaches the report's form as the hidden field that keeps it
+  // across a recalculation; the bar itself owns the visible input.
   assert.match(searchedHtml, /type="hidden" name="q" value="marker-15"/)
+  assert.doesNotMatch(searchedHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.doesNotMatch(searchedHtml, /data-ui="pager"/)
 
   const localizedAccountHtml = clean(await (await app.client.get(`${base}&q=Revenue`)).text())

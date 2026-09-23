@@ -39,10 +39,28 @@ export const n = (value: unknown): number => Number(value ?? 0)
  *
  * Reporting reads `closedAt` for cycle time, so it has to be written the moment
  * a stage carries a terminal state and cleared again when the case is pulled
- * back into the pipeline. A case that closes twice keeps the first date.
+ * back into the pipeline. An edit within the same outcome keeps its date; a new outcome gets a new date.
  */
 export const closedAtFor = (held: Row, terminalState: unknown, timestamp: string): string | null =>
-  terminalState === 'won' || terminalState === 'lost' ? ((held.closedAt as string | null) ?? timestamp) : null
+  terminalState === 'won' || terminalState === 'lost'
+    ? held.terminalState === terminalState
+      ? ((held.closedAt as string | null) ?? timestamp)
+      : timestamp
+    : null
+
+/** Capture ownership only on a new outcome; never invent historical ownership on an edit. */
+export const closingValues = (held: Row, terminalState: unknown, timestamp: string): Row => {
+  const closedAt = closedAtFor(held, terminalState, timestamp)
+  if (!closedAt)
+    return { closedAt: null, closedAssigneeUserId: null, closedTeamId: null, closedOwnershipRecordedAt: null }
+  if (held.terminalState === terminalState && held.closedAt) return { closedAt }
+  return {
+    closedAt,
+    closedAssigneeUserId: held.assigneeUserId ?? null,
+    closedTeamId: held.teamId ?? null,
+    closedOwnershipRecordedAt: timestamp,
+  }
+}
 export const normalized = (value: unknown): string =>
   String(value ?? '')
     .normalize('NFKC')
@@ -415,7 +433,11 @@ export async function saveCase(
       active: true,
       version: nextVersion,
       score: existing?.score ?? '0',
-      closedAt: closedAtFor(existing ?? {}, stage.terminalState, timestamp),
+      ...closingValues(
+        existing ?? { teamId, assigneeUserId: input.assigneeUserId },
+        stage.terminalState,
+        timestamp,
+      ),
       updatedAt: timestamp,
     }
     if (existing) {
@@ -434,6 +456,7 @@ export async function saveCase(
       await tx.db.insert('crm.Case', {
         id: input.id,
         ...values,
+        originKind: input.kind,
         threadId: thread.id,
         createdByUserId: tx.actor ?? null,
         createdAt: timestamp,
@@ -455,7 +478,10 @@ export async function saveCase(
       probability: String(input.probability ?? detail?.probability ?? '0'),
       expectedClosing: input.expectedClosing ?? detail?.expectedClosing ?? null,
       forecastCategory: input.forecastCategory ?? detail?.forecastCategory ?? 'pipeline',
-      lostReason: detail?.lostReason ?? null,
+      lostReason:
+        existing && existing.terminalState === stage.terminalState ? (detail?.lostReason ?? null) : null,
+      lostReasonCode:
+        existing && existing.terminalState === stage.terminalState ? (detail?.lostReasonCode ?? null) : null,
       sourceLeadId: detail?.sourceLeadId ?? null,
     }
     if (detail) await tx.db.update('crm.SalesDetail', { id: detail.id }, salesValues)
@@ -992,7 +1018,7 @@ export async function moveCase(
       active: true,
       version: n(held.version) + 1,
       updatedAt: timestamp,
-      closedAt: closedAtFor(held, stage.terminalState, timestamp),
+      ...closingValues(held, stage.terminalState, timestamp),
     }
     const changed = await tx.db.compareAndSet(
       'crm.Case',
@@ -1002,12 +1028,22 @@ export async function moveCase(
     )
     if (!('dryRun' in changed) && !changed.matched)
       return invalid(issue('version', 'crm.error.stageConflict', { current: held.version }))
+    if (held.terminalState !== stage.terminalState) {
+      const detail = (await tx.db.select('crm.SalesDetail', { caseId: input.id }))[0]
+      if (detail)
+        await tx.db.update('crm.SalesDetail', { id: detail.id }, { lostReason: null, lostReasonCode: null })
+    }
     await addTimeline(tx, {
       id: `timeline:${input.id}:move:${input.idempotencyKey}`,
       caseId: input.id,
       eventType: 'stage',
       body: 'crm.timeline.stage',
-      metadata: { from: held.stageId, to: stage.id },
+      metadata: {
+        from: held.stageId,
+        to: stage.id,
+        terminalState: stage.terminalState,
+        ...closingValues(held, stage.terminalState, timestamp),
+      },
     })
     if (held.assigneeUserId && held.terminalState !== stage.terminalState)
       await tx.jobs.enqueue(

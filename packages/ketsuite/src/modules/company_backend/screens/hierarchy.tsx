@@ -26,13 +26,15 @@ export const hierarchyScreen = (
     title={_('company_backend.hierarchy.title')}
     subtitle={`${_('company_backend.screen.title')}: ${String(options.rows.length)}`}
     frame={frame}
+    headerActions={
+      <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />
+    }
     actions={inline([
       <LinkButton
         label={_('company_backend.action.backCompanies')}
         href={options.companiesHref}
         variant="secondary"
       />,
-      <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />,
     ])}
     body={
       options.rows.length === 0

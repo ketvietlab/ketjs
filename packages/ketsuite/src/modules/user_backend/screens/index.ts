@@ -5,13 +5,8 @@ export {
   type UsersListScreenOptions,
 } from './users-list.tsx'
 export type { UserRow } from './types.ts'
+// The profile page still lists the sessions of the person reading it.
 export { sessionsScreen } from './sessions.tsx'
-export {
-  userFormScreen,
-  userIdentityFields,
-  type UserFormScreenOptions,
-  type UserFormValues,
-} from './user-form.tsx'
 export type { SessionRow } from './types.ts'
 export {
   roleListColumns,
@@ -20,15 +15,4 @@ export {
   type RolesListScreenOptions,
 } from './roles-list.tsx'
 export type { PermissionRow, RoleRow } from './types.ts'
-export {
-  roleIdentityFields,
-  roleScreen,
-  type RoleFormScreenOptions,
-  type RoleFormValues,
-} from './role-form.tsx'
-export {
-  presetsScreen,
-  type PresetsFormValues,
-  type PresetsScreenOptions,
-} from './presets-form.tsx'
 export { profileScreen, type ProfileScreenOptions } from './profile-form.tsx'

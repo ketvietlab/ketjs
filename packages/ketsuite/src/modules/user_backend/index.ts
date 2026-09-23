@@ -3,6 +3,7 @@ import { USER_MODAL_ISLANDS, islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'user_backend',
@@ -13,6 +14,7 @@ export default defineModule({
   category: 'Hệ thống',
   assets: new URL('./client/', import.meta.url),
   routes,
+  functions: searchFilterFunctions,
   menus,
   messages,
   islands,
@@ -29,14 +31,6 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export {
-  presetsScreen,
-  profileScreen,
-  roleScreen,
-  rolesScreen,
-  sessionsScreen,
-  userFormScreen,
-  usersScreen,
-} from './screens/index.ts'
+export { profileScreen, rolesScreen, sessionsScreen, usersScreen } from './screens/index.ts'
 
-export { accessError, accessOptions } from './access-routes.tsx'
+export { accessError, accessOptions } from './access-options.ts'

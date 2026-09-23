@@ -1,7 +1,17 @@
+import {
+  badge,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type ManufacturingOrderListRow = {
   id: string
@@ -14,6 +24,8 @@ export type ManufacturingOrderListRow = {
 }
 
 export type OrdersListScreenOptions = {
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<ManufacturingOrderListRow>>
   rows: ManufacturingOrderListRow[]
   /** Locale-aware `/admin/manufacturing/new` URL supplied by the route. */
   createHref: string
@@ -61,32 +73,42 @@ export const ordersListScreen = (
   _: Translator,
   options: OrdersListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.href,
+      columns: manufacturingOrderListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  return shell(
     _,
     _('manufacturing_backend.orders.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('manufacturing_backend.orders.title')}
-      actions={inline([
+      controls={collectionControls(_, _('manufacturing_backend.orders.title'), collection.frame)}
+      headerActions={
         <LinkButton
           label={_('manufacturing_backend.orders.create')}
           href={options.createHref}
           variant="primary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collectionActions(_, collection.frame)}
+      footer={`${_('manufacturing_backend.orders.title')}: ${String(collection.total)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.href,
-              columns: manufacturingOrderListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, collection.table)
           : emptyState(_('manufacturing_backend.empty.orders'), _('manufacturing_backend.empty.ordersHint'))
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}

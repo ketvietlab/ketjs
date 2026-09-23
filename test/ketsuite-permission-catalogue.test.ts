@@ -51,7 +51,8 @@ test('public production permission catalogue covers every function owned by its 
   // adding one does, and that is exactly the moment somebody should be made to
   // look. Raise it only with the reason written beside the exemption itself.
   assert.ok(
-    Object.keys(manifest.permissions.exemptions).length <= 83,
+    // 84: `user.syncRoleTemplates`, the serve-time bootstrap that applies role templates.
+    Object.keys(manifest.permissions.exemptions).length <= 84,
     'a new permission exemption was added — say why, in the declaration',
   )
 
@@ -171,7 +172,15 @@ test('public catalogue separates Flow reading, working, writing documents, and p
   // exempt because the route calling them has already run its own record check.
   const bridge = ketsuitePermissionModules.flow_backend
   assert.equal(bridge?.posture, 'projection/bridge')
-  assert.deepEqual(Object.keys(bridge?.functions ?? {}), [])
+  // The bridge's own granted functions are the search-filter bar's four, which
+  // read what the reader may already read and write only their own saved
+  // searches — nothing about a project.
+  assert.deepEqual(Object.keys(bridge?.functions ?? {}), [
+    'flow_backend.applySearchFilter',
+    'flow_backend.saveSearchFavorite',
+    'flow_backend.deleteSearchFavorite',
+    'flow_backend.setDefaultSearchFavorite',
+  ])
   assert.deepEqual(bridge?.exemptions['flow_backend.sync.commitContent'], {
     reason: 'internal-route',
     authority: 'flow_backend.trusted-route-worker-or-service',

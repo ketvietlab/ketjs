@@ -9,7 +9,10 @@
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    /* `flex-start`, not `center`: once a narrow width wraps the message onto its
+       own line, centering would float the icon between the two lines instead of
+       beside the first one. */
+    align-items: flex-start;
     gap: var(--kv-space-1) var(--kv-space-2);
     padding: var(--kv-space-2) var(--kv-space-3);
     border: 1px solid var(--kv-color-line);

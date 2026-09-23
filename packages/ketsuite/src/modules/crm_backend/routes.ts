@@ -1,3 +1,5 @@
+import { completeCollectionRows } from './collection-rows.ts'
+import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
 import { randomUUID } from 'node:crypto'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { ListState, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -13,7 +15,7 @@ import type { FormField } from '../../ui/index.ts'
 import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
 import type { FormRefusal } from '../backend/forms.ts'
 import { adminPage, inLocale, localeQuery, optional, timezoneOf } from '../backend/screen.ts'
-import { withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager as collectionPager, withParam } from '../backend/paging.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { RelationOption } from '../backend/relation-select.ts'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -359,13 +361,12 @@ const caseCreateHref = (
   url: URL,
   preset: { stageId?: string; kind?: 'lead' | 'opportunity' } = {},
 ): string => {
-  const target = new URL('/admin/crm/cases/new', 'http://ket.local')
+  const target = new URL(String(url))
   if (preset.stageId) target.searchParams.set('stageId', preset.stageId)
   if (preset.kind) target.searchParams.set('kind', preset.kind)
   const lang = url.searchParams.get('lang')
   if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('returnTo', `${url.pathname}${url.search}`)
-  return `${target.pathname}${target.search}`
+  return recordModalCreateHref(target, { kind: 'crm.case' })
 }
 
 /** Only CRM views and a Partner record are valid destinations carried through the create form. */
@@ -704,6 +705,7 @@ export const routes: Record<string, RouteEntry> = {
               return {
                 id: row.id,
                 name: row.name,
+                href: recordModalHref(url, { kind: 'crm.case', id: String(row.id) }),
                 kind: row.kind,
                 stageId: row.stageId,
                 priority: String(row.priority ?? '1'),
@@ -963,6 +965,7 @@ export const routes: Record<string, RouteEntry> = {
             groups,
             total: Number(result.total ?? 0),
             createHref: live.functions['crm.case.save'] ? caseCreateHref(url) : undefined,
+            recordBase: `${url.pathname}${url.search}`,
             locale: localeQuery(url),
           })
         },
@@ -996,12 +999,28 @@ export const routes: Record<string, RouteEntry> = {
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return caseCreatePage(ctx, url, req, { actionPath: '/admin/crm/cases/new' })
+      const destination = new URL(caseReturnTo(url, url.searchParams.get('returnTo')), url)
+      for (const key of ['kind', 'stageId', 'partnerId', 'lang']) {
+        if (url.searchParams.has(key)) destination.searchParams.set(key, url.searchParams.get(key)!)
+      }
+      return seeOther(recordModalCreateHref(destination, { kind: 'crm.case' }))
     },
 
   '/admin/crm/cases/{id}':
     (ctx): Route =>
     async (url, req, params) => {
+      if (req.method === 'GET') {
+        const record = await ctx.call('crm.case.get', { id: params.id }, url, req)
+        if (!record) return text('not found', { status: 404 })
+        const destination = new URL(inLocale(url, '/admin/crm/cases'), url)
+        return seeOther(
+          recordModalHref(destination, {
+            kind: 'crm.case',
+            id: String(params.id),
+            tab: url.searchParams.get('tab') ?? 'overview',
+          }),
+        )
+      }
       const refused = refusePost(req)
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -1402,14 +1421,24 @@ export const routes: Record<string, RouteEntry> = {
         ? String(url.searchParams.get('tab'))
         : 'mine'
       const [activities, plans, calendar, activityTypes, users] = await Promise.all([
+        tab === 'mine'
+          ? completeCollectionRows(
+              (cursor, limit) =>
+                ctx.call(
+                  'crm.activity.listMine',
+                  { today: new Date().toISOString().slice(0, 10), includeDone: false, cursor, limit },
+                  url,
+                  req,
+                ) as Promise<AnyRow[]>,
+            )
+          : Promise.resolve([] as AnyRow[]),
+        allowed<AnyRow>(ctx, 'activity.listPlans', {}, url, req, { plans: [] }),
         ctx.call(
-          'crm.activity.listMine',
-          { today: new Date().toISOString().slice(0, 10), includeDone: false },
+          'crm.calendar.list',
+          { cursor: String((pageOf(url) - 1) * PAGE_SIZE), limit: PAGE_SIZE },
           url,
           req,
-        ) as Promise<AnyRow[]>,
-        allowed<AnyRow>(ctx, 'activity.listPlans', {}, url, req, { plans: [] }),
-        ctx.call('crm.calendar.list', { cursor: '0', limit: 100 }, url, req) as Promise<AnyRow>,
+        ) as Promise<AnyRow>,
         allowed<AnyRow[]>(ctx, 'activity.listTypes', {}, url, req, []),
         people(ctx, url, req, PRELOAD),
       ])
@@ -1430,19 +1459,48 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'crm_backend.planner.title',
         body: (_, frame) =>
-          plannerScreen(_, frame, {
-            tab,
-            activities: activities ?? [],
-            plans: (plans.plans as AnyRow[]) ?? [],
-            events: (calendar.events as AnyRow[]) ?? [],
-            activityTypes,
-            controls,
-            errors,
-            failedAction,
-            scheduling: url.searchParams.get('schedule') === '1',
-            values,
-            locale: localeQuery(url),
-          }),
+          plannerScreen(
+            _,
+            tab !== 'calendar'
+              ? collectionSearchFrame(url, frame, _('crm_backend.planner.title'))
+              : tab === 'calendar'
+                ? {
+                    ...frame,
+                    chrome: {
+                      ...frame.chrome,
+                      pager: collectionPager(
+                        url,
+                        pageOf(url),
+                        ((calendar.events as AnyRow[]) ?? []).length,
+                        Number(calendar.total ?? 0),
+                      ),
+                    },
+                  }
+                : frame,
+            {
+              tab,
+              activities: searchCollectionRows(
+                url,
+                activities ?? [],
+                (row) => `${row.summary ?? ''} ${row.caseName ?? ''} ${row.dueDate ?? ''}`,
+              ),
+              plans:
+                tab === 'plans'
+                  ? searchCollectionRows(url, (plans.plans as AnyRow[]) ?? [], (row) =>
+                      String(row.name ?? ''),
+                    )
+                  : ((plans.plans as AnyRow[]) ?? []),
+              events: (calendar.events as AnyRow[]) ?? [],
+              total: tab === 'calendar' ? Number(calendar.total ?? 0) : undefined,
+              activityTypes,
+              controls,
+              errors,
+              failedAction,
+              scheduling: url.searchParams.get('schedule') === '1',
+              values,
+              locale: localeQuery(url),
+            },
+          ),
       })
     },
 
@@ -1462,15 +1520,53 @@ export const routes: Record<string, RouteEntry> = {
         if (result.ok) return seeOther(inLocale(url, '/admin/crm/leaderboard'))
         errors = errorsOf(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const listed = (await ctx.call('crm.gamification.list', { limit: 50 }, url, req)) as AnyRow
+      let currentPage = pageOf(url)
+      const readPage = (page: number) =>
+        ctx.call(
+          'crm.gamification.list',
+          {
+            limit: PAGE_SIZE,
+            cursor: (page - 1) * PAGE_SIZE,
+            search: url.searchParams.get('q') ?? '',
+          },
+          url,
+          req,
+        ) as Promise<AnyRow>
+      let listed = await readPage(currentPage)
+      const lastPage = Math.max(1, Math.ceil(Number(listed.total ?? 0) / PAGE_SIZE))
+      if (currentPage > lastPage) {
+        currentPage = lastPage
+        listed = await readPage(currentPage)
+      }
       return adminPage(ctx, url, req, {
         title: 'crm_backend.leaderboard.title',
         body: (_, frame) =>
-          leaderboardScreen(_, frame, {
-            profiles: (listed.profiles as AnyRow[]) ?? [],
-            errors,
-            locale: localeQuery(url),
-          }),
+          leaderboardScreen(
+            _,
+            collectionSearchFrame(
+              url,
+              {
+                ...frame,
+                chrome: {
+                  ...frame.chrome,
+                  pager: collectionPager(
+                    url,
+                    currentPage,
+                    ((listed.profiles as AnyRow[]) ?? []).length,
+                    Number(listed.total ?? 0),
+                  ),
+                },
+              },
+              _('crm_backend.leaderboard.title'),
+            ),
+            {
+              profiles: (listed.profiles as AnyRow[]) ?? [],
+              total: Number(listed.total ?? 0),
+              offset: (currentPage - 1) * PAGE_SIZE,
+              errors,
+              locale: localeQuery(url),
+            },
+          ),
       })
     },
 
@@ -1487,7 +1583,9 @@ export const routes: Record<string, RouteEntry> = {
       const [config, tags, users, canCreate] = await Promise.all([
         configuration(ctx, url, req),
         section === 'tags'
-          ? allowed<AnyRow[]>(ctx, 'crm.tag.list', { includeArchived: true, limit: 200 }, url, req, [])
+          ? completeCollectionRows((cursor, limit) =>
+              allowed<AnyRow[]>(ctx, 'crm.tag.list', { includeArchived: true, cursor, limit }, url, req, []),
+            )
           : Promise.resolve([] as AnyRow[]),
         people(ctx, url, req, 200),
         ctx.allows(CONFIGURATION_SAVE_FUNCTIONS[section], url, req),
@@ -1499,10 +1597,10 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'crm_backend.configuration.title',
         body: (_, frame) =>
-          configurationScreen(_, frame, {
+          configurationScreen(_, collectionSearchFrame(url, frame, _('crm_backend.configuration.title')), {
             section,
             status,
-            rows,
+            rows: searchCollectionRows(url, rows, (row) => `${row.name ?? ''} ${row.code ?? ''}`),
             locale: localeQuery(url),
             teams: config.teams ?? [],
             users,

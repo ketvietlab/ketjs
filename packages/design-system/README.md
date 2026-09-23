@@ -95,6 +95,35 @@ each option's text after its control. `optionsOrientation` sets how the options 
 Do not restyle `field-options` in an application to stack options; pass
 `optionsOrientation: 'vertical'` instead.
 
+### Relation pickers
+
+`RelationSelect` (`createRelationSelectView`/`relationSelect`) is a live client
+island, unlike the rest of the package's progressively enhanced controls: it owns
+its own state and calls `/_ket/fn/<name>` itself through `RelationSelectConfig.manager`
+(`listFunction`, optional `saveFunction`/`removeFunction`). A consuming app mounts
+it through its own island runtime (`defineIsland` in `@ketvietlab/ketjs-view`) and
+supplies a JSON-serializable config; nothing about it depends on server-rendered
+markup, so it may be cold-mounted anywhere the host places a matching island
+element — including inside a view that is itself already client-rendered, such as
+a modal a JavaScript runtime opened — not only hydrated from the page's initial HTML.
+
+Its option rows (`relation-option`, `relation-dialog-row`) show the current
+selection as a trailing mark on the label's own line, never on a line of its own
+below a description. The dialog's "more" action is a full-width row like the
+options above it, not a chip-sized button; a consumer overriding the footer should
+widen it to match, not narrow it to its label's content.
+
+Its inline dropdown is not a `<details>`, so the shared outside-click delegator
+(above) does not see it; the component closes it on an outside click itself,
+same contract, different mechanism. Choosing a value also fires a real `change`
+on the hidden native select (bubbling, a microtask after the choice settles) so
+a host page's own `change`-driven wiring keeps working — a second field whose
+options depend on this one's choice can key off it exactly as it would a plain
+`<select>`. Rendering the picker itself through `each`, keyed on whatever the
+dependency is, is what a host needs to swap it for a fresh instance when that
+key changes: the component holds no `update()`, so a config change alone (a new
+`manager.listInput`, a new options list) never reaches an already-mounted one.
+
 The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
 with `layout="flow"`), and canvas workspace (`WorkspacePage` with

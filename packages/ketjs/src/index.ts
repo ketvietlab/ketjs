@@ -306,6 +306,7 @@ export type {
   GroupFieldSpec,
   SortFieldSpec,
   PresetFilterSpec,
+  ListSearchShape,
   ListSearchSpec,
   ListGroup,
   ListSort,

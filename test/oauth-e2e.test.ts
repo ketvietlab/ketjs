@@ -90,7 +90,12 @@ const fakeProvider = async (t: TestContext) => {
         'base64url',
       )
       res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ token_type: 'Bearer', id_token: `${header}.${payload}.${signature}` }))
+      res.end(
+        JSON.stringify({
+          token_type: 'Bearer',
+          id_token: `${header}.${payload}.${signature}`,
+        }),
+      )
       return
     }
     res.statusCode = 404
@@ -109,10 +114,18 @@ const bootOauth = async (t: TestContext) => {
   const provider = await fakeProvider(t)
   const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
-  const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
+  const scope = {
+    company: 'acme',
+    branch: 'root:acme',
+    branches: ['root:acme'],
+  }
   const fixture = <T = Row>(name: string, input: Record<string, unknown>, actor?: string) =>
     e2e.fixture.call<T>(name, input, { scope, actor }).then((result) => result.value)
-  await fixture('partner.savePartner', { id: 'acme:partner', kind: 'company', name: 'Kết Việt' })
+  await fixture('partner.savePartner', {
+    id: 'acme:partner',
+    kind: 'company',
+    name: 'Kết Việt',
+  })
   await fixture('company.saveCompany', {
     id: 'acme',
     code: 'KET',
@@ -126,7 +139,11 @@ const bootOauth = async (t: TestContext) => {
     name: 'Admin',
     superuser: true,
   })
-  await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
+  await fixture('user.grantCompany', {
+    id: 'admin:acme',
+    userId: 'admin',
+    companyId: 'acme',
+  })
   await fixture(
     'oauth.saveProvider',
     {
@@ -154,7 +171,9 @@ const bootOauth = async (t: TestContext) => {
 test('oauth HTTP E2E: login page, cross-origin provider, PKCE callback and live session', async (t) => {
   const { e2e } = await bootOauth(t)
   const browser = e2e.client.anonymous()
-  const login = await browser.get('/login?lang=en', { headers: { accept: 'text/html' } })
+  const login = await browser.get('/login?lang=en', {
+    headers: { accept: 'text/html' },
+  })
   assert.equal(login.status, 200)
   assert.match(await login.text(), /Continue with Fake Identity/)
   const hostileLogin = await browser.get('/login?next=%2F%5Cattacker.example&lang=en', {
@@ -204,7 +223,9 @@ test('oauth HTTP E2E: login page, cross-origin provider, PKCE callback and live 
   assert.equal(unbound.status, 303)
   assert.match(unbound.headers.get('location') ?? '', /oauth_error=oauth\.error\.transactionInvalid/)
 
-  const completed = await browser.get(callback, { headers: { accept: 'text/html' } })
+  const completed = await browser.get(callback, {
+    headers: { accept: 'text/html' },
+  })
   const completedBody = await completed.text()
   assert.equal(completed.status, 200, completedBody)
   assert.match(completedBody, /"ok": true/)
@@ -263,14 +284,22 @@ test('oauth HTTP E2E: every administration screen renders in Vietnamese and Engl
     ['/admin/oauth/identities?lang=vi', /Danh tính ngoài/],
     ['/admin/oauth/identities/new?lang=en', /Verified issuer and subject/],
     ['/admin/oauth/link?lang=en', /Choose a provider/],
-    ['/admin/users/admin?lang=en', /Provider identities/],
+    ['/admin/users/admin?lang=en', /data-record-kind="user\.user"/],
     ['/admin/profile?lang=en', /Link external identity/],
   ] as const) {
-    const response = await e2e.client.get(path, { headers: { accept: 'text/html' } })
+    const response = await e2e.client.get(path, {
+      headers: { accept: 'text/html' },
+    })
     const body = await response.text()
     assert.equal(response.status, 200, `${path}: ${body}`)
     assert.match(body, expected, path)
-    assert.doesNotMatch(body, /(?:oauth|oauth_backend)\.[A-Za-z]/, path)
+    // The search-filter bar's island props name its functions, so the leak
+    // check looks at what the reader can actually see.
+    assert.doesNotMatch(
+      body,
+      /(?:>|placeholder="|aria-label="|title=")[^<"]*(?:oauth|oauth_backend)\.[A-Za-z]/u,
+      path,
+    )
   }
 
   const anonymous = await e2e.client.anonymous().get('/admin/oauth/providers', {
@@ -303,10 +332,14 @@ test('oauth HTTP E2E: a signed-in user links a verified subject without replacin
   const authorized = await fetch(authorizeUrl, { redirect: 'manual' })
   const callback = authorized.headers.get('location')
   assert.ok(callback)
-  const completed = await e2e.client.get(callback, { headers: { accept: 'text/html' } })
+  const completed = await e2e.client.get(callback, {
+    headers: { accept: 'text/html' },
+  })
   assert.equal(completed.status, 200)
   assert.match(await completed.text(), /Hồ sơ của tôi|My profile/)
-  const who = (await (await e2e.client.get('/whoami')).json()) as { userId: string }
+  const who = (await (await e2e.client.get('/whoami')).json()) as {
+    userId: string
+  }
   assert.equal(who.userId, 'admin')
   const identity = (await e2e.adapter!.all('SELECT * FROM oauth_external_identity', []))[0]!
   assert.equal(identity.userId, 'admin')
