@@ -2953,10 +2953,9 @@ export const redirectsScreen = (
       'http://collection.local',
     )
     url.searchParams.set('site', siteId ?? '')
-    for (const key of ['state', 'edit'])
-      if (params[key] !== undefined) url.searchParams.set(key, params[key])
-      else url.searchParams.delete(key)
-    return `${url.pathname}${url.search}`
+    if (params.edit) return withParam(url, 'edit', params.edit, false)
+    url.searchParams.delete('edit')
+    return withParam(url, 'state', params.state ?? null)
   }
   const collection = prepareCollectionTable(
     _,
