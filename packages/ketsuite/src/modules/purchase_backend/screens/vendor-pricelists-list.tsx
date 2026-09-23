@@ -1,13 +1,15 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  Disclosure,
   emptyState,
   formatMoney,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   RecordForm,
   Section,
   shell,
@@ -91,14 +93,20 @@ export const vendorPricelistsListScreen = (
   _: Translator,
   options: VendorPricelistsListScreenOptions,
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      columns: vendorPricelistColumns(_, options.currency),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const table =
     options.rows.length || options.table?.groups?.length
-      ? dataTable(_, {
-          rows: options.rows,
-          id: (row) => row.id,
-          columns: vendorPricelistColumns(_, options.currency),
-          ...options.table,
-        })
+      ? collectionTable(_, collection.table)
       : options.setup && (!options.setup.vendors || !options.setup.pickingTypes)
         ? null
         : emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'))
@@ -108,48 +116,38 @@ export const vendorPricelistsListScreen = (
     _('purchase_backend.pricelists.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('purchase_backend.pricelists.title')}
-      actions={inline([
+      headerActions={
         <LinkButton
           label={_('purchase_backend.action.addVendorPrice')}
           href={options.createHref}
           variant="primary"
-        />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        options.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.pricelists.title'),
-              {
-                ...options.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+        />
       }
-      status={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('purchase_backend.pricelists.title'), collection.frame)}
+      footer={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
       body={stack(
         [
           rejection(_, options.invalid),
           options.setup ? missingSetup(_, options.setup) : null,
-          <Section
-            title={_('purchase_backend.method.title')}
+          <Disclosure
+            summary={_('purchase_backend.method.title')}
             body={
-              <Surface
+              <Section
+                title={_('purchase_backend.method.title')}
                 body={
-                  <RecordForm
-                    action={options.action}
-                    submit={_('purchase_backend.action.saveMethod')}
-                    submitVariant="primary"
-                    hidden={{ action: 'method' }}
-                    fields={options.methodFields}
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={options.action}
+                        submit={_('purchase_backend.action.saveMethod')}
+                        submitVariant="primary"
+                        hidden={{ action: 'method' }}
+                        fields={options.methodFields}
+                      />
+                    }
                   />
                 }
               />
@@ -160,6 +158,6 @@ export const vendorPricelistsListScreen = (
         'loose',
       )}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

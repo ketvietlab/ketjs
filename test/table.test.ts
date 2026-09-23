@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { compose, translator } from '@ketvietlab/ketjs'
 import backend from '@ketvietlab/ketsuite/backend'
@@ -153,6 +154,25 @@ test('avatar: the name is on the wrapper, so a screen reader is not read initial
   const html = renderToString(person('Nguyễn Quản Trị'))
   assert.match(html, /data-ui="avatar" title="Nguyễn Quản Trị" aria-hidden="true"/)
   assert.match(html, /data-ui="person-name">[\s\S]*Nguyễn Quản Trị/)
+})
+
+test('table: the application table claims the data-table pattern, so the design system draws it', () => {
+  // Every data-table rule in the design system is scoped to this pattern. Without
+  // it the application table drew none of them, and the row link fell back to the
+  // browser's default underline because nothing set `text-decoration`.
+  assert.match(render(), /data-ui="table-scroll"[^>]*data-pattern="data-table"/)
+  const styles = readFileSync(
+    new URL('../packages/design-system/src/patterns/data-table/styles.css', import.meta.url),
+    'utf8',
+  )
+  assert.match(styles, /\[data-ui="row-link"\] \{[^}]*text-decoration: none/u)
+  // A row that is itself a link may still carry its own controls. The row link's
+  // overlay covers the whole row, so anything else a reader can press sits above
+  // it — otherwise the row swallows the click.
+  assert.match(
+    styles,
+    /:is\(a, button, summary, input, select, textarea\):not\(\[data-ui="row-link"\]\) \{\s*position: relative;\s*z-index: 1;/u,
+  )
 })
 
 test('table: a scrolling row keeps its header, a stacked row carries its own labels', () => {

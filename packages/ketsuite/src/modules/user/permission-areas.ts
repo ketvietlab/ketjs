@@ -101,7 +101,9 @@ export const permissionArea = (
   module: string,
   lang: 'vi' | 'en',
 ): { group: PermissionGroup; label: string } => {
-  const area = permissionAreas[module]
+  const area =
+    permissionAreas[module] ??
+    (module.endsWith('_backend') ? permissionAreas[module.slice(0, -8)] : undefined)
   return area
     ? { group: area.group, label: area[lang] }
     : { group: 'other', label: module.replaceAll('_', ' ') }

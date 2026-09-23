@@ -3,15 +3,17 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
-  inline,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type EmployeeListRow = {
   id: string
@@ -29,6 +31,8 @@ export type EmployeesListScreenOptions = {
   createHref: string
   /** Locale-aware collection endpoint for archive and restore commands. */
   action: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<EmployeeListRow>>
 }
 
 export const employeeListColumns = (_: Translator, action: string): Array<Column<EmployeeListRow>> => [
@@ -86,28 +90,38 @@ export const employeesListScreen = (
   _: Translator,
   options: EmployeesListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.editHref,
+      columns: employeeListColumns(_, options.action),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('hr_backend.employees.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('hr_backend.employees.title')}
-      actions={inline([
-        <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      controls={collectionControls(_, _('hr_backend.employees.title'), frame)}
+      headerActions={
+        <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />
+      }
+      actions={collectionActions(_, frame)}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.editHref,
-              columns: employeeListColumns(_, options.action),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : emptyState(_('hr_backend.empty.employees'), _('hr_backend.empty.employeesHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

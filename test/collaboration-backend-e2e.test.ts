@@ -115,7 +115,9 @@ test('Chatter backend E2E: Partner bridge renders and persists its timeline', as
 test('Chatter backend E2E: Product bridge renders, follows, posts attachments and updates inbox', async (t) => {
   const { e2e, call, member } = await boot(t)
 
-  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
+  // General and Variants now open in the record-modal; this route only still
+  // renders a page for Media, which is where the collaboration bridge lives.
+  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?tab=media&lang=en', {
     headers: { accept: 'text/html' },
   })
   assert.equal(productPage.status, 200)
@@ -127,7 +129,7 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.doesNotMatch(html, /data-ui="chatter-composer"/)
   assert.match(html, /data-island="mail\.inbox-indicator"/)
 
-  const navigation = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
+  const navigation = await e2e.client.get('/admin/product/templates/tpl-collab?tab=media&lang=en', {
     headers: { accept: 'text/html', 'x-ket-navigation': 'fragment-v1' },
   })
   assert.equal(navigation.status, 200)
@@ -430,7 +432,7 @@ test('Activity backend E2E: Product scheduling, due state, atomic completion and
   ).value.activity
   assert.equal(scheduled.threadId, 'thread:product.Template:tpl-collab')
 
-  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?lang=en', {
+  const productPage = await e2e.client.get('/admin/product/templates/tpl-collab?tab=media&lang=en', {
     headers: { accept: 'text/html' },
   })
   const productHtml = await productPage.text()

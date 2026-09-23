@@ -9,7 +9,7 @@ import {
   serializeCaseList,
   visibleCases,
 } from '../operations.ts'
-import { activityEffects } from './shared.ts'
+import { activityEffects, caseReadEffects } from './shared.ts'
 
 export const activityFunctions: Record<string, FnSpec> = {
   /**
@@ -23,7 +23,7 @@ export const activityFunctions: Record<string, FnSpec> = {
    * actor may see and names the case on every row.
    */
   'activity.listMine': defineFn({
-    input: { today: 'date?', includeDone: 'bool?', mine: 'bool?', limit: 'int?' },
+    input: { today: 'date?', includeDone: 'bool?', mine: 'bool?', limit: 'int?', cursor: 'int?' },
     output: {
       id: 'id',
       summary: 'text',
@@ -38,7 +38,9 @@ export const activityFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.ActivityLink',
       'read:crm.Case',
+      'read:crm.Team',
       'read:crm.TeamMember',
+      'read:crm.AccessGrant',
       'read:activity.Activity',
       'read:user.User',
     ],
@@ -86,7 +88,11 @@ export const activityFunctions: Record<string, FnSpec> = {
           const held = caseId ? visible.get(caseId) : undefined
           return held ? [{ ...activity, caseId, caseName: held.name, state: stateOf(activity) }] : []
         })
-        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 100))))
+        .slice(
+          Math.max(0, Math.trunc(n(args.cursor ?? 0))),
+          Math.max(0, Math.trunc(n(args.cursor ?? 0))) +
+            Math.max(1, Math.min(200, Math.trunc(n(args.limit ?? 100)))),
+        )
     },
   }),
 
@@ -138,13 +144,7 @@ export const activityFunctions: Record<string, FnSpec> = {
   'calendar.list': defineFn({
     input: { caseId: 'id?', from: 'datetime?', to: 'datetime?', cursor: 'text?', limit: 'int?' },
     output: { events: 'json', total: 'int', nextCursor: 'text?' },
-    effects: [
-      'read:crm.CalendarLink',
-      'read:crm.Case',
-      'read:calendar.Event',
-      'read:user.User',
-      'read:crm.TeamMember',
-    ],
+    effects: [...caseReadEffects],
     handler: async (ctx, args) => {
       const links = args.caseId
         ? await ctx.db.select('crm.CalendarLink', { caseId: args.caseId })

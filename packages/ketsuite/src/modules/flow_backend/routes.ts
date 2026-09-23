@@ -1,10 +1,14 @@
+import { withParam } from '../backend/paging.ts'
 import { randomUUID } from 'node:crypto'
+import { listSearchChrome } from '../backend/search-filter.ts'
+import { rowListSearch } from '../backend/row-list.ts'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { commandRecordId } from '../flow/operations.ts'
+import { epicListSearch, pageListSearch, projectListSearch, sprintListSearch } from './search.ts'
 import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField, TableGroup } from '../../ui/index.ts'
@@ -18,13 +22,7 @@ import {
   mentionControl,
   tagsControl,
 } from './relation-control.ts'
-import {
-  keepForListSearch,
-  LIST_PAGE_SIZE,
-  listFacets,
-  listMenus,
-  loadListGroups,
-} from '../backend/list-search.ts'
+import { LIST_PAGE_SIZE, loadListGroups } from '../backend/list-search.ts'
 import { pageOf } from '../backend/paging.ts'
 import {
   boardScreen,
@@ -54,6 +52,22 @@ import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
 
 type Translator = ReturnType<ServeContext['translate']>
+
+/** One set of functions behind every Flow list's bar; `listKey` says which list. */
+const flowSearchFunctions = {
+  apply: 'flow_backend.applySearchFilter',
+  saveFavorite: 'flow_backend.saveSearchFavorite',
+  deleteFavorite: 'flow_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'flow_backend.setDefaultSearchFavorite',
+}
+
+/** A sprint state, in the reader's language, for the group headers. */
+const flowGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `flow.sprint.${raw}`
+  return key === 'state' && _.resolves(message) ? _(message) : raw
+}
 
 /** Domain reads stay bounded; the map assembles complete epics one page at a time. */
 const MAP_BATCH_SIZE = 200
@@ -465,19 +479,23 @@ const crossProjectIssues =
     }))
     return adminPage(ctx, url, req, {
       title: options.title,
-      body: (_, frame) => {
-        frame.chrome = {
-          search: {
-            name: 'q',
-            value: state.q ?? '',
-            placeholder: _('flow_backend.search.issues'),
-            keep: keepForListSearch(url),
-            facets: listFacets(_, url, state, spec),
-            menus: listMenus(_, url, state, spec),
+      body: async (_, frame) => {
+        const chrome = await listSearchChrome(ctx, url, req, {
+          spec,
+          frame,
+          name: 'flow-issue-filter',
+          bodyId: 'flow-issue-list',
+          functions: flowSearchFunctions,
+          labels: { searchPlaceholder: _('flow_backend.search.issues') },
+        })
+        frame = {
+          ...chrome.frame,
+          chrome: {
+            ...chrome.frame.chrome,
+            pager: grouped
+              ? null
+              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           },
-          pager: grouped
-            ? null
-            : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
         }
         const at = url.searchParams.get('view') ?? (options.mine ? 'mine' : 'all')
         return crossProjectScreen(_, frame, _(options.title), grouped ? [] : marked, groups, {
@@ -1240,48 +1258,35 @@ export const routes: Record<string, RouteEntry> = {
 
       const _ = ctx.translate(ctx.localeOf(url, req))
       const showArchived = url.searchParams.get('archived') === '1'
-      // One page, and the real total beside it. This used to ask for two
-      // hundred and report what came back as the whole company's project
-      // count — wrong past that, and with no way to reach the rest (FLW-039).
-      const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
-      const all = (await ctx.call(
+      const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
+      const filter = {
+        search: url.searchParams.get('q') ?? '',
+        archivedOnly: tab === 'archived',
+        mine: tab === 'mine',
+      }
+      const counted = (await ctx.call('flow.project.count', filter, url, req)) as AnyRow
+      const total = Number(counted.total ?? 0)
+      const page = Math.min(pageOf(url), Math.max(1, Math.ceil(total / LIST_PAGE_SIZE)))
+      const listed = (await ctx.call(
         'flow.project.list',
         {
+          ...filter,
           limit: LIST_PAGE_SIZE,
           cursor: (page - 1) * LIST_PAGE_SIZE,
-          includeArchived: showArchived,
         },
         url,
         req,
       )) as AnyRow[]
-      const counted = (await ctx.call(
-        'flow.project.count',
-        { includeArchived: showArchived },
-        url,
-        req,
-      )) as AnyRow
-      const total = Number(counted.total ?? 0)
       const stats = (await ctx.call(
         'flow.project.stats',
-        { projectIds: all.map((project) => String(project.id)) },
+        {
+          projectIds: listed.map((project) => String(project.id)),
+        },
         url,
         req,
       )) as AnyRow[]
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
-      const withStats = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
-
-      const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
-      // Asked as "which projects", not as "the two hundred issues I touched
-      // most recently" — that page silently dropped projects from the tab of
-      // anyone carrying more work than it held. See projectsWithMyWork.
-      const rows =
-        tab === 'mine'
-          ? ((await ctx.call('flow.project.list', { mine: true }, url, req)) as AnyRow[]).map(
-              (project) => withStats.find((row) => String(row.id) === String(project.id)) ?? project,
-            )
-          : tab === 'archived'
-            ? withStats.filter((project) => project.active === false)
-            : withStats
+      const rows = listed.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
       const recent = (await ctx.call(
         'flow.issue.list',
@@ -1294,23 +1299,27 @@ export const routes: Record<string, RouteEntry> = {
       )) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
-        body: (_, frame) => {
-          const workspace = projectsListScreen(_, frame, {
+        body: async (_, frame) => {
+          // The query is the only thing the bar can offer here: the list is
+          // paged and searched by `flow.project.list`, which takes a search
+          // string and nothing else. The all/mine/archived tabs stay tabs.
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: projectListSearch,
+            frame,
+            name: 'flow-project-filter',
+            bodyId: 'flow-project-list',
+            functions: flowSearchFunctions,
+          })
+          const workspace = projectsListScreen(_, chrome.frame, {
             rows,
             projectCount: total,
-            // Only the tab that really pages gets a pager. `mine` and
-            // `archived` are filters over what came back, so a pager on them
-            // would count pages of a list this route never asked for.
-            pager:
-              tab === 'all' && total > LIST_PAGE_SIZE
-                ? {
-                    from: rows.length ? (page - 1) * LIST_PAGE_SIZE + 1 : 0,
-                    to: Math.min(page * LIST_PAGE_SIZE, total),
-                    total,
-                    prev: page > 1 ? `/admin/flow/projects?page=${page - 1}` : null,
-                    next: page * LIST_PAGE_SIZE < total ? `/admin/flow/projects?page=${page + 1}` : null,
-                  }
-                : null,
+            pager: {
+              from: rows.length ? (page - 1) * LIST_PAGE_SIZE + 1 : 0,
+              to: rows.length ? (page - 1) * LIST_PAGE_SIZE + rows.length : 0,
+              total,
+              prev: page > 1 ? withParam(url, 'page', String(page - 1), false) : null,
+              next: page * LIST_PAGE_SIZE < total ? withParam(url, 'page', String(page + 1), false) : null,
+            },
             issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
             issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
             activeCount: stats.filter((row) => String(row.state) === 'active').length,
@@ -1597,19 +1606,26 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name),
         translate: false,
         active: `/admin/flow/projects/${projectId}/issues`,
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: state.q ?? '',
-              placeholder: _('flow_backend.search.issues'),
-              keep: keepForListSearch(listUrl),
-              facets: listFacets(_, listUrl, state, spec),
-              menus: listMenus(_, listUrl, state, spec),
+        body: async (_, frame) => {
+          // The bar reads and writes the collection URL, not this one: a modal
+          // may be open over the list, and the state the reader is narrowing
+          // belongs to the list underneath it.
+          const chrome = await listSearchChrome(ctx, listUrl, req, {
+            spec,
+            frame,
+            name: 'flow-project-issue-filter',
+            bodyId: 'flow-project-issue-list',
+            functions: flowSearchFunctions,
+            labels: { searchPlaceholder: _('flow_backend.search.issues') },
+          })
+          frame = {
+            ...chrome.frame,
+            chrome: {
+              ...chrome.frame.chrome,
+              pager: grouped
+                ? null
+                : pager(listUrl, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
             },
-            pager: grouped
-              ? null
-              : pager(listUrl, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           }
           const returnTo = projectIssuesCollection(url, projectId)
           const workspace = issuesScreen(_, frame, {
@@ -1697,22 +1713,22 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name ?? ''),
         translate: false,
         active: endpoint,
-        body: (t, frame) => {
+        body: async (t, frame) => {
           const errors = url.searchParams.getAll('error')
           // `page.list` has taken a search since it was written and this route
           // has passed it for as long — through `?q=`, which until now only a
-          // hand-typed URL could set. The chrome is what the cross-project
-          // document screen already uses; a second, hand-rolled form here
+          // hand-typed URL could set. The bar is what the cross-project
+          // document screen already carries; a second, hand-rolled form here
           // would be a second place for the same thing to drift (FLW-034).
-          frame.chrome = {
-            ...frame.chrome,
-            search: {
-              name: 'q',
-              value: url.searchParams.get('q') ?? '',
-              placeholder: t('flow_backend.pages.search'),
-              keep: keepForListSearch(url),
-            },
-          }
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: pageListSearch,
+            frame,
+            name: 'flow-project-page-filter',
+            bodyId: 'flow-project-page-list',
+            functions: flowSearchFunctions,
+            labels: { searchPlaceholder: t('flow_backend.pages.search') },
+          })
+          frame = chrome.frame
           return pagesScreen(t, frame, {
             projectName: String(project.name ?? ''),
             pages,
@@ -1764,20 +1780,26 @@ export const routes: Record<string, RouteEntry> = {
       }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.epics.allTitle',
-        body: (t, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: t('flow_backend.epics.search'),
-              keep: keepForListSearch(url),
-            },
-            pager: {
-              from: result.rows.length ? cursor + 1 : 0,
-              to: Math.min(cursor + result.rows.length, result.total),
-              total: result.total,
-              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
-              next: cursor + result.rows.length < result.total ? pageHref(currentPage + 1) : null,
+        body: async (t, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: epicListSearch,
+            frame,
+            name: 'flow-epic-filter',
+            bodyId: 'flow-epic-list',
+            functions: flowSearchFunctions,
+            labels: { searchPlaceholder: t('flow_backend.epics.search') },
+          })
+          frame = {
+            ...chrome.frame,
+            chrome: {
+              ...chrome.frame.chrome,
+              pager: {
+                from: result.rows.length ? cursor + 1 : 0,
+                to: Math.min(cursor + result.rows.length, result.total),
+                total: result.total,
+                prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+                next: cursor + result.rows.length < result.total ? pageHref(currentPage + 1) : null,
+              },
             },
           }
           return allEpicsScreen(t, frame, {
@@ -1871,20 +1893,26 @@ export const routes: Record<string, RouteEntry> = {
       }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.pages.allTitle',
-        body: (t, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: t('flow_backend.pages.search'),
-              keep: keepForListSearch(url),
-            },
-            pager: {
-              from: rows.length ? cursor + 1 : 0,
-              to: Math.min(cursor + rows.length, result.total),
-              total: result.total,
-              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
-              next: cursor + rows.length < result.total ? pageHref(currentPage + 1) : null,
+        body: async (t, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: pageListSearch,
+            frame,
+            name: 'flow-page-filter',
+            bodyId: 'flow-page-list',
+            functions: flowSearchFunctions,
+            labels: { searchPlaceholder: t('flow_backend.pages.search') },
+          })
+          frame = {
+            ...chrome.frame,
+            chrome: {
+              ...chrome.frame.chrome,
+              pager: {
+                from: rows.length ? cursor + 1 : 0,
+                to: Math.min(cursor + rows.length, result.total),
+                total: result.total,
+                prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+                next: cursor + rows.length < result.total ? pageHref(currentPage + 1) : null,
+              },
             },
           }
           return allPagesScreen(t, frame, {
@@ -2409,10 +2437,20 @@ export const routes: Record<string, RouteEntry> = {
         // Sprints and Settings permanently unmarked, and told the reader they
         // were on a screen they had left.
         active: `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`,
-        body: (_, frame) =>
-          sprintsScreen(_, frame, {
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: sprintListSearch,
+            rows: sprints,
+            frame,
+            name: 'flow-sprint-filter',
+            bodyId: 'flow-sprint-list',
+            functions: flowSearchFunctions,
+            groupLabel: (key, value) => flowGroupLabel(_, key, value),
+          })
+          return sprintsScreen(_, search.frame, {
             projectName: String(project.name),
-            sprints,
+            sprints: search.rows,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
             closeSprintHref: (sprint: AnyRow) => {
               const target = new URL(url)
               target.searchParams.set('close', String(sprint.id))
@@ -2439,7 +2477,8 @@ export const routes: Record<string, RouteEntry> = {
             recordId,
             idempotencyKey,
             transitionKey: (sprint) => `sprint:${String(sprint.id)}:${String(sprint.state)}`,
-          }),
+          })
+        },
       })
     },
 

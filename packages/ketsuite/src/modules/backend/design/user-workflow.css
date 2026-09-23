@@ -160,26 +160,6 @@
   align-items: center;
   gap: 12px;
 }
-.user-action-bar button,
-.user-action-bar a {
-  padding: 9px 16px;
-  border: 1px solid var(--kv-panel-border);
-  border-radius: var(--kv-radius-md);
-  background: var(--kv-panel-bg);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-decoration: none;
-}
-.user-action-bar .primary {
-  background: var(--kv-accent);
-  color: white;
-  border-color: var(--kv-accent);
-}
-.user-action-bar button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .user-notice {
   padding: 16px;
   background: var(--kv-panel-bg-subtle);

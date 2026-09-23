@@ -2,28 +2,29 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  code,
-  dataTable,
-  emptyState,
   inline,
+  code,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { UserRow } from './types.ts'
 
 export type UserListRow = UserRow & { detailHref: string }
 
 export type UsersListScreenOptions = {
-  rows: UserListRow[]
+  rows: readonly UserListRow[]
+  clearHref?: string | null
   total: number
   createHref: string
-  toggleHref: string
-  includeArchived: boolean
-  /** Where the list stands with nothing narrowing it, when something does. */
-  clearHref?: string | null
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<UserListRow>>
 }
 
 export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
@@ -79,8 +80,21 @@ export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
   },
 ]
 
-export const usersScreen = (_: Translator, frame: Frame, options: UsersListScreenOptions): TemplateResult =>
-  shell(
+export const usersScreen = (_: Translator, frame: Frame, options: UsersListScreenOptions): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      columns: userListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('user_backend.users.title'),
     <ListPage
@@ -88,46 +102,17 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       frame={frame}
       title={_('user_backend.users.title')}
       description={_('user_backend.users.subtitle')}
-      actions={inline([
-        <LinkButton
-          label={_('user_backend.action.createUser')}
-          href={options.createHref}
-          variant="primary"
-        />,
-        <LinkButton
-          label={
-            options.includeArchived
-              ? _('user_backend.filter.activeOnly')
-              : _('user_backend.filter.includeArchived')
-          }
-          href={options.toggleHref}
-          variant="tertiary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('user_backend.users.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />
       }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, _('user_backend.users.title'), frame)}
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-              columns: userListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : options.clearHref
-            ? // Nothing matched what was asked for, so the way out is dropping the
-              // question rather than the hint for an empty deployment.
-              emptyState(_('user_backend.users.noMatch'), _('user_backend.users.noMatchHint'), {
+            ? emptyState(_('user_backend.users.noMatch'), _('user_backend.users.noMatchHint'), {
                 actions: (
                   <LinkButton
                     label={_('user_backend.action.clearFilters')}
@@ -141,3 +126,4 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

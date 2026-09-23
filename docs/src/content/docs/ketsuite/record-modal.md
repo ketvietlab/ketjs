@@ -90,6 +90,30 @@ Views are render-pure. They read the context and return design-system markup (`R
 builds `TabbedView` and `TabPanel`; a module supplies the tab's label and view and must not create its own
 tab-body wrapper, padding, or scrolling contract.
 
+`RecordModalForm` accepts a `body` after its standard fields for composed controls such as an ordered
+value editor. Pass `dirty` when a structural edit changes the draft without leaving a changed visible
+input. The runtime combines that flag with native field checks when deciding whether closing needs a
+discard confirmation. A public `ReorderList` emits its ordered IDs through a native hidden input change;
+the record runtime captures all current fields before applying that view state.
+
+A command may supply `issueField(path, submittedForm, context)` to map server validation paths to stable
+native control names. Ordered editors map indexed paths using the submitted order snapshot, so an error
+stays with its row if the reader later changes the order. Matched native names display inline once;
+unmatched and general failures remain in the layer notice.
+
+## Tabs other modules add
+
+A module that owns a record cannot know the tabs a module composed later wants on it. Such a record takes
+`extensionTabs(context)` beside its declared `tabs`: they follow the declared ones, pass the same `visible`
+filter and render through the same `TabbedView`. A definition that takes extension tabs keeps the fixed
+height, because it may gain a tab at any time.
+
+The record's context function supplies them from a joint. A client modal cannot render a joint, so only island
+fills cross: the context lists each fill's island, and the view places it with `recordIsland`. The product
+template modal reads `product_backend:template.recordTabs` — a module fills it with one island placement, the
+island renders the panel with `{ templateId, locale }`, the tab is labelled by the module's
+`<module>.productTemplateTab` message and addressed as `tab=<module>`.
+
 ## Creating a record
 
 A collection's create action opens the **same** record modal as its rows, with no record yet. There is

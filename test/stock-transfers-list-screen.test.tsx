@@ -74,6 +74,8 @@ test('stock transfers list: keeps create, search and table navigation in the Lis
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(
@@ -87,7 +89,7 @@ test('stock transfers list: keeps create, search and table navigation in the Lis
   )
   assert.match(html, /data-col="name"[\s\S]*?WH\/INT\/00027/)
   assert.match(html, /href="\/admin\/stock\/transfers\/pick-027\?lang=vi"/)
-  assert.match(html, /data-ui="row-select"[^>]*form="stock-transfer-bulk"/)
+  assert.match(html, /data-ui="kt-row-select"[^>]*form="stock-transfer-bulk"/)
   assert.doesNotMatch(html, /transfer-create-form/)
 })
 

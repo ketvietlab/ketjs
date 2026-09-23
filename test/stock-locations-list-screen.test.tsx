@@ -74,6 +74,8 @@ test('stock locations list: keeps hierarchy, columns, search and pager in ListPa
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(html, /data-ui="list-page-actions"[\s\S]*?href="\/admin\/stock\/locations\/new\?lang=vi"/)
@@ -84,7 +86,7 @@ test('stock locations list: keeps hierarchy, columns, search and pager in ListPa
   assert.match(html, /Kho trung tâm \/ Tồn kho \/ Kệ A-01/)
   assert.match(html, /data-col="usage"[\s\S]*?Nội bộ/)
   assert.match(html, /data-col="warehouse"[\s\S]*?Kho trung tâm/)
-  assert.match(html, /data-ui="row-select"[^>]*form="stock-location-bulk"/)
+  assert.match(html, /data-ui="kt-row-select"[^>]*form="stock-location-bulk"/)
   assert.doesNotMatch(html, /location-create-form/)
 })
 

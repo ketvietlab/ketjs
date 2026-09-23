@@ -1,6 +1,6 @@
 import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import type { RelationSelectConfig, RelationSelectLabels } from '../../ui/client/relation-select-view.tsx'
+import type { RelationSelectConfig, RelationSelectLabels } from '@ketvietlab/design-system'
 
 export type {
   RelationEditorField,
@@ -8,7 +8,7 @@ export type {
   RelationOption,
   RelationSelectConfig,
   RelationSelectLabels,
-} from '../../ui/client/relation-select-view.tsx'
+} from '@ketvietlab/design-system'
 
 type Req = Parameters<Route>[1]
 

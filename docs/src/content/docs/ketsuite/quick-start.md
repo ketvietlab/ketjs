@@ -86,6 +86,12 @@ this creates the development company and the `admin` superuser. Repeated starts 
 password is intentionally insecure: keep the server on its default loopback host, do not share the
 database, and never expose this development credential to another machine.
 
+Add `--demo-data` (`ketsuite serve --dev-admin --demo-data`, or just `--demo-data` on its own — it implies
+`--dev-admin`) to also seed a demo dataset once the admin account exists: partners, a product catalog,
+CRM leads and opportunities, warehouses, sales and purchase orders, and a few extra staff logins, so the
+suite has something real to click through instead of every list being empty. Also idempotent — it seeds
+once and leaves the dataset alone on later starts.
+
 ## Provisioning behavior under test
 
 `npm start` runs `ketsuite serve` and never creates `admin` / `admin`. To initialize a blank database

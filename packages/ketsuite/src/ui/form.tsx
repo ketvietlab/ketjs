@@ -207,7 +207,7 @@ export type RecordFormOptions = {
   scope?: string | null
   saveBeforeNavigation?: string
   errors?: readonly string[]
-  hidden?: Record<string, string>
+  hidden?: Record<string, string | string[]>
 } & (
   | { cancelHref: string; cancelLabel: string }
   | { cancelHref?: null | undefined; cancelLabel?: null | undefined }
@@ -225,9 +225,11 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     method={o.method ?? 'post'}
     action={o.action}
   >
-    {Object.entries(o.hidden ?? {}).map(([name, value]) => (
-      <input type="hidden" name={name} value={value} autocomplete="off" />
-    ))}
+    {Object.entries(o.hidden ?? {}).flatMap(([name, value]) =>
+      (Array.isArray(value) ? value : [value]).map((item) => (
+        <input type="hidden" name={name} value={item} autocomplete="off" />
+      )),
+    )}
     {!!o.errors?.length && (
       <ul data-ui="form-errors" role="alert">
         {each(

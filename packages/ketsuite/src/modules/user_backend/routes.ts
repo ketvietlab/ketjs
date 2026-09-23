@@ -1,6 +1,8 @@
+import { rowListSearch } from '../backend/row-list.ts'
+import { userListSearch } from './search.ts'
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
-import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext, SessionContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { profileScreen, usersScreen } from './screens/index.ts'
 import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
@@ -125,6 +127,25 @@ const sessionRows = async (ctx: ServeContext, url: URL, req: Req, userId: string
   }))
 }
 
+const userSearchFunctions = {
+  apply: 'user_backend.applySearchFilter',
+  saveFavorite: 'user_backend.saveSearchFavorite',
+  deleteFavorite: 'user_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'user_backend.setDefaultSearchFavorite',
+}
+
+/** An access kind, a role source, or a boolean column, in the reader's language. */
+const userGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return _(`user_backend.state.${raw === 'false' ? 'archived' : 'active'}`)
+  if (key === 'passwordReady')
+    return _(`user_backend.state.${raw === 'false' ? 'invitationPending' : 'passwordReady'}`)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  if (key === 'accessKind' && _.resolves(`user_backend.access.${raw}`)) return _(`user_backend.access.${raw}`)
+  if (key === 'mode' && _.resolves(`user_backend.role.${raw}`)) return _(`user_backend.role.${raw}`)
+  return raw
+}
+
 export const routes: Record<string, RouteEntry> = {
   '/admin/users':
     (ctx: ServeContext): Route =>
@@ -136,108 +157,64 @@ export const routes: Record<string, RouteEntry> = {
       // deployments without one open the create action in the record modal.
       const deploymentCreatesAccounts = !!live.routes[accountCreationRoute]
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const includeArchived = url.searchParams.get('archived') === '1'
-      const search = searchOf(url) ?? ''
-      const currentPage = pageOf(url)
-      const locale = ctx.localeOf(url, req)
-      const needle = search.toLocaleLowerCase(locale)
-      // Who works where and who holds what: the two questions this list is read
-      // with. Both are answered by the query, because neither is on a user row.
       const companyFilter = url.searchParams.get('company') ?? ''
       const roleFilter = url.searchParams.get('role') ?? ''
       const [companies, roles] = (await Promise.all([
         ctx.call('company.listCompanies', {}, url, req),
         ctx.call('user.listRoles', {}, url, req),
       ])) as [AnyRow[], AnyRow[]]
+      const includeArchived = url.searchParams.get('archived') === '1'
       const allRows = (await ctx.call(
         'user.listUsers',
         {
           includeArchived,
-          ...(companyFilter ? { companyId: companyFilter } : {}),
-          ...(roleFilter ? { roleId: roleFilter } : {}),
+          companyId: url.searchParams.get('company') || undefined,
+          roleId: url.searchParams.get('role') || undefined,
         },
         url,
         req,
       )) as UserRow[]
-      const matching = (
-        needle
-          ? allRows.filter((row) =>
-              [row.name, row.login, row.email, row.accessKind].some((value) =>
-                String(value ?? '')
-                  .toLocaleLowerCase(locale)
-                  .includes(needle),
-              ),
-            )
-          : allRows
-      ).sort(
-        (left, right) =>
-          left.name.localeCompare(right.name, locale) || left.login.localeCompare(right.login, locale),
-      )
-      const rows = matching.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'user_backend.users.title',
         active: '/admin/users',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: _('user_backend.search.users'),
-              keep: {
-                ...(includeArchived ? { archived: '1' } : {}),
-                ...(companyFilter ? { company: companyFilter } : {}),
-                ...(roleFilter ? { role: roleFilter } : {}),
-                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-              },
-              // A filter that is on says so above the table, and says it removably.
-              facets: [
-                ...(companyFilter
-                  ? [
-                      {
-                        label: String(
-                          companies.find((company) => String(company.id) === companyFilter)?.name ??
-                            companyFilter,
-                        ),
-                        without: withParam(url, 'company', null),
-                      },
-                    ]
-                  : []),
-                ...(roleFilter
-                  ? [
-                      {
-                        label: String(
-                          roles.find((role) => String(role.id) === roleFilter)?.name ?? roleFilter,
-                        ),
-                        without: withParam(url, 'role', null),
-                      },
-                    ]
-                  : []),
-              ],
-            },
-            pager: pager(url, currentPage, rows.length, matching.length),
-            tailMenus: [
-              listFilterMenu(url, 'company', _('user_backend.field.company'), companyFilter, companies),
-              listFilterMenu(url, 'role', _('user_backend.field.role'), roleFilter, roles),
-            ],
-          }
+        body: async (_, frame) => {
           const returnTo = safeUserReturnTo(url, `${url.pathname}${url.search}`)
-          return usersScreen(_, frame, {
-            rows: rows.map((row) => ({
+          const search = await rowListSearch(ctx, url, req, {
+            spec: userListSearch,
+            rows: allRows.map((row) => ({
               ...row,
               // A row opens the person in the record modal; the collection behind it
-              // keeps its search, page and archive state.
+              // keeps its query, page and archive state.
               detailHref: recordModalHref(`${url.pathname}${url.search}`, {
                 kind: 'user.user',
                 id: row.id,
               }),
             })),
-            total: matching.length,
+            frame,
+            name: 'user-people-filter',
+            bodyId: 'user-people-list',
+            functions: userSearchFunctions,
+            labels: { searchPlaceholder: _('user_backend.search.users') },
+            groupLabel: (key, value) => userGroupLabel(_, key, value),
+          })
+          search.frame.chrome = {
+            ...search.frame.chrome,
+            tailMenus: [
+              listFilterMenu(url, 'company', _('user_backend.field.company'), companyFilter, companies),
+              listFilterMenu(url, 'role', _('user_backend.field.role'), roleFilter, roles),
+            ],
+          }
+          return usersScreen(_, search.frame, {
+            clearHref:
+              companyFilter || roleFilter || url.searchParams.get('q') ? inLocale(url, '/admin/users') : null,
+            rows: search.rows,
+            total: search.groups
+              ? search.groups.reduce((sum, group) => sum + group.count, 0)
+              : search.rows.length,
             createHref: deploymentCreatesAccounts
               ? withUserReturnTo(url, '/admin/users/new', returnTo)
               : recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.user' }),
-            toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
-            includeArchived,
-            clearHref: search || companyFilter || roleFilter ? inLocale(url, '/admin/users') : null,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
       })
