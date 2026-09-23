@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { compose, translator } from '@ketvietlab/ketjs'
@@ -193,5 +194,33 @@ test('chrome: resource menus sit after paging and before the product-style view 
     (html.match(/data-ui="search-menu"/g) ?? []).length,
     1,
     'the assignee control is no longer duplicated inside global search',
+  )
+})
+
+test('chrome: capped totals retain the standard pager and navigation beyond the cap', () => {
+  const html = render({
+    layout: 'command',
+    pager: {
+      from: 10001,
+      to: 10050,
+      total: 10001,
+      totalLabel: '10.000+',
+      prev: '/admin/tasks?cursor=9950',
+      next: '/admin/tasks?cursor=10050',
+    },
+  })
+  assert.match(html, /10001-10050 \/ 10\.000\+/u)
+  assert.match(html, /data-ui="pager-step" data-dir="next" href="\/admin\/tasks\?cursor=10050"/u)
+  assert.equal((html.match(/data-ui="pager"/gu) ?? []).length, 1)
+  const escaped = render({ pager: { from: 1, to: 1, total: 1, totalLabel: '<b>1+</b>' } })
+  assert.doesNotMatch(escaped, /<b>/u)
+  assert.doesNotMatch(render({ pager: { from: 0, to: 0, total: 0 } }), /data-ui="pager"/u)
+})
+
+test('command toolbar constrains its wrapping tail to the available width', () => {
+  const css = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.match(
+    css,
+    /\[data-ui="list-chrome"\]\[data-layout="command"\] \[data-ui="chrome-tail"\] \{[^}]*max-inline-size: 100%;[^}]*justify-content: flex-end;/u,
   )
 })

@@ -56,6 +56,8 @@ export type Pager = {
   from: number
   to: number
   total: number
+  /** Localised or capped count, such as "10,000+"; navigation remains caller-owned. */
+  totalLabel?: string
   prev?: string | null
   next?: string | null
 }
@@ -126,7 +128,7 @@ export type ListChrome = {
   views?: ViewKind[]
 }
 
-const pagerLabel = (pager: Pager): string => `${pager.from}-${pager.to} / ${pager.total}`
+const pagerLabel = (pager: Pager): string => `${pager.from}-${pager.to} / ${pager.totalLabel ?? pager.total}`
 
 const GLOBAL_FILTER_ID = 'backend-global-filter'
 type SearchConfig = NonNullable<ListChrome['search']>

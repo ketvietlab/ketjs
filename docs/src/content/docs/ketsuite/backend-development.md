@@ -284,6 +284,12 @@ over a row of page numbers. Search, status filters and paging should keep the cu
 in the URL. The table, kanban, or empty state belongs in `body`. The product catalogue at
 `/admin/product/templates` is the reference integration for this composition.
 
+The KetSuite `listChrome`/`pagerBar` adapter accepts `Pager.totalLabel` for a localised or capped
+count (for example `10,000+`). Keep `total` numeric and derive `prev`/`next` from the query result,
+not the count cap; the standard command-bar pager then works beyond that cap without a second bar.
+The command toolbar bounds its trailing controls to the available width so long counts wrap controls
+instead of pushing the pager outside a compact viewport.
+
 ListChrome is one command bar: a bounded search field on the leading side, with filters and the
 result range clustered at the trailing edge. On compact widths search and paging stay on the first
 row; filters wrap on the row below. Bulk actions occupy space only when a selection exists.
