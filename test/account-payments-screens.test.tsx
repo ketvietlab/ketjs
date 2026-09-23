@@ -72,6 +72,8 @@ test('payments ListPage keeps filters, summaries and journal-entry destinations'
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?value="PAY\/HTTP"/)
   assert.match(html, /data-ui="facet"[\s\S]*?Đã thanh toán/)

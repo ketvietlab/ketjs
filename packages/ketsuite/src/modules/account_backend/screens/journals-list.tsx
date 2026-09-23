@@ -3,13 +3,14 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
   Surface,
 } from '../../../ui/index.ts'
@@ -88,15 +89,16 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
     `${_('account_backend.journal.summary.purchase')}: ${String(options.summary.purchase)}`,
     `${_('account_backend.journal.summary.liquidity')}: ${String(options.summary.liquidity)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: journalListColumns(_, accountLabels),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: journalListColumns(_, accountLabels),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -111,32 +113,17 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
     _('account_backend.journals.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.journals.title')}
       description={_('account_backend.journal.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        options.frame.chrome
-          ? listChrome(
-              _,
-              _('account_backend.journals.title'),
-              {
-                ...options.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      status={status}
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('account_backend.journals.title'), collection.frame)}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

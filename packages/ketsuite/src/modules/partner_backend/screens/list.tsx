@@ -1,15 +1,12 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { bulkActions, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
+import { collectionActions, collectionControls, ListPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 export const partnersScreen = (
   _: Translator,
   frame: Frame,
-  // Pre-rendered by the route via `backend/search-filter.ts`'s
-  // `searchFilterBar()` — replaces the old `listChrome` search/role/archived
-  // bar and the `CollectionTabs` summary strip with one filter surface that
-  // also carries Group By.
+  // The filter island occupies the same compact command bar as the catalogue.
   searchFilterBar: JSXChild,
   // Pre-rendered by the route via `backend/ket-table.ts`'s `tableGrid()` —
   // `partnersScreen` stays a pure, synchronous view function, and the island
@@ -27,24 +24,11 @@ export const partnersScreen = (
       frame={frame}
       title={_('partner_backend.screen.title')}
       description={_('partner_backend.screen.description')}
-      actions={
-        frame.chrome?.create || frame.chrome?.selection || frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              frame.chrome?.create ? (
-                <LinkButton
-                  label={frame.chrome.create.label}
-                  href={frame.chrome.create.path}
-                  variant="primary"
-                />
-              ) : (
-                ''
-              ),
-              frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
-              frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={searchFilterBar}
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, _('partner_backend.screen.title'), {
+        ...frame,
+        chrome: { ...frame.chrome, searchContent: searchFilterBar },
+      })}
       status={_('partner_backend.screen.results', { count: total })}
       body={tableGrid}
     />,

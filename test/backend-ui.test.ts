@@ -15,7 +15,8 @@ import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
-import { recordModalHost } from '@ketvietlab/ketsuite/ui'
+import { collectionTable, recordModalHost } from '@ketvietlab/ketsuite/ui'
+import { bulkActions, listChrome } from '../packages/ketsuite/src/ui/chrome.tsx'
 import {
   actionGroup,
   attachmentPanel,
@@ -236,6 +237,70 @@ test('KetSuite ListPage derives breadcrumbs and company context from its frame',
   assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
   assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
   assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite ListPage keeps external bulk submission beside Create while only selected tools are hidden', () => {
+  const selection = CHROME.selection!
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: { chrome: CHROME },
+      title: 'Pages',
+      actions: bulkActions(_, selection),
+      controls: listChrome(_, 'Pages', { search: CHROME.search, create: null, selection: null }, false),
+      body: collectionTable(_, {
+        rows: [page()],
+        id: (row) => row.id,
+        selection,
+        columns: [{ key: 'title', label: 'Title', cell: (row) => row.title }],
+      }),
+    }),
+  )
+  const headerStart = output.indexOf('data-ui="list-page-header"')
+  const headerEnd = output.indexOf('</header>', headerStart)
+  const header = output.slice(headerStart, headerEnd)
+  assert.match(
+    header,
+    /data-ui="list-page-actions"[^>]*>[\s\S]*?href="\/admin\/pages\/new"[\s\S]*?data-ui="list-page-tools"[^>]* hidden/,
+  )
+  assert.doesNotMatch(header, /data-ui="list-page-actions"[^>]* hidden/)
+  assert.match(
+    header,
+    /<form data-ui="bulk-form" id="page-bulk" method="post" action="\/admin\/pages\/bulk" hidden/,
+  )
+  assert.match(header, /name="returnTo" value="\/admin\/pages"/)
+  assert.match(header, /name="action" value="archive"/)
+  assert.equal(output.match(/id="page-bulk"/g)?.length, 1)
+  const afterHeader = output.slice(headerEnd)
+  assert.match(afterHeader, /name="selected.p" value="1" form="page-bulk"/)
+  assert.doesNotMatch(
+    afterHeader,
+    /data-ui="list-page-actions"|data-ui="list-page-tools"|data-ui="bulk-form"/,
+  )
+})
+
+test('KetSuite ListPage explicit null Create keeps secondary header actions without reviving the frame create link', () => {
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: { chrome: CHROME },
+      title: 'Pages',
+      headerActions: null,
+      actions: linkButton({ label: 'Export', href: '/admin/pages/export?q=x&lang=vi' }),
+      controls: 'Filters',
+      body: 'Rows',
+    }),
+  )
+  const headerStart = output.indexOf('data-ui="list-page-header"')
+  const headerEnd = output.indexOf('</header>', headerStart)
+  const header = output.slice(headerStart, headerEnd)
+  assert.match(
+    header,
+    /data-ui="list-page-tools"[^>]*>[\s\S]*?href="\/admin\/pages\/export\?q=x&amp;lang=vi"/,
+  )
+  assert.doesNotMatch(header, /data-ui="list-page-tools"[^>]* hidden/)
+  assert.doesNotMatch(output, /href="\/admin\/pages\/new"/)
+  assert.doesNotMatch(output.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
 })
 
 test('KetSuite FormPage derives its operational topbar from the application frame', () => {
@@ -655,6 +720,10 @@ const componentContract = [
 ]
 
 const everything = [
+  // Record/workspace chrome retains this compatibility hook. Collection pages
+  // now render their create action through the shared ListPage header instead.
+  listChrome(_, 'Workspace', { create: { label: 'Create', path: '/records/new' } }, false),
+  listChrome(_, 'Custom search', { searchContent: 'Search filter island' }, false),
   recordModalHost('ketsuite.example'),
   shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
   pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {

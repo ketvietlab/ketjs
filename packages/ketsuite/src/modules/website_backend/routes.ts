@@ -1,8 +1,18 @@
+import { readWebsiteCollection } from './collection.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { listSearchChrome } from '../backend/search-filter.ts'
+import {
+  entryListSearch,
+  revisionListSearch,
+  siteDomainListSearch,
+  siteHealthListSearch,
+  siteMemberListSearch,
+} from './search.ts'
 import { randomUUID } from 'node:crypto'
-import { text, withHeaders } from '@ketvietlab/ketjs'
+import { parseListState, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager } from '../backend/paging.ts'
 import {
   contentScreen,
   entryFormScreen,
@@ -58,6 +68,34 @@ import type {
 import { csvOf, safeFilename } from './csv.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
+
+/**
+ * A page's revisions, narrowed. Both content kinds and the legacy content path
+ * render the same list, so they ask for it the same way.
+ */
+const revisionSearch = (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  frame: Parameters<typeof rowListSearch>[3]['frame'],
+  rows: RevisionRow[],
+) =>
+  rowListSearch(ctx, url, req, {
+    spec: revisionListSearch,
+    frame,
+    rows,
+    name: 'website-revision-filter',
+    bodyId: 'website-revision-list',
+    functions: websiteSearchFunctions,
+  })
+
+/** Every website list shares one set of search-filter functions. */
+const websiteSearchFunctions = {
+  apply: 'website_backend.applySearchFilter',
+  saveFavorite: 'website_backend.saveSearchFavorite',
+  deleteFavorite: 'website_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'website_backend.setDefaultSearchFavorite',
+}
 
 const sitesOf = (ctx: ServeContext, url: URL, req: Req) =>
   ctx.call('website.listSites', {}, url, req) as Promise<SiteRow[]>
@@ -267,7 +305,9 @@ const renderEntry = async (
           req,
         ) as Promise<SeoValues | null>,
         ctx.call('website.listEntryTerms', { entryId: detail.entry.id }, url, req) as Promise<EntryTermRow[]>,
-        ctx.call('website.listTaxonomyTerms', { siteId }, url, req) as Promise<TaxonomyRow[]>,
+        readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', { siteId }) as Promise<
+          TaxonomyRow[]
+        >,
       ])
     : [null, [], []]
   return adminPage(ctx, url, req, {
@@ -295,13 +335,16 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       // `listEntries` and `countEntries` have taken both of these since they
       // were written and no screen passed either, so a site with three hundred
       // pages could only be read one page of thirty at a time, in date order.
-      const search = searchOf(url)
-      const status = url.searchParams.get('status')
+      // The bar owns the query and the publication state; `listEntries` takes
+      // one status, so the first the reader picked is the one that applies.
+      const { state } = parseListState(entryListSearch, url)
+      const search = state.q ?? ''
+      const status = state.presets[0] ?? 'all'
       const filter = {
         siteId,
         type,
         ...(search ? { search } : {}),
-        ...(status && status !== 'all' ? { status } : {}),
+        ...(status !== 'all' ? { status } : {}),
       }
       const [rows, total] = siteId
         ? await Promise.all([
@@ -317,18 +360,26 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       return adminPage(ctx, url, req, {
         title: _(`website_backend.${kind.titleKey}.title`),
         translate: false,
-        body: (_, frame) =>
-          contentScreen(
+        body: async (_, frame) => {
+          const chrome = await listSearchChrome(ctx, url, req, {
+            spec: entryListSearch,
+            frame,
+            name: 'website-content-filter',
+            bodyId: 'website-content-list',
+            functions: websiteSearchFunctions,
+            labels: { searchPlaceholder: _(`website_backend.${kind.titleKey}.title`) },
+          })
+          return contentScreen(
             _,
             rows,
             siteOptions(sites),
             siteId,
-            frame,
+            chrome.frame,
             localeQuery(url),
             kind,
             pager(url, current, rows.length, total.count),
-            { search, status: status ?? 'all' },
-          ),
+          )
+        },
       })
     },
 
@@ -419,17 +470,25 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail || detail.entry.type !== type)
         return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call(
-        'website.listRevisions',
-        { entryId: params.id },
-        url,
-        req,
-      )) as RevisionRow[]
+      const rows = (await readWebsiteCollection(ctx, url, req, 'website.listRevisions', {
+        entryId: params.id,
+      })) as RevisionRow[]
       const diff = await revisionDiffOf(ctx, url, req, params.id, rows)
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) =>
-          revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
+        body: async (_, frame) => {
+          const search = await revisionSearch(ctx, url, req, frame, rows)
+          return revisionsScreen(
+            _,
+            detail.entry,
+            rows,
+            search.frame,
+            localeQuery(url),
+            kind.basePath,
+            diff,
+            search.rows,
+          )
+        },
       })
     },
 
@@ -857,7 +916,9 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail) return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call('website.listRevisions', { entryId: params.id }, url, req)) as Array<{
+      const rows = (await readWebsiteCollection(ctx, url, req, 'website.listRevisions', {
+        entryId: params.id,
+      })) as Array<{
         id: string
         version: number
         kind: string
@@ -866,7 +927,19 @@ export const routes: Record<string, RouteEntry> = {
       }>
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) => revisionsScreen(_, detail.entry, rows, frame, localeQuery(url)),
+        body: async (_, frame) => {
+          const search = await revisionSearch(ctx, url, req, frame, rows)
+          return revisionsScreen(
+            _,
+            detail.entry,
+            rows,
+            search.frame,
+            localeQuery(url),
+            undefined,
+            undefined,
+            search.rows,
+          )
+        },
       })
     },
 
@@ -906,7 +979,7 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       const rows = siteId
-        ? ((await ctx.call('website.listTaxonomyTerms', { siteId }, url, req)) as never[])
+        ? ((await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', { siteId })) as never[])
         : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.taxonomies.title',
@@ -921,7 +994,9 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
-      const rows = siteId ? ((await ctx.call('website.listMedia', { siteId }, url, req)) as never[]) : []
+      const rows = siteId
+        ? ((await readWebsiteCollection(ctx, url, req, 'website.listMedia', { siteId })) as never[])
+        : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.media.title',
         body: (_, frame) => mediaScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url)),
@@ -1030,12 +1105,10 @@ export const routes: Record<string, RouteEntry> = {
           : null
         const [rows, entries] = siteId
           ? await Promise.all([
-              ctx.call(
-                'website.listPublications',
-                { siteId, ...(state ? { state } : {}) },
-                url,
-                req,
-              ) as Promise<PublicationRow[]>,
+              readWebsiteCollection(ctx, url, req, 'website.listPublications', {
+                siteId,
+                ...(state ? { state } : {}),
+              }) as Promise<PublicationRow[]>,
               ctx.call('website.listEntries', { siteId, status: 'published' }, url, req) as Promise<
                 EntryRow[]
               >,
@@ -1137,7 +1210,9 @@ export const routes: Record<string, RouteEntry> = {
         sites.map(async (site): Promise<SiteHealth> => {
           const [domains, publications, index] = await Promise.all([
             ctx.call('website.listDomains', { siteId: site.id }, url, req) as Promise<DomainRow[]>,
-            ctx.call('website.listPublications', { siteId: site.id }, url, req) as Promise<PublicationRow[]>,
+            readWebsiteCollection(ctx, url, req, 'website.listPublications', { siteId: site.id }) as Promise<
+              PublicationRow[]
+            >,
             ctx.call('website_search.indexStatus', { siteId: site.id }, url, req) as Promise<{
               state: string
               current: boolean
@@ -1158,7 +1233,18 @@ export const routes: Record<string, RouteEntry> = {
       )
       return adminPage(ctx, url, req, {
         title: 'website_backend.health.title',
-        body: (_, frame) => siteHealthScreen(_, rows, frame, localeQuery(url)),
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: siteHealthListSearch,
+            frame,
+            rows,
+            name: 'website-health-filter',
+            bodyId: 'website-health-list',
+            functions: websiteSearchFunctions,
+            labels: { searchPlaceholder: _('website_backend.health.title') },
+          })
+          return siteHealthScreen(_, rows, search.frame, localeQuery(url), search.rows)
+        },
       })
     },
 
@@ -1239,8 +1325,22 @@ export const routes: Record<string, RouteEntry> = {
         )) as MemberRow[]
         return adminPage(ctx, url, req, {
           title: 'website_backend.members.title',
-          body: (_, frame) =>
-            siteMembersScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: siteMemberListSearch,
+              frame,
+              rows,
+              name: 'website-member-filter',
+              bodyId: 'website-member-list',
+              functions: websiteSearchFunctions,
+              labels: { searchPlaceholder: _('website_backend.members.title') },
+            })
+            return siteMembersScreen(_, site, search.rows, search.frame, {
+              values,
+              errors,
+              locale: localeQuery(url),
+            })
+          },
         })
       }
       if (req.method === 'GET') return render()
@@ -1285,13 +1385,24 @@ export const routes: Record<string, RouteEntry> = {
         const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
           title: 'website_backend.domains.title',
-          body: (_, frame) =>
-            siteDomainsScreen(_, site, rows, frame, {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: siteDomainListSearch,
+              frame,
+              rows,
+              name: 'website-domain-filter',
+              bodyId: 'website-domain-list',
+              functions: websiteSearchFunctions,
+              labels: { searchPlaceholder: _('website_backend.domains.title') },
+            })
+            return siteDomainsScreen(_, site, rows, search.frame, {
+              tableRows: search.rows,
               values,
               errors,
               locale: localeQuery(url),
               editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
-            }),
+            })
+          },
         })
       }
       if (req.method === 'GET') return render()
@@ -1408,15 +1519,10 @@ export const routes: Record<string, RouteEntry> = {
         // time: there were no inactive rows to look at.
         const state = url.searchParams.get('state')
         const rows = siteId
-          ? ((await ctx.call(
-              'website.listRedirects',
-              {
-                siteId,
-                ...(state === 'active' || state === 'inactive' ? { active: state === 'active' } : {}),
-              },
-              url,
-              req,
-            )) as RedirectRow[])
+          ? ((await readWebsiteCollection(ctx, url, req, 'website.listRedirects', {
+              siteId,
+              ...(state === 'active' || state === 'inactive' ? { active: state === 'active' } : {}),
+            })) as RedirectRow[])
           : []
         const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
@@ -1467,9 +1573,9 @@ export const routes: Record<string, RouteEntry> = {
       const form = await readForm(req)
       const siteId = form.siteId
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
-      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
-        (row) => row.id === params.id,
-      )
+      const current = (
+        (await readWebsiteCollection(ctx, url, req, 'website.listRedirects', { siteId })) as RedirectRow[]
+      ).find((row) => row.id === params.id)
       if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call(
         'website.saveRedirect',
@@ -1498,9 +1604,9 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
-      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
-        (row) => row.id === params.id,
-      )
+      const current = (
+        (await readWebsiteCollection(ctx, url, req, 'website.listRedirects', { siteId })) as RedirectRow[]
+      ).find((row) => row.id === params.id)
       if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call(
         'website.saveRedirect',
@@ -1522,12 +1628,10 @@ export const routes: Record<string, RouteEntry> = {
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
       const taxonomies = await taxonomyOptions(ctx, url, req)
       const parents = (
-        (await ctx.call(
-          'website.listTaxonomyTerms',
-          { siteId, taxonomy: form?.taxonomy || taxonomies[0]?.value },
-          url,
-          req,
-        )) as TaxonomyRow[]
+        (await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', {
+          siteId,
+          taxonomy: form?.taxonomy || taxonomies[0]?.value,
+        })) as TaxonomyRow[]
       ).map((item) => ({ value: item.id, label: item.name }))
       if (req.method === 'POST') {
         const id = randomUUID()
@@ -1577,12 +1681,10 @@ export const routes: Record<string, RouteEntry> = {
       )) as TaxonomyRow | null
       if (!row) return text(_('website_backend.error.notFound'), { status: 404 })
       const taxonomies = await taxonomyOptions(ctx, url, req)
-      const all = (await ctx.call(
-        'website.listTaxonomyTerms',
-        { siteId: row.siteId, taxonomy: row.taxonomy },
-        url,
-        req,
-      )) as TaxonomyRow[]
+      const all = (await readWebsiteCollection(ctx, url, req, 'website.listTaxonomyTerms', {
+        siteId: row.siteId,
+        taxonomy: row.taxonomy,
+      })) as TaxonomyRow[]
       const parents = all
         .filter((item) => item.id !== row.id)
         .map((item) => ({ value: item.id, label: item.name }))

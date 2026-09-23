@@ -184,6 +184,8 @@ export type SearchFilterLabels = {
 
 export type SearchFilterConfig = {
   name: string
+  /** Disable unsupported editors while retaining the same search and preset-facet interaction. */
+  capabilities?: { groupBy?: boolean; favorites?: boolean; customFilters?: boolean }
   /** Keeps the standard interaction while reducing the search bar's visual density. */
   size?: SearchFilterSize
   query?: string
@@ -235,6 +237,8 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     groupByMoveLater: 'Move later',
     ...config.labels,
   }
+  const capabilities = config.capabilities ?? {}
+  const columnCount = 1 + Number(capabilities.groupBy !== false) + Number(capabilities.favorites !== false)
   const manager = config.manager
   const groupByOptions = flatten(config.groupBy)
   // A free-text query against a boolean field has no natural meaning, so it is
@@ -801,7 +805,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
               {facets().length ? <span data-ui="menu-trigger-count">{String(facets().length)}</span> : null}
             </summary>
             <div data-ui="menu-panel" role="group" aria-label={labels.toggleLabel}>
-              <div data-ui="search-filter-columns">
+              <div data-ui="search-filter-columns" data-columns={columnCount}>
                 <div data-ui="search-filter-column" data-facet-type="filter">
                   {columnTitle(labels.filters, countOf('filter'))}
                   {each(
@@ -809,162 +813,170 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
                     (option) => option.id,
                     (option, index) => filterMenuItem(option, index === 0 ? null : config.filters[index - 1]),
                   )}
-                  <hr data-ui="menu-separator" />
-                  <div data-ui="custom-filter">
-                    <div data-ui="custom-filter-row">
-                      <select
-                        aria-label={labels.customFilterField}
-                        onChange={(event) => {
-                          if (event.currentTarget instanceof HTMLSelectElement) {
-                            customFilterField.set(event.currentTarget.value)
-                            customFilterOperator.set('')
-                          }
-                        }}
-                      >
-                        <option value="" disabled selected={!customFilterField()}>
-                          {labels.customFilterField}
-                        </option>
-                        {each(
-                          config.customFilterFields,
-                          (field) => field.value,
-                          (field) => (
-                            <option value={field.value} selected={field.value === customFilterField()}>
-                              {field.label}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                      <select
-                        aria-label={labels.customFilterOperator}
-                        disabled={!customFilterField()}
-                        onChange={(event) => {
-                          if (event.currentTarget instanceof HTMLSelectElement)
-                            customFilterOperator.set(event.currentTarget.value)
-                        }}
-                      >
-                        <option value="" disabled selected={!customFilterOperator()}>
-                          {labels.customFilterOperator}
-                        </option>
-                        {each(
-                          operatorsFor(customFilterField()),
-                          (operator) => operator,
-                          (operator) => (
-                            <option value={operator} selected={operator === customFilterOperator()}>
-                              {operatorLabels[operator]}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                      {!isValuelessOperator(customFilterOperator() as SearchFilterOperator) && (
-                        <input
-                          type="text"
-                          autocomplete="off"
-                          aria-label={labels.customFilterValue}
-                          placeholder={labels.customFilterValue}
-                          value={customFilterValue()}
-                          onInput={(event) => {
-                            if (event.currentTarget instanceof HTMLInputElement)
-                              customFilterValue.set(event.currentTarget.value)
-                          }}
-                        />
-                      )}
-                    </div>
-                    <button
-                      data-ui="custom-filter-add"
-                      type="button"
-                      disabled={!customFilterField() || !customFilterOperator()}
-                      onClick={addCustomFilter}
-                    >
-                      {labels.customFilterAdd}
-                    </button>
-                  </div>
-                </div>
-                <div data-ui="search-filter-column" data-facet-type="groupBy">
-                  {columnTitle(labels.groupBy, countOf('groupBy'))}
-                  {groupByPipeline()}
-                  {config.groupBy.length ? (
-                    <p data-ui="search-filter-grouping-add-label">{labels.groupByAdd}</p>
-                  ) : null}
-                  {each(
-                    config.groupBy,
-                    (option) => option.id,
-                    (option, index) =>
-                      groupByMenuItem(option, index === 0 ? null : config.groupBy[index - 1]),
-                  )}
-                  {groupByOptions.length ? <hr data-ui="menu-separator" /> : null}
-                  {groupByOptions.length ? (
-                    <select
-                      data-ui="custom-group-by"
-                      disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
-                      aria-label={labels.customGroupByPlaceholder}
-                      onChange={(event) => {
-                        if (!(event.currentTarget instanceof HTMLSelectElement)) return
-                        const select = event.currentTarget
-                        const option = groupByOptions.find((entry) => entry.id === select.value)
-                        select.value = ''
-                        if (option && !isActive('groupBy', option.id)) toggleGroupBy(option)
-                      }}
-                    >
-                      <option value="" disabled selected>
-                        {labels.customGroupByPlaceholder}
-                      </option>
-                      {each(
-                        groupByOptions,
-                        (option) => option.id,
-                        (option) => (
-                          <option value={option.id}>{option.label}</option>
-                        ),
-                      )}
-                    </select>
-                  ) : null}
-                </div>
-                <div data-ui="search-filter-column" data-facet-type="favorite">
-                  {columnTitle(labels.favorites, activeFavoriteId() ? 1 : 0)}
-                  {manager?.saveFavoriteFunction ? (
-                    <form data-ui="favorite-save" aria-label={labels.saveSearch} onSubmit={saveFavorite}>
-                      <div data-ui="favorite-save-row">
-                        <input
-                          type="text"
-                          autocomplete="off"
-                          placeholder={labels.favoriteName}
-                          aria-label={labels.favoriteName}
-                          value={saveFavoriteName()}
-                          onInput={(event) => {
-                            if (event.currentTarget instanceof HTMLInputElement)
-                              saveFavoriteName.set(event.currentTarget.value)
-                          }}
-                        />
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={saveFavoriteDefault()}
+                  {capabilities.customFilters !== false && (
+                    <>
+                      <hr data-ui="menu-separator" />
+                      <div data-ui="custom-filter">
+                        <div data-ui="custom-filter-row">
+                          <select
+                            aria-label={labels.customFilterField}
                             onChange={(event) => {
+                              if (event.currentTarget instanceof HTMLSelectElement) {
+                                customFilterField.set(event.currentTarget.value)
+                                customFilterOperator.set('')
+                              }
+                            }}
+                          >
+                            <option value="" disabled selected={!customFilterField()}>
+                              {labels.customFilterField}
+                            </option>
+                            {each(
+                              config.customFilterFields,
+                              (field) => field.value,
+                              (field) => (
+                                <option value={field.value} selected={field.value === customFilterField()}>
+                                  {field.label}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                          <select
+                            aria-label={labels.customFilterOperator}
+                            disabled={!customFilterField()}
+                            onChange={(event) => {
+                              if (event.currentTarget instanceof HTMLSelectElement)
+                                customFilterOperator.set(event.currentTarget.value)
+                            }}
+                          >
+                            <option value="" disabled selected={!customFilterOperator()}>
+                              {labels.customFilterOperator}
+                            </option>
+                            {each(
+                              operatorsFor(customFilterField()),
+                              (operator) => operator,
+                              (operator) => (
+                                <option value={operator} selected={operator === customFilterOperator()}>
+                                  {operatorLabels[operator]}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                          {!isValuelessOperator(customFilterOperator() as SearchFilterOperator) && (
+                            <input
+                              type="text"
+                              autocomplete="off"
+                              aria-label={labels.customFilterValue}
+                              placeholder={labels.customFilterValue}
+                              value={customFilterValue()}
+                              onInput={(event) => {
+                                if (event.currentTarget instanceof HTMLInputElement)
+                                  customFilterValue.set(event.currentTarget.value)
+                              }}
+                            />
+                          )}
+                        </div>
+                        <button
+                          data-ui="custom-filter-add"
+                          type="button"
+                          disabled={!customFilterField() || !customFilterOperator()}
+                          onClick={addCustomFilter}
+                        >
+                          {labels.customFilterAdd}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {capabilities.groupBy !== false && (
+                  <div data-ui="search-filter-column" data-facet-type="groupBy">
+                    {columnTitle(labels.groupBy, countOf('groupBy'))}
+                    {groupByPipeline()}
+                    {config.groupBy.length ? (
+                      <p data-ui="search-filter-grouping-add-label">{labels.groupByAdd}</p>
+                    ) : null}
+                    {each(
+                      config.groupBy,
+                      (option) => option.id,
+                      (option, index) =>
+                        groupByMenuItem(option, index === 0 ? null : config.groupBy[index - 1]),
+                    )}
+                    {groupByOptions.length ? <hr data-ui="menu-separator" /> : null}
+                    {groupByOptions.length ? (
+                      <select
+                        data-ui="custom-group-by"
+                        disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
+                        aria-label={labels.customGroupByPlaceholder}
+                        onChange={(event) => {
+                          if (!(event.currentTarget instanceof HTMLSelectElement)) return
+                          const select = event.currentTarget
+                          const option = groupByOptions.find((entry) => entry.id === select.value)
+                          select.value = ''
+                          if (option && !isActive('groupBy', option.id)) toggleGroupBy(option)
+                        }}
+                      >
+                        <option value="" disabled selected>
+                          {labels.customGroupByPlaceholder}
+                        </option>
+                        {each(
+                          groupByOptions,
+                          (option) => option.id,
+                          (option) => (
+                            <option value={option.id}>{option.label}</option>
+                          ),
+                        )}
+                      </select>
+                    ) : null}
+                  </div>
+                )}
+                {capabilities.favorites !== false && (
+                  <div data-ui="search-filter-column" data-facet-type="favorite">
+                    {columnTitle(labels.favorites, activeFavoriteId() ? 1 : 0)}
+                    {manager?.saveFavoriteFunction ? (
+                      <form data-ui="favorite-save" aria-label={labels.saveSearch} onSubmit={saveFavorite}>
+                        <div data-ui="favorite-save-row">
+                          <input
+                            type="text"
+                            autocomplete="off"
+                            placeholder={labels.favoriteName}
+                            aria-label={labels.favoriteName}
+                            value={saveFavoriteName()}
+                            onInput={(event) => {
                               if (event.currentTarget instanceof HTMLInputElement)
-                                saveFavoriteDefault.set(event.currentTarget.checked)
+                                saveFavoriteName.set(event.currentTarget.value)
                             }}
                           />
-                          {labels.favoriteDefault}
-                        </label>
-                      </div>
-                      <button
-                        data-ui="action"
-                        data-variant="primary"
-                        data-size="compact"
-                        type="submit"
-                        disabled={!saveFavoriteName().trim()}
-                      >
-                        {labels.favoriteSaveAction}
-                      </button>
-                    </form>
-                  ) : null}
-                  {favorites().length ? (
-                    <ul data-ui="favorite-list">
-                      {each(favorites(), (favorite) => favorite.id, favoriteRow)}
-                    </ul>
-                  ) : (
-                    <p data-ui="menu-label">{labels.noFavorites}</p>
-                  )}
-                </div>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={saveFavoriteDefault()}
+                              onChange={(event) => {
+                                if (event.currentTarget instanceof HTMLInputElement)
+                                  saveFavoriteDefault.set(event.currentTarget.checked)
+                              }}
+                            />
+                            {labels.favoriteDefault}
+                          </label>
+                        </div>
+                        <button
+                          data-ui="action"
+                          data-variant="primary"
+                          data-size="compact"
+                          type="submit"
+                          disabled={!saveFavoriteName().trim()}
+                        >
+                          {labels.favoriteSaveAction}
+                        </button>
+                      </form>
+                    ) : null}
+                    {favorites().length ? (
+                      <ul data-ui="favorite-list">
+                        {each(favorites(), (favorite) => favorite.id, favoriteRow)}
+                      </ul>
+                    ) : (
+                      <p data-ui="menu-label">{labels.noFavorites}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </details>
