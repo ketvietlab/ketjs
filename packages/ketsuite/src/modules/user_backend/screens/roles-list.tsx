@@ -18,7 +18,7 @@ export type RoleListRow = RoleRow & { detailHref: string }
 export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
   createHref: string
-  presetsHref: string
+  presetsHref?: string
   /** What the search-filter bar decided about the table, such as its groups. */
   table?: Partial<DataTable<RoleListRow>>
 }
@@ -85,15 +85,7 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       headerActions={
         <LinkButton label={_('user_backend.action.createRole')} href={options.createHref} variant="primary" />
       }
-      actions={collectionActions(
-        _,
-        frame,
-        <LinkButton
-          label={_('user_backend.action.presets')}
-          href={options.presetsHref}
-          variant="secondary"
-        />,
-      )}
+      actions={collectionActions(_, frame)}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length || options.table?.groups?.length

@@ -49,6 +49,7 @@ const context = (
   tab: '',
   data: { ...data, permissions: { save: options.save !== false } },
   t: (key) => key,
+  outcome: () => null,
   fieldError: (name) => options.errors?.[name] ?? null,
   draft: (name, fallback = '') => options.draft?.[name] ?? fallback,
   draftChecked: (_name, _value, fallback = false) => fallback,

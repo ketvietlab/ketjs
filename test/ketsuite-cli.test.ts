@@ -20,14 +20,23 @@ test('KetSuite scaffold writes the packaged app and safe development scripts', a
     // to remember to move.
     const shipped = JSON.parse(await readFile('package.json', 'utf8')).version
     assert.equal(pkg.dependencies['@ketvietlab/ketsuite'], `^${shipped}`)
-    assert.equal(pkg.scripts.dev, 'ketsuite serve --dev-admin')
-    assert.equal(pkg.scripts.start, 'ketsuite serve')
-    assert.equal(
-      await readFile(join(target, 'ket.workspace.mjs'), 'utf8'),
-      "export { deployments } from '@ketvietlab/ketsuite/deployment'\n",
-    )
+    // A generated app is one product, commerce unless asked, and every command it
+    // runs names that product, so `ket` and `ketsuite serve` reach the same database.
+    assert.equal(pkg.scripts.dev, 'ketsuite serve --deployment commerce --dev-admin')
+    assert.equal(pkg.scripts.start, 'ketsuite serve --deployment commerce')
+    const workspace = await readFile(join(target, 'ket.workspace.mjs'), 'utf8')
+    assert.match(workspace, /import \{ commerce \} from '@ketvietlab\/ketsuite\/deployment'/)
+    assert.match(workspace, /export const deployments = \[commerce\]/)
     assert.throws(() => scaffoldKetsuite('my_suite', target), /refusing to overwrite/)
     assert.throws(() => scaffoldKetsuite('My-Suite', join(parent, 'invalid')), /invalid app name/)
+
+    const hotel = join(parent, 'hotel')
+    scaffoldKetsuite('hotel', hotel, 'hospitality')
+    const hotelPkg = JSON.parse(await readFile(join(hotel, 'package.json'), 'utf8'))
+    assert.equal(hotelPkg.scripts.start, 'ketsuite serve --deployment hospitality')
+    assert.match(await readFile(join(hotel, 'ket.workspace.mjs'), 'utf8'), /\[hospitality\]/)
+    // The development composition is not a product anyone should ship.
+    assert.throws(() => scaffoldKetsuite('everything', join(parent, 'dev'), 'dev'), /one product/)
   } finally {
     await rm(parent, { recursive: true, force: true })
   }

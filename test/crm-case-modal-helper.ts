@@ -18,6 +18,7 @@ export const caseContext = (
   tab,
   data: payload.data,
   t: (key) => payload.messages[key] ?? key,
+  outcome: () => null,
   fieldError: () => null,
   draft: (_name, fallback = '') => fallback,
   draftChecked: (_name, _value, fallback = false) => fallback,
