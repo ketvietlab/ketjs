@@ -33,7 +33,9 @@ const workspaces = [
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
   { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 4_000_000 },
+  // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
+  // filter menu, with no stray files — about half the package is source maps.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 4_250_000 },
 ]
 
 /** @param {string} message @returns {never} */
