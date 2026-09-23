@@ -122,6 +122,11 @@ export type RecordModalContext<Data> = {
   /** Whether a checkbox/radio value was selected before the view re-rendered. */
   draftChecked: (name: string, value?: string, fallback?: boolean) => boolean
   /**
+   * What a preview command answered, for the view to render. Null until that
+   * command has run in this layer, and again as soon as anything moves.
+   */
+  outcome: <T>(command: string) => T | null
+  /**
    * A submit has been in flight long enough to be worth saying so. A command the
    * server answers at once never sets it, so a button bound to it does not flash
    * its spinner; the runtime stops a second submit either way.
@@ -202,6 +207,15 @@ export type RecordModalCommand<Data> = {
    * `openTab`, replacing the `:new` history entry.
    */
   after?: 'close' | 'reload' | 'refresh' | 'stay' | 'open' | { tab: string } | { dialog: string | null }
+  /**
+   * The command asks what would happen instead of making it happen: its function
+   * writes nothing, so the record is not re-read, the collection is not told and
+   * what was typed stays on screen. The answer reaches the view through
+   * `context.outcome`, beside the very form that asked for it, so the person can
+   * read the consequence and then submit the command that commits it. `after` is
+   * not consulted — a preview always stays in its layer.
+   */
+  preview?: boolean
   /** The id of the record a create command made, read from the function's value. */
   created?: (value: unknown) => string | null
   /** Tab to open on the created record when `after` is `open`. */
@@ -407,6 +421,9 @@ type DraftScope = 'record' | 'dialog'
 const emptyDraftState = (): DraftState => ({ values: {}, checks: {} })
 const draftCheckKey = (name: string, value: string): string => `${name}\u0000${value}`
 
+/** Name prefix of a checkbox that ticks every checkbox of its form sharing the rest of its name. */
+export const CHECK_ALL = '__all:'
+
 const after_ = <Data,>(command: RecordModalCommand<Data>) => command.after ?? 'close'
 
 /**
@@ -498,6 +515,10 @@ export const createRecordModal =
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
+    // What the last preview command answered. One at a time: a second preview
+    // replaces the first, and anything that moves the layer clears it, so a
+    // consequence is never read beside a selection it was not computed from.
+    const outcome = signal<{ command: string; value: unknown } | null>(null)
 
     // Contexts this island has read, newest last: reopening a record (or the create
     // form) renders immediately and revalidates in place. Bounded and page-scoped;
@@ -555,6 +576,10 @@ export const createRecordModal =
         draft: (name, fallback = '') => draftState().values[name] ?? fallback,
         draftChecked: (name, value = '1', fallback = false) =>
           draftState().checks[draftCheckKey(name, value)] ?? fallback,
+        outcome: <T,>(command: string) => {
+          const held = outcome()
+          return held?.command === command ? (held.value as T) : null
+        },
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
@@ -687,6 +712,7 @@ export const createRecordModal =
         recordDrafts.set(emptyDraftState())
         dialogDrafts.set(emptyDraftState())
         viewState.set({})
+        outcome.set(null)
         dialog.set(null)
         dialogReturnFocus = null
         envelope.set(null)
@@ -720,6 +746,7 @@ export const createRecordModal =
       recordDrafts.set(emptyDraftState())
       dialogDrafts.set(emptyDraftState())
       viewState.set({})
+      outcome.set(null)
       status.set('idle')
       envelope.set(null)
       releaseInert?.()
@@ -745,6 +772,7 @@ export const createRecordModal =
         dialog.set(null)
         dialogDrafts.set(emptyDraftState())
         issues.set([])
+        outcome.set(null)
         afterRender(() => (target?.isConnected ? target : null))
         return
       }
@@ -811,6 +839,8 @@ export const createRecordModal =
         }
         if (!result.ok) {
           // The layer was snapshotted before the busy state rendered, including unchecked controls.
+          // A refused submit leaves an answer that was computed from something else.
+          outcome.set(null)
           issues.set(
             result.issues.length
               ? result.issues.map((issue) => ({
@@ -831,8 +861,20 @@ export const createRecordModal =
           )
           return
         }
+        if (command.preview) {
+          // Nothing changed, so nothing is dropped, re-read or announced — and the
+          // drafts snapshotted before this submit stay, so the selection is still on
+          // screen beside the answer it produced.
+          outcome.set({ command: name, value: result.value })
+          version.set(version() + 1)
+          return
+        }
         if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
         else recordDrafts.set(emptyDraftState())
+        // A command that stays in its layer leaves its answer for the view, which is
+        // how something the server can only say once — a one-time credential — reaches
+        // the reader. Every other `after` replaces the layer, so the answer goes.
+        outcome.set(after_(command) === 'stay' ? { command: name, value: result.value } : null)
         form.reset()
         const value = result.value as { id?: unknown } | null | undefined
         const createdId =
@@ -1090,6 +1132,7 @@ export const createRecordModal =
                   if (key.startsWith('recordParam') && value !== undefined)
                     params[key.slice('recordParam'.length).replace(/^./u, (c) => c.toLowerCase())] = value
                 issues.set([])
+                outcome.set(null)
                 dialog.set({ name: opener.getAttribute(RECORD_DIALOG_ATTRIBUTE) ?? '', params })
                 afterRender()
                 return
@@ -1132,6 +1175,8 @@ export const createRecordModal =
               // which the views read back, so no prompt stands between two tabs.
               keepDrafts(recordLayer(), 'record')
               issues.set([])
+              // The answer belonged to the tab that asked for it.
+              outcome.set(null)
               show(
                 target.id,
                 target.tab ?? null,
@@ -1234,6 +1279,27 @@ export const createRecordModal =
           (event) => {
             const control = event.target instanceof Element ? event.target : null
             if (!control || !root?.contains(control)) return
+            // A checkbox named `__all:<prefix>` ticks or clears every checkbox of its
+            // form whose name starts with that prefix, so one control stands for a
+            // row or a whole section. Any tick in such a form is kept as a draft, so
+            // the view re-renders and each "all" box reads whether it is now full.
+            if (control instanceof HTMLInputElement && control.type === 'checkbox' && control.form) {
+              const form = control.form
+              if (form.querySelector(`input[type="checkbox"][name^="${CHECK_ALL}"]`)) {
+                if (control.name.startsWith(CHECK_ALL)) {
+                  const prefix = control.name.slice(CHECK_ALL.length)
+                  for (const target of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+                    if (
+                      !target.disabled &&
+                      !target.name.startsWith(CHECK_ALL) &&
+                      target.name.startsWith(prefix)
+                    )
+                      target.checked = control.checked
+                }
+                keepAllDrafts()
+                return
+              }
+            }
             const stateKey =
               control.getAttribute('data-record-state') ??
               (['relation-native', 'reorder-list-value'].includes(control.getAttribute('data-ui') ?? '')

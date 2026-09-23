@@ -51,7 +51,8 @@ test('public production permission catalogue covers every function owned by its 
   // adding one does, and that is exactly the moment somebody should be made to
   // look. Raise it only with the reason written beside the exemption itself.
   assert.ok(
-    Object.keys(manifest.permissions.exemptions).length <= 83,
+    // 84: `user.syncRoleTemplates`, the serve-time bootstrap that applies role templates.
+    Object.keys(manifest.permissions.exemptions).length <= 84,
     'a new permission exemption was added — say why, in the declaration',
   )
 

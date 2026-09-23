@@ -9,6 +9,7 @@ export {
   ketsuitePermissionModuleNames,
   ketsuitePermissionModules,
 } from './permission-catalogue.ts'
+export { ketsuiteRoleTemplates } from './role-templates.ts'
 
 // website vertical
 export { default as channelApi } from './modules/channel_api/index.ts'

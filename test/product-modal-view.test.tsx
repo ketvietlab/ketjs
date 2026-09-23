@@ -30,6 +30,7 @@ const contextOf = (
   tab: options.tab ?? '',
   data,
   t: (key) => key,
+  outcome: () => null,
   fieldError: () => null,
   draft: (_name, fallback = '') => fallback,
   draftChecked: (_name, _value, fallback = false) => fallback,
