@@ -71,9 +71,11 @@ test('flow cross-project issue routes: render ListPage, retain list state and lo
   assert.equal(mine.status, 200)
   assert.match(rendered, /data-ui="list-page"/)
   assert.doesNotMatch(rendered, /data-ui="record-workspace"|data-ui="form-page"/)
-  assert.match(textContent, /data-ui="list-page-title">My work/)
-  assert.match(rendered, /name="q"[^>]*value="Finish"/)
-  assert.match(rendered, /name="lang" value="en"/)
+  assert.match(textContent, /data-ui="list-page-title"[^>]*>My work/)
+  // The search-filter bar replaced the GET search form; the query still
+  // narrows the list, and the old input is gone.
+  assert.match(rendered, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(rendered, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(rendered, /data-active="true"[^>]*href="\/admin\/flow\/mine\?lang=en"/)
   assert.match(textContent, /href="\/admin\/flow\/issues\?lang=en">All\s*<span>2<\/span>/)
   assert.match(textContent, /href="\/admin\/flow\/mine\?lang=en" aria-current="page">Mine\s*<span>1<\/span>/)
@@ -86,7 +88,7 @@ test('flow cross-project issue routes: render ListPage, retain list state and lo
   const allHtml = await all.text()
   const allTextContent = allHtml.replace(/<!--k\[?-->/g, '')
   assert.equal(all.status, 200)
-  assert.match(allTextContent, /data-ui="list-page-title">All issues/)
+  assert.match(allTextContent, /data-ui="list-page-title"[^>]*>All issues/)
   assert.match(allHtml, /data-active="true"[^>]*href="\/admin\/flow\/issues\?lang=en"/)
 
   const unsupported = await app.client.request('/admin/flow/mine?lang=en', { method: 'POST' })

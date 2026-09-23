@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { test, type TestContext } from 'node:test'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import type { Row } from '@ketvietlab/ketjs'
@@ -55,6 +56,105 @@ async function seedProduct(call: HttpCall) {
     combinationKey: '',
   })
 }
+
+test('product catalogue: uses SearchFilter and preserves a four-field group pipeline in the URL', async (t) => {
+  const { e2e, call } = await bootSuite(t)
+  await seedProduct(call)
+
+  const page = await e2e.client.get('/admin/product/templates?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  assert.equal(page.status, 200)
+  const html = await page.text()
+  assert.match(html, /data-island="backend\.search-filter"/)
+  assert.match(html, /data-ui="search-filter"/)
+  assert.match(html, /data-island="backend\.ket-table"/)
+  assert.match(html, /data-ui="kt-row" data-row="tpl"/)
+  assert.match(html, /data-col="listPrice"[^>]*>[\s\S]*?100/)
+  assert.doesNotMatch(html, /data-ui="table"/)
+  assert.doesNotMatch(html, /data-ui="chrome-search"/)
+
+  const href = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates?lang=vi',
+      facets: [],
+      groupBy: ['categoryId', 'active', 'saleOk', 'purchaseOk'],
+      customFilters: [],
+    })
+  ).value.href
+  const grouped = new URL(href, 'http://ket.local')
+  assert.deepEqual(grouped.searchParams.getAll('group'), ['categoryId', 'active', 'saleOk', 'purchaseOk'])
+  assert.equal(grouped.searchParams.get('lang'), 'vi')
+  let groupHref = href
+  for (let depth = 0; depth < 4; depth++) {
+    const response = await e2e.client.get(groupHref, { headers: { accept: 'text/html' } })
+    assert.equal(response.status, 200)
+    const groupHtml = await response.text()
+    const closed = groupHtml.match(/data-ui="kt-group-toggle" href="([^"]+)" aria-expanded="false"/)
+    assert.ok(closed, `grouping level ${depth + 1} must be expandable`)
+    groupHref = closed[1]!.replaceAll('&amp;', '&')
+  }
+  const leaf = await e2e.client.get(groupHref, { headers: { accept: 'text/html' } })
+  assert.match(await leaf.text(), /data-ui="kt-row" data-row="tpl"/)
+
+  const favorite = await call<{ id: string }>('product_backend.saveSearchFavorite', {
+    name: 'Nhóm sản phẩm để kiểm thử',
+    isDefault: true,
+    state: {
+      returnTo: '/admin/product/templates?lang=vi',
+      facets: [],
+      groupBy: ['categoryId', 'active', 'saleOk', 'purchaseOk'],
+      customFilters: [],
+    },
+  })
+  const favoriteHref = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates?lang=vi',
+      favoriteId: favorite.value.id,
+      facets: [],
+      groupBy: [],
+      customFilters: [],
+    })
+  ).value.href
+  assert.deepEqual(new URL(favoriteHref, 'http://ket.local').searchParams.getAll('group'), [
+    'categoryId',
+    'active',
+    'saleOk',
+    'purchaseOk',
+  ])
+
+  const cleared = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: favoriteHref,
+      facets: [],
+      groupBy: [],
+      customFilters: [],
+    })
+  ).value.href
+  const clearedPage = await e2e.client.get(cleared, { headers: { accept: 'text/html' } })
+  assert.doesNotMatch(await clearedPage.text(), /data-ui="kt-group-row"/)
+
+  const typed = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates',
+      query: 'Áo thun',
+      facets: [],
+      groupBy: ['type'],
+    })
+  ).value.href
+  assert.equal(new URL(typed, 'http://ket.local').searchParams.get('q'), 'Áo thun')
+
+  await call('product_backend.deleteSearchFavorite', { id: favorite.value.id })
+  const deletedFavorite = (
+    await call<{ href: string }>('product_backend.applySearchFilter', {
+      returnTo: '/admin/product/templates',
+      favoriteId: favorite.value.id,
+      facets: [],
+      groupBy: [],
+    })
+  ).value.href
+  assert.deepEqual(new URL(deletedFavorite, 'http://ket.local').searchParams.getAll('group'), [])
+})
 
 test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', async (t) => {
   const { e2e, call } = await bootSuite(t)
@@ -184,20 +284,42 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
     '90',
   )
 
-  const productCreatePage = await e2e.client.get('/admin/product/templates/new?lang=vi', {
-    headers: { accept: 'text/html' },
+  // General and Variants now live in the product.template record-modal (see
+  // product_backend/modal/product-modal-view.tsx), so creation, editing and
+  // stock config go through the domain functions directly instead of a
+  // page form — the modal's commands call the very same functions.
+  const invalidStockConfig = await call<Row>('stock.configureProduct', {
+    templateId: 'tpl',
+    isStorable: false,
+    tracking: 'lot',
   })
-  assert.equal(productCreatePage.status, 200)
-  const productCreateHtml = await productCreatePage.text()
-  assert.match(productCreateHtml, /data-ui="form-page"/)
-  assert.match(productCreateHtml, /id="product-create-form"/)
-  assert.match(productCreateHtml, /data-scope="product-create"/)
-  assert.equal((productCreateHtml.match(/name="type"/g) ?? []).length, 2)
-  assert.doesNotMatch(productCreateHtml, /<select[^>]*name="type"/)
-  assert.match(productCreateHtml, /name="saleOk"[^>]*form="product-create-form"/)
-  assert.match(productCreateHtml, /name="purchaseOk"[^>]*form="product-create-form"/)
-  assert.match(productCreateHtml, /name="isStorable"[^>]*form="product-create-form"/)
-  assert.doesNotMatch(productCreateHtml, /data-island="mail\.chatter"/)
+  assert.equal(invalidStockConfig.value.ok, false)
+  const configAfterInvalid = await call<Row>('stock.getProductConfig', { templateId: 'tpl' })
+  assert.equal(configAfterInvalid.value.isStorable, false)
+  assert.equal(configAfterInvalid.value.tracking, 'none')
+
+  const newTemplateId = randomUUID()
+  const createdTemplate = await call<Row>('product.saveTemplate', {
+    id: newTemplateId,
+    name: 'Sản phẩm từ form',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '250000',
+    saleOk: true,
+    purchaseOk: true,
+    description: 'Được tạo qua HTTP E2E.',
+  })
+  assert.equal(createdTemplate.value.ok, true)
+  assert.equal(
+    ((await call<Row>('product.getTemplate', { id: newTemplateId })).value as Row).name,
+    'Sản phẩm từ form',
+  )
+  const createdConfig = await call<Row>('stock.configureProduct', {
+    templateId: newTemplateId,
+    isStorable: true,
+    tracking: 'none',
+  })
+  assert.equal(createdConfig.value.ok, true)
 
   const favoritePage = await e2e.client.get(
     '/admin/product/templates/favorites/new?returnTo=%2Fadmin%2Fproduct%2Ftemplates%3Fq%3DAO&lang=vi',
@@ -212,123 +334,47 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.match(favoriteHtml, /name="default"[^>]*type="checkbox"|type="checkbox"[^>]*name="default"/)
   assert.doesNotMatch(favoriteHtml, /data-island="mail\.chatter"/)
 
-  const invalidProductPage = await e2e.client.post(
-    '/admin/product/templates/new?lang=vi',
-    new URLSearchParams({
-      name: 'Sản phẩm cấu hình kho sai',
-      type: 'goods',
-      uomId: 'unit',
-      isStorable: '0',
-      tracking: 'lot',
-    }),
-    { headers: { accept: 'text/html' } },
-  )
-  assert.equal(invalidProductPage.status, 200)
-  assert.match(await invalidProductPage.text(), /Dữ liệu chưa hợp lệ/)
-  const invalidProducts = await call<Row[]>('product.listTemplates', {
-    search: 'Sản phẩm cấu hình kho sai',
-  })
-  assert.equal(invalidProducts.value.length, 0)
-
-  const createdProductPage = await e2e.client.post(
-    '/admin/product/templates/new?lang=vi',
-    new URLSearchParams({
-      name: 'Sản phẩm từ form',
-      type: 'goods',
-      uomId: 'unit',
-      listPrice: '250000',
-      saleOk: '1',
-      purchaseOk: '1',
-      isStorable: '1',
-      tracking: 'none',
-      description: 'Được tạo qua HTTP E2E.',
-    }),
-    { headers: { accept: 'text/html' } },
-  )
-  assert.equal(createdProductPage.status, 200)
-  const createdProductHtml = await createdProductPage.text()
-  assert.match(createdProductHtml, /Sản phẩm từ form/)
-  assert.match(createdProductHtml, /data-island="mail\.chatter"/)
-
-  const productPage = await e2e.client.get('/admin/product/templates/tpl?lang=vi', {
+  // The old full-page detail route now only redirects General and Variants
+  // into the record-modal URL; it still renders Media itself (checked below).
+  const generalRedirect = await e2e.client.get('/admin/product/templates/tpl?lang=vi', {
     headers: { accept: 'text/html' },
+    redirect: 'manual',
   })
-  assert.equal(productPage.status, 200)
-  const productHtml = await productPage.text()
-  assert.match(productHtml, /Áo thun/)
-  assert.match(productHtml, /data-ui="form-page"[^>]*data-scope="product-form-page"/)
-  assert.match(productHtml, /data-ui="form-page-controller"/)
-  assert.match(productHtml, /data-island="product\.editor"/)
-  assert.match(productHtml, /id="product-detail-form"/)
-  assert.equal((productHtml.match(/name="saleOk"/g) ?? []).length, 1)
-  assert.equal((productHtml.match(/name="purchaseOk"/g) ?? []).length, 1)
-  assert.equal((productHtml.match(/name="isStorable"/g) ?? []).length, 1)
-  assert.equal((productHtml.match(/name="type"/g) ?? []).length, 2)
-  assert.doesNotMatch(productHtml, /<select[^>]*name="type"/)
-  assert.match(
-    productHtml,
-    /data-ui="form-option-input" type="radio" name="type" autocomplete="off" value="goods"/,
-  )
-  assert.match(productHtml, /Loại hàng hoá/)
-  assert.match(productHtml, /name="saleOk"[^>]*checked/)
-  assert.match(
-    productHtml,
-    /data-ui="tab" data-active="true" href="\/admin\/product\/templates\/tpl\?tab=general&amp;lang=vi"/,
-  )
-  assert.match(productHtml, /action="\/admin\/product\/templates\/tpl\?tab=general&amp;lang=vi"/)
-  assert.doesNotMatch(productHtml, /data-ui="media" data-state="ready"/)
+  assert.equal(generalRedirect.status, 303)
+  const generalLocation = new URL(generalRedirect.headers.get('location') ?? '', 'http://ket.local')
+  assert.equal(generalLocation.pathname, '/admin/product/templates')
+  assert.equal(generalLocation.searchParams.get('record'), 'product.template:tpl')
+  assert.equal(generalLocation.searchParams.get('tab'), 'general')
+  assert.equal(generalLocation.searchParams.get('lang'), 'vi')
 
-  const invalidDetailSave = await e2e.client.post(
-    '/admin/product/templates/tpl?tab=general&lang=vi',
-    new URLSearchParams({
-      name: 'Tên không được lưu dở dang',
-      type: 'goods',
-      uomId: 'unit',
-      listPrice: '999.00',
-      isStorable: '0',
-      tracking: 'serial',
-    }),
-    { headers: { accept: 'application/json', 'x-ket-partial': 'product-detail' } },
-  )
-  assert.equal(invalidDetailSave.status, 422)
+  const variantsRedirect = await e2e.client.get('/admin/product/templates/tpl?tab=variants&lang=vi', {
+    headers: { accept: 'text/html' },
+    redirect: 'manual',
+  })
+  assert.equal(variantsRedirect.status, 303)
+  const variantsLocation = new URL(variantsRedirect.headers.get('location') ?? '', 'http://ket.local')
+  assert.equal(variantsLocation.searchParams.get('tab'), 'variants')
+
+  const invalidSave = await call<Row>('product.saveTemplate', {
+    id: 'tpl',
+    name: '',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '999.00',
+  })
+  assert.equal(invalidSave.value.ok, false)
   assert.equal(((await call<Row>('product.getTemplate', { id: 'tpl' })).value as Row).name, 'Áo thun')
 
-  const partialSave = await e2e.client.post(
-    '/admin/product/templates/tpl?tab=general&lang=vi',
-    new URLSearchParams({
-      name: 'Áo thun',
-      type: 'goods',
-      uomId: 'unit',
-      listPrice: '100.00',
-      saleOk: '1',
-      purchaseOk: '1',
-      tracking: 'none',
-    }),
-    { headers: { accept: 'text/html', 'x-ket-partial': 'product-detail' } },
-  )
-  assert.equal(partialSave.status, 200)
-  assert.match(partialSave.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
-  const partialSaveHtml = await partialSave.text()
-  assert.match(partialSaveHtml, /data-ket-slot="product\.record-header"/)
-  assert.match(partialSaveHtml, /data-ket-slot="product\.record-body"/)
-  assert.doesNotMatch(partialSaveHtml, /data-ui="sidebar"|<!doctype/)
-  // The chatter, the activity list and the save controller sit outside the two
-  // replaced slots, so a partial must not carry them: they keep their DOM and
-  // their local state across the save.
-  assert.doesNotMatch(partialSaveHtml, /data-island="(?:product\.editor|mail\.chatter|activity\.record)"/)
-  // A relation control is different — it is a field of the record body, so it is
-  // part of what the save replaces. Islands inside a fragment are reconciled by
-  // key rather than rebuilt, which is what keeps the picker interactive after a
-  // partial save.
-  assert.match(partialSaveHtml, /data-island="backend\.relation-select"/)
-
-  const variantsPage = await e2e.client.get('/admin/product/templates/tpl?tab=variants&lang=vi', {
-    headers: { accept: 'text/html' },
+  const savedTemplate = await call<Row>('product.saveTemplate', {
+    id: 'tpl',
+    name: 'Áo thun',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '100.00',
+    saleOk: true,
+    purchaseOk: true,
   })
-  assert.equal(variantsPage.status, 200)
-  const variantsHtml = await variantsPage.text()
-  assert.doesNotMatch(variantsHtml, /name="saleOk"/)
-  assert.doesNotMatch(variantsHtml, /id="product-detail-form"/)
+  assert.equal(savedTemplate.value.ok, true)
 
   const mediaPage = await e2e.client.get('/admin/product/templates/tpl?tab=media&lang=vi', {
     headers: { accept: 'text/html' },
@@ -385,11 +431,14 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   })
   assert.equal(attributesPage.status, 200)
   const attributesHtml = await attributesPage.text()
-  assert.match(attributesHtml, /id="product-attribute-create"/)
-  assert.match(attributesHtml, /data-scope="product-attribute-create"/)
-  assert.match(attributesHtml, /data-ui="card-grid"/)
-  assert.match(attributesHtml, /data-scope="product-attribute-value"/)
-  assert.match(attributesHtml, /Thuộc tính đã cấu hình/)
+  assert.match(attributesHtml, /data-ui="ket-table"/)
+  assert.match(attributesHtml, /data-island="product\.attribute-modal"/)
+  assert.match(attributesHtml, /data-island="backend\.search-filter"/)
+  assert.match(attributesHtml, /data-ui="search-filter"[^>]*data-size="compact"/)
+  assert.doesNotMatch(attributesHtml, /data-ui="chrome-search"/)
+  assert.match(attributesHtml, /record=product.attribute%3Anew/)
+  assert.match(attributesHtml, /record=product.attribute%3Acolor/)
+  assert.doesNotMatch(attributesHtml, /id="product-attribute-create"|data-ui="card-grid"/)
   assert.doesNotMatch(attributesHtml, /data-island="mail\.chatter"/)
 
   const invalidAttribute = await e2e.client.post(

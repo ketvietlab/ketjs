@@ -16,6 +16,7 @@ const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
   staff: {
     staffBearer: { type: 'http', scheme: 'bearer' },
     staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE },
+    staffGateway: { type: 'apiKey', in: 'header', name: 'x-ket-gateway-assertion' },
   },
   pos: {
     posBearer: { type: 'http', scheme: 'bearer' },

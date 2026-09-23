@@ -8,6 +8,7 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import { icon } from './icons.ts'
+import { KetTable } from '@ketvietlab/design-system'
 
 export type Cell = TemplateResult | string
 
@@ -133,6 +134,49 @@ const columnMenu = <R,>(_: Translator, table: DataTable<R>): TemplateResult => {
   )
 }
 
+/** Collection boundary: callbacks stay server-side while KetTable owns the grid. */
+export const collectionTable = <R,>(_: Translator, table: DataTable<R>): TemplateResult => (
+  <KetTable
+    columns={visibleColumns(table).map((column) => ({
+      ...column,
+      sortHref: column.sort?.href,
+      sortLabel: column.sort?.label,
+      sortDirection: column.sort?.direction,
+    }))}
+    rows={table.rows}
+    id={table.id}
+    rowHref={table.rowHref}
+    rowLink={table.rowLink}
+    caption={table.caption}
+    responsive={table.responsive}
+    gutter={table.gutter}
+    selection={
+      table.selection ? { formId: table.selection.formId, fieldName: table.selection.field } : undefined
+    }
+    groups={table.groups}
+    sort={(() => {
+      const column = table.columns.find((item) => item.sort?.direction)
+      return column?.sort?.direction ? { field: column.key, direction: column.sort.direction } : null
+    })()}
+    tools={
+      table.colsHref && table.columns.some((column) => column.optional) ? columnMenu(_, table) : undefined
+    }
+    labels={{
+      selectAll: _('backend.table.selectAll'),
+      selectRow: _('backend.table.selectRow'),
+      sortedAscending: _('backend.table.sortAscending'),
+      sortedDescending: _('backend.table.sortDescending'),
+      previousPage: _('backend.chrome.previous'),
+      nextPage: _('backend.chrome.next'),
+      loading: _('backend.relation.loading'),
+      loadError: _('backend.error.failed.title'),
+      retry: _('backend.relation.retry'),
+      empty: _('backend.table.empty'),
+      emptyHint: '',
+    }}
+  />
+)
+
 /** A canonical, URL-driven operational table with keyed rows. */
 export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResult => {
   const columns = visibleColumns(table)
@@ -140,6 +184,10 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
   return (
     <div
       data-ui="table-scroll"
+      // The design system's data-table rules are all scoped to this pattern, so
+      // without it the application table drew none of them: the row link kept the
+      // browser's default underline because nothing set `text-decoration`.
+      data-pattern="data-table"
       data-gutter={table.gutter ?? null}
       data-responsive={table.responsive ?? 'scroll'}
     >

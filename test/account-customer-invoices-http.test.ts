@@ -50,7 +50,7 @@ test('customer invoice HTTP separates filtered ListPage from the stable full For
   })
 
   const list = await app.client.get(
-    `${path}?lang=vi&state=draft&payment=not_paid&type=out_invoice&q=Kh%C3%A1ch+h%C3%A0ng+HTTP`,
+    `${path}?lang=vi&preset=draft&preset=not_paid&q=Kh%C3%A1ch+h%C3%A0ng+HTTP`,
   )
   const listHtml = await list.text()
   assert.equal(list.status, 200)
@@ -60,13 +60,15 @@ test('customer invoice HTTP separates filtered ListPage from the stable full For
     listHtml,
     /data-row-href="\/admin\/accounting\/customer-invoices\/invoice-search-http\?lang=vi"/,
   )
-  assert.match(listHtml, /data-ui="facet"[\s\S]*?Nháp/)
-  assert.match(listHtml, /data-ui="facet"[\s\S]*?Chưa thanh toán/)
+  // The search-filter bar owns the query and the presets now; the old GET
+  // search input and its facet menus are gone.
+  assert.match(listHtml, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(listHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(listHtml, /href="\/admin\/accounting\/customer-invoices\/new\?lang=vi&amp;returnTo=/)
   assert.doesNotMatch(listHtml, /id="customer-invoice-create-form"|data-ui="modal-layer"|mail\.chatter/)
 
   const createHref = `${path}/new?lang=vi&returnTo=${encodeURIComponent(
-    `${path}?lang=vi&state=draft&payment=not_paid&type=out_invoice&q=Kh%C3%A1ch+h%C3%A0ng+HTTP`,
+    `${path}?lang=vi&preset=draft&preset=not_paid&q=Kh%C3%A1ch+h%C3%A0ng+HTTP`,
   )}`
   const create = await app.client.get(createHref)
   const createHtml = await create.text()
@@ -95,7 +97,7 @@ test('customer invoice HTTP separates filtered ListPage from the stable full For
     assert.match(createHtml, new RegExp(`name="${name}"`), `missing ${name}`)
   assert.equal((createHtml.match(/data-island="backend\.relation-select"/g) ?? []).length, 4)
   assert.match(createHtml, /type="hidden" name="id" value="[^"]+"/)
-  assert.match(createHtml, /href="\/admin\/accounting\/customer-invoices\?lang=vi&amp;state=draft/)
+  assert.match(createHtml, /href="\/admin\/accounting\/customer-invoices\?lang=vi&amp;preset=draft/)
   assert.doesNotMatch(createHtml, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
 
   const unsafe = await (await app.client.get(`${path}/new?lang=en&returnTo=https://evil.example/`)).text()
@@ -135,7 +137,7 @@ test('customer invoice POST preserves the full rejected document and retries ide
   const paymentTermId = String(terms[0]?.id)
 
   const rejected = await app.client.post(
-    `${path}/new?lang=vi&returnTo=${encodeURIComponent(`${path}?lang=vi&state=draft`)}`,
+    `${path}/new?lang=vi&returnTo=${encodeURIComponent(`${path}?lang=vi&preset=draft`)}`,
     new URLSearchParams({
       id: 'invoice-retry-token',
       journalId: saleJournalId,
@@ -166,7 +168,7 @@ test('customer invoice POST preserves the full rejected document and retries ide
   assert.match(rejectedHtml, /name="priceUnit"[^>]*value="150000"/)
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;customer-retry&quot;/)
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;missing-income-account&quot;/)
-  assert.match(rejectedHtml, /href="\/admin\/accounting\/customer-invoices\?lang=vi&amp;state=draft"/)
+  assert.match(rejectedHtml, /href="\/admin\/accounting\/customer-invoices\?lang=vi&amp;preset=draft"/)
 
   const body = new URLSearchParams({
     id: 'invoice-retry-token',

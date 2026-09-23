@@ -74,7 +74,6 @@ test('public production permission catalogue covers every function owned by its 
     'account_partner',
     'calendar_activity',
     'calendar_mail_transport',
-    'loyalty_sale',
     'mail_inbound',
     'product_activity_backend',
     'product_variant_activity_backend',
@@ -172,7 +171,15 @@ test('public catalogue separates Flow reading, working, writing documents, and p
   // exempt because the route calling them has already run its own record check.
   const bridge = ketsuitePermissionModules.flow_backend
   assert.equal(bridge?.posture, 'projection/bridge')
-  assert.deepEqual(Object.keys(bridge?.functions ?? {}), [])
+  // The bridge's own granted functions are the search-filter bar's four, which
+  // read what the reader may already read and write only their own saved
+  // searches — nothing about a project.
+  assert.deepEqual(Object.keys(bridge?.functions ?? {}), [
+    'flow_backend.applySearchFilter',
+    'flow_backend.saveSearchFavorite',
+    'flow_backend.deleteSearchFavorite',
+    'flow_backend.setDefaultSearchFavorite',
+  ])
   assert.deepEqual(bridge?.exemptions['flow_backend.sync.commitContent'], {
     reason: 'internal-route',
     authority: 'flow_backend.trusted-route-worker-or-service',

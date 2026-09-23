@@ -1,22 +1,23 @@
 @layer ket.app {
-  :where([data-kv-design-system]) [data-ui="table-scroll"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] {
     width: 100%;
     overflow-x: auto;
     border: 1px solid var(--kv-panel-border);
     border-radius: var(--kv-radius-md);
     background: var(--kv-table-bg);
+    box-shadow: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="table"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="table"] {
     width: 100%;
     min-width: 38rem;
     border-collapse: separate;
     border-spacing: 0;
+    background: transparent;
     font-size: var(--kv-text-sm);
   }
 
-  :where([data-kv-design-system]) [data-ui="table-scroll"][data-framed="false"],
-  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="table-scroll"][data-framed="false"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"][data-framed="false"] {
     width: auto;
     margin-inline: 0;
     border: 0;
@@ -24,14 +25,16 @@
     background: transparent;
   }
 
-  :where([data-kv-design-system]) [data-ui="table-caption"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="table-caption"] {
     padding: var(--kv-space-3);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
     text-align: left;
   }
 
-  :where([data-kv-design-system]) [data-ui="col"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="col"] {
     height: var(--kv-table-header-height);
     padding: 0 var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
@@ -45,8 +48,10 @@
     white-space: nowrap;
   }
 
-  :where([data-kv-design-system]) [data-ui="select-col"],
-  :where([data-kv-design-system]) [data-ui="select-cell"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="select-col"],
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="select-cell"] {
     width: 3.5rem;
     min-width: 3.5rem;
     max-width: 3.5rem;
@@ -54,14 +59,16 @@
     text-align: center;
   }
 
-  :where([data-kv-design-system]) [data-ui="select-col"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="select-col"] {
     height: var(--kv-table-header-height);
     padding: 0 var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-header-bg);
   }
 
-  :where([data-kv-design-system]) [data-ui="select-cell"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="select-cell"] {
     min-width: 3.5rem;
     height: var(--kv-row-height);
     padding: 0.4375rem var(--kv-space-3);
@@ -70,15 +77,16 @@
     vertical-align: middle;
   }
 
-  :where([data-kv-design-system]) [data-ui="select-all"],
-  :where([data-kv-design-system]) [data-ui="row-select"] {
-    width: 1rem;
-    height: 1rem;
+  /* Selection controls sit at the table's text size, not the 16px native default. */
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="select-all"],
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row-select"] {
+    width: 0.875rem;
+    height: 0.875rem;
     margin: 0;
     accent-color: var(--kv-color-accent);
   }
 
-  :where([data-kv-design-system]) [data-ui="sort-link"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="sort-link"] {
     display: inline-flex;
     align-items: center;
     gap: var(--kv-space-1);
@@ -86,52 +94,69 @@
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="sort-link"]:hover {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="sort-link"]:hover {
     color: var(--kv-color-accent);
   }
 
-  :where([data-kv-design-system]) [data-ui="sort-icon"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="sort-icon"] {
     color: var(--kv-color-accent);
     font-size: var(--kv-text-xs);
     line-height: 1;
   }
 
-  :where([data-kv-design-system]) [data-ui="col"][data-align="end"],
-  :where([data-kv-design-system]) [data-ui="cell"][data-align="end"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="col"][data-align="end"],
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"][data-align="end"] {
     font-variant-numeric: tabular-nums;
     text-align: right;
   }
 
-  :where([data-kv-design-system]) [data-ui="row"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row"] {
     position: relative;
     height: var(--kv-row-height);
     transition: background var(--kv-motion-fast);
   }
 
-  :where([data-kv-design-system]) [data-ui="row"]:hover {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row"]:hover {
     background: transparent;
   }
 
-  :where([data-kv-design-system]) [data-ui="row"]:hover [data-ui="cell"],
-  :where([data-kv-design-system]) [data-ui="row"]:hover [data-ui="select-cell"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row"]:hover
+    [data-ui="cell"],
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row"]:hover
+    [data-ui="select-cell"] {
     background: var(--kv-table-row-hover);
   }
 
   :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
     [data-ui="row"][data-selected="true"]:not(:has([data-ui="row-select"]))
     [data-ui="cell"],
-  :where([data-kv-design-system]) [data-ui="row"]:has([data-ui="row-select"]:checked) [data-ui="cell"],
   :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row"]:has([data-ui="row-select"]:checked)
+    [data-ui="cell"],
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
     [data-ui="row"]:has([data-ui="row-select"]:checked)
     [data-ui="select-cell"] {
     background: var(--kv-table-row-selected);
   }
 
-  :where([data-kv-design-system]) [data-ui="group-row"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="group-row"] {
     height: var(--kv-table-header-height);
   }
 
-  :where([data-kv-design-system]) [data-ui="group-cell"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="group-cell"] {
     padding: var(--kv-space-2) var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-header-bg);
@@ -141,7 +166,7 @@
     text-align: left;
   }
 
-  :where([data-kv-design-system]) [data-ui="group-link"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="group-link"] {
     display: inline-flex;
     align-items: center;
     min-width: 0;
@@ -150,19 +175,25 @@
     vertical-align: middle;
   }
 
-  :where([data-kv-design-system]) a[data-ui="group-link"]:hover {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    a[data-ui="group-link"]:hover {
     color: var(--kv-color-accent);
     text-decoration: underline;
     text-underline-offset: 0.15em;
   }
 
-  :where([data-kv-design-system]) [data-ui="group-indent"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="group-indent"] {
     display: inline-block;
     width: calc(var(--kv-group-depth, 0) * var(--kv-space-5));
     min-width: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="group-count"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="group-count"] {
     display: inline-grid;
     min-width: 1.625rem;
     margin-left: var(--kv-space-2);
@@ -176,7 +207,10 @@
     text-align: center;
   }
 
-  :where([data-kv-design-system]) [data-ui="group-pager"] td {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="group-pager"]
+    td {
     padding: var(--kv-space-2) var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-row-bg);
@@ -184,13 +218,18 @@
     font-size: var(--kv-text-xs);
   }
 
-  :where([data-kv-design-system]) [data-ui="group-pager-actions"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="group-pager-actions"] {
     display: inline-flex;
     gap: var(--kv-space-1);
     margin-left: var(--kv-space-3);
   }
 
-  :where([data-kv-design-system]) [data-ui="group-pager-actions"] a {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="group-pager-actions"]
+    a {
     display: inline-grid;
     place-items: center;
     width: 1.5rem;
@@ -201,26 +240,32 @@
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="cell"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="cell"] {
     max-width: 24rem;
     height: var(--kv-row-height);
     padding: 0.4375rem var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-row-bg);
     color: var(--kv-text-secondary);
+    font-size: inherit;
+    line-height: inherit;
     overflow-wrap: anywhere;
   }
 
-  :where([data-kv-design-system]) [data-ui="cell"][data-priority="primary"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"][data-priority="primary"] {
     color: var(--kv-text-main);
     font-weight: var(--kv-weight-semibold);
   }
 
-  :where([data-kv-design-system]) [data-ui="cell"][data-linked="true"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"][data-linked="true"] {
     padding: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="row-link"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row-link"] {
     display: flex;
     min-height: calc(var(--kv-row-height) - 1px);
     align-items: center;
@@ -229,41 +274,98 @@
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="row-link"]:hover {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    :is(strong, small) {
+    display: block;
+    min-width: 0;
+  }
+
+  /* `strong` defaults to `bolder`, which pushed the semibold primary cell to 800+. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    strong {
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="cell"] small {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-normal);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row-link"]:has(small) {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row-link"]:hover {
     color: var(--kv-color-accent);
     text-decoration: underline;
     text-underline-offset: 0.15em;
   }
 
-  :where([data-kv-design-system]) [data-ui="row-link"]::after {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row-link"]::after {
     position: absolute;
     inset: 0;
     content: "";
   }
 
-  :where([data-kv-design-system]) [data-ui="row-select"] {
+  :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="row-select"] {
     position: relative;
     z-index: 1;
   }
 
-  :where([data-kv-design-system]) [data-ui="row"]:focus-within {
+  /* A row that is itself a link may still carry its own controls — a milestone
+     that opens one tab of the record, a per-row action. The row link's overlay
+     covers the whole row, so anything else a reader can press has to sit above
+     it or the row swallows the click. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    :is(a, button, summary, input, select, textarea):not([data-ui="row-link"]) {
+    position: relative;
+    z-index: 1;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row"]:focus-within {
     outline: 2px solid var(--kv-color-focus);
     outline-offset: -2px;
   }
 
-  :where([data-kv-design-system]) [data-ui="row-link"]:focus-visible {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="row-link"]:focus-visible {
     outline: none;
     box-shadow: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="cell"][data-align="end"] [data-ui="row-link"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"][data-align="end"]
+    [data-ui="row-link"] {
     justify-content: flex-end;
   }
 
   :where([data-kv-design-system])
-    [data-ui="table-scroll"][data-gutter="compact"]
+    [data-ui="table-scroll"][data-pattern="data-table"][data-gutter="compact"]
     [data-ui="cell"]:not([data-linked="true"]),
-  :where([data-kv-design-system]) [data-ui="table-scroll"][data-gutter="compact"] [data-ui="row-link"] {
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"][data-gutter="compact"]
+    [data-ui="row-link"] {
     padding-block: 0.3125rem;
   }
 }

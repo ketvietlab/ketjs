@@ -13,6 +13,10 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
 import { PRODUCT_TYPES } from './types.ts'
+import { productModalContextFunctions } from './product-modal-context.ts'
+import { attributeModalContextFunctions } from './attribute-modal-context.ts'
+import { variantSetupFunctions } from './variant-setup.ts'
+import { attributeDraftFunctions } from './attribute-draft.ts'
 import { emptyProductListState, productListSearch } from './search.ts'
 
 /**
@@ -146,7 +150,8 @@ const uomRoot = (row: Row): string => String(row.parentPath).split('/').filter(B
  * only need one variant still pay one pass, which is why the whole set is
  * resolved at once rather than per row.
  */
-const describeVariants = async (ctx: Ctx, products: Row[]): Promise<Row[]> => {
+/** Shared with `templateModalContext`: the same attribute-value decoration every variant list needs. */
+export const describeVariants = async (ctx: Ctx, products: Row[]): Promise<Row[]> => {
   if (!products.length) return products
   const wanted = new Set(products.map((product) => String(product.id)))
   const links = (await ctx.db.select('product.ProductValue')).filter((link) =>
@@ -194,6 +199,40 @@ const describeVariants = async (ctx: Ctx, products: Row[]): Promise<Row[]> => {
       name: values.length ? values.map((entry) => String(entry.value)).join(' · ') : null,
     }
   })
+}
+
+/** Shared with `templateModalContext`: a template's attribute lines, named and valued. */
+export const attributeLinesOf = async (ctx: Ctx, templateId: unknown): Promise<Row[]> => {
+  const lines = await ctx.db.select('product.TemplateAttributeLine', { templateId })
+  if (!lines.length) return []
+  const attributes = new Map((await ctx.db.select('product.Attribute')).map((row) => [String(row.id), row]))
+  const values = new Map((await ctx.db.select('product.AttributeValue')).map((row) => [String(row.id), row]))
+  const templateValues = await ctx.db.select('product.TemplateAttributeValue')
+  const byLine = new Map<string, Row[]>()
+  for (const templateValue of templateValues) {
+    const value = values.get(String(templateValue.valueId))
+    if (!value) continue
+    const held = byLine.get(String(templateValue.lineId)) ?? []
+    held.push({ id: String(value.id), name: String(value.name), sequence: Number(value.sequence ?? 10) })
+    byLine.set(String(templateValue.lineId), held)
+  }
+  return lines
+    .map((line) => {
+      const attribute = attributes.get(String(line.attributeId))
+      return {
+        id: String(line.id),
+        templateId: String(line.templateId),
+        attributeId: String(line.attributeId),
+        attribute: attribute ? String(attribute.name) : null,
+        sequence: Number(attribute?.sequence ?? 10),
+        values: (byLine.get(String(line.id)) ?? []).sort(
+          (a, b) => Number(a.sequence) - Number(b.sequence) || String(a.name).localeCompare(String(b.name)),
+        ),
+      }
+    })
+    .sort(
+      (a, b) => a.sequence - b.sequence || String(a.attribute ?? '').localeCompare(String(b.attribute ?? '')),
+    )
 }
 
 const templateSummary = (template: Row) => ({
@@ -480,7 +519,7 @@ export const functions: Record<string, FnSpec> = {
    */
   listAttributeValues: defineFn({
     input: { attributeId: 'id?', search: 'text?', limit: 'int?' },
-    output: { id: 'id', attributeId: 'id', name: 'text', sequence: 'int' },
+    output: { id: 'id', attributeId: 'id', name: 'text', sequence: 'int', htmlColor: 'text?' },
     effects: ['read:product.AttributeValue'],
     agent: true,
     handler: async (ctx, args) => {
@@ -879,44 +918,7 @@ export const functions: Record<string, FnSpec> = {
       'read:product.Attribute',
     ],
     agent: true,
-    handler: async (ctx, args) => {
-      const lines = await ctx.db.select('product.TemplateAttributeLine', { templateId: args.templateId })
-      if (!lines.length) return []
-      const attributes = new Map(
-        (await ctx.db.select('product.Attribute')).map((row) => [String(row.id), row]),
-      )
-      const values = new Map(
-        (await ctx.db.select('product.AttributeValue')).map((row) => [String(row.id), row]),
-      )
-      const templateValues = await ctx.db.select('product.TemplateAttributeValue')
-      const byLine = new Map<string, Row[]>()
-      for (const templateValue of templateValues) {
-        const value = values.get(String(templateValue.valueId))
-        if (!value) continue
-        const held = byLine.get(String(templateValue.lineId)) ?? []
-        held.push({ id: String(value.id), name: String(value.name), sequence: Number(value.sequence ?? 10) })
-        byLine.set(String(templateValue.lineId), held)
-      }
-      return lines
-        .map((line) => {
-          const attribute = attributes.get(String(line.attributeId))
-          return {
-            id: String(line.id),
-            templateId: String(line.templateId),
-            attributeId: String(line.attributeId),
-            attribute: attribute ? String(attribute.name) : null,
-            sequence: Number(attribute?.sequence ?? 10),
-            values: (byLine.get(String(line.id)) ?? []).sort(
-              (a, b) =>
-                Number(a.sequence) - Number(b.sequence) || String(a.name).localeCompare(String(b.name)),
-            ),
-          }
-        })
-        .sort(
-          (a, b) =>
-            a.sequence - b.sequence || String(a.attribute ?? '').localeCompare(String(b.attribute ?? '')),
-        )
-    },
+    handler: async (ctx, args) => attributeLinesOf(ctx, args.templateId),
   }),
 
   /**
@@ -1368,4 +1370,9 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id }
     },
   }),
+
+  ...productModalContextFunctions,
+  ...attributeModalContextFunctions,
+  ...variantSetupFunctions,
+  ...attributeDraftFunctions,
 }

@@ -17,6 +17,8 @@
       "@ketvietlab/ketjs-view": ["./packages/ketjs-view/src/index.ts"],
       "@ketvietlab/ketjs-view/jsx-runtime": ["./packages/ketjs-view/src/jsx-runtime.ts"],
       "@ketvietlab/ketjs-view/jsx-dev-runtime": ["./packages/ketjs-view/src/jsx-dev-runtime.ts"],
+      "@ketvietlab/ketjs-view-tools": ["./packages/ketjs-view-tools/src/index.ts"],
+      "@ketvietlab/create-view": ["./packages/create-view/src/index.ts"],
       "@ketvietlab/ketjs": ["./packages/ketjs/src/index.ts"],
       "@ketvietlab/ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
       "@ketvietlab/ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],

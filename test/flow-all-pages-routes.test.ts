@@ -63,13 +63,13 @@ test('flow all pages route: ListPage preserves cross-project links, search state
   assert.equal(first.status, 200)
   assert.match(firstHtml, /data-ui="list-page"/)
   assert.doesNotMatch(firstHtml, /data-ui="record-workspace"|data-ui="form-page"|livedoc\.editor/)
-  assert.match(firstText, /data-ui="list-page-title">All docs/)
+  assert.match(firstText, /data-ui="list-page-title"[^>]*>All docs/)
   assert.match(firstText, /data-ui="list-page-footer">All docs: 52/)
-  assert.match(firstHtml, /name="q"[^>]*value="Guide"/)
-  assert.match(firstHtml, /name="filter" value="project:platform"/)
-  assert.match(firstHtml, /name="group" value="project"/)
-  assert.match(firstHtml, /name="lang" value="en"/)
-  assert.equal(firstHtml.match(/data-ui="row"/g)?.length, 50)
+  // The search-filter bar replaced the GET search form; what the URL says is
+  // still what the page renders, and the old input is gone.
+  assert.match(firstHtml, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(firstHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
+  assert.equal(firstHtml.match(/data-ui="kt-row"/g)?.length, 50)
   assert.match(firstText, /data-ui="pager-range">1-50 \/ 52/)
   assert.match(
     firstHtml,
@@ -83,7 +83,7 @@ test('flow all pages route: ListPage preserves cross-project links, search state
   const secondHtml = await second.text()
   const secondText = secondHtml.replace(/<!--k\[?-->/g, '')
   assert.equal(second.status, 200)
-  assert.equal(secondHtml.match(/data-ui="row"/g)?.length, 2)
+  assert.equal(secondHtml.match(/data-ui="kt-row"/g)?.length, 2)
   assert.match(secondText, /data-ui="pager-range">51-52 \/ 52/)
   assert.match(
     secondHtml,

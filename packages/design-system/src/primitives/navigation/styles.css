@@ -1,9 +1,9 @@
 @layer ket.app {
-  :where([data-kv-design-system]) [data-ui="breadcrumbs"] {
+  :where([data-kv-design-system]) [data-ui="breadcrumbs"][data-pattern="breadcrumbs"] {
     min-width: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumbs"] ol {
+  :where([data-kv-design-system]) [data-ui="breadcrumbs"][data-pattern="breadcrumbs"] ol {
     display: flex;
     min-width: 0;
     align-items: center;
@@ -15,37 +15,114 @@
     list-style: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] {
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    :is([data-ui="breadcrumb"], [data-ui="breadcrumb-overflow"]) {
     display: inline-flex;
     min-width: 0;
     align-items: center;
     gap: var(--kv-space-1-5);
+    color: inherit;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] + [data-ui="breadcrumb"]::before {
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    :is([data-ui="breadcrumb"], [data-ui="breadcrumb-overflow"])
+    + :is([data-ui="breadcrumb"], [data-ui="breadcrumb-overflow"])::before {
     flex: none;
     color: var(--kv-border-strong);
     content: "/";
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] :is(a, span) {
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow"] {
+    position: relative;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow"] details {
+    position: relative;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-trigger"] {
+    display: grid;
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    place-items: center;
+    border-radius: var(--kv-radius-sm);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-trigger"]::-webkit-details-marker {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-trigger"]:hover {
+    background: var(--kv-interactive-hover);
+    color: var(--kv-text-main);
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-list"] {
+    position: absolute;
+    z-index: var(--kv-layer-menu);
+    top: calc(100% + var(--kv-space-1));
+    left: 0;
+    display: grid;
+    width: max-content;
+    max-width: min(20rem, calc(100vw - var(--kv-space-8)));
+    gap: var(--kv-space-0-5);
+    padding: var(--kv-space-1);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-list"] li {
+    display: contents;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-list"] :is(a, span) {
+    display: block;
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-text-main);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb-overflow-list"] a:hover {
+    background: var(--kv-interactive-hover);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    [data-ui="breadcrumb"]
+    :is(a, span) {
     overflow: hidden;
     color: inherit;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] a {
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    [data-ui="breadcrumb"]
+    a {
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] a:hover {
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    [data-ui="breadcrumb"]
+    a:hover {
     color: var(--kv-text-main);
     text-decoration: underline;
     text-underline-offset: 0.1875rem;
   }
 
-  :where([data-kv-design-system]) [data-ui="breadcrumb"] [aria-current="page"] {
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    [data-ui="breadcrumb"]
+    [aria-current="page"] {
     color: var(--kv-text-main);
     font-weight: var(--kv-weight-medium);
   }
@@ -107,7 +184,7 @@
     opacity: 0.72;
   }
 
-  :where([data-kv-design-system]) [data-ui="tabs"] {
+  :where([data-kv-design-system]) [data-ui="tabs"][data-pattern="tabs"] {
     display: flex;
     min-height: var(--kv-table-header-height);
     align-items: center;
@@ -116,28 +193,60 @@
     overflow-x: auto;
   }
 
-  :where([data-kv-design-system]) [data-ui="tab"] {
+  :where([data-kv-design-system]) [data-ui="tabbed-view"] {
+    display: grid;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabbed-view"]:not(:has(> [data-ui="tabbed-view-context"])) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabbed-view-context"] {
+    min-width: 0;
+    padding-block-end: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab-panel"] {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-block: var(--kv-space-5);
+    padding-inline: 0;
+    overscroll-behavior: contain;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabs"][data-pattern="tabs"] [data-ui="tab"] {
     position: relative;
     display: inline-flex;
     height: var(--kv-table-header-height);
     flex: none;
     align-items: center;
     gap: var(--kv-space-1-5);
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--kv-text-muted);
     font-size: var(--kv-text-sm);
     font-weight: var(--kv-weight-medium);
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="tab"]:hover {
+  :where([data-kv-design-system]) [data-ui="tabs"][data-pattern="tabs"] [data-ui="tab"]:hover {
     color: var(--kv-text-secondary);
   }
 
-  :where([data-kv-design-system]) [data-ui="tab"][data-active="true"] {
+  :where([data-kv-design-system]) [data-ui="tabs"][data-pattern="tabs"] [data-ui="tab"][data-active="true"] {
     color: var(--kv-tab-active-text);
   }
 
-  :where([data-kv-design-system]) [data-ui="tab"][data-active="true"]::after {
+  :where([data-kv-design-system])
+    [data-ui="tabs"][data-pattern="tabs"]
+    [data-ui="tab"][data-active="true"]::after {
     position: absolute;
     right: 0;
     bottom: -1px;
@@ -146,5 +255,11 @@
     border-radius: 2px 2px 0 0;
     background: var(--kv-accent);
     content: "";
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="breadcrumbs"][data-pattern="breadcrumbs"]
+    [data-ui="breadcrumb"]::after {
+    content: none;
   }
 }

@@ -1,7 +1,28 @@
 {
   "schemaVersion": "ketjs.design-system-inventory-policy.v1",
   "publicModules": {
+    "./data-operations/timeframe-filter/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/bar-chart/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
     "./data-display/data-grid/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/matrix/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "build",
@@ -97,6 +118,34 @@
       "decision": "keep",
       "wave": 2,
       "gapTask": "DS-014"
+    },
+    "./interactions/relation-select/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-044"
+    },
+    "./interactions/lightbox/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-047"
+    },
+    "./interactions/search-filter/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-045"
+    },
+    "./interactions/ket-table/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-046"
     },
     "./interactions/skeleton/index.tsx": {
       "owner": "Feedback",
@@ -286,6 +335,13 @@
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-017"
+    },
+    "./interactions/reorder-list/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
     }
   },
   "compatibilityModules": {
@@ -344,6 +400,20 @@
       "target": "Public core",
       "wave": 4,
       "gapTask": "DS-027"
+    },
+    "./collection-state.ts": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./collection.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
     },
     "./dashboard-page.tsx": {
       "owner": "Page recipes",
@@ -554,6 +624,27 @@
       "target": "Public core",
       "wave": 1,
       "gapTask": "DS-007"
+    },
+    "./record-modal.tsx": {
+      "owner": "Overlays",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-015"
+    },
+    "./client/record-modal.tsx": {
+      "owner": "Overlays",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-015"
+    },
+    "./client/record-modal-form.tsx": {
+      "owner": "Overlays",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-015"
     }
   },
   "plannedComponents": []

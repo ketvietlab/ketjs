@@ -77,6 +77,8 @@ test('journal ListPage keeps command controls, business summary, relation label 
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/journals\/new\?lang=vi&amp;returnTo=/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="BNK"/)

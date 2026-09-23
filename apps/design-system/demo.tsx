@@ -1,5 +1,5 @@
 import { document, page, text, withHeaders } from '@ketvietlab/ketjs'
-import { html } from '@ketvietlab/ketjs-view'
+import { html, renderIsland, trustedMarkup } from '@ketvietlab/ketjs-view'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import type { RouteResult } from '@ketvietlab/ketjs'
 import { icon } from '@ketvietlab/ketsuite/ui'
@@ -12,6 +12,7 @@ import {
   Breadcrumbs,
   Button,
   ContentCard,
+  createRelationSelectView,
   DataTable,
   Disclosure,
   EmptyState,
@@ -37,6 +38,7 @@ import {
 import type { BreadcrumbItem, FieldProps, NavigationItemData, Tone } from '@ketvietlab/design-system'
 import type { IncomingMessage } from 'node:http'
 import { readFileSync } from 'node:fs'
+import { customerName, customers } from './demo-backend.ts'
 import { demoStyles } from './demo-styles.ts'
 
 const stages = ['draft', 'confirmed', 'shipping', 'done'] as const
@@ -234,24 +236,10 @@ type Order = {
   note: string
   history: string[]
 }
-const customers = [
-  'Mùa Hạ Riverside',
-  'Công ty Ánh Dương',
-  'The Local Coffee',
-  'An Nhiên Retreat',
-  'Khách sạn Sông Xanh',
-  'Bếp Nhà',
-  'Nắng Garden',
-  'Hương Việt',
-  'Lá Xanh Bistro',
-  'Cộng Hưởng Studio',
-  'Mộc Coffee',
-  'Bình Minh Hotel',
-]
 const seed = (): Order[] =>
   customers.map((customer, i) => ({
     id: `SO-${1042 - i}`,
-    customer,
+    customer: customer.id,
     email: `order${i + 1}@example.com`,
     phone: '0901234567',
     address: `${24 + i * 3} Nguyễn Văn Hưởng, TP. Hồ Chí Minh`,
@@ -432,7 +420,12 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
     }
     const context =
       contextMode === 'submenu' ? (
-        <Breadcrumbs label="Vị trí hiện tại" items={breadcrumbItems} />
+        <Breadcrumbs
+          label="Vị trí hiện tại"
+          items={breadcrumbItems}
+          maxItems={3}
+          overflowLabel="Hiện các cấp trung gian"
+        />
       ) : (
         <Inline
           items={[
@@ -483,7 +476,12 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                 }
               : undefined,
           },
-          { key: 'customer', label: 'Khách hàng', priority: 'primary', cell: (order) => order.customer },
+          {
+            key: 'customer',
+            label: 'Khách hàng',
+            priority: 'primary',
+            cell: (order) => customerName(order.customer),
+          },
           {
             key: 'date',
             label: 'Ngày giao',
@@ -511,12 +509,62 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
     const fields = (order?: Order): FieldProps[] => {
       const value = (key: keyof Order, fallback = '') =>
         submitted?.get(key) ?? String(order?.[key] ?? fallback)
+      // A real design-system island (search, choose, create) rather than a plain
+      // text field — wired against real listCustomers/createCustomer functions
+      // (see demo-backend.ts), the same way relation-select wires against a real
+      // backend in production. See atlas/relation-select-hydration.ts for the
+      // shared client-side registry this and the KetAtlas mock both hydrate from.
+      const customerId = value('customer')
+      const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }))
+      if (customerId && !customers.some((c) => c.id === customerId))
+        customerOptions.push({ value: customerId, label: customerName(customerId) })
+      const customerControl = trustedMarkup(
+        renderIsland(
+          'design-system.relation-select',
+          (props) => createRelationSelectView(props as Parameters<typeof createRelationSelectView>[0]),
+          {
+            id: `customer-select-${order?.id ?? 'new'}`,
+            config: {
+              name: 'customer',
+              ariaLabel: 'Khách hàng',
+              value: customerId || null,
+              required: true,
+              options: customerOptions,
+              manager: {
+                listFunction: 'demo.listCustomers',
+                saveFunction: 'demo.createCustomer',
+                fields: [{ name: 'name', label: 'Tên khách hàng', required: true }],
+              },
+              labels: {
+                choose: 'Chọn khách hàng',
+                search: 'Tìm khách hàng',
+                more: 'Xem tất cả',
+                noRecords: 'Không tìm thấy khách hàng',
+                loading: 'Đang tải…',
+                loadError: 'Không tải được danh sách khách hàng',
+                dialogTitle: 'Chọn khách hàng',
+                close: 'Đóng',
+                select: 'Chọn',
+                create: 'Thêm khách hàng',
+                edit: 'Sửa',
+                save: 'Lưu',
+                cancel: 'Hủy',
+                remove: 'Xóa',
+                confirmRemove: 'Xác nhận xóa',
+                retry: 'Thử lại',
+                clear: 'Xóa lựa chọn',
+                chosen: 'Đã chọn',
+              },
+            },
+          },
+        ),
+      )
       return [
         {
           id: 'customer',
           name: 'customer',
           label: 'Khách hàng',
-          value: value('customer'),
+          control: customerControl,
           required: true,
           error: formErrors.customer,
         },
@@ -638,7 +686,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         .filter(
           (order) =>
             (!filter || order.stage === filter) &&
-            `${order.id} ${order.customer}`.toLocaleLowerCase('vi').includes(search),
+            `${order.id} ${customerName(order.customer)}`.toLocaleLowerCase('vi').includes(search),
         )
         .sort((a, b) => (sort === 'asc' ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)))
       const pageCount = Math.max(1, Math.ceil(matching.length / 8))
@@ -711,7 +759,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <RecordPage
           title={selected.id}
-          description={selected.customer}
+          description={customerName(selected.customer)}
           context={context}
           variant="operational"
           status={stateBadge(selected)}
@@ -922,7 +970,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                           .map((order) => (
                             <ContentCard
                               title={order.id}
-                              summary={order.customer}
+                              summary={customerName(order.customer)}
                               href={recordHref(order)}
                               body={
                                 <Stack
@@ -962,8 +1010,8 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         : activeModule.sections[selectedSection]
       main = (
         <WorkspacePage
-          title={activeModule.label}
-          description={`Điều hành ${activeModule.label.toLocaleLowerCase('vi')} tại tất cả chi nhánh.`}
+          title={sectionLabel}
+          description={`Điều hành ${sectionLabel.toLocaleLowerCase('vi')} trong ${activeModule.label.toLocaleLowerCase('vi')}.`}
           context={context}
           variant="operational"
           actions={
@@ -1158,7 +1206,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                               .filter((order) => order.priority && order.stage !== 'done')
                               .map((order) => (
                                 <ContentCard
-                                  title={`${order.id} · ${order.customer}`}
+                                  title={`${order.id} · ${customerName(order.customer)}`}
                                   summary={
                                     order.note ||
                                     `Chuẩn bị ${order.quantity} gói cho lịch giao ${order.date.split('-').reverse().join('/')}`
@@ -1227,7 +1275,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
             <Stack
               items={[
                 <p>
-                  {selected.id} · {selected.customer}
+                  {selected.id} · {customerName(selected.customer)}
                 </p>,
                 <Inline
                   items={[
@@ -1267,7 +1315,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       body: document({
         lang: 'vi',
         title: 'An Việt · Bán hàng',
-        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href=${`${basePath}/styles.css`}><script type="module" src="/design-system/runtime/auto.js"></script><script type="module" src=${`${basePath}/client.js`}></script>`,
+        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href=${`${basePath}/styles.css`}><script type="module" src="/design-system/runtime/auto.js"></script><script src="/design-system/atlas/island-runtime.mjs"></script><script type="module" src=${`${basePath}/client.js`}></script>`,
         body: (
           <div data-kv-design-system data-theme={theme} data-presentation="grouped" data-demo-app>
             <AppShell
@@ -1386,7 +1434,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
               ['Mã đơn', 'Khách hàng', 'Giá trị', 'Trạng thái'],
               ...rows.map((order) => [
                 order.id,
-                order.customer,
+                customerName(order.customer),
                 String(total(order)),
                 stageLabel[order.stage],
               ]),

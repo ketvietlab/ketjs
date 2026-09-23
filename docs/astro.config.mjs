@@ -93,6 +93,7 @@ export default defineConfig({
               items: [
                 { label: 'Form validation', slug: 'ketjs/form-validation' },
                 { label: 'Rendering and islands', slug: 'ketjs/rendering' },
+                { label: 'Static sites', slug: 'ketjs/view-static-sites' },
                 { label: 'Themes and KTL', slug: 'ketjs/themes' },
                 { label: 'Menus and localization', slug: 'ketjs/menus-i18n' },
                 { label: 'Reports and PDF', slug: 'ketjs/reports' },

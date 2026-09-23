@@ -16,10 +16,8 @@ const outputPath = join(designRoot, 'src/catalogue/inventory.generated.ts')
 const jsonOutputPath = join(designRoot, 'src/catalogue/inventory.generated.json')
 const check = process.argv.includes('--check')
 
-// A working tree can contain ignored build products such as KetSuite's bundled
-// design-system.css. Include tracked files and non-ignored new source files, but
-// never let those local products change the committed inventory. Source archives
-// have no Git metadata, so they retain the deterministic directory-walk fallback.
+// Include tracked files and non-ignored new source files. Source archives have no
+// Git metadata, so they retain the deterministic directory-walk fallback.
 const repositorySourceFiles = (() => {
   try {
     return new Set(

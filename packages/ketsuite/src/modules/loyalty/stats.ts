@@ -160,13 +160,17 @@ export const statsFunctions: Record<string, FnSpec> = {
    * showing next to the total rather than buried in it.
    */
   'membership.stats': defineFn({
-    input: { tierId: 'id?' },
+    input: { tierId: 'id?', state: 'text?' },
     output: { total: 'int', active: 'int', dormant: 'int', points: 'decimal', spend: 'decimal' },
     effects: ['read:loyalty.Membership'],
     agent: true,
     handler: async (ctx, args) => {
       const M = ctx.table('loyalty.Membership')
-      const scope = args.tierId ? eq(M.tierId, args.tierId) : null
+      const scope = all(
+        args.tierId ? eq(M.tierId, args.tierId) : null,
+        args.state === 'active' ? gt(M.rollingSpend, 0) : null,
+        args.state === 'dormant' ? lte(M.rollingSpend, 0) : null,
+      )
       return {
         total: await ctx.db.count(where(from(M), scope)),
         active: await ctx.db.count(where(from(M), all(scope)).where(gt(M.rollingSpend, 0))),

@@ -163,7 +163,9 @@ test('pos-e2e: real HTTP session carries a register sale through stock and accou
     assert.equal(response.status, 200, path)
     const html = await response.text()
     assert.match(html, expected, path)
-    assert.doesNotMatch(html, /pos_backend\.[A-Za-z]/, path)
+    // The search-filter bar names its own functions in island props, so what
+    // must never leak is an untranslated key the reader can see.
+    assert.doesNotMatch(html, /(?:>|placeholder="|aria-label="|title=")[^<"]*pos_backend\.[A-Za-z]/u, path)
   }
   const english = await e2e.client.get('/admin/pos/orders/order-1?lang=en', {
     headers: { accept: 'text/html' },
@@ -179,4 +181,55 @@ test('pos-e2e: real HTTP session carries a register sale through stock and accou
   await e2e.client.logout()
   const denied = await e2e.client.get('/admin/pos/orders', { headers: { accept: 'application/json' } })
   assert.equal(denied.status, 401)
+})
+
+test('pos-e2e: the search-filter bar drives the order list the way the URL names it', async (t) => {
+  const { e2e, call } = await bootPos(t)
+  await call('pos.createOrder', {
+    id: 'order-paid',
+    uuid: 'offline-order-paid',
+    sessionId: 'session-1',
+    partnerId: 'customer',
+  })
+  await call('pos.addLine', {
+    id: 'line-paid',
+    orderId: 'order-paid',
+    productId: 'chair',
+    productUomId: 'unit',
+    qty: '1',
+  })
+  await call('pos.addPayment', {
+    id: 'payment-paid',
+    orderId: 'order-paid',
+    paymentMethodId: 'cash-method',
+    amount: '2800000',
+  })
+  await call('pos.validateOrder', { id: 'order-paid' })
+  await call('pos.createOrder', {
+    id: 'order-draft',
+    uuid: 'offline-order-draft',
+    sessionId: 'session-1',
+    partnerId: 'customer',
+  })
+
+  const orders = '/admin/pos/orders?lang=vi'
+  const all = await (await e2e.client.get(orders)).text()
+  assert.match(all, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(all, /name="q"[^>]*data-ui="chrome-search-input"/)
+  assert.match(all, /data-row="order-paid"/)
+  assert.match(all, /data-row="order-draft"/)
+
+  // The route no longer asks the domain for one state; the bar's presets do it.
+  const paidOnly = await (await e2e.client.get(`${orders}&preset=paid`)).text()
+  assert.match(paidOnly, /data-row="order-paid"/)
+  assert.doesNotMatch(paidOnly, /data-row="order-draft"/)
+
+  // Alternatives within one group, so asking for both keeps both orders.
+  const both = await (await e2e.client.get(`${orders}&preset=paid&preset=draft`)).text()
+  assert.match(both, /data-row="order-paid"/)
+  assert.match(both, /data-row="order-draft"/)
+
+  const grouped = await (await e2e.client.get(`${orders}&group=state`)).text()
+  assert.match(grouped, /data-ui="kt-group-toggle"/)
+  assert.doesNotMatch(grouped, /data-ui="kt-row"/)
 })

@@ -3,13 +3,14 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
   Surface,
 } from '../../../ui/index.ts'
@@ -86,15 +87,16 @@ export const accountsListScreen = (_: Translator, options: AccountsListScreenOpt
     `${_('account_backend.account.summary.liability')}: ${String(options.summary.liability)}`,
     `${_('account_backend.account.summary.profit')}: ${String(options.summary.profit)}`,
   ].join(' · ')
+  const collection = prepareCollectionTable(_, options.frame, {
+    rows: options.rows,
+    id: (row) => String(row.id),
+    rowHref: options.rowHref,
+    columns: accountListColumns(_, name),
+    ...options.table,
+  })
   const table =
     options.rows.length || options.table?.groups?.length ? (
-      dataTable(_, {
-        rows: options.rows,
-        id: (row) => String(row.id),
-        rowHref: options.rowHref,
-        columns: accountListColumns(_, name),
-        ...options.table,
-      })
+      collectionTable(_, collection.table)
     ) : (
       <Surface
         padding="compact"
@@ -109,32 +111,17 @@ export const accountsListScreen = (_: Translator, options: AccountsListScreenOpt
     _('account_backend.accounts.title'),
     <ListPage
       variant="operational"
-      frame={options.frame}
+      frame={collection.frame}
       title={_('account_backend.accounts.title')}
       description={_('account_backend.account.subtitle')}
-      actions={inline([
-        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />,
-        options.frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        options.frame.chrome
-          ? listChrome(
-              _,
-              _('account_backend.accounts.title'),
-              {
-                ...options.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      status={status}
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('account_backend.accounts.title'), collection.frame)}
+      footer={status}
       body={table}
     />,
-    { ...options.frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

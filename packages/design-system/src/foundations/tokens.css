@@ -72,7 +72,7 @@
     --kv-ref-danger-hover: #f1766d;
     --kv-ref-danger-bg: rgb(239 102 92 / 13%);
     --kv-ref-danger-border: rgb(239 102 92 / 28%);
-    --kv-ref-info: #5968df;
+    --kv-ref-info: #aab6ed;
     --kv-ref-info-bg: rgb(89 104 223 / 13%);
     --kv-ref-info-border: rgb(89 104 223 / 25%);
     --kv-ref-status-todo-text: #aab1bc;
@@ -171,15 +171,17 @@
     --kv-font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --kv-font-display: var(--kv-font-sans);
     --kv-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    --kv-text-2xs: 0.625rem;
-    --kv-text-xs: 0.6875rem;
-    --kv-text-sm: 0.75rem;
-    --kv-text-md: 0.8125rem;
-    --kv-text-base: 0.875rem;
-    --kv-text-lg: 1rem;
-    --kv-text-xl: 1.125rem;
-    --kv-text-2xl: 1.375rem;
-    --kv-text-3xl: 1.75rem;
+    /* Text scale, one pixel above the original 10/11/12/13/14/16/18/22/28 steps.
+       Page titles keep their own `--kv-page-title-size`. */
+    --kv-text-2xs: 0.6875rem;
+    --kv-text-xs: 0.75rem;
+    --kv-text-sm: 0.8125rem;
+    --kv-text-md: 0.875rem;
+    --kv-text-base: 0.9375rem;
+    --kv-text-lg: 1.0625rem;
+    --kv-text-xl: 1.1875rem;
+    --kv-text-2xl: 1.4375rem;
+    --kv-text-3xl: 1.8125rem;
     --kv-leading-tight: 1.2;
     --kv-leading-normal: 1.45;
     --kv-leading-relaxed: 1.6;
@@ -222,7 +224,9 @@
     --kv-density-control-height: var(--kv-control-height-md);
     --kv-density-row-height: 3.25rem;
     --kv-density-content-gap: var(--kv-space-4);
-    --kv-sidebar-width: 13.5rem;
+    /* Wide enough for a root section label at the raised text scale
+       ("Chăm sóc khách hàng" at 14px medium). */
+    --kv-sidebar-width: 14.25rem;
     --kv-right-rail-width: 21.25rem;
     --kv-sidebar-item-height: 1.875rem;
     --kv-table-row-height: 3.25rem;
@@ -292,6 +296,16 @@
     --kv-table-row-hover: light-dark(#f7f5f5, rgb(255 255 255 / 2.7%));
     --kv-table-row-selected: light-dark(#eef0fb, rgb(89 104 223 / 9%));
     --kv-table-border: var(--kv-panel-border);
+    /* Six categorical chart hues. The first two are the pair most often
+       compared; red sits last because it reads as a warning elsewhere. Dark
+       marks are lifted for contrast rather than darkened. */
+    --kv-chart-1: light-dark(#4759b8, #7b8bf5);
+    --kv-chart-2: light-dark(#1d7a52, #3fc98a);
+    --kv-chart-3: light-dark(#b5761a, #e8ab45);
+    --kv-chart-4: light-dark(#7a4bad, #b389e8);
+    --kv-chart-5: light-dark(#1a7d8c, #45c2d1);
+    --kv-chart-6: light-dark(#a83a3a, #ef7a72);
+    --kv-chart-track: light-dark(#efedee, rgb(255 255 255 / 5.5%));
     --kv-sidebar-border: light-dark(#e9e7e8, rgb(255 255 255 / 7%));
     --kv-right-rail-border: var(--kv-sidebar-border);
   }

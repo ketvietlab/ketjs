@@ -88,6 +88,7 @@ test('crm pipeline: keeps specialized chrome, figures and the route-owned board 
 
   assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.match(rendered, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(rendered, /data-ui="page-context-viewer"/)
   assert.match(rendered, /data-ui="board-page-toolbar"/)
   assert.doesNotMatch(rendered, /data-ui="record-workspace"/)
   assert.match(rendered, /data-ui="chrome-search-input"[^>]*name="q"[^>]*value="May mặc"/)

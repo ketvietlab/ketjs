@@ -73,6 +73,8 @@ test('customer invoices ListPage keeps filters, customer, lifecycle, payment and
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/customer-invoices\/new\?lang=vi&amp;returnTo=/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="ACME"/)

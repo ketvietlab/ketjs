@@ -18,6 +18,7 @@ import {
   ISLAND_HOST_ATTRIBUTE,
   createIslandManager,
   domHost,
+  each,
   html,
   hydrateIslands,
   renderIsland,
@@ -308,6 +309,33 @@ test('island: a standard div host renders and hydrates beside the legacy host', 
   assert.equal(rootLive.length, 1, 'a standard host can itself be the hydration root')
 })
 
+test('island: client-only keyed content keeps source order on its first mount', () => {
+  const factory = () => {
+    const open = signal(false)
+    return () => html`<div>
+      <button on:click=${() => open.set(true)}>open</button>
+      ${
+        open()
+          ? html`<ol>${each(
+              ['first', 'second', 'third'],
+              (item) => item,
+              // A component fragment owns the item, matching Stack/Inline in the
+              // design system rather than returning the row root directly.
+              (item) => html`${html`<li>${item}</li>`}`,
+            )}</ol>`
+          : ''
+      }
+    </div>`
+  }
+  const container = parseFragment(renderIsland('ordered', factory, {}))
+  hydrateIslands(domHost(document), container as never, { ordered: factory })
+  container.querySelectorAll('button')[0]!.fire('click')
+  assert.deepEqual(
+    container.querySelectorAll('li').map((item) => item.innerHTML.replace(/<!--k\[?-->/g, '')),
+    ['first', 'second', 'third'],
+  )
+})
+
 test('island: unsupported host tags fail instead of becoming markup', () => {
   let constructed = false
   assert.throws(
@@ -526,6 +554,30 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     assert.match(bootstrapSource, /new Set\(\[\.\.\.Object\.keys\(definitions\),/)
     assert.match(bootstrapSource, /navigation fragment contains unknown island/)
     assert.match(bootstrapSource, /server and browser builds differ/)
+
+    // A client view may hand the island host itself to `ket:islands-attach`. The
+    // loader has to load that island's module too, not only the islands inside it.
+    const loaderSource = bootstrapSource.slice(
+      bootstrapSource.indexOf('const loadPlaced = '),
+      bootstrapSource.indexOf('\nawait loadPlaced(document)'),
+    )
+    const loaded: string[] = []
+    const loadPlaced = new Function(
+      'ISLAND_SELECTOR',
+      'knownIslands',
+      'loadFactory',
+      `${loaderSource}\nreturn loadPlaced`,
+    )('ket-island', new Set(['website.search']), async (name: string) => loaded.push(name)) as (
+      root: unknown,
+      requireKnown?: boolean,
+    ) => Promise<void>
+    const host = {
+      matches: (selector: string) => selector === 'ket-island',
+      querySelectorAll: () => [],
+      getAttribute: (name: string) => (name === 'data-island' ? 'website.search' : null),
+    }
+    await loadPlaced(host, true)
+    assert.deepEqual(loaded, ['website.search'])
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)

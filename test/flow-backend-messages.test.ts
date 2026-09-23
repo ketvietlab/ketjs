@@ -29,9 +29,11 @@ const requested = (): Map<string, string[]> => {
       const source = readFileSync(path, 'utf8')
       for (const match of source.matchAll(/['"`]flow_backend\.([a-zA-Z][\w.]*)['"`]/g)) {
         const key = match[1] as string
-        // `flow_backend.sync.*` are this module's four function keys, not
-        // message keys — they share the prefix and nothing else.
+        // `flow_backend.sync.*` and the search-filter bar's four functions are
+        // this module's function keys, not message keys — they share the prefix
+        // and nothing else.
         if (key.startsWith('sync.')) continue
+        if (/^(?:apply|save|delete|setDefault)Search(?:Filter|Favorite)$/.test(key)) continue
         found.set(key, [...(found.get(key) ?? []), path])
       }
     }

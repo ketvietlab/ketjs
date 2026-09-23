@@ -28,8 +28,10 @@ export type AnyRow = Record<string, unknown>
  * between a page that happens to be behind a login and one that says so.
  */
 export const viewerOf = async (ctx: ServeContext, url: URL, req: Req): Promise<Viewer | null> => {
-  const sessions = await ctx.sessionsOf(url, req)
-  const record = await sessions?.of(req)
+  // The identity the rest of the request already runs as: a cookie session, or one a trusted
+  // gateway asserted. Reading the cookie alone left gateway logins without a viewer, so the
+  // sidebar lost the avatar and the only way to sign out.
+  const record = await ctx.requestIdentityOf(url, req)
   if (!record) return null
   const user = (await ctx.callUnchecked('user.getUser', { id: record.userId }, url, req)) as {
     name?: string
@@ -67,6 +69,14 @@ export const viewerOf = async (ctx: ServeContext, url: URL, req: Req): Promise<V
       ? `/admin/profile${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
       : null,
     timezone: user?.timezone && isTimezone(user.timezone) ? user.timezone : ctx.config.defaultTimezone,
+    // `POST /logout` only ends a KetJS cookie session. A gateway login signs out where the
+    // deployment says, and without one the control is hidden rather than pointing nowhere.
+    signOut:
+      record.origin === 'session'
+        ? { action: '/logout' }
+        : ctx.signOutPath
+          ? { action: ctx.signOutPath }
+          : null,
   }
 }
 
@@ -88,7 +98,7 @@ export type FrameOptions = {
  * The shell's half of a screen.
  *
  * `sidebar.foot` is skipped for a navigation fragment on purpose: the foot sits
- * outside `[data-ui="sidebar-main"]`, so it is not one of the slots the client
+ * outside the `backend.sidebar-main` navigation slot, so it is not one of the slots the client
  * replaces, and rendering its islands would build markup the browser discards.
  */
 export const frameOf = async (
@@ -103,6 +113,7 @@ export const frameOf = async (
   const lang = ctx.localeOf(url, req)
   return {
     navigation,
+    collectionUrl: url.pathname + url.search,
     viewer: await viewerOf(ctx, url, req),
     menu: await ctx.menu(menuUrl, req),
     // The sidebar's search is in the URL like every other list's, so a filtered

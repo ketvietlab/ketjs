@@ -14,8 +14,6 @@ import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 
 export const HOOKS = [
-  'sidebar',
-  'sidebar-main',
   'sidebar-search',
   'sidebar-search-icon',
   'sidebar-search-input',
@@ -54,6 +52,11 @@ export type Viewer = {
   contextPath?: string | null
   profilePath?: string | null
   timezone?: string
+  /**
+   * Where the sign-out form posts. Absent keeps `POST /logout`; null hides the control, for an
+   * identity whose sign-out the deployment has not declared.
+   */
+  signOut?: { action: string } | null
 }
 
 export type Indicator = {
@@ -302,12 +305,14 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
                   </span>
                 </a>
               )}
-              <form data-ui="signout" method="post" action="/logout">
-                <button data-ui="signout-button" type="submit">
-                  {icon('log-out')}
-                  <span data-ui="signout-label">{_('backend.signOut')}</span>
-                </button>
-              </form>
+              {viewer.signOut !== null && (
+                <form data-ui="signout" method="post" action={viewer.signOut?.action ?? '/logout'}>
+                  <button data-ui="signout-button" type="submit">
+                    {icon('log-out')}
+                    <span data-ui="signout-label">{_('backend.signOut')}</span>
+                  </button>
+                </form>
+              )}
             </div>
           </details>
         )}
@@ -316,10 +321,11 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
   )
 }
 
-export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => {
-  return (
-    <aside data-ui="sidebar">
-      <div data-ui="sidebar-main">{sidebarMain(_, options)}</div>
-    </aside>
-  )
-}
+/**
+ * The sidebar content for the design-system `AppShell`'s `sidebar` region.
+ *
+ * @deprecated The KetSuite shell renders `AppShell` itself, which supplies the
+ * `app-sidebar` region; call `sidebarMain`. Kept so existing imports keep working
+ * without the legacy `sidebar` and `sidebar-main` wrappers.
+ */
+export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => sidebarMain(_, options)

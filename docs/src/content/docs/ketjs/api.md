@@ -18,6 +18,8 @@ details.
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
 | `@ketvietlab/ketjs-view/jsx-runtime` | Automatic JSX runtime. |
 | `@ketvietlab/ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
+| `@ketvietlab/ketjs-view-tools` | Static page rendering, asset bundling, local development, preview, and project validation. |
+| `@ketvietlab/create-view` | Runnable static Ket view project generator. |
 | `@ketvietlab/ketjs-postgres` | Optional PostgreSQL adapter. |
 
 All packages require Node.js 24 or later for their supported server/tooling use. `@ketvietlab/ketjs-view` has no runtime
