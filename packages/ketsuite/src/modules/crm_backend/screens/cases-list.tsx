@@ -1,18 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
   pageTrailFromFrame,
   recordModalHref,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame, TableGroup } from '../../../ui/index.ts'
@@ -97,7 +96,7 @@ export const casesListScreen = (
   const groups = options.groups ?? []
   const total = options.total ?? options.rows.length
   const selection = options.table?.selection ?? frame.chrome?.selection
-  const hasActions = selection || frame.extras?.['topbar.end'] !== undefined
+  const _hasActions = selection || frame.extras?.['topbar.end'] !== undefined
 
   const prepared = prepareCollectionTable(
     _,
@@ -134,27 +133,8 @@ export const casesListScreen = (
           ''
         )
       }
-      actions={
-        hasActions
-          ? inline([selection ? bulkActions(_, selection) : '', frame.extras?.['topbar.end'] ?? ''])
-          : undefined
-      }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('crm_backend.cases.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame, undefined, selection)}
+      controls={collectionControls(_, _('crm_backend.cases.title'), frame)}
       status={`${_('crm_backend.cases.title')}: ${String(total)}`}
       body={
         options.rows.length || groups.length

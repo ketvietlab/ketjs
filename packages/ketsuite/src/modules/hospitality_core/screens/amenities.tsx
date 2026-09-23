@@ -8,6 +8,7 @@ import {
   collectionTable,
   emptyState,
   feedback,
+  type DataTable,
   type Frame,
   linkButton,
   modalForm,
@@ -31,12 +32,14 @@ export const amenitiesScreen = (
     errors?: readonly string[]
     values?: Record<string, string>
   },
+  /** What the route decided about the table, notably the groups it is read by. */
+  table?: Partial<DataTable<AmenityRow>>,
 ): TemplateResult => {
   const collection = prepareCollectionTable(
     _,
     frame,
-    { columns: amenityColumns(_), rows, id: (row) => row.id },
-    { paginate: true },
+    { columns: amenityColumns(_), rows, id: (row) => row.id, ...table },
+    { paginate: !table?.groups },
   )
   const list = (
     <ListScreenFrame
@@ -50,7 +53,7 @@ export const amenitiesScreen = (
       })}
       body={stack([
         feedback(_, state),
-        collection.table.rows.length
+        collection.table.rows.length || table?.groups?.length
           ? collectionTable(_, collection.table)
           : emptyState(
               _('hospitality_core.screen.amenities.empty'),

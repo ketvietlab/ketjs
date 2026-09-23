@@ -284,6 +284,12 @@ over a row of page numbers. Search, status filters and paging should keep the cu
 in the URL. The table, kanban, or empty state belongs in `body`. The product catalogue at
 `/admin/product/templates` is the reference integration for this composition.
 
+The KetSuite `listChrome`/`pagerBar` adapter accepts `Pager.totalLabel` for a localised or capped
+count (for example `10,000+`). Keep `total` numeric and derive `prev`/`next` from the query result,
+not the count cap; the standard command-bar pager then works beyond that cap without a second bar.
+The command toolbar bounds its trailing controls to the available width so long counts wrap controls
+instead of pushing the pager outside a compact viewport.
+
 ListChrome is one command bar: a bounded search field on the leading side, with filters and the
 result range clustered at the trailing edge. On compact widths search and paging stay on the first
 row; filters wrap on the row below. Bulk actions occupy space only when a selection exists.
@@ -509,3 +515,24 @@ panel.
 Cover shared components with contract tests and a representative rendered screen. Generated visual
 artifacts may be used locally for inspection, but they are not source documentation and should not be
 committed as PR evidence.
+
+### Client record dialog context and actions
+
+`RecordModalDialog.actions(context)` renders a nested dialog's own fixed footer. Use
+`RecordModalForm` with a stable `id` and footer buttons with the HTML `form` attribute,
+just as for the main record's `actions`. The runtime continues to own validation,
+submitting, busy state, layer-scoped drafts, focus and close confirmation. `hidden`
+allows a form to supply non-visible command inputs without rebuilding its markup.
+The form and trigger helpers are also exported from the browser `record-modal-client` entry.
+
+A modal may use `context.route(id, creating)` for a read-only, same-origin JSON context
+route instead of `context.fn`. That route returns `{ data, messages }` and composes
+its reads through `ServeContext.call` so each function retains its authorization and
+scope checks. It must not return server-rendered dialog HTML. The runtime handles
+loading, aborts and cache policy for either source.
+
+A successful command may declare `navigate(value, context)` for a same-origin
+location, for example a newly created record or a URL-backed collection filter. The
+runtime performs navigation only after the command succeeds; refusals retain the draft.
+
+Action-only record forms (`data-layout="actions"`) opt out of field-container sizing and retain their intrinsic button width inside a fixed footer. This contract belongs to the shared RecordForm stylesheet.

@@ -10,6 +10,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+import { adminUrl, live } from './postgres-live.ts'
 
 const clock = defineModule({
   name: 'clock',
@@ -49,25 +50,6 @@ const roundTrip = async (adapter: Adapter): Promise<Row> => {
   return (await callFn('clock.read', { id: 'e1' }, o)).value as Row
 }
 
-const configured =
-  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
-const adminUrl = new URL(configured)
-adminUrl.pathname = '/postgres'
-
-const reachable = await (async () => {
-  const adapter = postgresAdapter(adminUrl.toString())
-  try {
-    await adapter.open()
-    await adapter.all('SELECT 1')
-    await adapter.close()
-    return true
-  } catch {
-    await adapter.close().catch(() => {})
-    return false
-  }
-})()
-const live = { skip: reachable ? false : `no PostgreSQL at ${adminUrl.toString()}` }
-
 test('datetime: a stored instant is ISO-8601 UTC text, whatever offset was written', async (t) => {
   const adapter = sqliteAdapter()
   await adapter.open()
@@ -84,9 +66,12 @@ test('datetime: both datastores answer with the same bytes', live, async () => {
   const databaseUrl = new URL(adminUrl)
   databaseUrl.pathname = `/${database}`
   const admin = postgresAdapter(adminUrl.toString(), { max: 1 })
-  await admin.open()
-  await admin.run(`CREATE DATABASE "${database}"`)
-  await admin.close()
+  try {
+    await admin.open()
+    await admin.run(`CREATE DATABASE "${database}"`)
+  } finally {
+    await admin.close().catch(() => {})
+  }
 
   const sqlite = sqliteAdapter()
   const postgres = postgresAdapter(databaseUrl.toString(), { max: 2 })

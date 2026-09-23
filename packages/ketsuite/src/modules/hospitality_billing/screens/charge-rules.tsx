@@ -7,6 +7,7 @@ import {
   type ChoiceRow,
   collectionTable,
   feedback,
+  type DataTable,
   type Frame,
   linkButton,
   modalForm,
@@ -36,6 +37,8 @@ export const chargeRulesScreen = (
     errors?: readonly string[]
     values?: Record<string, string>
   },
+  /** What the route decided about the table, notably the groups it is read by. */
+  table?: Partial<DataTable<ChargeRuleRow>>,
 ): TemplateResult => {
   const collection = prepareCollectionTable(
     _,
@@ -45,8 +48,9 @@ export const chargeRulesScreen = (
       rows,
       id: (row) => row.chargeType,
       rowHref: modal?.rowHref,
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   const list = (
     <ListScreenFrame

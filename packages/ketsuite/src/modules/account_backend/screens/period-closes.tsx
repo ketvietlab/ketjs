@@ -1,24 +1,25 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  Disclosure,
+  collectionActions,
+  collectionControls,
   collectionTable,
   dataTable,
+  Disclosure,
   emptyState,
-  RecordScreen,
   icon,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
+  RecordScreen,
   RecordWorkspace,
   Section,
   shell,
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormField, Frame } from '../../../ui/index.ts'
+import type { DataTable, FormField, Frame } from '../../../ui/index.ts'
 
 type Row = Record<string, unknown>
 const closeBadge = (_: Translator, state: unknown) => {
@@ -44,6 +45,8 @@ export const periodClosesListScreen = (
     action: string
     fields: FormField[]
     rowHref: (row: Row) => string
+    /** What the search-filter bar decided about the table, such as its groups. */
+    table?: Partial<DataTable<Row>>
     errors?: string[]
   },
 ): TemplateResult => {
@@ -79,8 +82,9 @@ export const periodClosesListScreen = (
           align: 'end',
         },
       ],
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   return shell(
     _,
@@ -92,7 +96,7 @@ export const periodClosesListScreen = (
       controls={collectionControls(_, _('account_backend.close.title'), collection.frame)}
       description={_('account_backend.close.subtitle')}
       footer={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       body={stack([
         <Disclosure
           summary={_('account_backend.close.create')}
@@ -119,7 +123,7 @@ export const periodClosesListScreen = (
             />
           }
         />,
-        options.rows.length ? (
+        options.rows.length || options.table?.groups?.length ? (
           collectionTable(_, collection.table)
         ) : (
           <Surface

@@ -215,6 +215,8 @@ test('flow project routes: the list pages, and says how many there really are', 
   // The real total, not the length of what is on screen. Both numbers used to
   // be the same because the screen reported the second as the first.
   assert.match(first, /51/)
+  // The pager keeps the locale now that the bar owns the collection URL; it
+  // used to drop it, which sent a reader of the second page back to Vietnamese.
   assert.match(first, /href="\/admin\/flow\/projects\?lang=en&amp;page=2"/)
 
   const second = await (await app.client.get('/admin/flow/projects?page=2&lang=en')).text()

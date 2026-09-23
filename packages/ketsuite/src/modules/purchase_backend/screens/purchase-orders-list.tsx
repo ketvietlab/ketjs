@@ -1,7 +1,14 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
+import {
+  collectionControls,
+  emptyState,
+  icon,
+  linkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { emptyState, icon, ListPage, linkButton, listChrome, shell } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
 import {
   purchaseOrderListColumns,
@@ -22,12 +29,17 @@ export const purchaseOrdersListScreen = (
   _: Translator,
   options: PurchaseOrdersListScreenOptions,
 ): TemplateResult => {
-  const collection = prepareCollectionTable(_, options.frame, {
-    rows: options.rows,
-    columns: purchaseOrderListColumns(_),
-    id: (row) => String(row.id),
-    ...options.table,
-  })
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      columns: purchaseOrderListColumns(_),
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const summary = `${_('purchase_backend.dashboard.records')}: ${String(total)}`
 
@@ -38,22 +50,7 @@ export const purchaseOrdersListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('purchase_backend.orders.title')}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.orders.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      controls={collectionControls(_, _('purchase_backend.orders.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length

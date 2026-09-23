@@ -78,6 +78,9 @@ async function bootSale(t: TestContext) {
   return { e2e, call }
 }
 
+/** A `sale_backend.*` key where the reader would see it, rather than in props. */
+const VISIBLE_KEY = /(?:>|placeholder="|aria-label="|title=")[^<"]*sale_backend\.[A-Za-z]/u
+
 test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) => {
   const { e2e, call } = await bootSale(t)
   await call('sale.setInvoicePolicy', { templateId: 'goods', invoicePolicy: 'delivery' })
@@ -161,7 +164,9 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     assert.equal(response.status, 200, path)
     const html = await response.text()
     assert.match(html, expected, path)
-    assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
+    // No message key reaches the reader as text. The search-filter bar names
+    // the functions it calls in its island props, which is data, not a key.
+    assert.doesNotMatch(html, VISIBLE_KEY, path)
     if (path === '/admin/sales/orders') {
       assert.match(html, /data-ui="list-page"/)
       assert.match(html, /data-ui="kt-grid"/)
@@ -214,7 +219,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   const salesDashboardHtml = await salesDashboard.text()
   assert.match(salesDashboardHtml, /Tạo báo giá/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
-  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=draft"/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;preset=draft"/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/orders\?lang=vi"/)
 
   const legacyInvalidRedirect = await e2e.client.post(
@@ -418,7 +423,7 @@ test('sale-e2e: a quotation can lose a line and come back from cancelled', async
   const detailHtml = await detail.text()
   assert.match(detailHtml, /name="lineId" value="so-ux:a"/)
   assert.match(detailHtml, /Thao tác/)
-  assert.doesNotMatch(detailHtml, /sale_backend\.[A-Za-z]/)
+  assert.doesNotMatch(detailHtml, VISIBLE_KEY)
 
   const removed = await post('/admin/sales/quotations/so-ux?lang=vi', {
     action: 'remove-line',
@@ -439,7 +444,7 @@ test('sale-e2e: a quotation can lose a line and come back from cancelled', async
   const listedHtml = await listed.text()
   assert.match(listedHtml, /so-ux/)
   assert.match(listedHtml, /Đã huỷ/)
-  assert.doesNotMatch(listedHtml, /sale_backend\.[A-Za-z]/)
+  assert.doesNotMatch(listedHtml, VISIBLE_KEY)
 
   const cancelledDetail = await e2e.client.get('/admin/sales/quotations/so-ux?lang=vi', {
     headers: { accept: 'text/html' },
@@ -454,7 +459,7 @@ test('sale-e2e: a quotation can lose a line and come back from cancelled', async
   const backHtml = await back.text()
   assert.match(backHtml, /Add line/)
   assert.doesNotMatch(backHtml, /Set to draft/)
-  assert.doesNotMatch(backHtml, /sale_backend\.[A-Za-z]/)
+  assert.doesNotMatch(backHtml, VISIBLE_KEY)
 })
 
 test('sale-e2e: the print group is translated and reaches the lists', async (t) => {

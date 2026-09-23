@@ -1,6 +1,7 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { menus } from './menus.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'company_backend',
@@ -12,6 +13,7 @@ export default defineModule({
   category: 'Hệ thống',
   routes,
   menus,
+  functions: searchFilterFunctions,
   messages: {
     vi: {
       'app.title': 'Công ty và chi nhánh',

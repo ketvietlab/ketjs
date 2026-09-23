@@ -136,6 +136,22 @@ export type RecordModalContext<Data> = {
 /** Attachments a command uploaded before its function ran, by form field. */
 export type RecordUploads = Record<string, { id: string; name: string | null }>
 
+/** Read-only context routes compose permission-checked function calls on the server. */
+export const readRecordContextRoute = async <Data,>(
+  href: string,
+  signal?: AbortSignal,
+): Promise<RecordCallResult<Data | null>> => {
+  const url = new URL(href, location.href)
+  if (url.origin !== location.origin) throw new Error('Record context must stay same-origin')
+  const response = await fetch(url.href, {
+    credentials: 'same-origin',
+    signal,
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) return { ok: false, issues: [], message: null, status: response.status }
+  return { ok: true, value: (await response.json()) as Data | null }
+}
+
 /** One extra call of a multi-step command — see `RecordModalCommand.also`. */
 export type RecordModalCommandStep<Data> = {
   fn: string
@@ -150,6 +166,8 @@ export type RecordModalCommandStep<Data> = {
 
 export type RecordModalCommand<Data> = {
   fn: string
+  /** Same-origin destination after a successful command; evaluated by the runtime. */
+  navigate?: (value: unknown, context: RecordModalContext<Data>) => string
   /** Map server paths to stable native field names using the submitted snapshot. */
   issueField?: (field: string, form: FormData, context: RecordModalContext<Data>) => string
   /** Map the submitted form to the function's input. */
@@ -201,6 +219,8 @@ export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
   size?: 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
+  /** Fixed actions for this dialog layer, outside its scrolling body. */
+  actions?: (context: RecordModalContext<Data>) => JSXChild
 }
 
 export type RecordModalDefinition<Data> = {
@@ -218,7 +238,9 @@ export type RecordModalDefinition<Data> = {
    * the default input is `{}` (no id): the read returns the empty record's defaults,
    * the choices its form needs and the viewer's permissions.
    */
-  context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+  context:
+    | { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+    | { route: (id: string, creating: boolean) => string; query?: readonly string[] }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
   /**
@@ -575,18 +597,17 @@ export const createRecordModal =
       failure.set(null)
       try {
         const creating = id === RECORD_NEW_ID
-        const input = definition.context.input
-          ? definition.context.input(id, creating)
-          : creating
-            ? {}
-            : { id }
-        const result = await callRecordFunction<RecordContextEnvelope<Data> | null>(
-          definition.context.fn,
-          input,
-          {
-            signal: controller.signal,
-          },
-        )
+        const result =
+          'route' in definition.context
+            ? await readRecordContextRoute<RecordContextEnvelope<Data>>(
+                definition.context.route(id, creating),
+                controller.signal,
+              )
+            : await callRecordFunction<RecordContextEnvelope<Data> | null>(
+                definition.context.fn,
+                definition.context.input ? definition.context.input(id, creating) : creating ? {} : { id },
+                { signal: controller.signal },
+              )
         if (controller.signal.aborted) return
         if (!result.ok || !result.value) {
           failure.set(result.ok ? 'recordModal.notFound' : (result.message ?? 'recordModal.loadFailed'))
@@ -864,6 +885,14 @@ export const createRecordModal =
             }),
           )
         }
+        if (command.navigate) {
+          const destination = new URL(command.navigate(result.value, context), location.href)
+          if (destination.origin !== location.origin)
+            throw new Error('Record navigation must stay same-origin')
+          hide('none')
+          location.assign(destination.href)
+          return
+        }
         const after = after_(command)
         // A modal that closes says so by closing; one that stays owes an answer.
         if (after !== 'close') saved.set(true)
@@ -994,6 +1023,7 @@ export const createRecordModal =
         presentation: 'dialog',
         size: spec.size ?? 'default',
         title: spec.title(context),
+        actions: spec.actions?.(context),
         closeLabel: t('recordModal.close'),
         body: (
           <>
@@ -1115,6 +1145,23 @@ export const createRecordModal =
             if (!target || target.kind !== definition.kind) return
             event.preventDefault()
             const current = open()
+            const contextQuery = 'route' in definition.context ? (definition.context.query ?? []) : []
+            const previousUrl = new URL(location.href)
+            const changedContext = contextQuery.some(
+              (key) => previousUrl.searchParams.get(key) !== url.searchParams.get(key),
+            )
+            if (changedContext) {
+              // These keys belong to the context reader (for example item pagination).
+              // Preserve collection filters and record drafts while replacing this slice.
+              keepDrafts(recordLayer(), 'record')
+              for (const key of contextQuery) {
+                const value = url.searchParams.get(key)
+                if (value === null) previousUrl.searchParams.delete(key)
+                else previousUrl.searchParams.set(key, value)
+              }
+              history.replaceState(history.state ?? {}, '', previousUrl.href)
+              if (current?.id === target.id) void load(current.id)
+            }
             if (current?.id === target.id) {
               if ((target.tab ?? '') === current.tab) return
               // Switching tab is not discarding: what was typed rides along as drafts,
@@ -1367,3 +1414,12 @@ export {
   recordModalClosedHref,
   readRecordModalTarget,
 }
+
+export {
+  RecordModalForm,
+  RecordActionForm,
+  RecordCloseTrigger,
+  RecordDialogTrigger,
+  RecordCommandForm,
+  recordStateSelectControl,
+} from './record-modal-form.tsx'

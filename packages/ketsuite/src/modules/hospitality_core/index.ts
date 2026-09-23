@@ -14,6 +14,7 @@ import { messages } from './messages.ts'
 import { models } from './models.ts'
 import { relations } from './relations.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'hospitality_core',
@@ -35,6 +36,7 @@ export default defineModule({
     ...services,
     ...nightAuditFunctions,
     ...stayNoticeFunctions,
+    ...searchFilterFunctions,
   },
   jobs: { ...nightAuditJobs, ...stayNoticeJobs },
   routes,
