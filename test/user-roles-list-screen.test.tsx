@@ -28,14 +28,14 @@ test('roles list uses ListPage with row navigation and collection actions', () =
           },
         ],
         createHref: '/admin/roles/new?lang=en',
-        presetsHref: '/admin/permission-presets?lang=en',
       },
     ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-row-href="\/admin\/roles\/manager%2Fa\?lang=en"/)
   assert.match(html, /href="\/admin\/roles\/new\?lang=en"/)
-  assert.match(html, /href="\/admin\/permission-presets\?lang=en"/)
+  // The legacy preset path is gone: a role is built from a template, not a preset.
+  assert.doesNotMatch(html, /permission-presets/)
   assert.match(html, /v2/)
   assert.match(html, />4</)
   assert.match(html, /user_backend\.health\.stale-managed-role/)

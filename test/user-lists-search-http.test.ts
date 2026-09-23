@@ -82,22 +82,11 @@ test('identity lists HTTP: the bar replaces the GET search and drives the same U
   assert.match(await (await app.client.get(open[1]!.replaceAll('&amp;', '&'))).text(), /data-ui="kt-row"/)
 })
 
-test('identity lists HTTP: roles carry the bar and read its presets', async (t) => {
+test('identity lists HTTP: custom role administration remains unavailable', async (t) => {
   const app = await boot(t)
-  const roles = await app.client.get(`${ROLES}?lang=vi`)
-  const html = await roles.text()
-  assert.equal(roles.status, 200)
-  assert.match(html, /data-island="backend\.search-filter"/)
-  assert.match(html, /data-row="manager"/)
-  assert.doesNotMatch(
-    await (await app.client.get(`${ROLES}?lang=vi&preset=managed`)).text(),
-    /data-row="manager"/,
-  )
-  assert.match(await (await app.client.get(`${ROLES}?lang=vi&preset=custom`)).text(), /data-row="manager"/)
-  assert.match(
-    await (await app.client.get(`${ROLES}?lang=vi&preset=unassigned`)).text(),
-    /data-row="manager"/,
-  )
+  const html = await (await app.client.get(`${ROLES}?lang=vi`)).text()
+  assert.doesNotMatch(html, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(html, /data-row="manager"/)
 })
 
 test('identity lists HTTP: the bar applies and saves searches through the shared functions', async (t) => {

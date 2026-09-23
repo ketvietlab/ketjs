@@ -123,13 +123,36 @@ test('provisioning hires a person: the account, the workplace and every role in 
   assert.deepEqual((entry.metadata as { roleIds?: string[] })?.roleIds, ['reader', 'second'])
 })
 
-test('provisioning refuses without a reason, without a role, or against a stale revision', async (t) => {
+test('provisioning without a role creates a person who works somewhere and may do nothing', async (t) => {
+  const { run, revisionOf } = await boot(t)
+  const result = await run<Provisioned>('user.provisionUser', provision(await revisionOf(), { roleIds: [] }))
+  assert.equal(result.ok, true, JSON.stringify(result.errors ?? result))
+
+  const [person] = await run<Row[]>('user.listUsers', { search: 'minhtrang' })
+  assert.equal(person?.login, 'minhtrang')
+  // The workplace is theirs, so a role can be given there later without adding one.
+  const context = await run<{ data: { memberships: { companies: string[] } } }>('user.userModalContext', {
+    id: 'minh-trang',
+  })
+  assert.deepEqual(context.data.memberships.companies, ['company-a'])
+  // No role is no function: nothing was granted on the way in.
+  const access = await run<{ functions: Array<{ key: string }> }>('user.effectiveAccess', {
+    userId: 'minh-trang',
+  })
+  assert.deepEqual(access.functions, [])
+  // The hire is still written down, as what it was.
+  const audit = await run<Row[]>('user.listAuthorizationAudit', { targetId: 'minh-trang' })
+  assert.ok(audit.some((row) => String(row.event) === 'authorization.user.created'))
+  assert.ok(!audit.some((row) => String(row.event) === 'authorization.assignment.created'))
+})
+
+test('provisioning refuses without a reason, with a role it may not give, or against a stale revision', async (t) => {
   const { run, revisionOf } = await boot(t)
   const revision = await revisionOf()
 
   for (const [field, overrides] of [
     ['reason', { reason: '   ' }],
-    ['roleIds', { roleIds: [] }],
+    ['roleIds', { roleIds: ['no-such-role'] }],
     ['expectedAuthorizationRevision', { expectedAuthorizationRevision: revision + 5 }],
   ] as const) {
     const refused = await run<Provisioned>(
