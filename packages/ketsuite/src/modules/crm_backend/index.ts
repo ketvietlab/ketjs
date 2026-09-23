@@ -20,7 +20,7 @@ export default defineModule({
   fills: {
     'crm_backend:screen.pipeline': `{% island "crm.pipeline" %}`,
     // The configuration record modals: closed hosts that open a record from its link.
-    'backend:runtime': Object.keys(CONFIGURATION_MODAL_ISLANDS)
+    'backend:runtime': ['crm.case-modal', ...Object.keys(CONFIGURATION_MODAL_ISLANDS)]
       .map((name) => `{% island "${name}" %}`)
       .join(''),
     'partner_backend:record.salesActions': `<a data-ui="action" data-variant="secondary" href="/admin/crm/cases/new?kind=lead&amp;partnerId={{ partnerId }}&amp;lang={{ lang }}"><span data-ui="action-label">{{ 'crm_backend.action.createLead' | _ }}</span></a>`,
@@ -41,20 +41,7 @@ export default defineModule({
       sequence: 20,
       needs: 'crm.case.list',
     },
-    'crm.activities': {
-      parent: 'crm',
-      label: 'menu.activities',
-      path: '/admin/crm/activities',
-      sequence: 35,
-      needs: 'crm.activity.schedule',
-    },
-    'crm.leaderboard': {
-      parent: 'crm',
-      label: 'menu.leaderboard',
-      path: '/admin/crm/leaderboard',
-      sequence: 50,
-      needs: 'crm.gamification.list',
-    },
+    // Temporarily omit Activities and Leaderboard from navigation; their routes remain available.
     'crm.configuration': {
       parent: 'crm',
       label: 'menu.configuration',

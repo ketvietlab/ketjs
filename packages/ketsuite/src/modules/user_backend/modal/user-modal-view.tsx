@@ -15,6 +15,7 @@ import {
   DataTable,
   DescriptionList,
   Notice,
+  LinkButton,
   RecordSummary,
   Section,
   Stack,
@@ -110,7 +111,13 @@ const field = (c: Context, props: Omit<FieldProps, 'id'>): FieldProps => ({
 /** A select whose choice changes what the rest of the form offers, before anything is submitted. */
 const stateSelect = (
   c: Context,
-  props: { name: string; label: string; value: string; options: FieldOption[]; required?: boolean },
+  props: {
+    name: string
+    label: string
+    value: string
+    options: FieldOption[]
+    required?: boolean
+  },
 ): FieldProps => {
   const base = field(c, {
     name: props.name,
@@ -152,7 +159,13 @@ const createFields = (c: Context): FieldProps[] => {
   return [
     field(c, { name: 'name', label: t(c, 'field.name'), required: true }),
     field(c, { name: 'login', label: t(c, 'field.login'), required: true }),
-    field(c, { name: 'email', label: t(c, 'field.email'), type: 'email', required: true, span: 'full' }),
+    field(c, {
+      name: 'email',
+      label: t(c, 'field.email'),
+      type: 'email',
+      required: true,
+      span: 'full',
+    }),
     stateSelect(c, {
       name: 'scopeKind',
       label: t(c, 'field.scope'),
@@ -186,7 +199,10 @@ const createFields = (c: Context): FieldProps[] => {
             required: true,
             options: c.data.branches
               .filter((branch) => String(branch.companyId) === companyId)
-              .map((branch) => ({ value: String(branch.id), label: String(branch.name) })),
+              .map((branch) => ({
+                value: String(branch.id),
+                label: String(branch.name),
+              })),
           }),
         ]
       : []),
@@ -243,24 +259,53 @@ const createView = (c: Context): JSXChild =>
           kind: c.kind,
           fields: createFields(c),
           command: 'create',
-          actions: [Button({ label: t(c, 'action.createUser'), variant: 'primary', type: 'submit' })],
+          actions: [
+            Button({
+              label: t(c, 'action.createUser'),
+              variant: 'primary',
+              type: 'submit',
+            }),
+          ],
         }),
       }),
     ],
   })
 
 const profileFields = (c: Context): FieldProps[] => [
-  field(c, { name: 'name', label: t(c, 'field.name'), value: c.data.record.name, required: true }),
-  field(c, { name: 'login', label: t(c, 'field.login'), value: c.data.record.login, required: true }),
-  field(c, { name: 'email', label: t(c, 'field.email'), type: 'email', value: c.data.record.email }),
+  field(c, {
+    name: 'name',
+    label: t(c, 'field.name'),
+    value: c.data.record.name,
+    required: true,
+  }),
+  field(c, {
+    name: 'login',
+    label: t(c, 'field.login'),
+    value: c.data.record.login,
+    required: true,
+  }),
+  field(c, {
+    name: 'email',
+    label: t(c, 'field.email'),
+    type: 'email',
+    value: c.data.record.email,
+  }),
   field(c, {
     name: 'accessKind',
     label: t(c, 'field.accessKind'),
     type: 'select',
     value: c.data.record.accessKind,
-    options: ACCESS_KINDS.map((kind) => ({ value: kind, label: t(c, `access.${kind}`) })),
+    options: ACCESS_KINDS.map((kind) => ({
+      value: kind,
+      label: t(c, `access.${kind}`),
+    })),
   }),
-  field(c, { name: 'active', label: t(c, 'state.active'), type: 'checkbox', value: c.data.record.active }),
+  field(c, {
+    name: 'active',
+    label: t(c, 'state.active'),
+    type: 'checkbox',
+    value: c.data.record.active,
+  }),
 ]
 
 const companyFieldName = (companyId: string): string => `company_${companyId}`
@@ -331,7 +376,10 @@ const workplaceFields = (c: Context): FieldProps[] => {
       type: 'select',
       required: true,
       value: c.data.record.defaultBranchId ?? '',
-      options: offeredBranches.map((branch) => ({ value: String(branch.id), label: String(branch.name) })),
+      options: offeredBranches.map((branch) => ({
+        value: String(branch.id),
+        label: String(branch.name),
+      })),
     }),
     field(c, {
       name: 'workplaceReason',
@@ -362,7 +410,10 @@ const header = (c: Context): JSXChild =>
             ? [
                 RecordDialogTrigger({
                   dialog: 'edit',
-                  children: Button({ label: t(c, 'action.editProfile'), variant: 'secondary' }),
+                  children: Button({
+                    label: t(c, 'action.editProfile'),
+                    variant: 'secondary',
+                  }),
                 }),
               ]
             : [
@@ -382,7 +433,11 @@ const overviewTab = (c: Context): JSXChild => {
     body: DescriptionList({
       columns: 2,
       items: [
-        { id: 'email', label: t(c, 'field.email'), value: c.data.record.email || '—' },
+        {
+          id: 'email',
+          label: t(c, 'field.email'),
+          value: c.data.record.email || '—',
+        },
         {
           id: 'state',
           label: t(c, 'field.state'),
@@ -391,8 +446,16 @@ const overviewTab = (c: Context): JSXChild => {
             tone: c.data.record.active ? 'positive' : 'neutral',
           }),
         },
-        { id: 'roles', label: t(c, 'field.rolesHeld'), value: String(c.data.assignments.length) },
-        { id: 'company', label: t(c, 'field.company'), value: company ? String(company) : '—' },
+        {
+          id: 'roles',
+          label: t(c, 'field.rolesHeld'),
+          value: String(c.data.assignments.length),
+        },
+        {
+          id: 'company',
+          label: t(c, 'field.company'),
+          value: company ? String(company) : '—',
+        },
       ],
     }),
   })
@@ -411,7 +474,11 @@ const assignmentGroups = (c: Context): Array<{ key: string; title: string; rows:
   const groups = new Map<string, { key: string; title: string; rows: AnyRow[] }>()
   for (const row of c.data.assignments) {
     const key = String(row.scopeKey ?? 'tenant')
-    const group = groups.get(key) ?? { key, title: scopeName(c, row), rows: [] }
+    const group = groups.get(key) ?? {
+      key,
+      title: scopeName(c, row),
+      rows: [],
+    }
     group.rows.push(row)
     groups.set(key, group)
   }
@@ -428,7 +495,10 @@ const accessTab = (c: Context): JSXChild => {
         ? [
             RecordDialogTrigger({
               dialog: 'assign',
-              children: Button({ label: t(c, 'action.assignRole'), variant: 'primary' }),
+              children: Button({
+                label: t(c, 'action.assignRole'),
+                variant: 'primary',
+              }),
             }),
           ]
         : [
@@ -483,7 +553,10 @@ const assignFields = (c: Context): FieldProps[] => {
       label: t(c, 'field.scope'),
       value: scopeKind,
       required: true,
-      options: c.data.scopeKinds.map((kind) => ({ value: kind, label: t(c, `scope.choice.${kind}`) })),
+      options: c.data.scopeKinds.map((kind) => ({
+        value: kind,
+        label: t(c, `scope.choice.${kind}`),
+      })),
     }),
     ...(scopeKind === 'tenant'
       ? []
@@ -508,7 +581,10 @@ const assignFields = (c: Context): FieldProps[] => {
             required: true,
             options: c.data.branches
               .filter((branch) => String(branch.companyId) === companyId)
-              .map((branch) => ({ value: String(branch.id), label: String(branch.name) })),
+              .map((branch) => ({
+                value: String(branch.id),
+                label: String(branch.name),
+              })),
           }),
         ]
       : []),
@@ -566,10 +642,19 @@ const coverage = (c: Context, covered: number, total: number): string =>
 const previewPanel = (c: Context, command: string): JSXChild => {
   const preview = c.outcome<Preview>(command)
   if (!preview) return ''
-  if (!preview.ok) return Notice({ tone: 'warning', title: t(c, 'preview.unavailable'), message: '' })
+  if (!preview.ok)
+    return Notice({
+      tone: 'warning',
+      title: t(c, 'preview.unavailable'),
+      message: '',
+    })
   const contexts = preview.contexts ?? []
   if (!contexts.length)
-    return Notice({ tone: 'info', title: t(c, 'preview.noChange'), message: t(c, 'preview.noChangeHint') })
+    return Notice({
+      tone: 'info',
+      title: t(c, 'preview.noChange'),
+      message: t(c, 'preview.noChangeHint'),
+    })
   return Stack({
     gap: 'compact',
     items: contexts.flatMap((entry): JSXChild[] => [
@@ -583,7 +668,13 @@ const previewPanel = (c: Context, command: string): JSXChild => {
           ]
         : []),
       ...(entry.superuser
-        ? [Notice({ tone: 'info', title: t(c, 'preview.superuser'), message: '' })]
+        ? [
+            Notice({
+              tone: 'info',
+              title: t(c, 'preview.superuser'),
+              message: '',
+            }),
+          ]
         : entry.bundles.length
           ? [
               DataTable<PreviewBundle>({
@@ -609,7 +700,13 @@ const previewPanel = (c: Context, command: string): JSXChild => {
                 ],
               }),
             ]
-          : [Notice({ tone: 'info', title: t(c, 'preview.noChange'), message: '' })]),
+          : [
+              Notice({
+                tone: 'info',
+                title: t(c, 'preview.noChange'),
+                message: '',
+              }),
+            ]),
     ]),
   })
 }
@@ -663,15 +760,28 @@ const coverageOf = (c: Context, roleId: string): AnyRow[] => c.data.roleCoverage
 /** The role as held: what it covers, where it applies, and the form that takes it back. */
 const roleDialog = (c: Context): JSXChild => {
   const assignment = c.data.assignments.find((row) => String(row.id) === String(c.dialog?.params.id ?? ''))
-  if (!assignment) return Notice({ tone: 'info', title: t(c, 'users.noAssignments'), message: '' })
+  if (!assignment)
+    return Notice({
+      tone: 'info',
+      title: t(c, 'users.noAssignments'),
+      message: '',
+    })
   return Stack({
     gap: 'default',
     items: [
       DescriptionList({
         columns: 2,
         items: [
-          { id: 'role', label: t(c, 'field.assignment'), value: String(assignment.roleName) },
-          { id: 'scope', label: t(c, 'field.scope'), value: scopeName(c, assignment) },
+          {
+            id: 'role',
+            label: t(c, 'field.assignment'),
+            value: String(assignment.roleName),
+          },
+          {
+            id: 'scope',
+            label: t(c, 'field.scope'),
+            value: scopeName(c, assignment),
+          },
         ],
       }),
       // What the role is for, not only where it applies.
@@ -760,6 +870,14 @@ const loginTab = (c: Context): JSXChild => {
   return Stack({
     gap: 'default',
     items: [
+      ...(c.data.permissions.identities
+        ? [
+            LinkButton({
+              label: t(c, 'login.identities'),
+              href: `/admin/oauth/identities?${new URLSearchParams({ user: c.id, lang: c.data.lang })}`,
+            }),
+          ]
+        : []),
       Section({
         title: t(c, 'login.accountTitle'),
         body: DescriptionList({
@@ -773,7 +891,11 @@ const loginTab = (c: Context): JSXChild => {
                 tone: c.data.record.passwordReady ? 'positive' : 'warning',
               }),
             },
-            { id: 'login', label: t(c, 'field.login'), value: c.data.record.login },
+            {
+              id: 'login',
+              label: t(c, 'field.login'),
+              value: c.data.record.login,
+            },
             {
               id: 'lastLogin',
               label: t(c, 'login.lastSignIn'),
@@ -797,7 +919,13 @@ const loginTab = (c: Context): JSXChild => {
                   }),
                   DescriptionList({
                     columns: 1,
-                    items: [{ id: 'token', label: t(c, 'login.oneTimeLabel'), value: issued.token }],
+                    items: [
+                      {
+                        id: 'token',
+                        label: t(c, 'login.oneTimeLabel'),
+                        value: issued.token,
+                      },
+                    ],
                   }),
                 ],
               }),
@@ -823,13 +951,21 @@ const loginTab = (c: Context): JSXChild => {
                 ],
                 command: 'resetPassword',
                 actions: [
-                  Button({ label: t(c, 'action.resetPassword'), variant: 'primary', type: 'submit' }),
+                  Button({
+                    label: t(c, 'action.resetPassword'),
+                    variant: 'primary',
+                    type: 'submit',
+                  }),
                 ],
               }),
             }),
           ]
         : [
-            Notice({ tone: 'info', title: t(c, 'users.readOnlyTitle'), message: t(c, 'login.readOnlyHint') }),
+            Notice({
+              tone: 'info',
+              title: t(c, 'users.readOnlyTitle'),
+              message: t(c, 'login.readOnlyHint'),
+            }),
           ]),
     ],
   })
@@ -842,7 +978,11 @@ const auditTab = (c: Context): JSXChild =>
         rows: c.data.audit,
         id: (row) => String(row.id),
         columns: [
-          { key: 'when', label: t(c, 'audit.when'), cell: (row) => String(row.occurredAt ?? '—') },
+          {
+            key: 'when',
+            label: t(c, 'audit.when'),
+            cell: (row) => String(row.occurredAt ?? '—'),
+          },
           {
             key: 'event',
             label: t(c, 'audit.action'),
@@ -854,7 +994,11 @@ const auditTab = (c: Context): JSXChild =>
             label: t(c, 'field.assignment'),
             cell: (row) => (row.roleIds as string[]).map((id) => roleNameOf(c, id)).join(' · ') || '—',
           },
-          { key: 'reason', label: t(c, 'field.reason'), cell: (row) => String(row.reason ?? '—') },
+          {
+            key: 'reason',
+            label: t(c, 'field.reason'),
+            cell: (row) => String(row.reason ?? '—'),
+          },
           {
             key: 'outcome',
             label: t(c, 'audit.outcome'),
@@ -866,7 +1010,11 @@ const auditTab = (c: Context): JSXChild =>
           },
         ],
       })
-    : Notice({ tone: 'info', title: t(c, 'audit.empty'), message: t(c, 'audit.emptyHint') })
+    : Notice({
+        tone: 'info',
+        title: t(c, 'audit.empty'),
+        message: t(c, 'audit.emptyHint'),
+      })
 
 /** A role named by what it is called, falling back to the id it was recorded under. */
 const roleNameOf = (c: Context, roleId: string): string =>
@@ -932,7 +1080,10 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   ],
   dialogs: {
     assign: { title: (c) => t(c, 'action.assignRole'), view: assignDialog },
-    role: { title: (c) => String(openAssignment(c).roleName ?? ''), view: roleDialog },
+    role: {
+      title: (c) => String(openAssignment(c).roleName ?? ''),
+      view: roleDialog,
+    },
     edit: {
       title: (c) => t(c, 'action.editProfile'),
       view: (c) =>
@@ -945,7 +1096,13 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
                 kind: c.kind,
                 fields: profileFields(c),
                 command: 'save',
-                actions: [Button({ label: t(c, 'action.save'), variant: 'primary', type: 'submit' })],
+                actions: [
+                  Button({
+                    label: t(c, 'action.save'),
+                    variant: 'primary',
+                    type: 'submit',
+                  }),
+                ],
               }),
             }),
             // Its own form and its own command: who a person is and where they work

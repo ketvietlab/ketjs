@@ -59,7 +59,12 @@ const assignableRoles = async (ctx: Ctx): Promise<Row[]> =>
         template.digest === role.templateDigest
       )
     })
-    .map((role): Row => ({ id: String(role.id), name: String(role.name ?? role.id) }))
+    .map(
+      (role): Row => ({
+        id: String(role.id),
+        name: String(role.name ?? role.id),
+      }),
+    )
     .sort(byName)
 
 /**
@@ -159,7 +164,10 @@ const authorizationAuditOf = async (ctx: Ctx, userId: string): Promise<Row[]> =>
       .limit(AUDIT_PAGE),
   )
   return rows.map((row): Row => {
-    const metadata = (row.metadata ?? {}) as { roleIds?: unknown; roleId?: unknown }
+    const metadata = (row.metadata ?? {}) as {
+      roleIds?: unknown
+      roleId?: unknown
+    }
     const roleIds = Array.isArray(metadata.roleIds)
       ? metadata.roleIds.map(String)
       : metadata.roleId
@@ -258,6 +266,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
         resetPassword: can('user.issueAuthToken'),
         audit: can('user.listAuthorizationAudit'),
         workplaces: can('user.setWorkplaces'),
+        identities: Boolean(ctx.manifest.functions['oauth.listIdentities']) && can('oauth.listIdentities'),
       }
       const creating = !args.id
       // The modal is a read of a person, so it answers only a viewer allowed that read:
@@ -299,9 +308,11 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
                 companies: (await ctx.db.select('user.Membership', { userId: args.id })).map((row) =>
                   String(row.companyId),
                 ),
-                branches: (await ctx.db.select('user.BranchMembership', { userId: args.id })).map((row) =>
-                  String(row.branchId),
-                ),
+                branches: (
+                  await ctx.db.select('user.BranchMembership', {
+                    userId: args.id,
+                  })
+                ).map((row) => String(row.branchId)),
               },
           companies,
           branches,

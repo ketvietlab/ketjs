@@ -10,6 +10,7 @@ import {
   LinkButton,
   ListPage,
   pageTrailFromFrame,
+  recordModalHref,
   prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
@@ -23,6 +24,7 @@ export type CasesListScreenOptions = {
   groups?: TableGroup<CaseListRow>[]
   /** Omitted when the reader may list records but may not create one. */
   createHref?: string
+  recordBase?: string
   locale?: string
   total?: number
   table?: Partial<DataTable<CaseListRow>>
@@ -105,7 +107,11 @@ export const casesListScreen = (
       groups,
       responsive: 'stack',
       id: (row) => String(row.id),
-      rowHref: (row) => localized(`/admin/crm/cases/${String(row.id)}`, options.locale ?? ''),
+      rowHref: (row) =>
+        recordModalHref(options.recordBase ?? localized('/admin/crm/cases', options.locale ?? ''), {
+          kind: 'crm.case',
+          id: String(row.id),
+        }),
       ...options.table,
     },
     { paginate: false },
