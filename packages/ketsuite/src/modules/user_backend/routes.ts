@@ -253,7 +253,7 @@ export const routes: Record<string, RouteEntry> = {
         recordModalHref(new URL(safeUserReturnTo(url, url.searchParams.get('returnTo')), url), {
           kind: 'user.user',
           id: params.id,
-          tab: url.searchParams.get('tab') ?? 'profile',
+          tab: url.searchParams.get('tab') ?? 'overview',
         }),
       )
     },
