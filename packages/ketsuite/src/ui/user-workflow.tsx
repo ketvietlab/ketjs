@@ -1,4 +1,5 @@
 import type { JSXChild } from '@ketvietlab/ketjs-view'
+import { button, linkButton } from './actions.tsx'
 import { formField, formFields } from './form.tsx'
 import { icon } from './icons.ts'
 
@@ -30,19 +31,34 @@ export type UserWorkflowOptions = {
 const hidden = (name: string, value: string) => (
   <input type="hidden" name={name} value={value} autocomplete="off" />
 )
-export const RoleSelection = ({ roles, selected }: { roles: UserRoleOption[]; selected: string[] }) => (
-  <div class="user-role-picker">
-    <label class="user-role-search">
-      Tìm vai trò
-      <input type="search" data-role-search placeholder="Tìm theo công việc" autocomplete="off" />
+export const RoleSelection = ({
+  roles,
+  selected,
+  error,
+}: {
+  roles: UserRoleOption[]
+  selected: string[]
+  error?: string | null
+}) => (
+  <div class="user-role-picker" data-invalid={String(!!error)}>
+    <label class="user-role-search" data-ui="form-field" data-kind="search" data-span="full">
+      <span data-ui="form-label">Tìm vai trò</span>
+      <input
+        data-ui="form-control"
+        type="search"
+        data-role-search
+        placeholder="Tìm theo công việc"
+        autocomplete="off"
+      />
     </label>
     {roles.length === 0 ? (
       <p>Chưa có vai trò khả dụng. Có thể gán vai trò sau khi danh mục được cập nhật.</p>
     ) : null}
-    <div class="user-role-grid">
+    <div class="user-role-grid" data-ui="form-options" role="group" aria-label="Vai trò công việc">
       {roles.map((r) => (
-        <label class="user-role-option" data-role-option>
+        <label class="user-role-option" data-ui="form-option" data-role-option>
           <input
+            data-ui="form-option-input"
             type="checkbox"
             name={`role.${r.id}`}
             value="on"
@@ -51,6 +67,8 @@ export const RoleSelection = ({ roles, selected }: { roles: UserRoleOption[]; se
             checked={selected.includes(r.id)}
             disabled={r.disabled || r.assigned}
             autocomplete="off"
+            aria-invalid={error ? 'true' : null}
+            aria-describedby={error ? 'field-workflow-roleIds-error' : null}
           />
           <span>
             <strong>{r.name}</strong>
@@ -67,6 +85,11 @@ export const RoleSelection = ({ roles, selected }: { roles: UserRoleOption[]; se
     <p data-role-empty hidden>
       Không có vai trò phù hợp.
     </p>
+    {error ? (
+      <small data-ui="form-error" id="field-workflow-roleIds-error">
+        {error}
+      </small>
+    ) : null}
   </div>
 )
 export const UserSummary = ({
@@ -253,9 +276,9 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
               'record',
             )}
             <div class="user-email-status" data-email-status role="status" aria-live="polite" />
-            <button type="button" data-email-retry hidden>
-              Kiểm tra lại
-            </button>
+            <span data-email-retry hidden>
+              {button({ label: 'Kiểm tra lại', name: 'emailRetry', variant: 'tertiary' })}
+            </span>
           </section>
         ) : null}
         {(mode === 'create' && o.step === 1) || (mode === 'assign' && !o.review) ? (
@@ -263,14 +286,29 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
             <h2>Nơi áp dụng</h2>
             {scopeFields}
             {mode === 'assign' ? (
-              <label class="user-check">
+              <label
+                class="user-check"
+                data-ui="form-field"
+                data-kind="checkbox"
+                data-invalid={String(!!o.fieldErrors?.addMembership)}
+              >
                 <input
+                  data-ui="form-control"
                   type="checkbox"
                   name="addMembership"
                   checked={v.addMembership === 'on'}
                   autocomplete="off"
+                  aria-invalid={o.fieldErrors?.addMembership ? 'true' : null}
+                  aria-describedby={
+                    o.fieldErrors?.addMembership ? 'field-workflow-addMembership-error' : null
+                  }
                 />
-                Thêm nơi làm việc còn thiếu
+                <span data-ui="form-label">Thêm nơi làm việc còn thiếu</span>
+                {o.fieldErrors?.addMembership ? (
+                  <small data-ui="form-error" id="field-workflow-addMembership-error">
+                    {o.fieldErrors.addMembership}
+                  </small>
+                ) : null}
               </label>
             ) : (
               <p>Tư cách thành viên chưa đủ để sử dụng nghiệp vụ. Vai trò xác định công việc được phép.</p>
@@ -281,7 +319,7 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
           <section>
             <h2>Vai trò công việc</h2>
             <p>Có thể chọn nhiều vai trò có sẵn cho cùng nơi làm việc.</p>
-            <RoleSelection roles={o.roles} selected={selected} />
+            <RoleSelection roles={o.roles} selected={selected} error={o.fieldErrors?.roleIds} />
           </section>
         ) : null}
         {mode === 'create' && o.step === 3 ? (
@@ -342,39 +380,49 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
           : null}
         <footer class="user-action-bar">
           <div>
-            {mode === 'assign' && o.review ? (
-              <button type="submit" name="command" value="edit" formNoValidate>
-                Quay lại
-              </button>
-            ) : null}
-            {mode === 'create' && o.step > 0 ? (
-              <button type="submit" name="step" value={String(o.step - 1)} formNoValidate>
-                Quay lại
-              </button>
-            ) : null}
+            {mode === 'assign' && o.review
+              ? button({
+                  label: 'Quay lại',
+                  type: 'submit',
+                  name: 'command',
+                  value: 'edit',
+                  formNoValidate: true,
+                })
+              : null}
+            {mode === 'create' && o.step > 0
+              ? button({
+                  label: 'Quay lại',
+                  type: 'submit',
+                  name: 'step',
+                  value: String(o.step - 1),
+                  formNoValidate: true,
+                })
+              : null}
           </div>
           <div>
-            <a href={o.cancelHref}>Hủy</a>
-            {mode === 'create' && o.step < 3 ? (
-              <button class="primary" type="submit" name="step" value={String(o.step + 1)} data-email-next>
-                Tiếp tục
-              </button>
-            ) : (
-              <button
-                class="primary"
-                type="submit"
-                name="command"
-                value={mode === 'assign' && !o.review ? 'preview' : 'confirm'}
-              >
-                {mode === 'create'
-                  ? 'Tạo người dùng'
-                  : mode === 'assign'
-                    ? o.review
-                      ? 'Xác nhận gán vai trò'
-                      : 'Tiếp tục'
-                    : 'Xác nhận gỡ vai trò'}
-              </button>
-            )}
+            {linkButton({ label: 'Hủy', href: o.cancelHref })}
+            {mode === 'create' && o.step < 3
+              ? button({
+                  label: 'Tiếp tục',
+                  type: 'submit',
+                  name: 'step',
+                  value: String(o.step + 1),
+                  variant: 'primary',
+                })
+              : button({
+                  label:
+                    mode === 'create'
+                      ? 'Tạo người dùng'
+                      : mode === 'assign'
+                        ? o.review
+                          ? 'Xác nhận gán vai trò'
+                          : 'Tiếp tục'
+                        : 'Xác nhận gỡ vai trò',
+                  type: 'submit',
+                  name: 'command',
+                  value: mode === 'assign' && !o.review ? 'preview' : 'confirm',
+                  variant: 'primary',
+                })}
           </div>
         </footer>
       </form>
