@@ -1,0 +1,8 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="formatted-date"],
+  :where([data-kv-design-system]) [data-ui="formatted-number"],
+  :where([data-kv-design-system]) [data-ui="formatted-money"] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}

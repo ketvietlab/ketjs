@@ -94,6 +94,27 @@ lookup that ignores the company finds a row it can never write — the update th
 changes nothing, and reports success. Every read of these two models is narrowed to the active company
 before it reaches a screen or a write.
 
+## Attribute management
+
+`/admin/product/attributes` uses the shared collection table: compact search across attribute and value
+names, display-type and variant-policy filters, pagination, column controls and a create action beside the title. Each row previews up to three
+values and opens `product.attribute` in a record modal over the current collection URL.
+
+The single-view modal edits the name, display type, variant policy and ordered values together. The
+public `ReorderList` supports drag-and-drop and move-up/down buttons; color attributes expose an
+optional `AttributeValue.htmlColor` value. Structural edits and field drafts survive view changes and
+validation refusals, and closing a changed record asks before discarding it.
+
+`product.attributeModalContext` checks read/create permissions and returns the complete ordered draft.
+`product.saveAttributeDraft` requires configuration permission and saves the parent and values in one
+transaction. An attribute may have no values. Supplied values must have distinct, nonblank names;
+colors use six-digit hexadecimal notation. Existing value IDs remain stable. Values referenced by a
+template cannot be removed, and an attribute used by a template cannot change its variant policy.
+The legacy POST endpoints remain available for compatibility; the modal uses the atomic command.
+
+Focused coverage lives in `test/product-attribute-draft.test.ts`, `test/product-attributes-screen.test.tsx`
+and the attribute modal and reorder-list tests.
+
 ## Variants
 
 `generateVariants` takes the cartesian product of the template's attribute lines, skipping attributes

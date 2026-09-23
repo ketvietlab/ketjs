@@ -43,16 +43,15 @@ test('live island: the connection belongs to the element, and follows a swap', (
   // with the old element rather than outliving it.
   assert.match(behaviour, /if \(region === watched\) return/u)
   assert.match(behaviour, /^ {4}close\(\)$/mu)
-  assert.match(
-    behaviour,
-    /new MutationObserver\(sync\)\.observe\(document\.body, \{ childList: true, subtree: true \}\)/u,
-  )
+  assert.match(behaviour, /const observer = new MutationObserver\(sync\)/u)
+  assert.match(behaviour, /observer\.observe\(document\.body, \{ childList: true, subtree: true \}\)/u)
+  assert.match(behaviour, /observer\.disconnect\(\)/u)
 })
 
 test('live island: what a chunk says is not this layer to read', () => {
   // The screen is server-rendered: the way to learn what changed is to ask for
   // it, so any message is the same message.
-  assert.match(behaviour, /const refresh = \(\) => navigateTo\(location\.href\)/u)
+  assert.match(behaviour, /const refresh = \(\) => navigateTo\(location\.href, navigation\)/u)
   assert.match(behaviour, /source\.onmessage = refresh/u)
 })
 

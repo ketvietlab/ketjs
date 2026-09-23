@@ -11,7 +11,7 @@ import type { JointDef } from '@ketvietlab/ketjs'
  * `props` says what a fill receives, and receives nothing else.
  */
 export const joints: Record<string, JointDef> = {
-  /** Behaviour shared by every backend page, even when the screen has no topbar. */
+  /** Long-lived visual roots that must sit outside replaceable navigation slots. */
   runtime: { multiple: true },
   /** Function-backed relational selector; owning screens supply model-specific capabilities. */
   'relation.select': { props: { id: 'id', config: 'json' } },
@@ -21,6 +21,18 @@ export const joints: Record<string, JointDef> = {
    * props and nothing else — no context, no translator, no company currency.
    */
   'screen.chart': { props: { id: 'id', config: 'json' } },
+  /**
+   * A `KetTable` island (`@ketvietlab/design-system`) — sortable/paginated/
+   * selectable, and grouped when its config's `groupBy` is non-empty. Like
+   * `screen.chart`, the config is already computed, translated and formatted.
+   */
+  'table.grid': { props: { id: 'id', config: 'json' } },
+  /**
+   * A `search-filter` island (`@ketvietlab/design-system`) — the free-text
+   * search, filter menu and Group By picker for a screen's `table.grid`. Like
+   * `table.grid`, the config is already computed, translated and formatted.
+   */
+  'search.filter': { props: { id: 'id', config: 'json' } },
   /**
    * Sidebar entries, after the ones backend owns.
    *

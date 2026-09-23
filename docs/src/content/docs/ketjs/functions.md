@@ -6,6 +6,12 @@ description: Define KetJS operations with checked signatures, explicit effects, 
 A server function is a named business operation. Its input, output, data reach, external effects,
 exposure, and safety properties are declared beside its handler and composed into the manifest.
 
+KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. KetSuite
+modules follow the [handler organization and migration rules](/ketsuite/module-development/): named
+handlers and descriptors grouped by capability, assembled with duplicate detection at
+`functions/index.ts`. The compact framework examples below illustrate the runtime contract, not an
+alternative layout for KetSuite modules.
+
 The generic `/_ket/fn` transport is not an automatic public API. `ServeSpec.resolveAudience` and `allowFor`
 classify callers before dispatch; an application facade should expose selected operations through owned HTTP
 routes. Idempotent calls are scoped by namespace and include a canonical request digest, so the same caller key

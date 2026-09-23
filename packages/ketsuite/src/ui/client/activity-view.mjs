@@ -269,12 +269,13 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       schedulePoll()
     }, 15_000)
   }
-  if (typeof window !== 'undefined')
-    queueMicrotask(async () => {
+  const mount = () => {
+    void (async () => {
       if (requests.disposed()) return
       await load()
       schedulePoll()
-    })
+    })()
+  }
 
   return {
     view: () => html`<section data-ui="activity-record" data-state=${status()} aria-label=${labels.title}>
@@ -355,6 +356,7 @@ export function createRecordActivityView(runtime, props, seed = {}) {
       )}
     </div>
   </section>`,
+    mount,
     dispose: () => {
       if (pollTimer !== null) clearTimeout(pollTimer)
       requests.dispose()
@@ -379,7 +381,6 @@ export function createActivityIndicatorView(runtime, props, initial = { count: 0
       overdue.set(0)
     }
   }
-  if (typeof window !== 'undefined') queueMicrotask(load)
   return {
     view: () => html`<a data-ui="activity-indicator" data-overdue=${overdue() > 0} href="/admin/activities" title=${labels.myActivities} aria-label=${labels.myActivities}>
     <svg data-ui="activity-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -388,6 +389,7 @@ export function createActivityIndicatorView(runtime, props, initial = { count: 0
     </svg>
     ${count() > 0 ? html`<span data-ui="activity-indicator-count">${count()}</span>` : ''}
   </a>`,
+    mount: () => void load(),
     dispose: requests.dispose,
   }
 }

@@ -4,6 +4,7 @@
 
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
+import { SVG_NAMESPACE } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
 import type { Markup } from './ssr.ts'
@@ -80,11 +81,18 @@ class Part {
   keys: unknown[] = []
   markupNodes: HostNode[] = []
   markupHtml = ''
+  /**
+   * The namespace of the element this part renders into. A hole inside an
+   * `<svg>` mounts its template through here, and its elements only draw when
+   * they are created in that namespace too.
+   */
+  namespace: string | undefined
 
-  constructor(host: Host, parent: HostNode, anchor: HostNode) {
+  constructor(host: Host, parent: HostNode, anchor: HostNode, namespace?: string) {
     this.host = host
     this.parent = parent
     this.anchor = anchor
+    this.namespace = namespace
   }
 
   clear(): void {
@@ -110,6 +118,15 @@ class Part {
   disposeBehavior(): void {
     this.child?.dispose(false)
     if (this.keyed) for (const instance of this.keyed.values()) instance.dispose(false)
+  }
+
+  firstNode(): HostNode {
+    if (this.kind === 'text' && this.node) return this.node
+    if (this.kind === 'result' && this.child) return this.child.firstNode() ?? this.anchor
+    if (this.kind === 'each' && this.keyed && this.keys.length)
+      return this.keyed.get(this.keys[0])?.firstNode() ?? this.anchor
+    if (this.kind === 'markup' && this.markupNodes.length) return this.markupNodes[0] as HostNode
+    return this.anchor
   }
 
   commit(value: unknown): void {
@@ -156,7 +173,7 @@ class Part {
     this.clear()
     this.kind = 'result'
     this.child = new Instance(this.host, result.strings)
-    this.child.mount(this.parent, this.anchor)
+    this.child.mount(this.parent, this.anchor, this.namespace)
     this.child.update(result.values)
   }
 
@@ -258,7 +275,7 @@ class Part {
       } else {
         if (inst) inst.remove()
         inst = new Instance(this.host, result.strings)
-        inst.mount(this.parent, nextAnchor)
+        inst.mount(this.parent, nextAnchor, this.namespace)
         inst.update(result.values)
         keyed.set(key, inst)
       }
@@ -345,8 +362,9 @@ class Instance {
     this.tpl = templateFor(strings)
   }
 
-  mount(parent: HostNode, anchor: HostNode | null): void {
-    const build = (node: TplNode, target: HostNode): void => {
+  /** `into` is the namespace of `parent`: set when this template is mounted inside an `<svg>`. */
+  mount(parent: HostNode, anchor: HostNode | null, into?: string): void {
+    const build = (node: TplNode, target: HostNode, namespace?: string): void => {
       const atRoot = target === parent
       if (node.type === 'text') {
         const t = this.host.createText(node.value)
@@ -358,10 +376,15 @@ class Instance {
         const marker = this.host.createText('')
         this.host.insert(target, marker, atRoot ? anchor : null)
         if (atRoot) this.roots.push(marker)
-        this.parts[node.index] = new Part(this.host, target, marker)
+        this.parts[node.index] = new Part(this.host, target, marker, namespace)
         return
       }
-      const el = this.host.createElement((node as TplEl).tag)
+      const tag = (node as TplEl).tag
+      // SVG elements are only drawn when they are created in the SVG namespace.
+      // Server-rendered markup gets this from the HTML parser; a client render
+      // builds every node itself, so it has to carry the namespace down.
+      const childNamespace = tag === 'svg' ? SVG_NAMESPACE : tag === 'foreignObject' ? undefined : namespace
+      const el = this.host.createElement(tag, childNamespace)
       for (const a of (node as TplEl).attrs) {
         if (a.hole == null) {
           this.host.setAttribute(el, a.name, a.value ?? '')
@@ -373,9 +396,9 @@ class Instance {
       }
       this.host.insert(target, el, atRoot ? anchor : null)
       if (atRoot) this.roots.push(el)
-      for (const c of (node as TplEl).children) build(c, el)
+      for (const c of (node as TplEl).children) build(c, el, childNamespace)
     }
-    for (const n of this.tpl.children) build(n, parent)
+    for (const n of this.tpl.children) build(n, parent, into)
   }
 
   update(values: unknown[]): void {
@@ -401,7 +424,10 @@ class Instance {
   }
 
   firstNode(): HostNode | null {
-    return this.roots[0] ?? null
+    const first = this.roots[0]
+    if (!first) return null
+    for (const part of this.parts) if (part instanceof Part && part.anchor === first) return part.firstNode()
+    return first
   }
 
   nextSibling(): HostNode | null {

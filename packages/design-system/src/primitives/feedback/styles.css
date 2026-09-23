@@ -1,0 +1,164 @@
+@layer ket.app {
+  /*
+   * One line by default — an icon, then title and message flowing together as
+   * a single sentence ("Saved: the change is in."), not a heading over a
+   * paragraph. `notice-copy` wraps on its own when a message is genuinely too
+   * long for the width available, so nothing is lost for a longer error list;
+   * it just stops reading as "one line" for that one case.
+   */
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] {
+    display: flex;
+    flex-wrap: wrap;
+    /* `flex-start`, not `center`: once a narrow width wraps the message onto its
+       own line, centering would float the icon between the two lines instead of
+       beside the first one. */
+    align-items: flex-start;
+    gap: var(--kv-space-1) var(--kv-space-2);
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border: 1px solid var(--kv-color-line);
+    border-left: 3px solid var(--kv-color-info);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-color-info-soft);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="positive"] {
+    border-left-color: var(--kv-color-positive);
+    background: var(--kv-color-positive-soft);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="warning"] {
+    border-left-color: var(--kv-color-warning);
+    background: var(--kv-color-warning-soft);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"][data-tone="danger"] {
+    border-left-color: var(--kv-color-danger);
+    background: var(--kv-color-danger-soft);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] {
+    display: inline-flex;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    align-items: center;
+    color: var(--kv-color-info);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="positive"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-positive);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="warning"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-warning);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="notice"][data-pattern="notice"][data-tone="danger"]
+    [data-ui="notice-mark"] {
+    color: var(--kv-color-danger);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-copy"] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.3em;
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"] {
+    margin: 0;
+    color: var(--kv-color-ink);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-semibold);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"]::after {
+    content: ":";
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-message"] {
+    margin: 0;
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
+    flex: none;
+    margin-left: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="empty"] {
+    display: grid;
+    min-height: 11rem;
+    place-items: center;
+    align-content: center;
+    padding: var(--kv-space-8);
+    color: var(--kv-color-ink-secondary);
+    text-align: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="empty-mark"] {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: var(--kv-space-3);
+    place-items: center;
+    border: 1px solid var(--kv-color-line-strong);
+    border-radius: 50%;
+    color: var(--kv-color-accent);
+    font-size: var(--kv-text-lg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="empty-title"] {
+    margin-bottom: var(--kv-space-1);
+    color: var(--kv-color-ink);
+    font-weight: 800;
+  }
+
+  :where([data-kv-design-system]) [data-ui="empty-message"] {
+    max-width: 34rem;
+    margin-bottom: 0;
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="empty-actions"] {
+    margin-top: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="loading"] {
+    display: grid;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="loading-label"] {
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-xs);
+    font-weight: 750;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 42rem) {
+    /* Flex-wrap already reflows icon/copy/actions onto their own lines as
+       needed; only the auto margin — meant to pin actions to the far end of
+       a shared row — needs to give way once actions wrap onto a row alone. */
+    :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
+      margin-left: 0;
+    }
+  }
+}

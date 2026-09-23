@@ -45,17 +45,16 @@ Framework đã export sẵn `isNavigationRequest()`, `NAVIGATION_HEADER`, `NAVIG
 — hiện chỉ [ui/layout.tsx](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/ui/layout.tsx) dùng. Đổi version
 protocol hôm nay là sửa 34 chỗ. Đây là việc cơ học, codemod được.
 
-### 2.2 `stock_backend` dùng giao thức partial cũ
+### 2.2 Form enhancement đã dùng chung navigation contract
 
-Ba bản `client/editor-view.mjs` (product, sale, stock) gần trùng nhau và đã trôi khỏi nhau:
+Ba bản `client/editor-view.mjs` (product, sale, stock) vẫn còn gần trùng nhau, nhưng không còn tự thay DOM:
 
-- `product_backend` và `sale_backend`: envelope `ket-fragments` + `globalThis.__ketNavigation.applyFragments`.
-- `stock_backend`: tự `querySelector('[data-ui="record-header"]')` rồi `replaceWith`
-  ([editor-view.mjs:48](https://github.com/ketvietlab/ketjs/blob/develop/packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs)).
+- cả ba được khai như module `behaviors`, nhận `BrowserNavigation` qua context;
+- response thành công và validation 422 đều đi qua `navigation.apply(response, { signal })`;
+- build ID, slot reconciliation, island state và history do KetJS sở hữu.
 
-Bản stock bỏ qua runtime navigation, không giữ state island, và bám vào `data-ui` — vốn là
-hợp đồng của đội design, không phải điểm neo cho JS. Nên đưa stock về giao thức
-`ket-fragments`, rồi gộp ba bản thành một helper trong `ui/client/`.
+Phần còn lại là gộp serialization, trạng thái saving/error và submit lifecycle thành một helper trong
+`ui/client/`; mỗi module chỉ nên truyền scope và copy riêng.
 
 ### 2.3 `x-ket-partial` là giao thức điều hướng thứ ba
 

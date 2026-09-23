@@ -1122,6 +1122,20 @@ is a build error, exactly like filling a joint nobody publishes.
 **Only islands hydrate.** The rest of the page stays inert markup, which is the
 point of rendering a theme to a string at all.
 
+**Two client contracts, not one overloaded component.** An island owns one local
+server-rendered tree. Its controller may `mount({ root, lifetime })` only after
+hydration and must release browser resources when that lifetime ends. Delegated
+shell actions and form interception span server-owned DOM, so modules declare
+them as browser behaviors with an optional selector instead of hiding them in an
+empty island. Behaviors receive the public navigation service directly; a shared
+mutable global is not an application contract.
+
+**A fragment and its runtime must be one build.** Responses carry `X-Ket-Build`.
+The browser refuses to combine a fragment from another build with its current
+controller code and performs a full navigation. This is part of correctness, not
+only cache invalidation: a new server prop shape cannot safely update an old
+client factory.
+
 **An API note worth keeping:** `hydrateIslands` first took the mount function as a
 parameter, and its first caller passed the one that BUILDS instead of the one that
 ADOPTS — so an island quietly rendered a second copy of itself beside the server's.
@@ -1152,6 +1166,12 @@ incident:
 comment marker per hole — nothing else. Everything but a hole has a length the
 template already knows, so the hydration walk can count nodes instead of reading
 markers for them.
+
+**Static output is a separate contract.** `renderToStaticString()` walks the same
+escaped template structure but omits markers outside explicit island hosts. It
+keeps them below either `<ket-island>` or `<div data-ket-island>` because only those
+subtrees are later adopted. This is decided from declared hydration boundaries,
+not guessed from whether a current interpolation happens to contain a signal.
 
 **Hydration adopts, it does not rebuild:** verified in a real browser, hydrating
 twenty server-rendered rows creates **zero** nodes and keeps the same node objects,
@@ -1281,8 +1301,7 @@ data in the manifest, so it arrives and leaves with the code that serves it, and
 // File: packages/ketsuite/src/modules/product_backend/menus.ts
 menus: {
   product: { label: 'menu.app', icon: '📦', sequence: 20 },
-  'product.catalogue': { parent: 'product', label: 'menu.catalogue' },
-  'product.templates': { parent: 'product.catalogue', label: 'menu.templates',
+  'product.templates': { parent: 'product', label: 'menu.templates',
                          path: '/admin/product/templates', needs: 'product.listTemplates' },
 }
 ```

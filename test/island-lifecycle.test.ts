@@ -1,40 +1,51 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { each, html, signal } from '@ketvietlab/ketjs-view'
-import { createProductEditorView } from '../packages/ketsuite/src/modules/product_backend/client/editor-view.mjs'
-import { createSaleEditorView } from '../packages/ketsuite/src/modules/sale_backend/client/editor-view.mjs'
-import { createStockEditorView } from '../packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs'
+import { productEditorBehavior } from '../packages/ketsuite/src/modules/product_backend/client/editor-view.mjs'
+import { saleEditorBehavior } from '../packages/ketsuite/src/modules/sale_backend/client/editor-view.mjs'
+import { stockEditorBehavior } from '../packages/ketsuite/src/modules/stock_backend/client/editor-view.mjs'
 import { createRecordActivityView } from '../packages/ketsuite/src/ui/client/activity-view.mjs'
 import { createChatterView } from '../packages/ketsuite/src/ui/client/mail-view.mjs'
 
 const runtime = { each, html, signal }
 
-test('editor islands remove their document submit listener when disposed', () => {
+test('record editor behaviors bind document submits to their browser lifetime', () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  const added: Array<[string, EventListener]> = []
-  const removed: Array<[string, EventListener]> = []
+  const added: Array<[string, EventListener, AddEventListenerOptions | boolean | undefined]> = []
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
     value: {
-      querySelectorAll: () => [],
-      addEventListener: (name: string, listener: EventListener) => added.push([name, listener]),
-      removeEventListener: (name: string, listener: EventListener) => removed.push([name, listener]),
+      addEventListener: (
+        name: string,
+        listener: EventListener,
+        options?: AddEventListenerOptions | boolean,
+      ) => added.push([name, listener, options]),
     },
   })
 
   try {
-    const product = createProductEditorView(runtime, {
-      identity: 'template:product-1',
-      templateId: 'product-1',
-      lang: 'vi',
-    })
-    const stock = createStockEditorView(runtime, { pickingId: 'picking-1', lang: 'vi' })
-    const sale = createSaleEditorView(runtime, { orderId: 'order-1', lang: 'vi' })
+    const lifetime = new AbortController()
+    const navigation = {
+      navigate: async () => {},
+      apply: async () => {},
+      replace: () => {},
+      reload: () => {},
+    }
+    const context = { navigation, lifetime: lifetime.signal }
+    const cleanups = [
+      productEditorBehavior(context),
+      stockEditorBehavior(context),
+      saleEditorBehavior(context),
+    ]
     assert.equal(added.length, 3)
-    product.dispose()
-    stock.dispose()
-    sale.dispose()
-    assert.deepEqual(removed, added)
+    assert.ok(
+      added.every(
+        ([name, , options]) =>
+          name === 'submit' && typeof options === 'object' && options.signal === lifetime.signal,
+      ),
+    )
+    lifetime.abort()
+    for (const cleanup of cleanups) cleanup?.()
   } finally {
     if (previous) Object.defineProperty(globalThis, 'document', previous)
     else Reflect.deleteProperty(globalThis, 'document')
@@ -67,6 +78,7 @@ test('a removed collaboration island aborts its active request', async () => {
       resId: 'product-1',
       lang: 'vi',
     })
+    chatter.mount()
     await new Promise<void>((resolve) => setImmediate(resolve))
     assert.ok(activeSignal, 'the initial collaboration request started')
     chatter.dispose()
@@ -115,6 +127,7 @@ test('a removed activity island clears its polling timer', async () => {
       resId: 'product-1',
       lang: 'vi',
     })
+    activity.mount()
     await new Promise<void>((resolve) => setImmediate(resolve))
     await new Promise<void>((resolve) => setImmediate(resolve))
     assert.ok(scheduled, 'polling starts after the initial activity request')

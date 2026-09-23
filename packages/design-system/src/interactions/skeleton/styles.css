@@ -1,0 +1,32 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="skeleton"] {
+    display: grid;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="skeleton-line"] {
+    height: 0.7rem;
+    border-radius: var(--kv-radius-xs);
+    background: linear-gradient(
+      90deg,
+      var(--kv-color-surface-subtle),
+      var(--kv-color-line),
+      var(--kv-color-surface-subtle)
+    );
+    background-size: 200% 100%;
+    animation: kv-skeleton-shimmer 1.5s var(--kv-ease-default) infinite;
+  }
+
+  :where([data-kv-design-system]) [data-ui="skeleton-line"][data-line="2"] {
+    width: 82%;
+  }
+  :where([data-kv-design-system]) [data-ui="skeleton-line"][data-line="3"] {
+    width: 58%;
+  }
+
+  @keyframes kv-skeleton-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+}

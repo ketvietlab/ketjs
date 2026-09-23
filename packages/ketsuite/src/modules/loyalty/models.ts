@@ -8,6 +8,13 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       programType: 'text',
       active: 'bool',
+      designVersion: 'int?',
+      configVersion: 'int?',
+      usageCount: 'int?',
+      phase: 'text?',
+      startDate: 'text?',
+      endDate: 'text?',
+      voucherValidityDays: 'int?',
       sequence: 'int',
       currency: 'text',
       dateFrom: 'datetime?',
@@ -207,6 +214,7 @@ export const models: Record<string, ModelDef> = {
       code: 'text',
       sequence: 'int',
       minimumSpend: 'decimal',
+      windowMonths: 'int?',
       redeemPercent: 'decimal',
       active: 'bool',
     },
@@ -245,6 +253,15 @@ export const models: Record<string, ModelDef> = {
       updatedAt: 'datetime',
     },
     indexes: { program: { fields: ['companyId', 'programId'], unique: true } },
+  },
+  // Retained as a storage-compatible legacy shape; tier evaluation reads Tier.windowMonths.
+  MembershipPolicy: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      windowMonths: 'int',
+      updatedAt: 'datetime',
+    },
   },
   Membership: {
     scope: 'company',

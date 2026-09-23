@@ -1,5 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
-import { adminFunctions } from './admin-functions.ts'
+import { guardedAdminFunctions, programDesignFunctions } from './program-design.ts'
 import { jobs, maintenanceFunctions } from './jobs.ts'
 import { membershipFunctions } from './membership-functions.ts'
 import { messages } from './messages.ts'
@@ -12,14 +12,15 @@ import { storedValueFunctions } from './stored-value.ts'
 export default defineModule({
   name: 'loyalty',
   version: '0.1.0',
-  depends: ['company', 'partner', 'product', 'pricing'],
+  depends: ['company', 'partner', 'product', 'pricing', 'stock'],
   title: 'Khách hàng thân thiết',
   summary: 'Chương trình ưu đãi, ví điểm, hạng thành viên và lịch sử bất biến.',
   category: 'Bán hàng',
   models,
   relations,
   functions: {
-    ...adminFunctions,
+    ...guardedAdminFunctions,
+    ...programDesignFunctions,
     ...orderFunctions,
     ...membershipFunctions,
     ...maintenanceFunctions,

@@ -101,13 +101,14 @@ test('modal guard: it runs on every way out, before the navigation layer', () =>
   // Capture phase: the close controls are ordinary links, so the guard has to
   // see the click before whatever handles navigation does. Formatting moves, so
   // read the call rather than its indentation.
-  const clickListener = island.slice(island.indexOf("addEventListener(\n    'click'"))
-  assert.ok(clickListener.startsWith('addEventListener('), 'the guard listens for clicks')
+  const routeModal = island.slice(island.indexOf('const installRouteModal'))
+  const clickListener = routeModal.slice(routeModal.indexOf("document.addEventListener(\n    'click'"))
+  assert.ok(clickListener.startsWith('document.addEventListener('), 'the guard listens for clicks')
   assert.match(
     clickListener
-      .slice(0, clickListener.indexOf("document.addEventListener('keydown'"))
+      .slice(0, clickListener.indexOf("document.addEventListener(\n    'click'", 1))
       .replace(/\s+/gu, ' '),
-    / true, \)/u,
+    /\{ capture: true, signal \}, \)/u,
     'registered on the capture phase',
   )
 })

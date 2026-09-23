@@ -1,5 +1,13 @@
 export const messages = {
   vi: {
+    'error.scheduleEnded': 'Lịch đã kết thúc; cập nhật ngày trước khi áp dụng.',
+    'error.conditionsRequired': 'Cần ít nhất một điều kiện hoặc nguồn nhóm tích điểm.',
+    'error.rewardsRequired': 'Cần ít nhất một phần thưởng đang dùng.',
+    'error.typeImmutable': 'Không đổi loại hoặc tiền tệ của chương trình đã tạo.',
+    'error.validityDays': 'Hiệu lực phiếu phải là số ngày nguyên lớn hơn 0.',
+    'error.productsRequired': 'Chọn ít nhất một sản phẩm thuộc phạm vi.',
+    'error.useConfiguration': 'Lưu qua cấu hình chương trình cùng phiên bản hiện tại.',
+
     'app.title': 'Khách hàng thân thiết',
     'app.summary': 'Chương trình ưu đãi, ví điểm, hạng thành viên và lịch sử bất biến.',
     'app.category': 'Bán hàng',
@@ -62,6 +70,14 @@ export const messages = {
     'ledger.description.reverse': 'Đảo giao dịch đơn hàng',
   },
   en: {
+    'error.scheduleEnded': 'The schedule has ended; update dates before activation.',
+    'error.conditionsRequired': 'Add a condition or an earning group source.',
+    'error.rewardsRequired': 'Add at least one enabled reward.',
+    'error.typeImmutable': 'Program type and currency cannot change after creation.',
+    'error.validityDays': 'Voucher validity must be a positive whole number of days.',
+    'error.productsRequired': 'Select at least one scoped product.',
+    'error.useConfiguration': 'Save through program configuration with its current version.',
+
     'app.title': 'Loyalty',
     'app.summary': 'Promotions, wallets, membership tiers, and an immutable ledger.',
     'app.category': 'Sales',

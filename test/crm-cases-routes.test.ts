@@ -162,7 +162,7 @@ test('crm cases routes: Partner intent prefills contact context and returns fiel
   assert.match(createHtml, /name="phone"[^>]*value="0909000123"/)
   assert.match(createHtml, /name="contactName"[^>]*value="Nguyễn Minh"/)
   assert.match(createHtml, /name="partnerIntent"[^>]*value="1"/)
-  assert.match(createHtml, /name="utmSource"[\s\S]*?value="pancake"[^>]*selected/)
+  assert.match(createHtml, /name="utmSource"[\s\S]*?value="marketplace"[^>]*selected/)
   assert.match(createHtml, /name="description"[^>]*required/)
   assert.match(createHtml, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
 

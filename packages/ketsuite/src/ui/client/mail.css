@@ -22,7 +22,7 @@
 
   [data-ui="chatter-title"] {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
 
   [data-ui="chatter-heading"],
@@ -36,7 +36,7 @@
   [data-ui="chatter-followers"],
   [data-ui="chatter-time"] {
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   [data-ui="chatter-follow"],
@@ -78,7 +78,7 @@
     align-items: center;
     gap: var(--admin-gap-xs);
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   [data-ui="chatter-body"] {
@@ -90,7 +90,7 @@
     background: var(--admin-surface);
     color: var(--admin-ink);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   [data-ui="chatter-compose-actions"] > div {
@@ -133,7 +133,7 @@
   [data-ui="chatter-attachments"] {
     margin: var(--admin-gap-sm) 0 0;
     padding-inline-start: 1.25rem;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
 
   [data-ui="chatter-deliveries"] {
@@ -153,7 +153,7 @@
     border-radius: 999px;
     background: var(--admin-surface);
     color: var(--admin-ink-secondary);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
   }
 

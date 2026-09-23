@@ -1,0 +1,38 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="attachments"] {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="attachment"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-3);
+    padding-block: var(--kv-space-2);
+    border-bottom: 1px solid var(--kv-panel-border);
+  }
+
+  :where([data-kv-design-system]) [data-ui="media-gallery"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="media-item"] {
+    display: grid;
+    gap: var(--kv-space-1);
+    min-width: 0;
+    margin: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="media-item"] :is(img, [role="img"]) {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-interactive-bg);
+  }
+}

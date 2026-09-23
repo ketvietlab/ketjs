@@ -123,8 +123,8 @@ test('flow issue detail: FormPage keeps record identity, collaboration and opera
 
   assert.match(html, /data-ui="form-page" data-scope="flow-issue-detail-form-page"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"/)
-  assert.match(textContent, /data-ui="form-page-title">Finish login/)
-  assert.match(textContent, /data-ui="form-page-description">Internal platform/)
+  assert.match(textContent, /data-ui="form-page-title"[^>]*>Finish login/)
+  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
   assert.match(textContent, /data-ui="form-page-status"[^>]*>.*Doing/)
   assert.match(textContent, /High/)
   assert.match(textContent, /Assignee: Administrator/)

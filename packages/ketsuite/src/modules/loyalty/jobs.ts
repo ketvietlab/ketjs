@@ -54,7 +54,6 @@ export const jobs: Record<string, JobSpec> = {
     input: { partnerId: 'id?', at: 'datetime?' },
     effects: [
       'read:partner.Partner',
-      'read:loyalty.MembershipConfig',
       'read:loyalty.SpendEntry',
       'read:loyalty.Tier',
       'read:loyalty.Wallet',

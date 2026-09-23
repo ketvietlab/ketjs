@@ -264,7 +264,7 @@ test('sale order partial keeps stable FormPage slots without duplicating collabo
 
 test('FormPage keeps a two-to-one rail and adds a gap after responsive wrapping', async () => {
   const css = await readFile(
-    new URL('../packages/design-system/src/patterns/patterns.css', import.meta.url),
+    new URL('../packages/design-system/src/patterns/form-page/styles.css', import.meta.url),
     'utf8',
   )
 

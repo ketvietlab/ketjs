@@ -1,5 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
+import { rowListSearch } from '../backend/row-list.ts'
+import { searchFilterFunctions } from './search-functions.ts'
+import {
+  accountListSearch,
+  closePeriodListSearch,
+  customerInvoiceListSearch,
+  generalLedgerLineSearch,
+  journalEntryListSearch,
+  journalListSearch,
+  openingBatchListSearch,
+  partnerLedgerLineSearch,
+  paymentListSearch,
+  paymentTermListSearch,
+  taxListSearch,
+  vendorBillListSearch,
+} from './search.ts'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { formatMoney, modalWorkspace } from '../../ui/index.ts'
@@ -9,9 +25,7 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
-  MOVE_STATES,
   PARTNER_TYPES,
-  PAYMENT_STATES,
   PAYMENT_TERM_DELAY_TYPES,
   PAYMENT_TERM_VALUES,
   PAYMENT_TYPES,
@@ -54,7 +68,7 @@ import {
   vendorBillsListScreen,
 } from './screens/index.ts'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -77,8 +91,8 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
 type AnyRow = Record<string, unknown>
 type Translator = ReturnType<ServeContext['translate']>
 
-/** How many rows an admin list renders before the reader has to narrow it down. */
-const LIST_PAGE = 200
+/** Seed the payment form picker; collection totals use complete sources. */
+const PAYMENT_PICKER_LIMIT = 200
 
 const succeeded = (result: unknown): boolean => (result as { ok?: boolean }).ok === true
 
@@ -337,22 +351,44 @@ const accountSummary = (rows: AnyRow[]) => {
   }
 }
 
-const accountGroups = (_: Translator, url: URL, rows: AnyRow[], grouped: boolean) => {
-  if (!grouped) return undefined
-  const groups = new Map<string, AnyRow[]>()
-  for (const row of rows) {
-    const type = String(row.accountType)
-    groups.set(type, [...(groups.get(type) ?? []), row])
-  }
-  return [...groups.entries()].map(([type, groupRows]) => ({
-    id: `type:${type}`,
-    label: labelOf(_, 'accountType', type),
-    count: groupRows.length,
-    depth: 0,
-    open: true,
-    href: withParam(url, 'group', null),
-    rows: groupRows,
-  }))
+/** One set of functions behind every accounting list's bar. */
+const accountSearchFunctions = {
+  apply: 'account_backend.applySearchFilter',
+  saveFavorite: 'account_backend.saveSearchFavorite',
+  deleteFavorite: 'account_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'account_backend.setDefaultSearchFavorite',
+}
+
+/**
+ * How a group header reads. Every enumerated field on these lists is labelled
+ * by a selection group whose name is the field's own, bar the two that differ.
+ */
+const accountGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return raw === 'false' ? _('account_backend.archived') : _('account_backend.active')
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const selection =
+    key === 'state' || key === 'moveType'
+      ? 'moveState'
+      : key === 'paymentState'
+        ? 'paymentState'
+        : key === 'type'
+          ? 'journalType'
+          : key
+  const label = labelOf(_, selection, raw)
+  return label === raw && key === 'moveType' ? labelOf(_, 'moveType', raw) : label
+}
+
+/** The slice of a narrowed list the reader's page shows, and its pager. */
+const listPage = <R>(
+  url: URL,
+  rows: readonly R[],
+  grouped: boolean,
+): { rows: R[]; pager: ReturnType<typeof pager> | null } => {
+  if (grouped) return { rows: [], pager: null }
+  const page = pageOf(url)
+  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  return { rows: shown, pager: pager(url, page, shown.length, rows.length) }
 }
 
 const saveAccount = async (
@@ -1250,6 +1286,7 @@ export default defineModule({
   // they open; payment-term milestones are visible and editable.
   version: '0.4.0',
   depends: ['account', 'backend'],
+  functions: searchFilterFunctions,
   joints: {
     'move.collaboration': {
       props: { resModel: 'text', resId: 'id', lang: 'text' },
@@ -1268,72 +1305,68 @@ export default defineModule({
       needs: 'account.listMoves',
       sequence: 1,
     },
-    'accounting.customers': { parent: 'accounting', label: 'menu.customers', sequence: 10 },
     'accounting.customerInvoices': {
-      parent: 'accounting.customers',
+      parent: 'accounting',
       label: 'menu.customerInvoices',
       path: '/admin/accounting/customer-invoices',
       needs: 'account.listMoves',
-      sequence: 10,
+      sequence: 1010,
     },
-    'accounting.vendors': { parent: 'accounting', label: 'menu.vendors', sequence: 20 },
     'accounting.vendorBills': {
-      parent: 'accounting.vendors',
+      parent: 'accounting',
       label: 'menu.vendorBills',
       path: '/admin/accounting/vendor-bills',
       needs: 'account.listMoves',
-      sequence: 10,
+      sequence: 2010,
     },
-    'accounting.operations': { parent: 'accounting', label: 'menu.operations', sequence: 30 },
     'accounting.entries': {
-      parent: 'accounting.operations',
+      parent: 'accounting',
       label: 'menu.entries',
       path: '/admin/accounting/entries',
       needs: 'account.listMoves',
-      sequence: 10,
+      sequence: 3010,
     },
     'accounting.payments': {
-      parent: 'accounting.operations',
+      parent: 'accounting',
       label: 'menu.payments',
       path: '/admin/accounting/payments',
       needs: 'account.listPayments',
-      sequence: 20,
+      sequence: 3020,
     },
-    'accounting.reporting': { parent: 'accounting', label: 'menu.reporting', sequence: 40 },
     'accounting.trialBalance': {
-      parent: 'accounting.reporting',
+      parent: 'accounting',
       label: 'menu.trialBalance',
       path: '/admin/accounting/trial-balance',
       needs: 'account.trialBalance',
-      sequence: 10,
+      sequence: 4010,
     },
     'accounting.generalLedger': {
-      parent: 'accounting.reporting',
+      parent: 'accounting',
       label: 'menu.generalLedger',
       path: '/admin/accounting/general-ledger',
       needs: 'account.generalLedger',
-      sequence: 20,
+      sequence: 4020,
     },
     'accounting.partnerStatement': {
-      parent: 'accounting.reporting',
+      parent: 'accounting',
       label: 'menu.partnerStatement',
       path: '/admin/accounting/partner-statement',
       needs: 'account.partnerStatement',
-      sequence: 30,
+      sequence: 4030,
     },
     'accounting.books': {
-      parent: 'accounting.reporting',
+      parent: 'accounting',
       label: 'menu.books',
       path: '/admin/accounting/books',
       needs: 'account.accountingBook',
-      sequence: 40,
+      sequence: 4040,
     },
     'accounting.periodCloses': {
-      parent: 'accounting.operations',
+      parent: 'accounting',
       label: 'menu.periodCloses',
       path: '/admin/accounting/period-closes',
       needs: 'account.listClosePeriods',
-      sequence: 30,
+      sequence: 3030,
     },
     'accounting.openingBalances': {
       parent: 'accounting.configuration',
@@ -1342,7 +1375,7 @@ export default defineModule({
       needs: 'account.listOpeningBatches',
       sequence: 5,
     },
-    'accounting.configuration': { parent: 'accounting', label: 'menu.configuration', sequence: 50 },
+    'accounting.configuration': { parent: 'accounting', label: 'menu.configuration', sequence: 5000 },
     'accounting.accounts': {
       parent: 'accounting.configuration',
       label: 'menu.accounts',
@@ -1512,127 +1545,37 @@ export default defineModule({
         const modalOpen =
           req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
         const formPath = accountModalPath(url, editing?.id ?? editingId(url))
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
-          ? url.searchParams.get('status')
-          : null
-        const family = ['asset', 'liability', 'profit'].includes(String(url.searchParams.get('family')))
-          ? url.searchParams.get('family')
-          : null
-        const grouped = url.searchParams.get('group') === 'type'
-        const needle = search?.toLocaleLowerCase()
-        const translate = needle ? ctx.translate(ctx.localeOf(url, req)) : null
-        const matching = all.filter((row) => {
-          const active = row.active === true
-          if (status === 'active' && !active) return false
-          if (status === 'archived' && active) return false
-          const type = String(row.accountType)
-          if (family === 'asset' && !type.startsWith('asset')) return false
-          if (family === 'liability' && !['liability', 'equity'].some((prefix) => type.startsWith(prefix)))
-            return false
-          if (family === 'profit' && !['income', 'expense'].some((prefix) => type.startsWith(prefix)))
-            return false
-          return (
-            !needle ||
-            `${String(row.code)} ${accountName(translate!, row)}`.toLocaleLowerCase().includes(needle)
-          )
-        })
-        const rows = grouped ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        // The reader's language decides what a standard account is called, so
+        // the name the bar searches and sorts is put on the row here rather
+        // than resolved again inside the filter.
+        const named = all.map((row) => ({
+          ...row,
+          displayName: accountName(ctx.translate(ctx.localeOf(url, req)), row),
+        }))
         return adminPage(ctx, url, req, {
           title: 'account_backend.accounts.title',
-          body: (_, frame) => {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: accountListSearch,
+              rows: named,
+              frame,
+              name: 'account-account-filter',
+              bodyId: 'account-account-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
             const workspace = accountsListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.accounts.title'),
-                    keep: {
-                      ...(status ? { status } : {}),
-                      ...(family ? { family } : {}),
-                      ...(grouped ? { group: 'type' } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(status
-                        ? [
-                            {
-                              label:
-                                status === 'active'
-                                  ? _('account_backend.active')
-                                  : _('account_backend.archived'),
-                              without: withParam(url, 'status', null),
-                            },
-                          ]
-                        : []),
-                      ...(family
-                        ? [
-                            {
-                              label: _(`account_backend.account.summary.${family}`),
-                              without: withParam(url, 'family', null),
-                            },
-                          ]
-                        : []),
-                      ...(grouped
-                        ? [
-                            {
-                              label: `${_('backend.chrome.groupBy')}: ${_('account_backend.field.accountType')}`,
-                              without: withParam(url, 'group', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          {
-                            id: 'status:active',
-                            label: _('account_backend.active'),
-                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
-                            active: status === 'active',
-                          },
-                          {
-                            id: 'status:archived',
-                            label: _('account_backend.archived'),
-                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
-                            active: status === 'archived',
-                          },
-                          ...(['asset', 'liability', 'profit'] as const).map((value) => ({
-                            id: `family:${value}`,
-                            label: _(`account_backend.account.summary.${value}`),
-                            path: withParam(url, 'family', family === value ? null : value),
-                            active: family === value,
-                          })),
-                        ],
-                      },
-                      {
-                        id: 'group',
-                        label: _('backend.chrome.groupBy'),
-                        items: [
-                          {
-                            id: 'group:type',
-                            label: _('account_backend.field.accountType'),
-                            path: withParam(url, 'group', grouped ? null : 'type'),
-                            active: grouped,
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  pager: grouped ? null : pager(url, page, rows.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows,
+              rows: shown.rows,
               createHref: accountModalPath(url),
               rowHref: (row) => accountModalPath(url, row.id),
               displayName: (row) => accountName(_, row),
               summary: accountSummary(all),
-              table: { groups: accountGroups(_, url, matching, grouped) },
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
             })
             if (!modalOpen) return workspace
             return modalWorkspace(
@@ -1684,91 +1627,26 @@ export default defineModule({
         const modalOpen =
           req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
         const formPath = journalModalPath(url, editing?.id ?? editingId(url))
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
-          ? url.searchParams.get('status')
-          : null
-        const type = JOURNAL_TYPES.includes(String(url.searchParams.get('type')) as never)
-          ? url.searchParams.get('type')
-          : null
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          const active = row.active === true
-          if (status === 'active' && !active) return false
-          if (status === 'archived' && active) return false
-          if (type && row.type !== type) return false
-          return !needle || `${String(row.code)} ${String(row.name)}`.toLocaleLowerCase().includes(needle)
-        })
-        const journals = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.journals.title',
           body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: journalListSearch,
+              rows: all,
+              frame,
+              name: 'account-journal-filter',
+              bodyId: 'account-journal-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
             const workspace = journalsListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.journals.title'),
-                    keep: {
-                      ...(status ? { status } : {}),
-                      ...(type ? { type } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(status
-                        ? [
-                            {
-                              label:
-                                status === 'active'
-                                  ? _('account_backend.active')
-                                  : _('account_backend.archived'),
-                              without: withParam(url, 'status', null),
-                            },
-                          ]
-                        : []),
-                      ...(type
-                        ? [
-                            {
-                              label: labelOf(_, 'journalType', type),
-                              without: withParam(url, 'type', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          {
-                            id: 'status:active',
-                            label: _('account_backend.active'),
-                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
-                            active: status === 'active',
-                          },
-                          {
-                            id: 'status:archived',
-                            label: _('account_backend.archived'),
-                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
-                            active: status === 'archived',
-                          },
-                          ...JOURNAL_TYPES.map((value) => ({
-                            id: `type:${value}`,
-                            label: labelOf(_, 'journalType', value),
-                            path: withParam(url, 'type', type === value ? null : value),
-                            active: type === value,
-                          })),
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, journals.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows: journals,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               accounts: data.accounts,
               createHref: journalModalPath(url),
               rowHref: (row) => journalModalPath(url, row.id),
@@ -1837,138 +1715,33 @@ export default defineModule({
               }),
           })
         }
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
-          ? url.searchParams.get('status')
-          : null
-        const use = TAX_USES.includes(String(url.searchParams.get('use')) as never)
-          ? url.searchParams.get('use')
-          : null
-        const computation = TAX_AMOUNT_TYPES.includes(String(url.searchParams.get('computation')) as never)
-          ? url.searchParams.get('computation')
-          : null
-        const included = url.searchParams.get('included') === '1'
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          const active = row.active === true
-          if (status === 'active' && !active) return false
-          if (status === 'archived' && active) return false
-          if (use && row.typeTaxUse !== use) return false
-          if (computation && row.amountType !== computation) return false
-          if (included && row.priceInclude !== true) return false
-          return (
-            !needle ||
-            `${String(row.name)} ${String(row.description ?? '')} ${String(row.amount)}`
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        })
-        const taxes = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.taxes.title',
-          body: (_, frame) =>
-            taxesListScreen(_, {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: taxListSearch,
+              rows: all,
+              frame,
+              name: 'account-tax-filter',
+              bodyId: 'account-tax-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
+            return taxesListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.taxes.title'),
-                    keep: {
-                      ...(status ? { status } : {}),
-                      ...(use ? { use } : {}),
-                      ...(computation ? { computation } : {}),
-                      ...(included ? { included: '1' } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(status
-                        ? [
-                            {
-                              label:
-                                status === 'active'
-                                  ? _('account_backend.active')
-                                  : _('account_backend.archived'),
-                              without: withParam(url, 'status', null),
-                            },
-                          ]
-                        : []),
-                      ...(use
-                        ? [
-                            {
-                              label: labelOf(_, 'taxUse', use),
-                              without: withParam(url, 'use', null),
-                            },
-                          ]
-                        : []),
-                      ...(computation
-                        ? [
-                            {
-                              label: labelOf(_, 'taxAmountType', computation),
-                              without: withParam(url, 'computation', null),
-                            },
-                          ]
-                        : []),
-                      ...(included
-                        ? [
-                            {
-                              label: _('account_backend.tax.summary.included'),
-                              without: withParam(url, 'included', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          {
-                            id: 'status:active',
-                            label: _('account_backend.active'),
-                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
-                            active: status === 'active',
-                          },
-                          {
-                            id: 'status:archived',
-                            label: _('account_backend.archived'),
-                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
-                            active: status === 'archived',
-                          },
-                          ...TAX_USES.map((value) => ({
-                            id: `use:${value}`,
-                            label: labelOf(_, 'taxUse', value),
-                            path: withParam(url, 'use', use === value ? null : value),
-                            active: use === value,
-                          })),
-                          ...TAX_AMOUNT_TYPES.map((value) => ({
-                            id: `computation:${value}`,
-                            label: labelOf(_, 'taxAmountType', value),
-                            path: withParam(url, 'computation', computation === value ? null : value),
-                            active: computation === value,
-                          })),
-                          {
-                            id: 'included',
-                            label: _('account_backend.tax.summary.included'),
-                            path: withParam(url, 'included', included ? null : '1'),
-                            active: included,
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, taxes.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows: taxes,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               accounts: data.accounts,
               currency: currencyOf(data.companies, frame),
               createHref: taxFormPath(url, returnTo),
               rowHref: (row) => taxFormPath(url, returnTo, row.id),
               summary: taxSummary(all),
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/taxes/new':
@@ -2058,72 +1831,26 @@ export default defineModule({
         const termModalOpen =
           !lineModalOpen &&
           (req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url)))
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
-          ? url.searchParams.get('status')
-          : null
-        const needle = search?.toLocaleLowerCase()
-        const matching = rows.filter((row) => {
-          const active = row.active === true
-          if (status === 'active' && !active) return false
-          if (status === 'archived' && active) return false
-          return (
-            !needle || `${String(row.name)} ${String(row.note ?? '')}`.toLocaleLowerCase().includes(needle)
-          )
-        })
-        const listed = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.terms.title',
-          body: (_, frame) => {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: paymentTermListSearch,
+              rows,
+              frame,
+              name: 'account-term-filter',
+              bodyId: 'account-term-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
             const workspace = paymentTermsListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.terms.title'),
-                    keep: {
-                      ...(status ? { status } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: status
-                      ? [
-                          {
-                            label:
-                              status === 'active'
-                                ? _('account_backend.active')
-                                : _('account_backend.archived'),
-                            without: withParam(url, 'status', null),
-                          },
-                        ]
-                      : [],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          {
-                            id: 'status:active',
-                            label: _('account_backend.active'),
-                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
-                            active: status === 'active',
-                          },
-                          {
-                            id: 'status:archived',
-                            label: _('account_backend.archived'),
-                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
-                            active: status === 'archived',
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, listed.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows: listed,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: paymentTermModalPath(url),
               lineCreateHref: rows.length ? paymentTermLineModalPath(url) : undefined,
               rowHref: (row) => paymentTermModalPath(url, row.id),
@@ -2437,66 +2164,30 @@ export default defineModule({
             return seeOther(`/admin/accounting/entries/${encodeURIComponent(id)}${localeQuery(url)}`)
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const all = (await ctx.call(
-          'account.listMoves',
-          { moveType: 'entry', limit: LIST_PAGE },
-          url,
-          req,
-        )) as AnyRow[]
-        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
-          ? url.searchParams.get('state')
-          : null
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          if (state && row.state !== state) return false
-          return (
-            !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${String(row.partnerId ?? '')}`
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        })
-        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const all = (await ctx.call('account.listMoves', { moveType: 'entry' }, url, req)) as AnyRow[]
         const returnTo = journalEntryListPath(url)
         const modalOpen = req.method === 'POST' || url.searchParams.get('create') === '1'
         if (modalOpen && !idempotencyKey) idempotencyKey = randomUUID()
         return adminPage(ctx, url, req, {
           title: 'account_backend.entries.title',
           body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: journalEntryListSearch,
+              rows: all,
+              frame,
+              name: 'account-entry-filter',
+              bodyId: 'account-entry-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
             const workspace = journalEntriesListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.entries.title'),
-                    keep: {
-                      ...(state ? { state } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: state
-                      ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
-                      : [],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: MOVE_STATES.map((value) => ({
-                          id: `state:${value}`,
-                          label: labelOf(_, 'moveState', value),
-                          path: withParam(url, 'state', state === value ? null : value),
-                          active: state === value,
-                        })),
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, rows.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: journalEntryModalPath(url),
               rowHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
@@ -2553,102 +2244,40 @@ export default defineModule({
           })
         const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: CUSTOMER_INVOICE_TYPES, limit: LIST_PAGE },
+          { moveTypes: CUSTOMER_INVOICE_TYPES },
           url,
           req,
         )) as AnyRow[]
-        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
-          ? url.searchParams.get('state')
-          : null
-        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
-          ? url.searchParams.get('payment')
-          : null
-        const type = CUSTOMER_INVOICE_TYPES.includes(String(url.searchParams.get('type')) as never)
-          ? url.searchParams.get('type')
-          : null
-        const page = pageOf(url)
-        const search = searchOf(url)
         const partnerLabels = new Map(
           data.partners.map((partner) => [String(partner.id), String(partner.name)]),
         )
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          if (state && row.state !== state) return false
-          if (payment && row.paymentState !== payment) return false
-          if (type && row.moveType !== type) return false
-          return (
-            !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        })
-        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        // The partner is an id on the row and a name on the screen, so the name
+        // the bar searches and sorts is put on the row before it is narrowed.
+        const named = all.map((row) => ({
+          ...row,
+          partnerName: partnerLabels.get(String(row.partnerId)) ?? '',
+        }))
         const returnTo = customerInvoiceListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.customerInvoices.title',
-          body: (_, frame) =>
-            customerInvoicesListScreen(_, {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: customerInvoiceListSearch,
+              rows: named,
+              frame,
+              name: 'account-customer-invoice-filter',
+              bodyId: 'account-customer-invoice-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
+            return customerInvoicesListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.customerInvoices.title'),
-                    keep: {
-                      ...(state ? { state } : {}),
-                      ...(payment ? { payment } : {}),
-                      ...(type ? { type } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(state
-                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
-                        : []),
-                      ...(payment
-                        ? [
-                            {
-                              label: labelOf(_, 'paymentState', payment),
-                              without: withParam(url, 'payment', null),
-                            },
-                          ]
-                        : []),
-                      ...(type
-                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          ...MOVE_STATES.map((value) => ({
-                            id: `state:${value}`,
-                            label: labelOf(_, 'moveState', value),
-                            path: withParam(url, 'state', state === value ? null : value),
-                            active: state === value,
-                          })),
-                          ...PAYMENT_STATES.map((value) => ({
-                            id: `payment:${value}`,
-                            label: labelOf(_, 'paymentState', value),
-                            path: withParam(url, 'payment', payment === value ? null : value),
-                            active: payment === value,
-                          })),
-                          ...CUSTOMER_INVOICE_TYPES.map((value) => ({
-                            id: `type:${value}`,
-                            label: labelOf(_, 'moveType', value),
-                            path: withParam(url, 'type', type === value ? null : value),
-                            active: type === value,
-                          })),
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, rows.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: customerInvoiceFormPath(url, returnTo),
               rowHref: (row) =>
                 `/admin/accounting/customer-invoices/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
@@ -2659,7 +2288,8 @@ export default defineModule({
                 posted: all.filter((row) => row.state === 'posted').length,
                 unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
               },
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/customer-invoices/new':
@@ -2719,102 +2349,40 @@ export default defineModule({
           })
         const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: VENDOR_BILL_TYPES, limit: LIST_PAGE },
+          { moveTypes: VENDOR_BILL_TYPES },
           url,
           req,
         )) as AnyRow[]
-        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
-          ? url.searchParams.get('state')
-          : null
-        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
-          ? url.searchParams.get('payment')
-          : null
-        const type = VENDOR_BILL_TYPES.includes(String(url.searchParams.get('type')) as never)
-          ? url.searchParams.get('type')
-          : null
-        const page = pageOf(url)
-        const search = searchOf(url)
         const partnerLabels = new Map(
           data.partners.map((partner) => [String(partner.id), String(partner.name)]),
         )
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          if (state && row.state !== state) return false
-          if (payment && row.paymentState !== payment) return false
-          if (type && row.moveType !== type) return false
-          return (
-            !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        })
-        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        // The partner is an id on the row and a name on the screen, so the name
+        // the bar searches and sorts is put on the row before it is narrowed.
+        const named = all.map((row) => ({
+          ...row,
+          partnerName: partnerLabels.get(String(row.partnerId)) ?? '',
+        }))
         const returnTo = vendorBillListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.vendorBills.title',
-          body: (_, frame) =>
-            vendorBillsListScreen(_, {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: vendorBillListSearch,
+              rows: named,
+              frame,
+              name: 'account-vendor-bill-filter',
+              bodyId: 'account-vendor-bill-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
+            return vendorBillsListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.vendorBills.title'),
-                    keep: {
-                      ...(state ? { state } : {}),
-                      ...(payment ? { payment } : {}),
-                      ...(type ? { type } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(state
-                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
-                        : []),
-                      ...(payment
-                        ? [
-                            {
-                              label: labelOf(_, 'paymentState', payment),
-                              without: withParam(url, 'payment', null),
-                            },
-                          ]
-                        : []),
-                      ...(type
-                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          ...MOVE_STATES.map((value) => ({
-                            id: `state:${value}`,
-                            label: labelOf(_, 'moveState', value),
-                            path: withParam(url, 'state', state === value ? null : value),
-                            active: state === value,
-                          })),
-                          ...PAYMENT_STATES.map((value) => ({
-                            id: `payment:${value}`,
-                            label: labelOf(_, 'paymentState', value),
-                            path: withParam(url, 'payment', payment === value ? null : value),
-                            active: payment === value,
-                          })),
-                          ...VENDOR_BILL_TYPES.map((value) => ({
-                            id: `type:${value}`,
-                            label: labelOf(_, 'moveType', value),
-                            path: withParam(url, 'type', type === value ? null : value),
-                            active: type === value,
-                          })),
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, rows.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: vendorBillFormPath(url, returnTo),
               rowHref: (row) =>
                 `/admin/accounting/vendor-bills/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
@@ -2825,7 +2393,8 @@ export default defineModule({
                 posted: all.filter((row) => row.state === 'posted').length,
                 unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
               },
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/vendor-bills/new':
@@ -2871,7 +2440,7 @@ export default defineModule({
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
-          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+          ctx.call('account.listOpenItems', { limit: PAYMENT_PICKER_LIMIT }, url, req) as Promise<AnyRow[]>,
         ])
         // Legacy collection POSTs still render the new full form when refused.
         if (rejected)
@@ -2887,120 +2456,38 @@ export default defineModule({
                 errors: rejected.messages,
               }),
           })
-        const all = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
-        const paymentType = PAYMENT_TYPES.includes(String(url.searchParams.get('type')) as never)
-          ? url.searchParams.get('type')
-          : null
-        const partnerType = PARTNER_TYPES.includes(String(url.searchParams.get('partnerType')) as never)
-          ? url.searchParams.get('partnerType')
-          : null
-        const state = PAYMENT_STATES.includes(String(url.searchParams.get('state')) as never)
-          ? url.searchParams.get('state')
-          : null
+        const all = (await ctx.call('account.listPayments', {}, url, req)) as AnyRow[]
+        // One partner, named by whoever linked here: not a preset, because the
+        // partners are a collection rather than a fixed list, and not something
+        // the bar should be able to drop by accident.
         const partnerId = url.searchParams.get('partnerId') || null
-        const page = pageOf(url)
-        const search = searchOf(url)
         const partnerLabels = new Map(
           data.partners.map((partner) => [String(partner.id), String(partner.name)]),
         )
-        const needle = search?.toLocaleLowerCase()
-        const matching = all.filter((row) => {
-          if (paymentType && row.paymentType !== paymentType) return false
-          if (partnerType && row.partnerType !== partnerType) return false
-          if (state && row.state !== state) return false
-          if (partnerId && String(row.partnerId ?? '') !== partnerId) return false
-          return (
-            !needle ||
-            `${String(row.name ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${String(row.memo ?? '')} ${String(row.paymentReference ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
-              .toLocaleLowerCase()
-              .includes(needle)
-          )
-        })
-        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const named = all
+          .filter((row) => !partnerId || String(row.partnerId ?? '') === partnerId)
+          .map((row) => ({ ...row, partnerName: partnerLabels.get(String(row.partnerId)) ?? '' }))
         const returnTo = paymentListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.payments.title',
-          body: (_, frame) =>
-            paymentsListScreen(_, {
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: paymentListSearch,
+              rows: named,
+              frame,
+              name: 'account-payment-filter',
+              bodyId: 'account-payment-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const shown = listPage(url, search.rows, Boolean(search.groups))
+            return paymentsListScreen(_, {
               frame: {
-                ...frame,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('account_backend.payments.title'),
-                    keep: {
-                      ...(paymentType ? { type: paymentType } : {}),
-                      ...(partnerType ? { partnerType } : {}),
-                      ...(state ? { state } : {}),
-                      ...(partnerId ? { partnerId } : {}),
-                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
-                    },
-                    facets: [
-                      ...(paymentType
-                        ? [
-                            {
-                              label: labelOf(_, 'paymentType', paymentType),
-                              without: withParam(url, 'type', null),
-                            },
-                          ]
-                        : []),
-                      ...(partnerType
-                        ? [
-                            {
-                              label: labelOf(_, 'partnerType', partnerType),
-                              without: withParam(url, 'partnerType', null),
-                            },
-                          ]
-                        : []),
-                      ...(state
-                        ? [
-                            {
-                              label: labelOf(_, 'paymentStatus', state),
-                              without: withParam(url, 'state', null),
-                            },
-                          ]
-                        : []),
-                      ...(partnerId
-                        ? [
-                            {
-                              label: partnerLabels.get(partnerId) ?? partnerId,
-                              without: withParam(url, 'partnerId', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: [
-                          ...PAYMENT_TYPES.map((value) => ({
-                            id: `type:${value}`,
-                            label: labelOf(_, 'paymentType', value),
-                            path: withParam(url, 'type', paymentType === value ? null : value),
-                            active: paymentType === value,
-                          })),
-                          ...PARTNER_TYPES.map((value) => ({
-                            id: `partnerType:${value}`,
-                            label: labelOf(_, 'partnerType', value),
-                            path: withParam(url, 'partnerType', partnerType === value ? null : value),
-                            active: partnerType === value,
-                          })),
-                          ...PAYMENT_STATES.map((value) => ({
-                            id: `state:${value}`,
-                            label: labelOf(_, 'paymentStatus', value),
-                            path: withParam(url, 'state', state === value ? null : value),
-                            active: state === value,
-                          })),
-                        ],
-                      },
-                    ],
-                  },
-                  pager: pager(url, page, rows.length, matching.length),
-                },
+                ...search.frame,
+                chrome: { ...search.frame.chrome, pager: shown.pager },
               },
-              rows,
+              rows: shown.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: paymentFormPath(url, returnTo),
               rowHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
@@ -3011,7 +2498,8 @@ export default defineModule({
                 outbound: all.filter((row) => row.paymentType === 'outbound').length,
                 open: openItems.length,
               },
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/payments/new':
@@ -3026,7 +2514,7 @@ export default defineModule({
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
-          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+          ctx.call('account.listOpenItems', { limit: PAYMENT_PICKER_LIMIT }, url, req) as Promise<AnyRow[]>,
         ])
         const returnTo = safePaymentReturnTo(url)
         return adminPage(ctx, url, req, {
@@ -3114,7 +2602,6 @@ export default defineModule({
           dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? '',
           search = searchOf(url) ?? '',
-          page = pageOf(url),
           inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
         await ctx.call('account.initializeCompany', {}, url, req)
         const [accounts, companies, allRows] = (await Promise.all([
@@ -3146,47 +2633,43 @@ export default defineModule({
               nameEn: _('account_backend.ledger.filter.unavailableAccount'),
             }
             const filterAccounts = unknownAccount ? [unavailableAccount, ...accounts] : accounts
-            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
-            const matching = allRows.filter((row) => {
-              if (!needle) return true
+            // A line's move holds its number, reference and date; the bar reads
+            // fields off the row, so they are flattened onto it here.
+            const lines: AnyRow[] = allRows.map((row) => {
               const move = (row.move ?? {}) as AnyRow
-              return [
-                move.name,
-                move.ref,
-                move.accountingDate ?? move.date,
-                row.name,
-                row.accountId,
-                accountLabel(_, accounts, row.accountId),
-              ].some((value) =>
-                String(value ?? '')
-                  .toLocaleLowerCase(ctx.localeOf(url, req))
-                  .includes(needle),
-              )
+              return {
+                ...row,
+                moveName: move.name ?? '',
+                ref: move.ref ?? '',
+                accountingDate: move.accountingDate ?? move.date ?? '',
+                accountName: accountLabel(_, accounts, row.accountId),
+              }
             })
-            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const narrowed = await rowListSearch(ctx, url, req, {
+              spec: generalLedgerLineSearch,
+              rows: lines,
+              frame,
+              name: 'account-general-ledger-filter',
+              bodyId: 'account-general-ledger-list',
+              functions: accountSearchFunctions,
+              labels: { searchPlaceholder: _('account_backend.ledger.search') },
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const matching = narrowed.rows
+            const shown = listPage(url, matching, Boolean(narrowed.groups))
             const errors = [
               ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
               ...(unknownAccount ? [_('account_backend.ledger.filter.accountError')] : []),
             ]
-            frame.chrome = {
-              search: {
-                name: 'q',
-                value: search,
-                placeholder: _('account_backend.ledger.search'),
-                keep: {
-                  ...(accountId ? { accountId } : {}),
-                  ...(dateFrom ? { dateFrom } : {}),
-                  ...(dateTo ? { dateTo } : {}),
-                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-                },
-              },
-              pager: pager(url, page, rows.length, matching.length),
+            frame = {
+              ...narrowed.frame,
+              chrome: { ...narrowed.frame.chrome, pager: shown.pager },
             }
             const currency = currencyOf(companies, frame)
             return generalLedgerScreen(_, {
               frame: frame,
               action: '/admin/accounting/general-ledger',
-              rows,
+              rows: shown.rows,
               summary: {
                 lines: matching.length,
                 debit: matching.reduce((total, row) => addDecimals(total, row.debit ?? '0'), '0'),
@@ -3247,7 +2730,6 @@ export default defineModule({
           dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? '',
           search = searchOf(url) ?? '',
-          page = pageOf(url),
           inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
         await ctx.call('account.initializeCompany', {}, url, req)
         const [accounts, companies, initialPartners, selectedPartners, allRows] = (await Promise.all([
@@ -3288,47 +2770,43 @@ export default defineModule({
                 (partner) => !companyPartners.has(String(partner.id)) && String(partner.id) !== partnerId,
               ),
             ]
-            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
-            const matching = allRows.filter((row) => {
-              if (!needle) return true
+            // A line's move holds its number, reference and date; the bar reads
+            // fields off the row, so they are flattened onto it here.
+            const lines: AnyRow[] = allRows.map((row) => {
               const move = (row.move ?? {}) as AnyRow
-              return [
-                move.name,
-                move.ref,
-                move.accountingDate ?? move.date,
-                row.name,
-                row.accountId,
-                accountLabel(_, accounts, row.accountId),
-              ].some((value) =>
-                String(value ?? '')
-                  .toLocaleLowerCase(ctx.localeOf(url, req))
-                  .includes(needle),
-              )
+              return {
+                ...row,
+                moveName: move.name ?? '',
+                ref: move.ref ?? '',
+                accountingDate: move.accountingDate ?? move.date ?? '',
+                accountName: accountLabel(_, accounts, row.accountId),
+              }
             })
-            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const narrowed = await rowListSearch(ctx, url, req, {
+              spec: partnerLedgerLineSearch,
+              rows: lines,
+              frame,
+              name: 'account-partner-statement-filter',
+              bodyId: 'account-partner-statement-list',
+              functions: accountSearchFunctions,
+              labels: { searchPlaceholder: _('account_backend.partnerLedger.search') },
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            const matching = narrowed.rows
+            const shown = listPage(url, matching, Boolean(narrowed.groups))
             const errors = [
               ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
               ...(unknownPartner ? [_('account_backend.partnerLedger.filter.partnerError')] : []),
             ]
-            frame.chrome = {
-              search: {
-                name: 'q',
-                value: search,
-                placeholder: _('account_backend.partnerLedger.search'),
-                keep: {
-                  ...(partnerId ? { partnerId } : {}),
-                  ...(dateFrom ? { dateFrom } : {}),
-                  ...(dateTo ? { dateTo } : {}),
-                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-                },
-              },
-              pager: pager(url, page, rows.length, matching.length),
+            frame = {
+              ...narrowed.frame,
+              chrome: { ...narrowed.frame.chrome, pager: shown.pager },
             }
             const currency = currencyOf(companies, frame)
             return partnerLedgerScreen(_, {
               frame: frame,
               action: '/admin/accounting/partner-statement',
-              rows,
+              rows: shown.rows,
               summary: {
                 debit: matching.reduce((total, row) => addDecimals(total, row.debit ?? '0'), '0'),
                 credit: matching.reduce((total, row) => addDecimals(total, row.credit ?? '0'), '0'),
@@ -3393,14 +2871,25 @@ export default defineModule({
         const rows = (await ctx.call('account.listOpeningBatches', {}, url, req)) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.opening.title',
-          body: (_, frame) =>
-            openingBalancesListScreen(_, {
-              frame,
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: openingBatchListSearch,
               rows,
+              frame,
+              name: 'account-opening-filter',
+              bodyId: 'account-opening-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            return openingBalancesListScreen(_, {
+              frame: search.frame,
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: `/admin/accounting/opening-balances/new${localeQuery(url)}`,
               rowHref: (row) =>
                 `/admin/accounting/opening-balances/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/opening-balances/new':
@@ -3571,10 +3060,20 @@ export default defineModule({
         const rows = (await ctx.call('account.listClosePeriods', {}, url, req)) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'account_backend.close.title',
-          body: (_, frame) =>
-            periodClosesListScreen(_, {
-              frame,
+          body: async (_, frame) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: closePeriodListSearch,
               rows,
+              frame,
+              name: 'account-close-filter',
+              bodyId: 'account-close-list',
+              functions: accountSearchFunctions,
+              groupLabel: (key, value) => accountGroupLabel(_, key, value),
+            })
+            return periodClosesListScreen(_, {
+              frame: search.frame,
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               action: `${url.pathname}${localeQuery(url)}`,
               errors,
               fields: [
@@ -3594,7 +3093,8 @@ export default defineModule({
               ],
               rowHref: (row) =>
                 `/admin/accounting/period-closes/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
-            }),
+            })
+          },
         })
       },
     '/admin/accounting/period-closes/{id}':

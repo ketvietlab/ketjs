@@ -1,5 +1,6 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
+import { Tabs } from '@ketvietlab/design-system'
 import {
   badge,
   button,
@@ -8,14 +9,11 @@ import {
   formatMoney,
   MediaPanel,
   ProductMediaManagement,
-  ProductVariantManagement,
   RecordForm,
-  RecordMore,
   Section,
   shell,
   stack,
   Surface,
-  Tabs,
 } from '../../../ui/index.ts'
 import type { FormOption, Frame, MediaItem, MediaPanelProps } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
@@ -109,6 +107,9 @@ export const productDetailScreen = (
     editor?: JSXChild
     /** Actions contributed through the public Product Template extension joint. */
     actions?: JSXChild
+    /** Tabs and active content contributed by modules extending Product Template records. */
+    tabs?: JSXChild
+    panel?: JSXChild
     /**
      * Relation pickers, built by the route because they need a request to reach
      * their joint. Absent ones fall back to the plain select beside them, so this
@@ -125,7 +126,7 @@ export const productDetailScreen = (
   collaboration: JSXChild,
   frame: Frame = {},
   locale = '',
-  activeTab: ProductDetailTab = 'general',
+  activeTab: string = 'general',
   partial = false,
 ): TemplateResult => {
   const images = media.images ?? []
@@ -302,140 +303,9 @@ export const productDetailScreen = (
   )
 
   const archived = row.active === false
-  const archiveAction = (
-    <RecordForm
-      action={localized(`/admin/product/templates/${row.id}/archive?tab=${activeTab}`, locale)}
-      submit={_(archived ? 'product_backend.archive.restore' : 'product_backend.archive.action')}
-      submitVariant={archived ? 'secondary' : 'destructive'}
-      submitSize="compact"
-      layout="inline"
-      hidden={{ active: archived ? '1' : '0' }}
-      fields={[]}
-    />
-  )
   const generalTab = stack(
     [<Section title={_('product_backend.tabs.general')} body={<Surface body={general} />} />],
     'loose',
-  )
-
-  const variantCount = variantTotal
-  const variantPage = management.variantPage ?? {
-    page: 1,
-    pageSize: 10,
-    total: variantTotal,
-  }
-  const variantFrom = variantPage.total ? (variantPage.page - 1) * variantPage.pageSize + 1 : 0
-  const variantTo = Math.min(variantPage.page * variantPage.pageSize, variantPage.total)
-  const variantPageHref = (page: number) =>
-    localized(`/admin/product/templates/${row.id}?tab=variants&page=${page}`, locale)
-  const variants = (
-    <ProductVariantManagement
-      attributes={{
-        title: _('product_backend.attributes.panelTitle'),
-        description: _('product_backend.attributes.panelHint'),
-        sortLabel: _('product_backend.attributes.sort'),
-        columns: {
-          name: _('product_backend.attributes.nameColumn'),
-          values: _('product_backend.attributes.values'),
-          actions: _('product_backend.attributes.actions'),
-        },
-        lines: management.attributeLines.map((line) => ({
-          id: line.id,
-          name: line.attribute || line.attributeId,
-          values: line.values.map((value) => value.name),
-          editHref: localized('/admin/product/attributes', locale),
-          removeAction: localized(
-            `/admin/product/templates/${row.id}/attribute-lines/${line.id}/remove?tab=variants`,
-            locale,
-          ),
-        })),
-        empty: _('product_backend.attributes.linesEmptyHint'),
-        editLabel: _('product_backend.attributes.editLine'),
-        removeLabel: _('product_backend.attributes.removeLine'),
-        addLabel: _('product_backend.attributes.addLine'),
-        addForm: (
-          <RecordForm
-            action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
-            submit={_('product_backend.action.add')}
-            submitVariant="secondary"
-            fields={[
-              {
-                name: 'attributeId',
-                label: _('product_backend.attributes.attribute'),
-                type: 'select',
-                options: [{ value: '', label: '—' }, ...management.variantAttributes],
-                required: true,
-                ...(management.controls?.attribute ? { control: management.controls.attribute } : {}),
-              },
-              {
-                name: 'valueIds',
-                label: _('product_backend.attributes.values'),
-                help: _('product_backend.attributes.valuesHint'),
-                required: true,
-                span: 'full' as const,
-                ...(management.controls?.attributeValues
-                  ? { control: management.controls.attributeValues }
-                  : {}),
-              },
-            ]}
-          />
-        ),
-      }}
-      variants={{
-        title: _('product_backend.variants.title'),
-        description: _('product_backend.variants.panelHint'),
-        generateLabel: _('product_backend.variants.generate'),
-        generateAction: localized(
-          `/admin/product/templates/${row.id}/variants/generate?tab=variants`,
-          locale,
-        ),
-        refreshLabel: _('product_backend.variants.refresh'),
-        columns: {
-          code: _('product_backend.variants.code'),
-          values: _('product_backend.variants.values'),
-          sku: _('product_backend.variants.sku'),
-          price: _('product_backend.field.listPrice'),
-          stock: _('product_backend.variants.stock'),
-          state: _('product_backend.col.state'),
-          actions: _('product_backend.variants.actions'),
-        },
-        rows: management.variants.map((variant) => {
-          const href = localized(`/admin/product/templates/${row.id}/variants/${variant.id}`, locale)
-          const code = variant.defaultCode || variant.name || variant.id
-          return {
-            id: variant.id,
-            code,
-            values: (variant.values ?? []).map((value) => String(value.value ?? '')).filter(Boolean),
-            sku: variant.defaultCode || '—',
-            price: formatMoney(_, row.listPrice, 'VND'),
-            stock: variant.stock == null ? '—' : String(variant.stock),
-            active: variant.active !== false,
-            stateLabel: _(
-              variant.active === false
-                ? 'product_backend.state.archived'
-                : 'product_backend.variants.selling',
-            ),
-            href,
-          }
-        }),
-        empty: _('product_backend.variants.empty'),
-        editLabel: _('product_backend.variants.edit'),
-        moreLabel: _('product_backend.action.more'),
-        selectAllLabel: _('backend.table.selectAll'),
-        selectRowLabel: _('backend.table.selectRow'),
-        displayLabel: _('product_backend.variants.display'),
-        rangeLabel: _('product_backend.variants.range', {
-          from: variantFrom,
-          to: variantTo,
-          total: variantCount,
-        }),
-        pageLabel: String(variantPage.page),
-        previousLabel: _('product_backend.variants.previous'),
-        nextLabel: _('product_backend.variants.next'),
-        previousHref: variantPage.page > 1 ? variantPageHref(variantPage.page - 1) : null,
-        nextHref: variantTo < variantPage.total ? variantPageHref(variantPage.page + 1) : null,
-      }}
-    />
   )
 
   const mediaOfVariant = (variantId: string) =>
@@ -525,10 +395,6 @@ export const productDetailScreen = (
             ]
           : []),
         ...(management.actions ? [management.actions] : []),
-        <RecordMore
-          label={_('product_backend.action.more')}
-          body={<FormCluster label={_('product_backend.action.more')} forms={[archiveAction]} />}
-        />,
       ]}
     />
   )
@@ -566,9 +432,16 @@ export const productDetailScreen = (
               count: images.length,
             },
           ]}
+          extension={management.tabs}
         />
       }
-      body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : generalTab}
+      body={
+        activeTab === 'media'
+          ? mediaTab
+          : activeTab === 'general'
+            ? generalTab
+            : management.panel || generalTab
+      }
       aside={collaboration}
       asideLabel={_('product_backend.collaboration.label')}
       controller={management.editor}

@@ -36,28 +36,28 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
-test('product attributes specialized surface: keeps the parent create form and selection semantics', () => {
-  const html = renderToString(attributesScreen(translate, [], {}, ['Tên thuộc tính là bắt buộc'], '?lang=vi'))
-
-  assert.match(html, /id="product-attribute-create"/)
-  assert.match(html, /data-scope="product-attribute-create"/)
-  assert.match(html, /action="\/admin\/product\/attributes\?lang=vi"/)
+test('product attributes list preserves translated context, errors and explicit create permission', () => {
+  const html = renderToString(
+    attributesScreen(
+      translate,
+      [],
+      {
+        chrome: {
+          create: { label: 'Tạo', path: '/admin/product/attributes?lang=vi&record=product.attribute%3Anew' },
+        },
+      },
+      ['Tên thuộc tính là bắt buộc'],
+      '?lang=vi',
+    ),
+  )
   assert.match(html, /Tên thuộc tính là bắt buộc/)
-  assert.match(
-    html,
-    /name="name"[\s\S]*?name="sequence"[\s\S]*?name="displayType"[\s\S]*?name="createVariant"/,
-  )
-  assert.match(
-    html,
-    /name="displayType"[\s\S]*?value="radio"[\s\S]*?value="pills"[\s\S]*?value="select"[\s\S]*?value="color"[\s\S]*?value="multi"/,
-  )
-  assert.match(html, /name="createVariant"[\s\S]*?value="always"[\s\S]*?value="no_variant"/)
-  assert.match(html, /Chưa có thuộc tính sản phẩm/)
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="form-page"/)
+  assert.match(html, /data-ui="list-page-header"[\s\S]*?record=product.attribute%3Anew[\s\S]*?<\/header>/)
+  assert.match(html, /data-ui="ket-table"/)
+  assert.doesNotMatch(html, /data-ui="record-form"|data-ui="card-grid"/)
 })
 
-test('product attributes specialized surface: keeps values and one child form scoped to each card', () => {
+test('product attributes list sorts compact value previews like the modal and preserves record links', () => {
   const html = renderToString(
     attributesScreen(
       translate,
@@ -68,35 +68,43 @@ test('product attributes specialized surface: keeps values and one child form sc
           displayType: 'pills',
           createVariant: 'always',
           values: [
-            { id: 'red', name: 'Đỏ' },
-            { id: 'blue', name: 'Xanh' },
+            { id: 'red', name: 'Đỏ', sequence: 2 },
+            { id: 'blue', name: 'Xanh', sequence: 1 },
           ],
         },
-        {
-          id: 'material',
-          name: 'Chất liệu',
-          displayType: 'select',
-          createVariant: 'no_variant',
-          values: [],
-        },
+        { id: 'material', name: 'Chất liệu', displayType: 'select', createVariant: 'no_variant', values: [] },
       ],
       {},
       undefined,
       '?lang=vi',
     ),
   )
-
-  assert.match(html, /data-ui="card-grid"/)
-  assert.match(html, /Màu sắc[\s\S]*?Nút dạng thẻ · Luôn tạo biến thể/)
-  assert.match(html, /Đỏ[\s\S]*?Xanh/)
-  assert.match(html, /action="\/admin\/product\/attributes\/color\/values\?lang=vi"/)
-  assert.match(html, /Chất liệu[\s\S]*?Danh sách chọn · Không tạo biến thể/)
+  assert.match(html, /record=product.attribute%3Acolor/)
+  assert.match(html, /record=product.attribute%3Amaterial/)
+  assert.match(html, /Xanh[\s\S]*?Đỏ/)
+  assert.ok(html.indexOf('Xanh') < html.indexOf('Đỏ'))
+  assert.match(html, /Nút dạng thẻ[\s\S]*?Luôn tạo biến thể/)
+  assert.match(html, /Danh sách chọn[\s\S]*?Không tạo biến thể/)
   assert.match(html, /Chưa có giá trị/)
-  assert.match(html, /action="\/admin\/product\/attributes\/material\/values\?lang=vi"/)
-  assert.equal(html.match(/data-scope="product-attribute-value"/g)?.length, 2)
-  assert.equal(html.match(/name="name"/g)?.length, 3)
-  assert.equal(html.match(/name="sequence"/g)?.length, 3)
-  assert.doesNotMatch(html, />pills<|>no_variant</)
-  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="form-page"/)
+  assert.doesNotMatch(html, /data-ui="record-form"|>pills<|>no_variant</)
+})
+
+test('attribute filters combine with search before pagination without a legacy search fallback', () => {
+  const rows = Array.from({ length: 35 }, (_, index) => ({
+    id: `attr-${index}`,
+    name: `Attribute ${index}`,
+    displayType: index === 34 ? 'color' : 'select',
+    createVariant: 'always',
+    values: [],
+  }))
+  const html = renderToString(
+    attributesScreen(translate, rows, {
+      collectionUrl:
+        '/admin/product/attributes?lang=vi&q=Attribute&displayType=color&createVariant=always&page=8&columns=name,values&record=product.attribute%3Aattr-34',
+    }),
+  )
+  assert.match(html, /1-1 \/ 1/)
+  assert.match(html, /record=product.attribute%3Aattr-34/)
+  assert.doesNotMatch(html, /record=product.attribute%3Aattr-0(?:&|"|%)/)
+  assert.doesNotMatch(html, /data-ui="chrome-search"|data-ui="facet"/)
 })

@@ -42,6 +42,7 @@ export const saleSnapshot = async (ctx: Ctx, orderId: string) => {
     orderId,
     partnerId: order.partnerId,
     currency: order.currency,
+    warehouseId: order.warehouseId ?? null,
     pricelistId: order.pricelistId ?? null,
     date: order.dateOrder,
     lines: await Promise.all(

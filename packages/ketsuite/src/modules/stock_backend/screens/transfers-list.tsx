@@ -2,14 +2,14 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -91,53 +91,43 @@ export const transfersListScreen = (
   options: TransfersListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: transferListColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.href,
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
 
   return shell(
     _,
     _('stock_backend.transfers'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('stock_backend.transfer.list.title')}
       description={_('stock_backend.transfer.list.subtitle')}
-      actions={inline([
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />,
-        selection ? bulkActions(_, selection) : '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('stock_backend.transfer.list.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      status={`${_('stock_backend.transfer.list.records.title')}: ${String(total)}`}
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('stock_backend.transfer.list.title'), collection.frame)}
+      footer={`${_('stock_backend.transfer.list.records.title')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
-              columns: transferListColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.href,
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('stock_backend.transfer.list.empty'), _('stock_backend.transfer.list.emptyHint'), {
               icon: icon('truck'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

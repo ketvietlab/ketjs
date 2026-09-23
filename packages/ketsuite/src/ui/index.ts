@@ -46,8 +46,13 @@ export type { ListPageProps } from './list-page.tsx'
  * `@ketvietlab/design-system`, and the backend already loads that stylesheet and
  * marks its root with `data-kv-design-system`.
  */
-export { Pipeline } from '@ketvietlab/design-system'
-export type { PipelineStep } from '@ketvietlab/design-system'
+export { DataMatrix, Pipeline } from '@ketvietlab/design-system'
+export type {
+  DataMatrixColumn,
+  DataMatrixProps,
+  DataMatrixRow,
+  PipelineStep,
+} from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatDateTime, formatMoney } from './format.ts'
@@ -78,7 +83,9 @@ export {
   contentCard,
   metric,
 } from './surfaces.tsx'
-export { dataTable, visibleColumns } from './table.tsx'
+export { collectionTable, dataTable, visibleColumns } from './table.tsx'
+export { collectionActions, collectionControls, prepareCollectionTable } from './collection.tsx'
+export { paginateCollectionRows, collectionQueryKeep } from './collection-state.ts'
 export type { Cell, Column, DataTable, TableGroup, TableSelection } from './table.tsx'
 export { scheduleBoard } from './schedule.tsx'
 export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './schedule.tsx'
@@ -107,7 +114,7 @@ export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
 export { datePicker } from './date-picker.tsx'
 export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
-export { breadcrumbs, pageContext, tabs } from './navigation.tsx'
+export { breadcrumbs, pageContext, pageTrailFromFrame, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
 export {
@@ -120,6 +127,42 @@ export {
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalForm, modalSheet, modalWorkspace } from './modal.tsx'
+export {
+  RECORD_NEW_ID,
+  RECORD_PARAM,
+  RECORD_TAB_PARAM,
+  defineRecordModalIsland,
+  isRecordKind,
+  isRecordModalCreate,
+  readRecordModalTarget,
+  recordModalClosedHref,
+  recordModalCreateHref,
+  recordModalHost,
+  recordModalHref,
+} from './record-modal.tsx'
+export type { RecordModalTarget } from './record-modal.tsx'
+export {
+  RECORD_COMMAND_FIELD,
+  RECORD_DIALOG_ATTRIBUTE,
+  callRecordFunction,
+  createRecordModal,
+  recordLayerHasDraft,
+} from './client/record-modal.tsx'
+export {
+  RecordDialogTrigger,
+  RecordModalForm,
+  recordStateSelectControl,
+} from './client/record-modal-form.tsx'
+export type {
+  RecordCallResult,
+  RecordContextEnvelope,
+  RecordIssue,
+  RecordModalCommand,
+  RecordModalContext,
+  RecordModalDefinition,
+  RecordModalDialog,
+  RecordModalTab,
+} from './client/record-modal.tsx'
 export type {
   RecordBreadcrumbs,
   RecordSummaryItem,

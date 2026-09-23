@@ -133,38 +133,28 @@
       --admin-topbar-height: calc(3.25rem + 10px);
     }
 
-    [data-ui="shell"] {
+    [data-ui="app-shell"] {
       display: block;
     }
 
-    [data-ui="sidebar"],
-    body > [data-ui="shell"] > [data-ui="sidebar"] {
+    [data-ui="app-sidebar"] {
       position: sticky;
       inset-block-start: 0;
       z-index: 30;
-      display: flex;
+      display: block;
       inline-size: 100%;
       block-size: auto;
-      flex-direction: row;
-      align-items: center;
-      gap: var(--admin-gap-sm);
-      min-block-size: var(--admin-topbar-height);
-      padding: var(--admin-gap-xs) var(--admin-gap-sm);
-      overflow: hidden;
+      min-block-size: 0;
+      padding: 0;
+      overflow: visible;
       background: var(--admin-sidebar-bg);
       border: 0;
       border-block-end: 1px solid var(--admin-divider-subtle);
     }
 
-    [data-ui="sidebar-header"] {
-      min-inline-size: 0;
-      flex: 1 1 auto;
-      padding: 0;
-    }
-
-    [data-ui="sidebar-brand"] {
-      min-block-size: 2.75rem;
-      padding-inline: var(--admin-gap-sm);
+    [data-ui="app-sidebar"] > [data-ui="app-navigation"] {
+      inline-size: 100%;
+      overflow: visible;
     }
 
     [data-ui="sidebar-foot"] {
@@ -200,7 +190,7 @@
       box-shadow: inset 0 -2px 0 var(--admin-accent);
     }
 
-    body > [data-ui="shell"] [data-ui="topbar"] {
+    [data-ui="app-main"] [data-ui="topbar"] {
       position: static;
       flex-wrap: wrap;
       min-block-size: var(--admin-topbar-height);
@@ -220,7 +210,11 @@
       flex: 1 0 100%;
     }
 
-    [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="app-main"]:has(
+        > [data-ket-slot="backend.topbar"]
+          > [data-ui="topbar"]
+          [data-ui="list-chrome"][data-layout="catalogue"]
+      )
       > [data-ui="content"] {
       padding: 0 var(--admin-gap) var(--admin-gap-lg);
     }
@@ -306,12 +300,12 @@
   }
 
   @media print {
-    [data-ui="sidebar"],
+    [data-ui="app-sidebar"],
     [data-ui="catalogue-nav"] {
       display: none;
     }
 
-    [data-ui="shell"] {
+    [data-ui="app-shell"] {
       display: block;
     }
 

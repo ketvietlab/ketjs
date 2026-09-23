@@ -79,7 +79,7 @@ test('stock inventory: preserves the adjustment task beside current balances', (
     ),
   )
 
-  assert.match(html, /data-ui="form-page"[^>]*data-variant="operational"/)
+  assert.match(html, /data-ui="record-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="list-page"/)
   assert.match(html, /Đã áp dụng kiểm kê[\s\S]*?Chênh lệch đã được ghi nhận/)
   assert.match(html, /id="inventory-adjustment-form"/)

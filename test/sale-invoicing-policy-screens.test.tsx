@@ -63,6 +63,8 @@ test('invoicing policies list: keeps product policies and moves editing to the d
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-ui="list-page-title"[\s\S]*?Chính sách lập hoá đơn/)
   assert.match(html, /Tổng sản phẩm: 12 · Theo số lượng đặt: 2 · Theo số lượng giao: 1/)

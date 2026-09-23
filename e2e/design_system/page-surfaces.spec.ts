@@ -4,7 +4,7 @@ const kinds = ['list', 'record', 'flow', 'canvas', 'form-compat', 'dashboard-com
 const states = ['baseline', 'loading', 'empty', 'error', 'validation', 'readonly'] as const
 const hooks = {
   list: 'list-page',
-  record: 'form-page',
+  record: 'record-page',
   flow: 'dashboard-page',
   canvas: 'board-page',
   'form-compat': 'form-page',
@@ -40,7 +40,7 @@ for (const kind of kinds)
           page.on('pageerror', (error) => errors.push(error.message))
           await page.setViewportSize({ width, height: 1000 })
           const hook = hooks[kind]
-          const record = hook === 'form-page'
+          const record = kind === 'record' || kind === 'form-compat'
           const canvas = hook === 'board-page'
           const workspace = canvas || hook === 'dashboard-page'
           const chrome = theme === 'light' ? 'rgb(247, 245, 245)' : 'rgb(29, 34, 40)'
@@ -52,6 +52,15 @@ for (const kind of kinds)
             const main = page.locator('[data-ui="app-main"]')
             const header = main.locator(`[data-ui="${hook}-header"]`)
             const body = main.locator(`[data-ui="${hook}-body"]`)
+            for (const section of await body.locator('[data-ui="section"]').all()) {
+              await expect(section).toHaveCSS('border-bottom-width', '0px')
+              await expect(section).toHaveCSS('padding-bottom', '0px')
+            }
+            for (const heading of await body.locator('[data-ui="section-head"]').all()) {
+              await expect(heading).toHaveCSS('border-bottom-width', '0px')
+              await expect(heading).toHaveCSS('padding-bottom', '0px')
+              await expect(heading).toHaveCSS('align-items', 'flex-start')
+            }
             await expect(main.locator('h1')).toHaveCount(1)
             await expect(main.locator('[data-pattern]')).toHaveCount(1)
             await expect(main.locator('[data-ui$="-eyebrow"]')).toHaveCount(0)
@@ -66,7 +75,9 @@ for (const kind of kinds)
               if (!canvas) await expect(body).toHaveCSS('background-color', ground)
               if (['baseline', 'validation', 'readonly'].includes(state)) {
                 const panel = theme === 'light' ? working : 'rgb(29, 34, 40)'
-                await expect(body.locator('[data-ui="surface"]')).toHaveCSS('background-color', panel)
+                await expect(body.locator('[data-ui="surface"]')).toHaveCount(1)
+                await expect(body.locator('[data-ui="surface-title"]')).toBeVisible()
+                await expect(body.locator('[data-ui="table-scroll"][data-framed="false"]')).toHaveCount(1)
                 for (const metric of await body.locator('[data-ui="metric"]').all())
                   await expect(metric).toHaveCSS('background-color', panel)
                 const gap = await body.evaluate((e) => {
@@ -86,12 +97,12 @@ for (const kind of kinds)
               }
             }
             if (record) {
-              await expect(main.locator('[data-ui="form-page-navigation"]')).toHaveCSS(
+              await expect(main.locator(`[data-ui="${hook}-navigation"]`)).toHaveCSS(
                 'background-color',
                 ground,
               )
-              await expect(main.locator('[data-ui="form-page-controller"]')).toBeHidden()
-              await expect(main.locator('[data-ui="form-page-aside"]')).toHaveCSS(
+              await expect(main.locator(`[data-ui="${hook}-controller"]`)).toBeHidden()
+              await expect(main.locator(`[data-ui="${hook}-aside"]`)).toHaveCSS(
                 'background-color',
                 theme === 'light' ? ground : 'rgb(23, 27, 32)',
               )
@@ -110,7 +121,7 @@ for (const kind of kinds)
               await expect(body.getByText('REC-002', { exact: true })).toBeVisible()
               await expect(body.locator('[data-ui="table-scroll"]')).toHaveCSS(
                 'background-color',
-                theme === 'light' ? working : 'rgba(0, 0, 0, 0)',
+                'rgba(0, 0, 0, 0)',
               )
             }
             for (const surface of await body.locator('[data-ui="surface"]').all())
@@ -173,20 +184,22 @@ for (const kind of kinds)
           }
           if (record) {
             await page.goto(`/surfaces?${new URLSearchParams({ kind, lang, theme, state: 'baseline' })}`)
-            const body = page.locator('[data-ui="form-page-body"]')
+            const body = page.locator(`[data-ui="${hook}-body"]`)
             const before = await body.evaluate((e) => ({
               padding: getComputedStyle(e).padding,
               top: e.getBoundingClientRect().top,
             }))
             await page.locator('[data-ui="tab"]').nth(1).click()
             await expect(page).toHaveURL(/tab=activity/)
+            await page.waitForLoadState('load')
+            await page.evaluate(() => document.fonts.ready)
             const after = await body.evaluate((e) => ({
               padding: getComputedStyle(e).padding,
               top: e.getBoundingClientRect().top,
             }))
             expect(after).toEqual(before)
             await page.goto(`/surfaces?${new URLSearchParams({ kind, lang, theme, aside: 'false' })}`)
-            await expect(page.locator('[data-ui="form-page-aside"]')).toHaveCount(0)
+            await expect(page.locator(`[data-ui="${hook}-aside"]`)).toHaveCount(0)
             expect(await body.evaluate((e) => getComputedStyle(e).padding)).toBe(before.padding)
           } else {
             await page.goto(`/surfaces?${new URLSearchParams({ kind, lang, theme, controls: 'false' })}`)

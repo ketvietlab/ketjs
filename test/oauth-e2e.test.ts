@@ -270,7 +270,13 @@ test('oauth HTTP E2E: every administration screen renders in Vietnamese and Engl
     const body = await response.text()
     assert.equal(response.status, 200, `${path}: ${body}`)
     assert.match(body, expected, path)
-    assert.doesNotMatch(body, /(?:oauth|oauth_backend)\.[A-Za-z]/, path)
+    // The search-filter bar's island props name its functions, so the leak
+    // check looks at what the reader can actually see.
+    assert.doesNotMatch(
+      body,
+      /(?:>|placeholder="|aria-label="|title=")[^<"]*(?:oauth|oauth_backend)\.[A-Za-z]/u,
+      path,
+    )
   }
 
   const anonymous = await e2e.client.anonymous().get('/admin/oauth/providers', {

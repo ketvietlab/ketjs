@@ -104,7 +104,6 @@ export function createCrmKanbanView(runtime, props, seed = {}) {
       )
     } catch {
       error.set(labels.conflict)
-      if (typeof window !== 'undefined') setTimeout(() => window.location.reload(), 900)
     } finally {
       busy.set('')
     }

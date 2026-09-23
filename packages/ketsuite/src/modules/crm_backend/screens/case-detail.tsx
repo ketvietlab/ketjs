@@ -10,6 +10,7 @@ import {
   icon,
   linkButton,
   modalForm,
+  pageTrailFromFrame,
   RecordActions,
   RecordForm,
   RecordScreen,
@@ -67,6 +68,7 @@ export const permissionScreen = (_: Translator, frame: Frame): TemplateResult =>
     title={_('crm_backend.permission.title')}
     subtitle={_('crm_backend.permission.hint')}
     frame={frame}
+    context={pageTrailFromFrame(_('crm_backend.permission.title'), frame)}
     body={emptyState(_('crm_backend.permission.title'), _('crm_backend.permission.hint'))}
   />
 )
@@ -725,6 +727,7 @@ export const caseDetailScreen = (
       title={String(row.name)}
       subtitle={`${String(row.partnerName ?? '—')} · ${String(row.stageName ?? '—')}`}
       frame={frame}
+      context={pageTrailFromFrame(String(row.name), frame)}
       body={
         <RecordWorkspace
           kicker={local(_, 'kind', row.kind)}

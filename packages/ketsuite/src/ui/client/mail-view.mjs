@@ -234,12 +234,13 @@ export function createChatterView(runtime, props, seed = {}) {
     }, 15_000)
   }
 
-  if (typeof window !== 'undefined')
-    queueMicrotask(async () => {
+  const mount = () => {
+    void (async () => {
       if (requests.disposed()) return
       await load()
       schedulePoll()
-    })
+    })()
+  }
 
   const view = () => {
     const data = page()
@@ -318,6 +319,7 @@ export function createChatterView(runtime, props, seed = {}) {
   }
   return {
     view,
+    mount,
     dispose: () => {
       if (pollTimer !== null) clearTimeout(pollTimer)
       requests.dispose()
@@ -339,7 +341,6 @@ export function createInboxIndicatorView(runtime, props, initialCount = 0) {
       count.set(0)
     }
   }
-  if (typeof window !== 'undefined') queueMicrotask(load)
   return {
     view: () => html`<a data-ui="mail-indicator" href="/admin/inbox" title=${labels.inbox} aria-label=${labels.inbox}>
     <svg data-ui="mail-indicator-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -347,6 +348,7 @@ export function createInboxIndicatorView(runtime, props, initialCount = 0) {
     </svg>
     ${count() > 0 ? html`<span data-ui="mail-indicator-count">${count()}</span>` : ''}
   </a>`,
+    mount: () => void load(),
     dispose: requests.dispose,
   }
 }

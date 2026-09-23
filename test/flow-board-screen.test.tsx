@@ -46,7 +46,7 @@ test('flow project navigation: marks whichever of the seven screens the reader i
     )
     const marked = [
       ...html.matchAll(
-        /data-active="true" href="\/admin\/flow\/projects\/project-platform\/([a-z]+)\?lang=en"/g,
+        /data-active="true"[^>]*href="\/admin\/flow\/projects\/project-platform\/([a-z]+)\?lang=en"/g,
       ),
     ]
     assert.deepEqual(
@@ -65,7 +65,8 @@ test('flow project navigation: preserves locale and marks board active', () => {
     })(),
   )
 
-  assert.match(rendered, /data-ui="sidebar-section-label"/)
+  assert.match(rendered, /data-ui="navigation-group"/)
+  assert.match(rendered, /data-ui="navigation-group-label"/)
   assert.match(rendered, /href="\/admin\/flow\/projects\/project-platform\/board\?lang=en"/)
   assert.match(rendered, /href="\/admin\/flow\/projects\/project-platform\/issues\?lang=en"/)
   assert.match(rendered, /href="\/admin\/flow\/projects\/project-platform\/gantt\?lang=en"/)

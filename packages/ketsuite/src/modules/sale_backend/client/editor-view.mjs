@@ -1,4 +1,4 @@
-// @ts-nocheck Progressive enhancement for sale.order operations.
+// @ts-nocheck Progressive enhancement for sale order forms.
 
 const LABELS = {
   vi: {
@@ -29,104 +29,82 @@ const errorText = async (response, fallback) => {
   }
 }
 
-const replaceSaleOrderParts = (markup) => {
-  const parsed = new DOMParser().parseFromString(markup, 'text/html')
-  const envelope = parsed.querySelector('ket-fragments')
-  const nextHeader = parsed.querySelector('template[data-ket-slot="sale.order-header"]')
-  const nextBody = parsed.querySelector('template[data-ket-slot="sale.order-body"]')
-  const currentHeader = document.querySelector('[data-ket-slot="sale.order-header"]')
-  const currentBody = document.querySelector('[data-ket-slot="sale.order-body"]')
-  if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-    throw new Error('The refreshed sales order fragment is incomplete.')
-  currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
-  currentBody.replaceChildren(document.importNode(nextBody.content, true))
-  if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
-}
-
-const editorHostFor = (props) => {
-  if (typeof document === 'undefined') return null
-  return Array.from(document.querySelectorAll('ket-island[data-island="sale.editor"]')).find((element) => {
-    try {
-      return JSON.parse(element.getAttribute('data-props') ?? '{}').orderId === props.orderId
-    } catch {
-      return false
-    }
-  })
-}
-
-export function createSaleEditorView(runtime, props) {
-  const { html, signal } = runtime
+export function createSaleEditorStatusView(runtime, props) {
   const labels = labelsOf(props)
-  const state = signal('idle')
-  const message = signal('')
-  const host = editorHostFor(props)
+  return () => runtime.html`<aside
+    data-ui="notice"
+    data-tone="info"
+    data-record-save-status="sale-order"
+    data-saving=${labels.saving}
+    data-saved=${labels.saved}
+    data-failed=${labels.failed}
+    role="status"
+    aria-live="polite"
+    hidden
+  ><div data-ui="notice-copy"><p data-ui="notice-title" data-record-save-message></p></div></aside>`
+}
+
+const showState = (status, state, message) => {
+  status.hidden = false
+  status.dataset.tone = state === 'saved' ? 'positive' : state === 'error' ? 'danger' : 'info'
+  status.setAttribute('role', state === 'error' ? 'alert' : 'status')
+  const copy = status.querySelector('[data-record-save-message]')
+  if (copy) copy.textContent = message
+}
+
+export const saleEditorBehavior = ({ navigation, lifetime }) => {
   let activeRequest = null
-  let disposed = false
-  if (host) host.hidden = true
-
-  const showState = (nextState, nextMessage) => {
-    if (host) host.hidden = false
-    state.set(nextState)
-    message.set(nextMessage)
-  }
-
   const submit = async (event) => {
     const form = event.target
     if (!(form instanceof HTMLFormElement) || form.dataset.scope !== 'sale-order') return
+    const status = document.querySelector('[data-record-save-status="sale-order"]')
+    if (!(status instanceof HTMLElement)) return
     event.preventDefault()
-    if (state() === 'saving') return
+
     const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
-    showState('saving', labels.saving)
+    showState(status, 'saving', status.dataset.saving)
     form.setAttribute('aria-busy', 'true')
     for (const submitter of submitters) submitter.disabled = true
+
+    activeRequest?.abort()
+    const request = new AbortController()
+    activeRequest = request
     try {
-      activeRequest?.abort()
-      activeRequest = new AbortController()
       const body = new URLSearchParams()
       for (const [name, value] of new FormData(form)) if (typeof value === 'string') body.append(name, value)
       const response = await fetch(form.getAttribute('action') || window.location.href, {
         method: String(form.method || 'post').toUpperCase(),
         credentials: 'same-origin',
         headers: {
-          accept: 'text/html',
+          accept: 'text/vnd.ket.fragments+html',
           'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
           'x-ket-partial': 'sale-order',
         },
         body,
-        signal: activeRequest.signal,
+        signal: request.signal,
       })
-      if (!response.ok) throw new Error(await errorText(response, labels.failed))
-      const markup = await response.text()
-      if (globalThis.__ketNavigation?.applyFragments) await globalThis.__ketNavigation.applyFragments(markup)
-      else replaceSaleOrderParts(markup)
-      const location = response.headers.get('x-ket-location')
-      if (location && location !== `${window.location.pathname}${window.location.search}`)
-        history.replaceState(history.state, '', location)
-      if (disposed) return
-      showState('saved', labels.saved)
+      const isFragment = response.headers
+        .get('content-type')
+        ?.toLowerCase()
+        .startsWith('text/vnd.ket.fragments+html')
+      if (!response.ok && !isFragment) throw new Error(await errorText(response, status.dataset.failed))
+      await navigation.apply(response, { signal: request.signal })
+      const nextStatus = document.querySelector('[data-record-save-status="sale-order"]')
+      if (!lifetime.aborted && nextStatus instanceof HTMLElement)
+        showState(
+          nextStatus,
+          response.ok ? 'saved' : 'error',
+          response.ok ? nextStatus.dataset.saved : nextStatus.dataset.failed,
+        )
     } catch (caught) {
-      if (disposed || caught?.name === 'AbortError') return
-      showState('error', caught instanceof Error ? caught.message : labels.failed)
+      if (lifetime.aborted || caught?.name === 'AbortError') return
+      showState(status, 'error', caught instanceof Error ? caught.message : status.dataset.failed)
     } finally {
-      activeRequest = null
+      if (activeRequest === request) activeRequest = null
       form.removeAttribute('aria-busy')
       for (const submitter of submitters) submitter.disabled = false
     }
   }
-  if (typeof document !== 'undefined') document.addEventListener('submit', submit)
-
-  return {
-    view: () => html`<aside
-    data-ui="notice"
-    data-tone=${state() === 'saved' ? 'positive' : state() === 'error' ? 'danger' : 'info'}
-    role=${state() === 'error' ? 'alert' : 'status'}
-    aria-live="polite"
-    hidden=${state() === 'idle'}
-  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`,
-    dispose: () => {
-      disposed = true
-      activeRequest?.abort()
-      if (typeof document !== 'undefined') document.removeEventListener('submit', submit)
-    },
-  }
+  document.addEventListener('submit', submit, { signal: lifetime })
+  return () => activeRequest?.abort()
 }

@@ -54,6 +54,7 @@ export const posSnapshot = async (ctx: Ctx, orderId: string): Promise<OrderSnaps
     orderId,
     partnerId: order.partnerId == null ? null : String(order.partnerId),
     currency: String(order.currency),
+    warehouseId: config?.warehouseId == null ? null : String(config.warehouseId),
     pricelistId: config?.pricelistId == null ? null : String(config.pricelistId),
     date: String(order.dateOrder),
     codes: applications.map((application) => normalizeCode(application.code)).filter(Boolean),

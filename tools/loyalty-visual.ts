@@ -200,6 +200,7 @@ try {
     code: 'silver',
     sequence: 10,
     minimumSpend: '0',
+    windowMonths: 120,
     redeemPercent: '20',
   })
   await call('loyalty.tier.save', {
@@ -208,12 +209,13 @@ try {
     code: 'gold',
     sequence: 20,
     minimumSpend: '5000000',
+    windowMonths: 120,
     redeemPercent: '40',
   })
   await call('loyalty.membership.config.save', {
     id: 'king-club:config',
     programId: 'king-club',
-    windowMonths: 12,
+    windowMonths: 120,
     pointValue: '1000',
     minimumRedeemStep: '10',
     fallbackCurrencyPerPoint: '1000',

@@ -10,9 +10,12 @@ import { renderToString } from './ssr.ts'
 import { escapeHtml } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
-import { mountHydrated } from './mount.ts'
+import { mount as mountFresh, mountHydrated } from './mount.ts'
+import { ISLAND_HOST_ATTRIBUTE, ISLAND_SELECTOR, ISLAND_TAG } from './island-protocol.ts'
+import type { IslandHostTag } from './island-protocol.ts'
 
-export const ISLAND_TAG = 'ket-island'
+export { ISLAND_HOST_ATTRIBUTE, ISLAND_SELECTOR, ISLAND_TAG } from './island-protocol.ts'
+export type { IslandHostTag } from './island-protocol.ts'
 
 // The view layer carries its own errors rather than reaching into the kernel for
 // them. That single import was the only thing pointing out of this layer, and it
@@ -32,26 +35,54 @@ export class IslandError extends Error {
 export type IslandProps = Record<string, unknown>
 /** One mounted island instance. Signals and other local state live in this closure. */
 export type IslandView = () => TemplateResult
+/** Browser-only resources available after the server tree has been adopted. */
+export type IslandMountContext = {
+  /** The stable island host element that owns this instance's DOM. */
+  root: IslandElement
+  /** Aborted before reactive and controller cleanup starts. */
+  lifetime: AbortSignal
+}
 /** Optional lifecycle around a mounted island. A plain IslandView remains valid. */
-export type IslandController = {
+export type IslandController<Props extends IslandProps = IslandProps> = {
   view: IslandView
-  update?(props: Readonly<IslandProps>): void
+  /** Runs once in the browser, after hydration has adopted the server DOM. */
+  mount?(context: IslandMountContext): void
+  update?: { call(props: Readonly<Props>): void }['call']
   dispose?(): void
 }
 /** Create one isolated instance from serializable server props. */
-export type IslandFactory = (props: IslandProps) => IslandView | IslandController
-export type IslandDefinition = {
-  view: IslandFactory
+export type IslandFactory<Props extends IslandProps = IslandProps> = {
+  call(props: Readonly<Props>): IslandView | IslandController<Props>
+}['call']
+export type IslandDefinition<Props extends IslandProps = IslandProps> = {
+  view: IslandFactory<Props>
   /** The only surrounding scope keys that may cross into the island. */
-  props?: Record<string, string>
-  /** Props that identify one persistent instance. Empty means one global instance. */
-  key?: readonly string[]
+  props?: { [Key in keyof Props]-?: string }
+  /** Props that identify one persistent instance within its reconciliation boundary. */
+  key?: readonly (keyof Props & string)[]
   /** Browser module, relative to the declaring module's assets directory. */
   client?: string
   /** Named browser export; defaults to `default`. */
   export?: string
 }
+/** Heterogeneous registry entry; prefer defineIsland<Props>() when authoring one. */
+export type AnyIslandDefinition = IslandDefinition
 export type IslandRegistry = Record<string, IslandFactory>
+export type RenderIslandOptions = {
+  key?: readonly string[]
+  /** Use `div` for standard HTML. The legacy `ket-island` host remains the default. */
+  tag?: IslandHostTag
+}
+
+/**
+ * Preserve one props type across its schema, identity key, and server factory.
+ * Runtime validation remains the composition layer's job; this closes the
+ * compile-time casts that otherwise hide drift between those three declarations.
+ */
+export const defineIsland =
+  <Props extends IslandProps>() =>
+  <Definition extends IslandDefinition<Props>>(definition: Definition): Definition =>
+    definition
 
 const controllerOf = (created: IslandView | IslandController): IslandController =>
   typeof created === 'function' ? { view: created } : created
@@ -124,16 +155,24 @@ export function renderIsland(
   name: string,
   factory: IslandFactory,
   props: IslandProps,
-  options: { key?: readonly string[] } = {},
+  options: RenderIslandOptions = {},
 ): string {
+  const tag = options.tag ?? ISLAND_TAG
+  if (tag !== ISLAND_TAG && tag !== 'div')
+    throw new IslandError({
+      code: 'E_ISLAND_HOST_TAG',
+      message: `island "${name}" received unsupported host tag "${String(tag)}"`,
+      hint: 'use "div" or omit tag to keep the legacy "ket-island" host',
+    })
   const { raw, revived } = jsonProps(name, props)
   const key = islandKey(name, revived, options.key)
   const controller = controllerOf(factory(revived))
+  const hostMarker = tag === 'div' ? ` ${ISLAND_HOST_ATTRIBUTE}=""` : ''
   try {
     return (
-      `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-key="${escapeHtml(key)}" data-props="${escapeHtml(raw)}">` +
+      `<${tag}${hostMarker} data-island="${escapeHtml(name)}" data-key="${escapeHtml(key)}" data-props="${escapeHtml(raw)}">` +
       renderToString(controller.view()) +
-      `</${ISLAND_TAG}>`
+      `</${tag}>`
     )
   } finally {
     controller.dispose?.()
@@ -158,6 +197,11 @@ export type HydratedIsland = {
 
 export type IslandManager = {
   hydrate(root: IslandElement): HydratedIsland[]
+  /**
+   * Start islands whose hosts a client view created, with no server markup to
+   * adopt: the island builds its own DOM. Hosts already running are left alone.
+   */
+  mount(root: IslandElement): HydratedIsland[]
   reconcile(slot: IslandElement, nextContent: IslandElement): HydratedIsland[]
   dispose(root: IslandElement): void
 }
@@ -173,8 +217,12 @@ const elementsOf = (root: IslandElement): IslandElement[] => {
   const nodeName =
     (root as unknown as { nodeName?: string; tagName?: string }).nodeName ??
     (root as unknown as { tagName?: string }).tagName
-  if (nodeName?.toLowerCase() === ISLAND_TAG) out.push(root)
-  out.push(...root.querySelectorAll(ISLAND_TAG))
+  if (
+    nodeName?.toLowerCase() === ISLAND_TAG ||
+    (nodeName?.toLowerCase() === 'div' && root.getAttribute(ISLAND_HOST_ATTRIBUTE) !== null)
+  )
+    out.push(root)
+  out.push(...root.querySelectorAll(ISLAND_SELECTOR))
   return out
 }
 
@@ -235,7 +283,7 @@ export function createIslandManager(
     managed.live.dispose()
   }
 
-  const hydrate = (root: IslandElement): HydratedIsland[] => {
+  const start = (root: IslandElement, adopt: boolean): HydratedIsland[] => {
     const out: HydratedIsland[] = []
     for (const element of elementsOf(root)) {
       const existing = instances.get(element)
@@ -256,7 +304,19 @@ export function createIslandManager(
       }
       const parsed = parsedProps(identity.name, element)
       const controller = controllerOf(factory(parsed.props))
-      const mounted = mountHydrated(host, element, controller.view)
+      const lifetime = new AbortController()
+      let mounted: ReturnType<typeof mountHydrated> | null = null
+      try {
+        mounted = adopt
+          ? mountHydrated(host, element, controller.view)
+          : mountFresh(host, element, controller.view)
+        controller.mount?.({ root: element, lifetime: lifetime.signal })
+      } catch (error) {
+        lifetime.abort()
+        mounted?.dispose()
+        controller.dispose?.()
+        throw error
+      }
       let disposed = false
       const live: HydratedIsland = {
         name: identity.name,
@@ -266,7 +326,8 @@ export function createIslandManager(
         dispose: () => {
           if (disposed) return
           disposed = true
-          mounted.dispose()
+          lifetime.abort()
+          mounted?.dispose()
           controller.dispose?.()
         },
       }
@@ -275,6 +336,7 @@ export function createIslandManager(
     }
     return out
   }
+  const hydrate = (root: IslandElement): HydratedIsland[] => start(root, true)
 
   const reconcile = (slot: IslandElement, nextContent: IslandElement): HydratedIsland[] => {
     const current = elementsOf(slot)
@@ -319,6 +381,7 @@ export function createIslandManager(
 
   return {
     hydrate,
+    mount: (root) => start(root, false),
     reconcile,
     dispose: (root) => {
       for (const element of elementsOf(root)) disposeElement(element)

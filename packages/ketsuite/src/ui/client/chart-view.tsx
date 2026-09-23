@@ -207,13 +207,7 @@ const datasetsOf = (spec: ChartSpec) => {
 
 const chartTypeOf = (spec: ChartSpec): ChartType => (spec.kind === 'doughnut' ? 'doughnut' : 'line')
 
-/**
- * Mounts one chart onto a canvas and keeps it matched to the colour scheme.
- *
- * Returned rather than run: `IslandController` has no "mounted" hook, so the
- * export below queues this for after the view has rendered and finds the canvas
- * by id — the same arrangement `live-doc-view.tsx` uses next door.
- */
+/** Mounts one chart onto a canvas and keeps it matched to the colour scheme. */
 export function createChartView(props: ChartIslandProps): {
   view: IslandController['view']
   canvasId: string
@@ -258,9 +252,12 @@ export function createChartView(props: ChartIslandProps): {
 
 export const chart = (props: IslandProps): IslandController => {
   const controller = createChartView(props as ChartIslandProps)
-  queueMicrotask(() => {
-    const canvas = document.getElementById(controller.canvasId)
-    if (canvas instanceof HTMLCanvasElement) controller.mount(canvas)
-  })
-  return { view: controller.view, dispose: () => controller.dispose() }
+  return {
+    view: controller.view,
+    mount: ({ root }) => {
+      const canvas = [...root.querySelectorAll('[data-ui="chart-canvas"]')][0]
+      if (canvas instanceof HTMLCanvasElement) controller.mount(canvas)
+    },
+    dispose: () => controller.dispose(),
+  }
 }

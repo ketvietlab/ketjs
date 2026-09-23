@@ -246,6 +246,7 @@ const assertModule = (value: unknown, source: ModuleSource): KetModule => {
     'routes',
     'menus',
     'islands',
+    'behaviors',
     'sections',
     'relations',
     'messages',
