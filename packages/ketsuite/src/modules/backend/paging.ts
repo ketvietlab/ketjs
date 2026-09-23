@@ -6,9 +6,10 @@
 // pastes into chat all work with no code written for any of them.
 
 import type { Pager } from '../../ui/index.ts'
+import { COLLECTION_PAGE_SIZE } from '../../ui/collection-state.ts'
 
 /** the domain contract's default, and about as many rows as fit a laptop screen. */
-export const PAGE_SIZE = 30
+export const PAGE_SIZE = COLLECTION_PAGE_SIZE
 
 export const pageOf = (url: URL): number => {
   const n = Number(url.searchParams.get('page') ?? '1')

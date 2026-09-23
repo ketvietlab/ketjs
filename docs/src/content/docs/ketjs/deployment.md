@@ -129,6 +129,18 @@ identity or a secret manager over credentials in an image or repository.
 Object storage is namespaced per app or tenant at runtime. Preserve the namespace contract when moving
 data between environments.
 
+`KET_STORAGE` defaults to `local`, and KetJS does not refuse it in production. On pods without a
+persistent volume, local storage loses every upload when the pod restarts. Set `KET_STORAGE=s3` for
+containerised deployments, or mount a durable volume at `KET_STORAGE_DIR` for a single host.
+
+With object storage, an upload is durable once `POST /files` answers `201`. The request spools the
+body to a temporary directory only to compute its checksum, writes the object to storage, and then
+commits the attachment row together with its follow-up jobs (publication copy, image renditions).
+The temporary directory is removed before the response. Those jobs read the original back from
+storage, so any worker pod can run them. If a pod stops mid-request, the client sees a failed upload.
+An object written before the row was committed has no attachment row, and the storage sweep removes
+it once it is old enough.
+
 ## Health and graceful shutdown
 
 Expose a small application route for readiness, for example:

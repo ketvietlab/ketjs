@@ -1,11 +1,13 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   CHARGE_TYPES,
   chargeName,
   type ChargeRuleRow,
   type ChoiceRow,
-  dataTable,
+  collectionTable,
   feedback,
+  type DataTable,
   type Frame,
   linkButton,
   modalForm,
@@ -35,13 +37,27 @@ export const chargeRulesScreen = (
     errors?: readonly string[]
     values?: Record<string, string>
   },
+  /** What the route decided about the table, notably the groups it is read by. */
+  table?: Partial<DataTable<ChargeRuleRow>>,
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: ruleColumns(_),
+      rows,
+      id: (row) => row.chargeType,
+      rowHref: modal?.rowHref,
+      ...table,
+    },
+    { paginate: !table?.groups },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_billing.chargeRules.title')}
-      frame={frame}
-      actions={linkButton({
+      frame={collection.frame}
+      headerActions={linkButton({
         label: _('hospitality_billing.chargeRules.save'),
         href: modal?.createHref ?? '/admin/hospitality/billing/rules?create=1',
         variant: 'primary',
@@ -59,12 +75,7 @@ export const chargeRulesScreen = (
             })}
           />
         ),
-        dataTable(_, {
-          columns: ruleColumns(_),
-          rows,
-          id: (row) => row.chargeType,
-          rowHref: modal?.rowHref,
-        }),
+        collectionTable(_, collection.table),
       ])}
     />
   )

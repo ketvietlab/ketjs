@@ -1,6 +1,6 @@
 import { deleteFrom, defineFn, eq, from, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { inlineTypes } from './policy.ts'
+import { inlineTypes, renderableTypes } from './policy.ts'
 
 const input = {
   id: 'id',
@@ -27,7 +27,7 @@ export const functions: Record<string, FnSpec> = {
   createAttachment: defineFn({
     input: { ...input, publishCopy: 'bool?' },
     output,
-    effects: ['write:storage.Attachment', 'enqueue:storage.publish'],
+    effects: ['write:storage.Attachment', 'enqueue:storage.publish', 'enqueue:storage.render'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -70,6 +70,9 @@ export const functions: Record<string, FnSpec> = {
         await tx.db.insert('storage.Attachment', record as Row)
         if (publishCopy === true && inlineTypes.has(String(args.mimetype)))
           await tx.jobs.enqueue('storage.publish', { id: args.id }, { uniqueKey: `attachment:${args.id}` })
+        // Committed with the row: a rendition job never races an attachment that rolled back.
+        if (args.kind === 'stored' && renderableTypes.has(String(args.mimetype)))
+          await tx.jobs.enqueue('storage.render', { id: args.id }, { uniqueKey: `render:${args.id}` })
       })
       return record
     },
@@ -82,6 +85,22 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const A = ctx.table('storage.Attachment')
       return ctx.db.one(from(A).where(eq(A.id, args.id)))
+    },
+  }),
+
+  /** Queue the renditions again — for images uploaded before the job existed. */
+  requestRender: defineFn({
+    input: { id: 'id' },
+    output: { id: 'id', existing: 'bool' },
+    effects: ['read:storage.Attachment', 'enqueue:storage.render'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const A = ctx.table('storage.Attachment')
+      const row = await ctx.db.one(from(A).where(eq(A.id, args.id)))
+      if (row?.kind !== 'stored' || !renderableTypes.has(String(row.mimetype)))
+        invalid('only a stored raster image has renditions')
+      return ctx.jobs.enqueue('storage.render', { id: args.id }, { uniqueKey: `render:${args.id}` })
     },
   }),
 
@@ -114,12 +133,17 @@ export const functions: Record<string, FnSpec> = {
   removeAttachment: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool' },
-    effects: ['write:storage.Attachment'],
+    effects: ['write:storage.Attachment', 'write:storage.AttachmentRendition'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      const A = ctx.table('storage.Attachment')
-      await ctx.db.del(deleteFrom(A).where(eq(A.id, args.id)))
+      await ctx.tx(async (tx) => {
+        // The rendition rows go with it; their bytes are left to the sweep, like the original's.
+        const R = tx.table('storage.AttachmentRendition')
+        await tx.db.del(deleteFrom(R).where(eq(R.attachmentId, args.id)))
+        const A = tx.table('storage.Attachment')
+        await tx.db.del(deleteFrom(A).where(eq(A.id, args.id)))
+      })
       return { ok: true }
     },
   }),

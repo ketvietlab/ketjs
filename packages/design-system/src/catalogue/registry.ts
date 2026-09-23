@@ -30,6 +30,7 @@ const entry = (
 })
 
 export const componentRegistry: readonly ComponentRegistration[] = [
+  entry('ReorderList', 'Forms', 'interactions/reorder-list', 'fields', 'reorder-list'),
   entry('ActionGroup', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('Button', 'Actions', 'primitives/actions', 'actions', 'button', 'stable', [
     'default',
@@ -150,6 +151,29 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('ToastRegion', 'Feedback', 'interactions/toast', 'interactions', 'feedback-runtime'),
   entry('Spinner', 'Feedback', 'interactions/spinner', 'interactions', 'feedback-runtime'),
   entry('Skeleton', 'Feedback', 'interactions/skeleton', 'interactions', 'feedback-runtime'),
+  entry(
+    'createSearchFilterView',
+    'Data operations',
+    'interactions/search-filter',
+    'interactions',
+    'search-filter',
+  ),
+  entry('searchFilter', 'Data operations', 'interactions/search-filter', 'interactions', 'search-filter'),
+  entry('createKetTableView', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry('ketTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry('KetTable', 'Data operations', 'interactions/ket-table', 'interactions', 'ket-table'),
+  entry(
+    'createRelationSelectView',
+    'Forms',
+    'interactions/relation-select',
+    'interactions',
+    'relation-select',
+  ),
+  entry('relationSelect', 'Forms', 'interactions/relation-select', 'interactions', 'relation-select'),
+  entry('createLightbox', 'Overlays', 'interactions/lightbox', 'interactions', 'lightbox'),
+  entry('createLightboxView', 'Overlays', 'interactions/lightbox', 'interactions', 'lightbox'),
+  entry('lightbox', 'Overlays', 'interactions/lightbox', 'interactions', 'lightbox'),
+  entry('LightboxThumb', 'Overlays', 'interactions/lightbox', 'interactions', 'lightbox'),
   entry('TextField', 'Forms', 'forms/scalar-fields', 'form-controls', 'scalar-fields'),
   entry('TextArea', 'Forms', 'forms/scalar-fields', 'form-controls', 'scalar-fields'),
   entry('NumberField', 'Forms', 'forms/scalar-fields', 'form-controls', 'scalar-fields'),

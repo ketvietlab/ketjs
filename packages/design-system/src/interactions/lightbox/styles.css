@@ -1,0 +1,153 @@
+@layer ket.app {
+  /* A Fancybox-style viewer: thumbnails open a full-screen stage above every
+     other layer, including a record modal, with zoom, pan and previous/next. */
+  :where([data-kv-design-system]) [data-ui="lightbox"] {
+    display: contents;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-thumbs"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-thumb"],
+  :where([data-kv-design-system]) [data-ui="lightbox-empty"] {
+    --lightbox-thumb-size: 5.5rem;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--lightbox-thumb-size);
+    block-size: var(--lightbox-thumb-size);
+    flex: none;
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-surface-raised);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-thumb"] {
+    cursor: zoom-in;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-thumb"]:focus-visible {
+    outline: 2px solid var(--kv-focus-border);
+    outline-offset: 2px;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-thumb"] img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  :where([data-kv-design-system])
+    :is([data-ui="lightbox-thumb"], [data-ui="lightbox-empty"])[data-size="small"] {
+    --lightbox-thumb-size: 2.5rem;
+    border-radius: var(--kv-radius-sm);
+  }
+  :where([data-kv-design-system])
+    :is([data-ui="lightbox-thumb"], [data-ui="lightbox-empty"])[data-size="large"] {
+    --lightbox-thumb-size: 9rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="lightbox-layer"] {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--kv-z-modal) + 10);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    color: var(--kv-panel-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-backdrop"] {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--kv-text-main) 92%, transparent);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-toolbar"] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-1);
+    padding: var(--kv-space-2) var(--kv-space-3);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-counter"] {
+    margin-inline-end: auto;
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  :where([data-kv-design-system]) :is([data-ui="lightbox-tool"], [data-ui="lightbox-nav"]) {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--kv-panel-bg) 12%, transparent);
+    color: inherit;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) :is([data-ui="lightbox-tool"], [data-ui="lightbox-nav"]):hover {
+    background: color-mix(in srgb, var(--kv-panel-bg) 24%, transparent);
+  }
+  :where([data-kv-design-system]) :is([data-ui="lightbox-tool"], [data-ui="lightbox-nav"]):focus-visible {
+    outline: 2px solid var(--kv-panel-bg);
+    outline-offset: 2px;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-tool"]:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-stage"] {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: var(--kv-space-2) var(--kv-space-12);
+    touch-action: none;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-image"] {
+    max-inline-size: 100%;
+    max-block-size: 100%;
+    object-fit: contain;
+    transform-origin: center;
+    transition: transform 160ms ease-out;
+    cursor: zoom-in;
+    user-select: none;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-stage"][data-zoomed="true"] [data-ui="lightbox-image"] {
+    cursor: grab;
+    transition: none;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-nav"] {
+    position: absolute;
+    inset-block-start: 50%;
+    translate: 0 -50%;
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-nav"][data-direction="previous"] {
+    inset-inline-start: var(--kv-space-3);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-nav"][data-direction="next"] {
+    inset-inline-end: var(--kv-space-3);
+  }
+  :where([data-kv-design-system]) [data-ui="lightbox-caption"] {
+    position: relative;
+    margin: 0;
+    padding: var(--kv-space-2) var(--kv-space-4) var(--kv-space-4);
+    font-size: var(--kv-text-sm);
+    text-align: center;
+  }
+
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="lightbox-stage"] {
+      padding-inline: var(--kv-space-2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-kv-design-system]) [data-ui="lightbox-image"] {
+      transition: none;
+    }
+  }
+}

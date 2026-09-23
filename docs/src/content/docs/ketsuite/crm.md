@@ -259,3 +259,69 @@ KET_VISUAL_SQLITE=/tmp/crm-visual.db npm run visual:crm:seed
 ```
 
 The seed prints the sign-in it created. Point the server at that file and open `/admin/crm/pipeline`.
+
+## Sales dashboard data contract
+
+`crm.report.sales({ start, end, timezone? })` is the public, live sales projection. It uses the
+caller's company and record visibility before loading related rows. `start` is inclusive, `end`
+exclusive; both are datetime instants. The timezone (UTC by default) controls day deadlines and
+monthly buckets. The end is capped at the current time. Periods must start before now, be ordered,
+and span at most 3,660 days. Metadata includes the company currency and observation time.
+
+The existing `crm.overview` and `crm.pipeline.summary` remain compatible. Consumers can adopt the
+new report independently; this change does not replace a downstream dashboard or snapshot pipeline.
+
+| Output | Definition |
+| --- | --- |
+| `period.newLeads` | Cases acquired as leads in the selected period, including leads subsequently converted in place. |
+| `period.won`, `lost`, `winRate` | Latest case outcome with `closedAt` in the period. Win rate is won / (won + lost); no outcomes returns null. |
+| `period.medianSalesCycleDays` | Median elapsed time from case creation to close for won cases. |
+| `comparison.period` | The same flow metrics for the immediately preceding window of equal elapsed duration. |
+| `cohort` | Lead-origin cases created in the selected period, followed through the observation time. Direct opportunities are excluded. Contacted, converted and won are parallel cohort milestones; contact is not a required conversion step. |
+| `cohort.contactedWithin24h` | Explicit `reached` customer interaction within 24 elapsed hours of creation. |
+| `cohort.convertedWithin14d` | Conversion to opportunity within 14 elapsed days. This is not an independent qualification assessment. |
+| `pipeline` | Current active open opportunities, exact decimal expected/weighted revenue and per-stage totals. |
+| `teams` | Current owner/team for open pipeline; owner/team captured at closing for outcomes. Includes unassigned and unknown-history buckets. |
+| `health`, `risks` | Open opportunities with no pending activity, an overdue pending activity, or no recorded successful contact for over 14 days. Risk reasons overlap; `atRiskCount` counts each case once. |
+| `lostReasons` | Standard categories, plus `not_recorded` for legacy free text or an uncategorized transition. |
+| `trend` | Monthly won/lost counts and win rate within the selected period, including empty months. |
+| `coverage` | Unknown acquisition kind, missing closing ownership, uncategorized losses and leads without recorded successful contact. |
+
+Window metrics expose `eligible`, `pending`, `successes` and `rate`. Only cases old enough to complete
+the entire observation window enter the rate denominator, even if a younger case has already
+succeeded. An empty mature cohort returns null, not zero. All cohort follow-up is observed at `asOf`,
+including events after the acquisition period ends. Historical reports are live restatements of the
+latest case outcomes, not immutable snapshots: reopening a case removes its previous outcome from
+these aggregates. A change from won to lost gets a new close timestamp; editing the same outcome
+retains its timestamp. Archived closed records still count; merged source records do not.
+
+### Recording the missing evidence
+
+- New cases keep immutable `originKind`. Conversion sets missing legacy origin to `lead`. Reporting
+  also recognizes a legacy current lead, `convertedAt`, or conversion timeline event without rewriting
+  history. An old direct opportunity without evidence stays unknown.
+- Every close path (save, stage move, explicit won/lost, conversion to a terminal stage) captures
+  `closedAssigneeUserId`, `closedTeamId` and `closedOwnershipRecordedAt`. Later reassignment does not
+  change attribution. Reopening clears the snapshot. An old closed case is not backfilled with its
+  current owner; a recorded unassigned close is distinguished from missing history.
+- `crm.case.markLost` accepts optional `lostReasonCode`: `budget`, `fit`, `competitor`, `no_need`,
+  `other`. Existing callers can still send free-text `lostReason`. The modal provides category and
+  note; moving/reopening into a different outcome clears stale categories. Version conflict refusals
+  cannot overwrite the reason.
+- `crm.case.logInteraction` accepts `id`, `expectedVersion`, `channel`, `outcome`, optional
+  `occurredAt`/`note`, and `idempotencyKey`. Channels are phone, email, chat, meeting and other;
+  outcomes are attempted, reached and unreachable. The event records actor, occurrence time and
+  entry time. Backdated entries must fall between case creation and now. Matching retries replay
+  the result; key reuse with different input is refused. The case modal exposes a draft-preserving
+  nested “Log interaction” dialog and renders channel/outcome in its timeline.
+
+Activity completion, reassignment, internal notes and generic `updatedAt` changes are not evidence of
+customer contact. Contact metrics mean **recorded** contact: an absent historical event cannot prove
+that no conversation occurred. Consumers must show the coverage caveat for historical cohorts.
+The stale-contact signal likewise means no recorded successful contact, using creation as the
+baseline when there is no contact history.
+
+Activity deadlines remain calendar dates. Overdue is measured in local calendar days; hour-level
+labels such as “overdue 2h” are unsupported. Current pipeline must not be presented as a historical
+snapshot. Delivered net revenue, refunds, repeat purchasing and private snapshot orchestration belong
+to downstream integrations and are not included in this public sales report.

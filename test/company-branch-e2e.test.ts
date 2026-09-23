@@ -76,7 +76,13 @@ test('company-branch-e2e: company, hierarchy, branch and context screens cross r
       /data-ui="viewer-context-switcher"/,
       `${path} has the company selector in the user menu`,
     )
-    assert.doesNotMatch(html, /company_backend\.[A-Za-z]/, path)
+    // The search-filter bar names its own functions in island props, so what
+    // must never leak is an untranslated key the reader can actually see.
+    assert.doesNotMatch(
+      html,
+      /(?:>|placeholder="|aria-label="|title=")[^<"]*company_backend\.[A-Za-z]/u,
+      path,
+    )
   }
 
   const english = await e2e.client.get('/admin/context?lang=en', { headers: { accept: 'text/html' } })

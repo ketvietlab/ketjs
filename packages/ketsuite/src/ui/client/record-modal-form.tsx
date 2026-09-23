@@ -18,12 +18,23 @@ import { RECORD_COMMAND_FIELD } from './record-modal.tsx'
 export const RecordModalForm = (props: {
   kind: string
   fields: readonly FieldProps[]
+  body?: JSXChild
+  /** Structural edits and retained drafts remain dirty after a view-state render. */
+  dirty?: boolean
   actions?: readonly JSXChild[]
   command?: string | null
+  hidden?: Readonly<Record<string, string>>
   /** Lets a button outside this form submit it via the HTML `form` attribute. */
   id?: string
 }): TemplateResult => (
-  <form data-ui="record-form" method="post" action="" data-record-kind={props.kind} id={props.id}>
+  <form
+    data-ui="record-form"
+    method="post"
+    action=""
+    data-record-kind={props.kind}
+    id={props.id}
+    data-record-dirty={props.dirty === true ? 'true' : null}
+  >
     {props.command ? (
       // autocomplete="off" like every other input the kit writes: the ui contract
       // holds for a hidden field too, and a browser restoring one would submit a
@@ -32,7 +43,11 @@ export const RecordModalForm = (props: {
     ) : (
       ''
     )}
+    {Object.entries(props.hidden ?? {}).map(([name, value]) => (
+      <input type="hidden" name={name} value={value} autocomplete="off" />
+    ))}
     <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
+    {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
 )
@@ -119,4 +134,93 @@ export const RecordCommandForm = (props: { kind: string; id: string }): Template
  */
 export const RecordCloseTrigger = (props: { children: JSXChild }): TemplateResult => (
   <span data-record-close="true">{props.children}</span>
+)
+
+/**
+ * A record's main image beside the first rows of its form: the viewer (a
+ * thumbnail opening the image set), and under it the controls that change it.
+ *
+ * The whole block is one dropzone form: dropping a photo on the thumbnail, or
+ * picking one, submits `uploadCommand` straight away (`data-record-submit`). Remove
+ * is a button of that same form naming its own command, so it never carries the
+ * file input with it.
+ */
+export const RecordImageField = (props: {
+  kind: string
+  id: string
+  /** The viewer island (`backend.lightbox`), or null when there is no image yet. */
+  viewer: JSXChild | null
+  uploadCommand?: string | null
+  removeCommand?: string | null
+  labels: { empty: string; upload: string; replace: string; remove: string; drop: string }
+  busy?: boolean
+}): TemplateResult => {
+  const hasImage = props.viewer != null
+  const editable = Boolean(props.uploadCommand)
+  return (
+    <form
+      data-ui="record-image"
+      id={props.id}
+      method="post"
+      action=""
+      enctype="multipart/form-data"
+      data-record-kind={props.kind}
+      data-record-dropzone={editable ? 'true' : null}
+      data-busy={props.busy ? 'true' : 'false'}
+    >
+      {editable ? (
+        <input type="hidden" name={RECORD_COMMAND_FIELD} value={props.uploadCommand} autocomplete="off" />
+      ) : (
+        ''
+      )}
+      <div data-ui="record-image-frame" title={editable ? props.labels.drop : undefined}>
+        {hasImage ? props.viewer : <span data-ui="record-image-empty">{props.labels.empty}</span>}
+      </div>
+      {editable || (hasImage && props.removeCommand) ? (
+        <div data-ui="record-image-actions">
+          {editable ? (
+            <label data-ui="record-image-upload" data-variant="tertiary">
+              <input
+                type="file"
+                autocomplete="off"
+                name="file"
+                accept="image/avif,image/gif,image/jpeg,image/png,image/webp"
+                data-record-submit="true"
+                disabled={props.busy === true}
+              />
+              <span>{hasImage ? props.labels.replace : props.labels.upload}</span>
+            </label>
+          ) : (
+            ''
+          )}
+          {hasImage && props.removeCommand ? (
+            <button
+              type="submit"
+              data-ui="action"
+              data-variant="tertiary"
+              data-size="compact"
+              name={RECORD_COMMAND_FIELD}
+              value={props.removeCommand}
+              formnovalidate
+              disabled={props.busy === true}
+            >
+              {props.labels.remove}
+            </button>
+          ) : (
+            ''
+          )}
+        </div>
+      ) : (
+        ''
+      )}
+    </form>
+  )
+}
+
+/** A form with an independent image column; narrow surfaces stack the image above it. */
+export const RecordFormWithImage = (props: { form: JSXChild; image: JSXChild }): TemplateResult => (
+  <div data-ui="record-form-with-image">
+    {props.form}
+    {props.image}
+  </div>
 )

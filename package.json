@@ -1,7 +1,7 @@
 {
   "name": "ketjs-monorepo",
   "private": true,
-  "version": "0.1.25",
+  "version": "0.1.26",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -11,11 +11,12 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "build": "node tools/build.mjs",
     "build:watch": "tsx tools/watch-build.ts",
     "check": "tsc -p tsconfig.json",
-    "test": "npm run build --silent && node --test \".build/test/*.test.js\"",
-    "test:built": "node --test \".build/test/*.test.js\"",
+    "test": "npm run build --silent && node --test --test-timeout=120000 --test-force-exit \".build/test/*.test.js\"",
+    "test:built": "node --test --test-timeout=120000 --test-force-exit \".build/test/*.test.js\"",
     "test:group": "npm run build --silent && node tools/ci-test-groups.mjs run",
     "test:group:built": "node tools/ci-test-groups.mjs run",
     "test:groups": "node tools/ci-test-groups.mjs list",

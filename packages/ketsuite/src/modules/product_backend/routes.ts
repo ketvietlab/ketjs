@@ -7,7 +7,6 @@ import {
   parseListState,
   table,
   text,
-  validateListState,
   withHeaders,
 } from '@ketvietlab/ketjs'
 import type {
@@ -23,14 +22,20 @@ import {
   favoriteModal,
   productDetailScreen,
   productsScreen,
+  templateColumns,
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
 } from './screens/index.ts'
 import { uomControl } from './relation-control.ts'
 import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
+import type { AttributeListRow } from './screens/attributes.tsx'
+import { attributeSearchFilterConfig } from './attributes-search.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
+import { listSearchFilterConfig, loadListFavorites, searchFilterBar } from '../backend/search-filter.ts'
+import { tableGrid } from '../backend/ket-table.ts'
+import type { KetTableGroup } from '../backend/ket-table.ts'
+import type { TableSelection } from '../../ui/index.ts'
 import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -48,12 +53,6 @@ type MediaRow = {
   attachment?: { name?: string; mimetype?: string }
 }
 type AnyVariant = Record<string, unknown> | null
-type SavedSearchRow = {
-  id: string
-  name: string
-  state: Partial<ListState>
-  defaultKey?: string | null
-}
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -179,7 +178,7 @@ type ProductListRow = {
   type: string
   categoryId: string | null
   uomId: string | null
-  listPrice: number
+  listPrice: number | string
   variants?: unknown[]
 }
 
@@ -203,17 +202,6 @@ const cloneState = (state: ListState): ListState => ({
   groupPages: { ...state.groupPages },
 })
 
-const keepForSearch = (url: URL): Record<string, string | string[]> => {
-  const keep: Record<string, string | string[]> = {}
-  for (const [key, value] of url.searchParams) {
-    if (['q', 'page', 'filterField', 'filterOp', 'filterValue', 'applyFilter'].includes(key)) continue
-    const current = keep[key]
-    keep[key] =
-      current === undefined ? value : Array.isArray(current) ? [...current, value] : [current, value]
-  }
-  return keep
-}
-
 const customRuleOf = (url: URL, spec: ReturnType<typeof productListSearch>): FilterRule | null => {
   if (url.searchParams.get('applyFilter') !== '1') return null
   const field = spec.filterable?.find((candidate) => candidate.key === url.searchParams.get('filterField'))
@@ -236,160 +224,27 @@ const customRuleOf = (url: URL, spec: ReturnType<typeof productListSearch>): Fil
   return { kind: 'rule', field: field.key, operator, ...(noValue ? {} : { value }) }
 }
 
-const productMenus = (
+const productFieldLabel = (
   _: ReturnType<ServeContext['translate']>,
-  url: URL,
-  state: ListState,
-  spec: ReturnType<typeof productListSearch>,
-  favorites: SavedSearchRow[],
-): SearchMenu[] => {
-  const stateHref = (change: (next: ListState) => void): string => {
-    const next = cloneState(state)
-    change(next)
-    next.page = 1
-    return encodeListState(next, url)
-  }
-  const presetItems = (spec.presets ?? []).map((preset) => ({
-    id: `preset:${preset.key}`,
-    label:
-      preset.key === 'goods' || preset.key === 'service'
-        ? _(`product_backend.type.${preset.key}`)
-        : preset.label,
-    active: state.presets.includes(preset.key),
-    path: stateHref((next) => {
-      next.presets = next.presets.includes(preset.key)
-        ? next.presets.filter((key) => key !== preset.key)
-        : [...next.presets, preset.key]
-    }),
-  }))
-  const groupItems = (spec.groupable ?? []).map((field) => {
-    const active = state.groupBy.some((group) => group.key === field.key)
-    const add = (interval?: NonNullable<(typeof state.groupBy)[number]['interval']>) =>
-      stateHref((next) => {
-        next.groupBy = next.groupBy.filter((group) => group.key !== field.key)
-        if (!active || interval) next.groupBy.push({ key: field.key, ...(interval ? { interval } : {}) })
-        next.openGroups = []
-      })
-    return field.intervals?.length
-      ? {
-          id: `group:${field.key}`,
-          label: field.label,
-          children: field.intervals.map((interval) => ({
-            id: `group:${field.key}:${interval}`,
-            label: interval,
-            active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
-            path: add(interval),
-          })),
-        }
-      : { id: `group:${field.key}`, label: field.label, active, path: add() }
-  })
-  const favoriteItems = favorites.map((favorite) => {
-    const next: ListState = {
-      ...cloneState(state),
-      ...favorite.state,
-      presets: [...(favorite.state.presets ?? [])],
-      filters: [...(favorite.state.filters ?? [])],
-      groupBy: [...(favorite.state.groupBy ?? [])],
-      sort: [...(favorite.state.sort ?? spec.defaultSort ?? [])],
-      page: 1,
-      openGroups: [],
-      groupPages: {},
-      favoriteId: favorite.id,
-    }
-    return {
-      id: `favorite:${favorite.id}`,
-      label: `${favorite.defaultKey ? '★ ' : ''}${favorite.name}`,
-      active: state.favoriteId === favorite.id,
-      path: encodeListState(next, url),
-    }
-  })
-  const returnTo = encodeListState({ ...cloneState(state), favoriteId: undefined }, url)
-  const saveUrl = new URL(returnTo, url)
-  saveUrl.searchParams.set('modal', 'favorite')
-  return [
+  key: string,
+  fallback: string,
+): string => {
+  const message = (
     {
-      id: 'filters',
-      label: _('backend.chrome.filters'),
-      items: [
-        ...presetItems,
-        {
-          id: 'archived',
-          label: _('backend.chrome.includeArchived'),
-          active: state.includeArchived,
-          path: stateHref((next) => {
-            next.includeArchived = !next.includeArchived
-          }),
-        },
-      ],
-      customFilter: {
-        fields: (spec.filterable ?? []).map((field) => ({ value: field.key, label: field.label })),
-        operators: [
-          { value: 'contains', label: _('backend.chrome.operator.contains') },
-          { value: 'equals', label: '=' },
-          { value: 'notEquals', label: '≠' },
-          { value: 'gte', label: '≥' },
-          { value: 'lte', label: '≤' },
-          { value: 'isSet', label: _('backend.chrome.operator.isSet') },
-          { value: 'isNotSet', label: _('backend.chrome.operator.isNotSet') },
-        ],
-        fieldLabel: _('backend.chrome.customField'),
-        operatorLabel: _('backend.chrome.customOperator'),
-        valueLabel: _('backend.chrome.customValue'),
-        applyLabel: _('backend.chrome.apply'),
-      },
-    },
-    { id: 'group', label: _('backend.chrome.groupBy'), items: groupItems },
-    {
-      id: 'favorites',
-      label: _('backend.chrome.favorites'),
-      items: [
-        ...favoriteItems,
-        {
-          id: 'favorite:new',
-          label: _('product_backend.favorite.create'),
-          path: `${saveUrl.pathname}${saveUrl.search}`,
-        },
-      ],
-    },
-  ]
-}
-
-const productFacets = (
-  _: ReturnType<ServeContext['translate']>,
-  url: URL,
-  state: ListState,
-  spec: ReturnType<typeof productListSearch>,
-) => {
-  const href = (change: (next: ListState) => void) => {
-    const next = cloneState(state)
-    change(next)
-    next.page = 1
-    return encodeListState(next, url)
-  }
-  return [
-    ...(state.q
-      ? [{ label: `${_('backend.chrome.searchFacet')}: ${state.q}`, without: href((next) => delete next.q) }]
-      : []),
-    ...state.presets.map((key) => ({
-      label: spec.presets?.find((preset) => preset.key === key)?.label ?? key,
-      without: href((next) => {
-        next.presets = next.presets.filter((preset) => preset !== key)
-      }),
-    })),
-    ...state.filters.map((filter, index) => ({
-      label: filter.kind === 'rule' ? `${filter.field} ${filter.operator}` : `${filter.op.toUpperCase()} (…)`,
-      without: href((next) => {
-        next.filters.splice(index, 1)
-      }),
-    })),
-    ...state.groupBy.map((group, index) => ({
-      label: `${_('backend.chrome.groupBy')}: ${group.key}${group.interval ? ` / ${group.interval}` : ''}`,
-      without: href((next) => {
-        next.groupBy.splice(index, 1)
-        next.openGroups = []
-      }),
-    })),
-  ]
+      type: 'product_backend.field.type',
+      categoryId: 'product_backend.field.category',
+      uomId: 'product_backend.field.uom',
+      active: 'product_backend.field.active',
+      saleOk: 'product_backend.field.saleOk',
+      purchaseOk: 'product_backend.field.purchaseOk',
+      createdAt: 'product_backend.field.createdAt',
+      updatedAt: 'product_backend.field.updatedAt',
+      name: 'product_backend.field.name',
+      description: 'product_backend.field.description',
+      listPrice: 'product_backend.field.listPrice',
+    } as Record<string, string>
+  )[key]
+  return message && _.resolves(message) ? _(message) : fallback
 }
 
 const pathStartsWith = (path: unknown[], prefix: unknown[]): boolean =>
@@ -408,7 +263,7 @@ const loadProductGroups = async (
     decorate: (rows: ProductListRow[]) => Promise<TemplateRow[]>
   },
   path: unknown[] = [],
-): Promise<TableGroup<TemplateRow>[]> => {
+): Promise<KetTableGroup[]> => {
   const groups = (await ctx.call(
     'product.groupTemplates',
     { state, path, timezone, limit: PAGE_SIZE },
@@ -483,7 +338,6 @@ const loadProductGroups = async (
         id: JSON.stringify(nextPath),
         label,
         count: Number(group.count),
-        depth: path.length,
         open,
         href: encodeListState(next, url),
         children: childGroups,
@@ -537,27 +391,7 @@ export const routes: Record<string, RouteEntry> = {
       const view: View = (VIEWS as readonly string[]).includes(asked ?? '') ? (asked as View) : 'list'
       const spec = productListSearch(table(ctx.manifest, 'product.Template'))
       const parsed = parseListState(spec, url)
-      const loadedFavorites = (await ctx.callUnchecked(
-        'backend.listSavedSearches',
-        { listKey: spec.key },
-        url,
-        req,
-      )) as SavedSearchRow[]
-      const favorites = loadedFavorites.filter((favorite) => {
-        try {
-          validateListState(spec, {
-            ...cloneState(parsed.state),
-            ...favorite.state,
-            presets: [...(favorite.state.presets ?? [])],
-            filters: [...(favorite.state.filters ?? [])],
-            groupBy: [...(favorite.state.groupBy ?? [])],
-            sort: [...(favorite.state.sort ?? spec.defaultSort ?? [])],
-          })
-          return true
-        } catch {
-          return false
-        }
-      })
+      const favorites = await loadListFavorites(ctx, url, req, spec, cloneState(parsed.state))
       const hasExpandedState = ['q', 'preset', 'filter', 'group', 'sort', 'archived'].some((key) =>
         url.searchParams.has(key),
       )
@@ -647,8 +481,8 @@ export const routes: Record<string, RouteEntry> = {
           const attachmentId = images.get(String(row.id))
           return {
             ...templateRow(row),
-            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
-            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? row.uomId) : '—',
+            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? row.categoryId) : '—',
             isStorable: canReadStock ? (inventory.get(String(row.id)) ?? false) : null,
             image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
           }
@@ -677,11 +511,88 @@ export const routes: Record<string, RouteEntry> = {
       const extensionActions = await ctx.joint(url, req, 'product_backend:catalogue.actions', {
         locale: localeQuery(url),
       })
-
       return adminPage(ctx, url, req, {
         title: 'KetSuite',
         translate: false,
-        body: (_, frame) => {
+        body: async (_, frame) => {
+          const filterBar = await searchFilterBar(
+            ctx,
+            url,
+            req,
+            'product-template-filter',
+            listSearchFilterConfig(_, {
+              name: 'product-template-filter',
+              bodyId: 'product-template-list',
+              spec,
+              state,
+              favorites,
+              fieldLabel: (key, fallback) => productFieldLabel(_, key, fallback),
+              presetLabel: (key, fallback) =>
+                key === 'goods' || key === 'service'
+                  ? _(`product_backend.type.${key}`)
+                  : productFieldLabel(_, key === 'sale' ? 'saleOk' : 'purchaseOk', fallback),
+              labels: {
+                searchLabel: _('product_backend.search.label'),
+                searchPlaceholder: _('product_backend.chrome.search'),
+              },
+              applyInput: { listKey: spec.key, returnTo: `${url.pathname}${url.search}` },
+              functions: {
+                apply: 'product_backend.applySearchFilter',
+                saveFavorite: 'product_backend.saveSearchFavorite',
+                deleteFavorite: 'product_backend.deleteSearchFavorite',
+                setDefaultFavorite: 'product_backend.setDefaultSearchFavorite',
+              },
+            }),
+          )
+          const shown = colsOf(url)
+          const columns = templateColumns(_)
+            .filter((column) => column.key !== 'id' || shown.includes('id'))
+            .map((column) => {
+              if (!spec.sortable?.some((field) => field.key === column.key)) return column
+              const next = cloneState(state)
+              next.sort = [
+                {
+                  key: column.key,
+                  dir: state.sort[0]?.key === column.key && state.sort[0].dir === 'asc' ? 'desc' : 'asc',
+                },
+              ]
+              next.page = 1
+              next.groupPages = {}
+              return { ...column, sortHref: encodeListState(next, url) }
+            })
+          const grid =
+            view === 'list'
+              ? await tableGrid(ctx, url, req, 'product-template-table', {
+                  columns,
+                  rows: decoratedRows,
+                  total: count,
+                  idField: 'id',
+                  locale: _.locale === 'qps' ? 'en' : _.locale,
+                  rowHrefTemplate: recordModalHref(url, {
+                    kind: 'product.template',
+                    id: '__ROW_ID__',
+                  }).replace('__ROW_ID__', '{id}'),
+                  groupBy: state.groupBy.map((group) => group.key),
+                  groups,
+                  selection,
+                  page: current,
+                  sort: state.sort[0] ? { field: state.sort[0].key, direction: state.sort[0].dir } : null,
+                  pager: false,
+                  labels: {
+                    selectAll: _('backend.table.selectAll'),
+                    selectRow: _('backend.table.selectRow'),
+                    sortedAscending: _('product_backend.table.sortAscending'),
+                    sortedDescending: _('product_backend.table.sortDescending'),
+                    previousPage: _('backend.chrome.previous'),
+                    nextPage: _('backend.chrome.next'),
+                    loading: _('backend.relation.loading'),
+                    loadError: _('backend.error.failed.title'),
+                    retry: _('backend.relation.retry'),
+                    empty: _('product_backend.screen.empty.message'),
+                    emptyHint: _('product_backend.screen.empty.hint'),
+                  },
+                })
+              : null
           const workspace = productsScreen(
             _,
             decoratedRows,
@@ -695,25 +606,37 @@ export const routes: Record<string, RouteEntry> = {
                   path: recordModalCreateHref(url, { kind: 'product.template' }),
                 },
                 selection,
-                search: {
-                  name: 'q',
-                  value: state.q ?? '',
-                  placeholder: _('product_backend.chrome.search'),
-                  keep: keepForSearch(url),
-                  facets: productFacets(_, url, state, spec),
-                  menus: productMenus(_, url, state, spec, favorites),
-                },
+                searchContent: filterBar,
                 pager: grouped ? null : pager(url, current, rows.length, count),
-                views: VIEWS.map((v) => ({
-                  id: v,
-                  label: _(`backend.chrome.view.${v}`),
-                  icon: v === 'kanban' ? 'layout-grid' : 'list',
-                  path: withParam(url, 'view', v),
-                  active: v === view,
+                tailMenus:
+                  view === 'list'
+                    ? [
+                        {
+                          id: 'columns',
+                          label: _('backend.table.columns'),
+                          items: [
+                            {
+                              id: 'id',
+                              label: _('backend.table.id'),
+                              active: shown.includes('id'),
+                              path: colsHref(url)(
+                                shown.includes('id') ? shown.filter((key) => key !== 'id') : [...shown, 'id'],
+                              ),
+                            },
+                          ],
+                        },
+                      ]
+                    : [],
+                views: VIEWS.map((candidate) => ({
+                  id: candidate,
+                  label: _(`backend.chrome.view.${candidate}`),
+                  icon: candidate === 'kanban' ? 'layout-grid' : 'list',
+                  path: withParam(url, 'view', candidate),
+                  active: candidate === view,
                 })),
               },
             },
-            { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
+            grid,
             count,
             extensionActions,
           )
@@ -836,10 +759,39 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('product.listAttributes', {}, url, req)) as Array<Record<string, unknown>>
+      const rows = (await ctx.call('product.listAttributes', {}, url, req)) as AttributeListRow[]
+      const live = await ctx.live(req)
+      const canCreate = Boolean(live.functions['product.saveAttributeDraft'])
+      const filterBar = await searchFilterBar(
+        ctx,
+        url,
+        req,
+        'product-attribute-filter',
+        attributeSearchFilterConfig(_, url),
+      )
       return adminPage(ctx, url, req, {
         title: 'product_backend.attributes.title',
-        body: (_, frame) => attributesScreen(_, rows, frame, invalidErrors(url, _), localeQuery(url)),
+        body: (_, frame) =>
+          attributesScreen(
+            _,
+            rows,
+            {
+              ...frame,
+              collectionUrl: url.pathname + url.search,
+              chrome: {
+                ...frame.chrome,
+                searchContent: filterBar,
+                create: canCreate
+                  ? {
+                      label: _('product_backend.attributes.createTitle'),
+                      path: recordModalCreateHref(url, { kind: 'product.attribute' }),
+                    }
+                  : null,
+              },
+            },
+            invalidErrors(url, _),
+            localeQuery(url),
+          ),
       })
     },
   '/admin/product/attributes/{id}/values':

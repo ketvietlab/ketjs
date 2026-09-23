@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { ketTableGroupedDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
+import { createKetTableView } from '../packages/design-system/src/interactions/ket-table/index.tsx'
 import {
   AppShell,
   AppNavigation,
@@ -186,6 +188,17 @@ test('design system: foundations expose reference, semantic and component tokens
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   assert.match(tokens, /--kv-ref-bg-main: #1b1f24/)
   assert.match(tokens, /--kv-ref-primary: #5968df/)
+  assert.match(tokens, /--kv-ref-primary-50: #eef0fb/)
+  assert.match(tokens, /--kv-ref-primary-100: #dde2f7/)
+  assert.match(tokens, /--kv-ref-primary-200: #c3cdf0/)
+  assert.match(tokens, /--kv-ref-primary-300: #aab6ed/)
+  assert.match(tokens, /--kv-ref-primary-400: #7485e8/)
+  assert.match(tokens, /--kv-ref-primary-500: #5968df/)
+  assert.match(tokens, /--kv-ref-primary-600: #4f5ed0/)
+  assert.match(tokens, /--kv-ref-primary-700: #4557bc/)
+  assert.match(tokens, /--kv-ref-primary-800: #394985/)
+  assert.match(tokens, /--kv-ref-primary-900: #2f3a5f/)
+  assert.match(tokens, /--kv-ref-info: #aab6ed/)
   assert.match(tokens, /--kv-page-bg:/)
   assert.match(tokens, /--kv-panel-bg:/)
   assert.match(tokens, /--kv-accent:/)
@@ -845,6 +858,25 @@ test('design system: operational tables expose sort, selection, grouping and row
   assert.match(selectRule, /padding: 0\.4375rem var\(--kv-space-3\)/)
 })
 
+test('design system: grouped KetTable pages each leaf without dropping later rows', () => {
+  const firstGroup = ketTableGroupedDemoConfig.groups?.[0]
+  assert.ok(firstGroup)
+  const html = renderToString(
+    createKetTableView({
+      id: 'paged-grouped-table',
+      config: {
+        ...ketTableGroupedDemoConfig,
+        manager: { listFunction: 'orders.list', pageSize: 1 },
+        groups: [{ ...firstGroup, count: 2, rows: firstGroup.rows?.slice(0, 1), offset: 0 }],
+      },
+    }).view(),
+  )
+  assert.match(html, /data-ui="kt-group-pager"[\s\S]*?1–1 \/ 2/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="prev"[^>]*disabled/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="next"/)
+  assert.match(css, /\[data-ui="kt-group-pager"\] td\s*\{[^}]*padding: var\(--kv-space-2\)/)
+})
+
 test('design system: ListChrome assembles URL-driven collection controls', () => {
   const chrome = renderToString(
     <ListChrome
@@ -958,6 +990,7 @@ test('design system: form rows collapse while field pairs remain inline', () => 
     assert.match(source, /@media \(max-width: 47\.9375rem\)/)
     assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/)
   }
+  assert.match(patterns, /min\(9rem, calc\(\(100% - var\(--kv-gap-field-group\)\) \* 0\.175\)\)/)
   assert.doesNotMatch(patterns, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(compatibility, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(partner, /\[data-ui="form-field"\]/)
@@ -1212,6 +1245,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       variant="operational"
       context="Sales / Sales orders"
       title="Sales orders"
+      headerActions={<Button label="Create order" variant="primary" />}
+      actions={<Button label="Export orders" variant="secondary" />}
       controls="Search orders"
       body="Order rows"
       status="148 orders"
@@ -1227,6 +1262,14 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
     /data-ui="list-page-body"[^>]*>[\s\S]*?Order rows[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?148 orders/,
   )
   assert.match(operationalList, /data-ui="list-page-toolbar"[\s\S]*?Search orders/)
+  const header = operationalList.slice(
+    operationalList.indexOf('data-ui="list-page-header"'),
+    operationalList.indexOf('</header>'),
+  )
+  assert.match(header, /data-ui="list-page-actions"[\s\S]*?Create order/)
+  assert.doesNotMatch(header, /Export orders/)
+  assert.ok(operationalList.indexOf('Search orders') < operationalList.indexOf('Export orders'))
+  assert.ok(operationalList.indexOf('Export orders') < operationalList.indexOf('Order rows'))
   assert.doesNotMatch(operationalList, /data-ui="list-page-status"/)
 
   const dashboardPage = renderToString(
@@ -1952,7 +1995,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 115)
+  assert.equal(names.length, 127)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1989,10 +2032,10 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 221)
-  assert.equal(designSystemInventory.summary.runtimeExports, 120)
+  assert.equal(designSystemInventory.summary.publicExports, 267)
+  assert.equal(designSystemInventory.summary.runtimeExports, 132)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),
@@ -2084,4 +2127,17 @@ test('design system: table selection checkboxes sit at 14px', () => {
     )?.[0] ?? ''
   assert.match(rule, /width: 0\.875rem;/u)
   assert.match(rule, /height: 0\.875rem;/u)
+})
+
+test('design system: indigo information text remains legible on dark surfaces', () => {
+  const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const color = (token: string) => css.match(new RegExp(`${token}: #(\\w{6})`))![1]!
+  const luminance = (hex: string) => {
+    const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+    const linear = rgb.map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+    return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722
+  }
+  const text = luminance(color('--kv-ref-info'))
+  const surface = luminance(color('--kv-ref-bg-main'))
+  assert.ok((text + 0.05) / (surface + 0.05) >= 4.5)
 })

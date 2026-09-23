@@ -6,7 +6,6 @@ import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } fro
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import {
   AppShell,
-  ListPage as DesignSystemListPage,
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
@@ -15,6 +14,8 @@ import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
 import { pageContextFromFrame } from './navigation.tsx'
+import { ListPage } from './list-page.tsx'
+import { collectionActions, collectionControls } from './collection.tsx'
 
 export const HOOKS = [
   'topbar',
@@ -35,6 +36,8 @@ export type Extras = {
 }
 
 export type Frame = {
+  /** Server request URL for native collection controls; never browser state. */
+  collectionUrl?: string
   viewer?: Viewer | null
   indicators?: Indicator[]
   menuFilter?: string | null
@@ -187,12 +190,9 @@ export type OperationalScreenOptions = {
    */
   aside?: JSXChild
   asideLabel?: string | null
-  /**
-   * What this screen offers beside its title — the one thing you came here to
-   * start. It shares the row with a list's chrome rather than replacing it, so a
-   * screen can both filter and offer an action; a screen with neither leaves the
-   * row out entirely.
-   */
+  /** Primary list action beside its title. Defaults to frame.chrome.create. */
+  headerActions?: JSXChild
+  /** List tools join primary header actions; record/workspace actions sit beside their title. */
   actions?: JSXChild
   /** Design-system location strip. CRM and customer-care pass breadcrumbs only. */
   context?: JSXChild
@@ -212,18 +212,16 @@ const operationalShell = (options: OperationalScreenOptions, body: TemplateResul
 export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
   operationalShell(
     options,
-    <DesignSystemListPage
+    <ListPage
       variant="operational"
+      frame={options.frame}
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
       description={options.subtitle}
-      actions={operationalActions(options)}
-      controls={
-        options.frame.chrome
-          ? listChrome(options.translator, options.title, options.frame.chrome, false)
-          : undefined
-      }
+      headerActions={options.headerActions}
+      actions={collectionActions(options.translator, options.frame, options.actions)}
+      controls={collectionControls(options.translator, options.title, options.frame)}
       body={options.body}
     />,
   )

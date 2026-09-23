@@ -339,6 +339,11 @@ UI nói rõ integration chưa tồn tại và chỉ cho admin sao chép link m�
 
 Module `user_backend` cung cấp:
 
+Các route gán và gỡ vai trò theo phạm vi kiểm tra cấu trúc form trước khi gọi workflow phân quyền. Khi submit
+bị từ chối, form giữ nguyên lý do mà quản trị viên đã nhập, đánh dấu đúng control chịu trách nhiệm và không
+đưa các thao tác chỉ dùng để điều hướng vào schema. Vai trò vẫn do hệ thống định nghĩa; UI chỉ hiển thị các
+gói quyền thay vì function key.
+
 - `/admin/users` và form create/detail;
 - company/branch/role membership management;
 - invitation/reset action và one-time link state;

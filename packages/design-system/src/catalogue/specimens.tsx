@@ -1,4 +1,5 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { ReorderList } from '../interactions/reorder-list/index.tsx'
 import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
@@ -21,7 +22,7 @@ import {
 import { AppShell, Page } from '../layouts/shell.tsx'
 import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
-import { ListChrome } from '../patterns/list-chrome.tsx'
+import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
 import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
@@ -38,6 +39,10 @@ import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
 import { ToastRegion } from '../interactions/toast/index.tsx'
 import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
+import { createSearchFilterView } from '../interactions/search-filter/index.tsx'
+import { searchFilterDemoConfig } from '../interactions/search-filter/demo.ts'
+import { createKetTableView, KetTable } from '../interactions/ket-table/index.tsx'
+import { ketTableDemoConfig, ketTableGroupedDemoConfig } from '../interactions/ket-table/demo.ts'
 import {
   Checkbox,
   CheckboxGroup,
@@ -74,6 +79,10 @@ import { FormattedDate, FormattedMoney, FormattedNumber } from '../record/format
 import { RecordActions, RecordRail, RecordSummary } from '../record/composition/index.tsx'
 import { ActivityTimeline, AuditLog } from '../record/activity/index.tsx'
 import { Attachments, MediaGallery } from '../record/media/index.tsx'
+import { lightboxDemoConfig } from '../interactions/lightbox/demo.ts'
+import { createLightboxView } from '../interactions/lightbox/index.tsx'
+import { relationSelectDemoConfig } from '../interactions/relation-select/demo.ts'
+import { createRelationSelectView } from '../interactions/relation-select/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -425,6 +434,31 @@ export const componentGroups: readonly ComponentGroup[] = [
     description: 'Native controls with one label, help and error contract.',
     examples: [
       {
+        id: 'reorder-list',
+        name: 'Reorder list',
+        description:
+          'Controlled editable rows emit ordered ids through one native change field; move controls accompany drag handles.',
+        render: () => (
+          <ReorderList
+            id="reorder-demo"
+            name="order"
+            label="Values"
+            labels={{
+              add: 'Add value',
+              remove: 'Remove',
+              up: 'Move up',
+              down: 'Move down',
+              drag: 'Drag',
+              empty: 'No values',
+            }}
+            items={[
+              { id: 'red', content: <Field id="reorder-red" name="red" label="Value" value="Red" /> },
+              { id: 'blue', content: <Field id="reorder-blue" name="blue" label="Value" value="Blue" /> },
+            ]}
+          />
+        ),
+      },
+      {
         id: 'field',
         name: 'Field',
         description: 'Text, select, checkbox and error states without application-owned markup.',
@@ -525,7 +559,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                     name: 'color',
                     label: 'Calendar colour',
                     type: 'color',
-                    value: '#5167c4',
+                    value: '#5968df',
                   },
                   {
                     id: 'settings-billing',
@@ -770,7 +804,12 @@ export const componentGroups: readonly ComponentGroup[] = [
                 context="Sales / Sales orders"
                 title="Sales orders"
                 description="Review demand, fulfillment and payment state from one operational list."
-                actions={<Button label="Create order" variant="primary" />}
+                headerActions={<Button label="Create order" variant="primary" />}
+                actionsPlacement="header"
+                actionsHidden
+                actions={
+                  <BulkActions selectedCount={0} actions={[{ id: 'archive', label: 'Archive selected' }]} />
+                }
                 controls={<ListDemoChrome id="app-shell" />}
                 body={<OrdersTable title="Order list" />}
               />
@@ -1162,7 +1201,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'list-page',
         name: 'List page',
         description:
-          'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
+          'The canonical collection hierarchy: identity with primary actions, URL-driven controls, tool actions and records.',
         render: () => (
           <ListPage
             variant="operational"
@@ -1170,7 +1209,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             eyebrow="Sales"
             title="Sales orders"
             description="Review demand, fulfillment and payment state from one operational list."
-            actions={<Button label="Create order" variant="primary" />}
+            headerActions={<Button label="Create order" variant="primary" />}
+            actions={<Button label="Export orders" variant="secondary" />}
             controls={
               <ListChrome
                 search={{
@@ -1642,6 +1682,91 @@ export const componentGroups: readonly ComponentGroup[] = [
             ]}
           />
         ),
+      },
+      {
+        id: 'search-filter',
+        name: 'Search filter',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+        render: () =>
+          createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
+      },
+      {
+        id: 'search-filter-presets',
+        name: 'Preset search filter',
+        description:
+          'The same compact search with only supported preset facets; unsupported custom rules, grouping and favorites are omitted.',
+        render: () =>
+          createSearchFilterView({
+            id: 'demo-search-filter-presets',
+            config: {
+              ...searchFilterDemoConfig,
+              size: 'compact',
+              capabilities: { groupBy: false, favorites: false, customFilters: false },
+              facets: searchFilterDemoConfig.facets.filter((facet) => facet.type === 'filter'),
+              groupBy: [],
+              favorites: [],
+              customFilterFields: [],
+            },
+          }).view(),
+      },
+      {
+        id: 'ket-table',
+        name: 'Ket table',
+        description:
+          'Selectable table island with either manager RPCs or native URL navigation. Shown flat, grouped with preloaded rows, and URL-driven with an active sort. The last specimen delegates paging to its surrounding toolbar. Demo links target this catalogue section; production routes supply real sort, group and page URLs.',
+        render: () => (
+          <Stack
+            items={[
+              createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              <KetTable
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Server collection',
+                    cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
+                    sortHref: '#ket-table',
+                  },
+                ]}
+                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                id={(row) => row.id}
+                rowHref={() => '#ket-table'}
+                caption="URL-driven server collection"
+                labels={ketTableDemoConfig.labels}
+              />,
+              createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
+              createKetTableView({
+                id: 'demo-ket-table-navigation',
+                config: {
+                  ...ketTableDemoConfig,
+                  manager: undefined,
+                  pager: false,
+                  sort: { field: 'name', direction: 'asc' },
+                  columns: ketTableDemoConfig.columns.map((column) => ({
+                    ...column,
+                    sortable: false,
+                    sortHref: column.key === 'name' ? '#ket-table' : undefined,
+                  })),
+                },
+              }).view(),
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'relation-select',
+        name: 'Relation select',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns state and fetches its own results client-side, so it keeps working after this static snapshot only once the page hydrates it. Shown in its default (closed) state with one value already chosen; distinct from RelationPicker below, which is href-driven and receives results pre-fetched by the server.',
+        render: () =>
+          createRelationSelectView({ id: 'demo-relation-select', config: relationSelectDemoConfig }).view(),
+      },
+      {
+        id: 'lightbox',
+        name: 'Lightbox',
+        description:
+          'A Fancybox-style image viewer, also an island: thumbnails open a full-screen stage with zoom (buttons, wheel, click to toggle 2×), drag to pan, pinch on a touch screen, previous/next and a counter; Escape closes and returns focus to the thumbnail. `createLightbox` is the same viewer without thumbnails, for a view that renders its own.',
+        render: () => createLightboxView({ id: 'demo-lightbox', config: lightboxDemoConfig }).view(),
       },
     ],
   },

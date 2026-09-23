@@ -2,12 +2,21 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf } from '../backend/paging.ts'
 import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { TableSelection } from '../../ui/index.ts'
+import { tableGrid } from '../backend/ket-table.ts'
+import type { KetTableColumn, KetTableGroup } from '../backend/ket-table.ts'
+import { searchFilterBar, searchFilterLabels } from '../backend/search-filter.ts'
+import type { SearchFacet, SearchFilterConfig } from '../backend/search-filter.ts'
+
+/** The only two fields the partner list can currently be grouped by. */
+type PartnerGroupBy = 'kind' | 'state'
+const isPartnerGroupBy = (value: string | null): value is PartnerGroupBy =>
+  value === 'kind' || value === 'state'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -26,17 +35,29 @@ const onlyPost = (req: Req) =>
       ? text('Forbidden', { status: 403 })
       : null
 
-const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
-  (
-    (await ctx.call(
-      'partner.listPartners',
-      { kind: 'company', includeArchived: false },
-      url,
-      req,
-    )) as AnyRow[]
-  )
+// Seeds the parent-organisation relation-select with only the currently chosen
+// company (if any) — the widget already searches `partner.listPartners` for the
+// rest as the user types, so preloading every company here would mean fetching
+// (and embedding into the page as JSON) the entire company partner list on every
+// partner detail render, which does not scale past a few thousand partners.
+const partnerOptions = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  parentId?: string | null,
+  exclude?: string,
+) => {
+  if (!parentId || parentId === exclude) return []
+  const rows = (await ctx.call(
+    'partner.listPartners',
+    { ids: [parentId], kind: 'company', includeArchived: true },
+    url,
+    req,
+  )) as AnyRow[]
+  return rows
     .filter((row) => row.id !== exclude)
     .map((row) => ({ value: String(row.id), label: String(row.name) }))
+}
 
 const parentControlFor = (
   ctx: ServeContext,
@@ -186,9 +207,10 @@ export const renderPartnerForm = async (
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration, salesActions, collaboration] = await Promise.all([
-    ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
-    partnerOptions(ctx, url, req, id),
+  const row = (await ctx.call('partner.getPartner', { id }, url, req)) as AnyRow | null
+  if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
+  const [parents, terms, integration, salesActions, collaboration] = await Promise.all([
+    partnerOptions(ctx, url, req, row.parentId ? String(row.parentId) : null, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
     ctx.joint(url, req, 'partner_backend:record.actions', {
       partnerId: id,
@@ -206,7 +228,6 @@ export const renderPartnerForm = async (
       lang,
     }),
   ])
-  if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
   const parentControl = await parentControlFor(ctx, url, req, _, parents, {
     id: `partner-parent-${id}`,
     value: row.parentId ? String(row.parentId) : '',
@@ -299,43 +320,109 @@ export const routes: Record<string, RouteEntry> = {
       const search = searchOf(url)
       const role = url.searchParams.get('role') || undefined
       const includeArchived = url.searchParams.get('archived') === '1'
+      const groupBy = isPartnerGroupBy(url.searchParams.get('groupBy'))
+        ? url.searchParams.get('groupBy')
+        : undefined
       const filter = { search, role, includeArchived }
-      const listHref = (changes: Record<string, string | null>) => {
-        const target = new URL(url)
-        target.searchParams.delete('page')
-        for (const [key, value] of Object.entries(changes)) {
-          if (value === null) target.searchParams.delete(key)
-          else target.searchParams.set(key, value)
-        }
-        return `${target.pathname}${target.search}`
+
+      let rows: AnyRow[] = []
+      let total = 0
+      let groups: KetTableGroup[] | undefined
+      if (groupBy === 'kind') {
+        const [companyCount, personCount, companyRows, personRows] = await Promise.all([
+          ctx.call('partner.countPartners', { ...filter, kind: 'company' }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call('partner.countPartners', { ...filter, kind: 'person' }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, groupBy: ['kind'], groupPath: ['company'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, groupBy: ['kind'], groupPath: ['person'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+        ])
+        groups = [
+          {
+            id: 'company',
+            label: _('partner.kind.company'),
+            count: companyCount.count,
+            rows: companyRows,
+            offset: 0,
+          },
+          {
+            id: 'person',
+            label: _('partner.kind.person'),
+            count: personCount.count,
+            rows: personRows,
+            offset: 0,
+          },
+        ]
+        total = companyCount.count + personCount.count
+      } else if (groupBy === 'state') {
+        // Grouping by state shows both buckets regardless of the `archived`
+        // filter facet — that checkbox has nothing left to add once the group
+        // headers already separate active from archived.
+        const stateFilter = { search, role }
+        const [activeCount, inclusiveCount, activeRows, archivedRows] = await Promise.all([
+          ctx.call('partner.countPartners', { ...stateFilter, includeArchived: false }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call('partner.countPartners', { ...stateFilter, includeArchived: true }, url, req) as Promise<{
+            count: number
+          }>,
+          ctx.call(
+            'partner.listPartners',
+            { ...stateFilter, groupBy: ['state'], groupPath: ['active'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call(
+            'partner.listPartners',
+            { ...stateFilter, groupBy: ['state'], groupPath: ['archived'], limit: PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+        ])
+        const archivedCount = Math.max(0, inclusiveCount.count - activeCount.count)
+        groups = [
+          {
+            id: 'active',
+            label: _('partner_backend.state.active'),
+            count: activeCount.count,
+            rows: activeRows,
+            offset: 0,
+          },
+          {
+            id: 'archived',
+            label: _('partner_backend.state.archived'),
+            count: archivedCount,
+            rows: archivedRows,
+            offset: 0,
+          },
+        ]
+        total = inclusiveCount.count
+      } else {
+        const [listRows, countResult] = await Promise.all([
+          ctx.call(
+            'partner.listPartners',
+            { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+          ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
+        ])
+        rows = listRows
+        total = countResult.count
       }
-      const [rows, total, activeTotal, inclusiveTotal, customerTotal, supplierTotal] = await Promise.all([
-        ctx.call(
-          'partner.listPartners',
-          { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
-          url,
-          req,
-        ) as Promise<AnyRow[]>,
-        ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
-        ctx.call('partner.countPartners', { search, includeArchived: false }, url, req) as Promise<{
-          count: number
-        }>,
-        ctx.call('partner.countPartners', { search, includeArchived: true }, url, req) as Promise<{
-          count: number
-        }>,
-        ctx.call(
-          'partner.countPartners',
-          { search, role: 'customer', includeArchived: false },
-          url,
-          req,
-        ) as Promise<{ count: number }>,
-        ctx.call(
-          'partner.countPartners',
-          { search, role: 'supplier', includeArchived: false },
-          url,
-          req,
-        ) as Promise<{ count: number }>,
-      ])
+
       const selection: TableSelection = {
         formId: 'partner-directory-bulk',
         action: inLocale(url, '/admin/partner/partners/bulk'),
@@ -345,12 +432,177 @@ export const routes: Record<string, RouteEntry> = {
           ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
         ],
       }
+      const langSuffix = url.searchParams.get('lang')
+        ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+        : ''
+
+      const facets: SearchFacet[] = [
+        ...(search ? [{ id: 'search:current', type: 'field' as const, label: search }] : []),
+        ...(role === 'customer'
+          ? [{ id: 'customer', type: 'filter' as const, label: _('partner_backend.filter.customers') }]
+          : []),
+        ...(role === 'supplier'
+          ? [{ id: 'supplier', type: 'filter' as const, label: _('partner_backend.filter.suppliers') }]
+          : []),
+        ...(includeArchived
+          ? [{ id: 'archived', type: 'filter' as const, label: _('partner_backend.filter.includeArchived') }]
+          : []),
+        ...(groupBy
+          ? [{ id: groupBy, type: 'groupBy' as const, label: _(`partner_backend.groupBy.${groupBy}`) }]
+          : []),
+      ]
+      const searchFilterConfig: SearchFilterConfig = {
+        size: 'compact',
+        name: 'partner-directory-filter',
+        facets,
+        filters: [
+          {
+            id: 'customer',
+            label: _('partner_backend.filter.customers'),
+            active: role === 'customer',
+            group: 'role',
+          },
+          {
+            id: 'supplier',
+            label: _('partner_backend.filter.suppliers'),
+            active: role === 'supplier',
+            group: 'role',
+          },
+          {
+            id: 'archived',
+            label: _('partner_backend.filter.includeArchived'),
+            active: includeArchived,
+            group: 'state',
+          },
+        ],
+        groupBy: [
+          { id: 'kind', label: _('partner_backend.groupBy.kind'), active: groupBy === 'kind' },
+          { id: 'state', label: _('partner_backend.groupBy.state'), active: groupBy === 'state' },
+        ],
+        favorites: [],
+        customFilterFields: [],
+        labels: searchFilterLabels(_, {
+          searchLabel: _('partner_backend.search.label'),
+          searchPlaceholder: _('partner_backend.search.placeholder'),
+        }),
+        manager: {
+          applyFunction: 'partner_backend.applyFilter',
+          bodyId: 'partner-directory-table',
+          applyInput: {
+            lang: url.searchParams.get('lang') ?? undefined,
+            cols: url.searchParams.get('cols') ?? undefined,
+          },
+        },
+      }
+
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
-        body: (_, frame) =>
-          partnersScreen(
+        body: async (_, frame) => {
+          const filterBar = await searchFilterBar(
+            ctx,
+            url,
+            req,
+            'partner-directory-filter',
+            searchFilterConfig,
+          )
+          const shown = colsOf(url)
+          const columns: KetTableColumn[] = [
+            {
+              key: 'name',
+              label: _('partner_backend.field.name'),
+              format: { kind: 'person', field: 'name' },
+              priority: 'primary',
+              width: 'wide',
+              sortable: true,
+            },
+            {
+              key: 'kind',
+              label: _('partner_backend.field.kind'),
+              format: {
+                kind: 'status',
+                field: 'kind',
+                tones: {
+                  company: { label: _('partner.kind.company'), tone: 'info' },
+                  person: { label: _('partner.kind.person'), tone: 'neutral' },
+                },
+              },
+              sortable: true,
+            },
+            {
+              key: 'email',
+              label: _('partner_backend.field.email'),
+              format: { kind: 'text', field: 'email' },
+              sortable: true,
+            },
+            {
+              key: 'phone',
+              label: _('partner_backend.field.phone'),
+              format: { kind: 'text', field: 'phone' },
+              sortable: true,
+            },
+            {
+              key: 'ref',
+              label: _('partner_backend.field.ref'),
+              format: { kind: 'identifier', field: 'ref' },
+              sortable: true,
+            },
+            {
+              key: 'state',
+              label: _('partner_backend.field.state'),
+              format: {
+                kind: 'status',
+                field: 'active',
+                tones: {
+                  true: { label: _('partner_backend.state.active'), tone: 'positive' },
+                  false: { label: _('partner_backend.state.archived'), tone: 'neutral' },
+                },
+              },
+            },
+          ]
+          if (shown.includes('id'))
+            columns.push({
+              key: 'id',
+              label: _('backend.table.id'),
+              format: { kind: 'identifier', field: 'id' },
+              priority: 'tertiary',
+            })
+          const grid = await tableGrid(ctx, url, req, 'partner-directory-table', {
+            columns,
+            rows: rows as never,
+            total,
+            idField: 'id',
+            rowHrefTemplate: `/admin/partner/partners/{id}${langSuffix}`,
+            groupBy: groupBy ? [groupBy] : undefined,
+            groups: groups as never,
+            selection: { formId: 'partner-directory-bulk' },
+            page: current,
+            pager: false,
+            manager: {
+              listFunction: 'partner.listPartners',
+              // No `groupFunction`: with a single group-by level, an expanded
+              // group's `depth` always equals `groupBy.length`, so `KetTable`
+              // only ever calls `listFunction` (for that group's rows) — see
+              // `fetchGroupLevel` in `ket-table/index.tsx`. It would only be
+              // reached by a second grouping level, which this screen doesn't offer.
+              listInput: { search, role, includeArchived },
+              pageSize: PAGE_SIZE,
+            },
+            labels: {
+              selectAll: _('partner_backend.table.selectAll'),
+              selectRow: _('partner_backend.table.selectRow'),
+              sortedAscending: _('partner_backend.table.sortAscending'),
+              sortedDescending: _('partner_backend.table.sortDescending'),
+              previousPage: _('partner_backend.table.previousPage'),
+              nextPage: _('partner_backend.table.nextPage'),
+              loading: _('partner_backend.table.loading'),
+              loadError: _('partner_backend.table.loadError'),
+              retry: _('partner_backend.table.retry'),
+              empty: _('partner_backend.screen.empty'),
+              emptyHint: _('partner_backend.screen.emptyHint'),
+            },
+          })
+          return partnersScreen(
             _,
-            rows as never,
             {
               ...frame,
               chrome: {
@@ -359,69 +611,30 @@ export const routes: Record<string, RouteEntry> = {
                   path: inLocale(url, '/admin/partner/partners/new'),
                 },
                 selection,
-                search: {
-                  name: 'q',
-                  value: search ?? '',
-                  placeholder: _('partner_backend.chrome.search'),
-                  keep: {
-                    ...(role ? { role } : {}),
-                    ...(includeArchived ? { archived: '1' } : {}),
-                    ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                pager: groupBy ? null : pager(url, current, rows.length, total),
+                tailMenus: [
+                  {
+                    id: 'columns',
+                    label: _('backend.table.columns'),
+                    items: [
+                      {
+                        id: 'id',
+                        label: _('backend.table.id'),
+                        active: shown.includes('id'),
+                        path: colsHref(url)(
+                          shown.includes('id') ? shown.filter((key) => key !== 'id') : [...shown, 'id'],
+                        ),
+                      },
+                    ],
                   },
-                  facets: role
-                    ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
-                    : [],
-                  menus: [
-                    {
-                      id: 'filters',
-                      label: _('backend.chrome.filters'),
-                      items: [
-                        {
-                          id: 'customers',
-                          label: _('partner_backend.filter.customers'),
-                          path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
-                          active: role === 'customer',
-                        },
-                        {
-                          id: 'suppliers',
-                          label: _('partner_backend.filter.suppliers'),
-                          path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
-                          active: role === 'supplier',
-                        },
-                        {
-                          id: 'archived',
-                          label: _('partner_backend.filter.includeArchived'),
-                          path: withParam(url, 'archived', includeArchived ? null : '1'),
-                          active: includeArchived,
-                        },
-                      ],
-                    },
-                  ],
-                },
-                pager: pager(url, current, rows.length, total.count),
+                ],
               },
             },
-            { selection },
-            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-            {
-              total: activeTotal.count,
-              customers: customerTotal.count,
-              suppliers: supplierTotal.count,
-              archived: Math.max(0, inclusiveTotal.count - activeTotal.count),
-              allHref: listHref({ role: null, archived: null }),
-              customersHref: listHref({ role: 'customer', archived: null }),
-              suppliersHref: listHref({ role: 'supplier', archived: null }),
-              archivedHref: listHref({ role: null, archived: '1' }),
-              active: includeArchived
-                ? 'archived'
-                : role === 'customer'
-                  ? 'customers'
-                  : role === 'supplier'
-                    ? 'suppliers'
-                    : 'all',
-            },
-            total.count,
-          ),
+            filterBar,
+            grid,
+            total,
+          )
+        },
       })
     },
 
@@ -464,7 +677,7 @@ export const routes: Record<string, RouteEntry> = {
         const id = randomUUID()
         const result = await savePartner(ctx, url, req, id, form)
         if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partner/partners/${id}`))
-        const parents = await partnerOptions(ctx, url, req)
+        const parents = await partnerOptions(ctx, url, req, form.parentId || null)
         return adminPage(ctx, url, req, {
           title: 'partner_backend.create.title',
           body: async (_, frame) =>
@@ -484,7 +697,7 @@ export const routes: Record<string, RouteEntry> = {
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const parents = await partnerOptions(ctx, url, req)
+      const parents = await partnerOptions(ctx, url, req, null)
       return adminPage(ctx, url, req, {
         title: 'partner_backend.create.title',
         body: async (_, frame) =>

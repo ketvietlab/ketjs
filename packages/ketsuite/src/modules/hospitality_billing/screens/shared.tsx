@@ -3,6 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   dataTable,
+  collectionTable,
   emptyState,
   ListScreen,
   linkButton,
@@ -13,12 +14,13 @@ import {
   Section,
   stack,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import { CHARGE_TYPES } from '../../hospitality_core/types.ts'
 
 export {
   badge,
   dataTable,
+  collectionTable,
   emptyState,
   ListScreen,
   linkButton,
@@ -30,7 +32,7 @@ export {
   stack,
   CHARGE_TYPES,
 }
-export type { Translator, TemplateResult, Column, Frame }
+export type { Translator, TemplateResult, Column, DataTable, Frame }
 
 export type ChargeRuleRow = {
   chargeType: string

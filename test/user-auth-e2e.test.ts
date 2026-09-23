@@ -38,12 +38,9 @@ const bootIdentity = async (t: TestContext) => {
 test('user-auth-e2e: every administration and profile screen crosses real HTTP', async (t) => {
   const { e2e } = await bootIdentity(t)
   for (const [path, expected] of [
+    // A person opens in a record modal over this list; there are no record pages,
+    // and no roles screen while custom roles cannot be assigned.
     ['/admin/users?lang=vi', /Người dùng/],
-    ['/admin/users/admin?lang=en', /Thông tin người dùng/],
-    ['/admin/users/new?lang=vi', /Tạo người dùng/],
-    ['/admin/roles?lang=en', /Roles/],
-    ['/admin/roles/new?lang=vi', /Tạo vai trò/],
-    ['/admin/permission-presets?lang=en', /Permission presets/],
     ['/admin/profile?lang=vi', /Hồ sơ của tôi/],
   ] as const) {
     const response = await e2e.client.get(path, { headers: { accept: 'text/html' } })
@@ -133,18 +130,17 @@ test("user-auth-e2e: self-service cannot revoke another user's session", async (
   )[0]
   assert.ok(adminSession)
 
-  const denied = await operator.request(
-    `/admin/users/admin/sessions/${encodeURIComponent(String(adminSession.id))}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: 'action=revoke',
-    },
-  )
-  // 403, not 400: the operator's request was well formed and their permissions
-  // were not. A monitor that cannot tell those apart cannot tell an attack from a
-  // typo.
-  assert.equal(denied.status, 403)
+  // The per-user session page is gone with the record pages: an administrator ends
+  // somebody's sessions by resetting their password in the user modal, which
+  // `user.resetPassword` guards. What must still hold is that the old address
+  // revokes nothing for anybody who posts to it.
+  await operator.request(`/admin/users/admin/sessions/${encodeURIComponent(String(adminSession.id))}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'action=revoke',
+  })
+  const still = await e2e.adapter!.all('SELECT id FROM ket_session WHERE id = ?', [adminSession.id])
+  assert.equal(still.length, 1)
   assert.equal((await e2e.client.get('/whoami')).status, 200)
 })
 

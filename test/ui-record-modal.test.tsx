@@ -131,12 +131,12 @@ test('record modal: a definition may put a footer of actions outside the scrolli
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
   assert.match(call, /actions: context \? definition\.actions\?\.\(context\) : undefined/u)
-  // A dialog layer never gets one — it already carries its own in-body submit button.
+  // A nested dialog owns its own fixed actions, independent of the record footer.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
-  assert.doesNotMatch(dialogLayer, /actions:/u)
+  assert.match(dialogLayer, /actions: spec.actions\?\.\(context\)/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -169,7 +169,7 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   // The layer is snapshotted before the guard goes up, so what was typed survives
   // the render that disables the form.
   assert.match(runtime, /keepDrafts\(currentLayer, scope\)[\s\S]*?setRunning\(true\)/u)
-  assert.match(runtime, /kept\.checks\[draftCheckKey\(control\.name, control\.value\)\] = control\.checked/u)
+  assert.match(runtime, /kept\.checks\[key\] = control\.checked/u)
   assert.match(runtime, /if \(!mayDiscard\(topLayer\(\)\)\) return/u)
   assert.match(runtime, /record\.inert = currentLayers\.length > 1/u)
   assert.match(runtime, /dialogReturnFocus/u)
@@ -177,10 +177,48 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /'idempotency-key'/u)
   assert.match(runtime, /new CustomEvent\('ket:records-changed'/u)
   // A view never fetches: only the runtime calls the function endpoint and `/files`.
-  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 2)
+  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 3)
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
+})
+
+test('record modal: a preview command changes nothing and leaves its answer on screen', () => {
+  const branch = /if \(command\.preview\) \{([\s\S]*?)\n        \}/u.exec(runtime)
+  assert.ok(branch, 'the submit path has a preview branch')
+  const body = branch[1]!
+
+  // It hands the answer to the view and stops. The selection needs no saving here:
+  // every submit snapshots its layer before it runs, and a preview clears nothing.
+  assert.match(body, /outcome\.set\(\{ command: name, value: result\.value \}\)/u)
+  assert.match(body, /return/u)
+  assert.doesNotMatch(body, /Drafts\.set|drafts\.set/u, 'a preview does not touch the drafts')
+  // Nothing is dropped, re-read or announced: the record did not change.
+  assert.doesNotMatch(body, /cache\.delete|announce\(\)|load\(/u)
+  assert.ok(
+    runtime.indexOf('if (command.preview)') < runtime.indexOf('cache.delete(current.id)'),
+    'the preview returns before the runtime treats the submit as a change',
+  )
+
+  // An answer is only ever read beside the selection it was computed from, so
+  // everything that moves the layer clears it: another record, a closed modal, a
+  // closed or newly opened dialog, another tab, a refusal, and a real write.
+  for (const [what, near] of [
+    ['another record', /outcome\.set\(null\)\n        dialog\.set/u],
+    ['a closed modal', /outcome\.set\(null\)\n      status\.set\('idle'\)/u],
+    ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
+    ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
+    ['another tab', /outcome\.set\(null\)\n              show\(/u],
+    ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
+  ] as const)
+    assert.match(runtime, near, `${what} clears the answer`)
+  // A write keeps its answer only when it stays in the layer, which is how a
+  // credential the server says once reaches the reader.
+  assert.match(
+    runtime,
+    /outcome\.set\(after_\(command\) === 'stay' \? \{ command: name, value: result\.value \} : null\)/u,
+  )
+  assert.match(runtime, /held\?\.command === command \? \(held\.value as T\) : null/u)
 })
 
 test('record modal: tabs another module adds follow the declared ones through the same filter', () => {
@@ -372,4 +410,91 @@ test('record modal: a record wears its state beside the title, inside the head',
     ModalSheet({ id: 'sheet', mode: 'client', title: 'Qualified', closeLabel: 'Đóng', body: '' }),
   )
   assert.match(plain, /data-ui="modal-title-row"/u)
+})
+
+test('record modal: unsaved fields on another tab survive remounts and reverting clears the guard', async () => {
+  const { recordDraftHasChanges } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const record = {
+    values: { name: 'Edited', body: '' },
+    initialValues: { name: 'Saved', body: '' },
+    checks: { 'tags\u0000one': false },
+    initialChecks: { 'tags\u0000one': true },
+  }
+  assert.equal(recordDraftHasChanges(record), true)
+  // Capturing an untouched dialog must not clear the underlying record's guard.
+  const dialog = { values: { reason: '' }, initialValues: { reason: '' }, checks: {}, initialChecks: {} }
+  assert.equal(recordDraftHasChanges(dialog), false)
+  assert.equal(recordDraftHasChanges(record), true)
+  record.values.name = 'Saved'
+  assert.equal(recordDraftHasChanges(record), true, 'unchecked options are also unsaved edits')
+  record.checks['tags\u0000one'] = true
+  assert.equal(recordDraftHasChanges(record), false)
+})
+
+test('record modal: route contexts preserve authorization failures and abort signals, reject external origins', async (t) => {
+  const { readRecordContextRoute } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  Object.defineProperty(globalThis, 'location', {
+    value: new URL('https://care.test/admin/crm/followups'),
+    configurable: true,
+  })
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'location', original)
+    else Reflect.deleteProperty(globalThis, 'location')
+  })
+  const controller = new AbortController()
+  const fetcher = t.mock.method(
+    globalThis,
+    'fetch',
+    async (input: string | URL | Request, init?: RequestInit) => {
+      assert.equal(input, 'https://care.test/_care/context?id=one')
+      assert.equal(init?.credentials, 'same-origin')
+      assert.equal(init?.signal, controller.signal)
+      return new Response(JSON.stringify({ data: { id: 'one' } }), { status: 200 })
+    },
+  )
+  assert.deepEqual(await readRecordContextRoute('/_care/context?id=one', controller.signal), {
+    ok: true,
+    value: { data: { id: 'one' } },
+  })
+  await assert.rejects(readRecordContextRoute('https://external.test/context'), /same-origin/)
+  assert.equal(fetcher.mock.callCount(), 1)
+  fetcher.mock.mockImplementation(async () => new Response(null, { status: 403 }))
+  assert.deepEqual(await readRecordContextRoute('/private'), {
+    ok: false,
+    issues: [],
+    message: null,
+    status: 403,
+  })
+})
+
+test('record modal: public forms associate fixed-footer submitters and retain command fields', async () => {
+  const { RecordModalForm } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const { Button } = await import('@ketvietlab/design-system')
+  const html = await renderToString(
+    ModalSheet({
+      id: 'nested',
+      title: 'Milestone',
+      mode: 'client',
+      closeLabel: 'Close',
+      body: RecordModalForm({
+        kind: 'care.program',
+        id: 'milestone-form',
+        hidden: { __command: 'saveMilestone', id: 'one' },
+        fields: [{ id: 'title', name: 'title', label: 'Title', required: true }],
+      }),
+      actions: Button({ type: 'submit', form: 'milestone-form', label: 'Save' }),
+    }),
+  )
+  assert.match(html, /id="milestone-form"/)
+  assert.match(html, /name="__command" value="saveMilestone"/)
+  assert.match(html, /form="milestone-form"/)
+  assert.ok(html.indexOf('form="milestone-form"') > html.indexOf('</form>'))
+})
+
+test('record modal: action forms opt out of field container sizing in fixed footers', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const actionRule = css.match(/\[data-ui="record-form"\]\[data-layout="actions"\]\s*\{([^}]+)\}/u)?.[1] ?? ''
+  assert.match(actionRule, /container-type:\s*normal/u)
+  assert.match(actionRule, /flex:\s*0 0 auto/u)
 })
