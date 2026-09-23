@@ -515,3 +515,24 @@ panel.
 Cover shared components with contract tests and a representative rendered screen. Generated visual
 artifacts may be used locally for inspection, but they are not source documentation and should not be
 committed as PR evidence.
+
+### Client record dialog context and actions
+
+`RecordModalDialog.actions(context)` renders a nested dialog's own fixed footer. Use
+`RecordModalForm` with a stable `id` and footer buttons with the HTML `form` attribute,
+just as for the main record's `actions`. The runtime continues to own validation,
+submitting, busy state, layer-scoped drafts, focus and close confirmation. `hidden`
+allows a form to supply non-visible command inputs without rebuilding its markup.
+The form and trigger helpers are also exported from the browser `record-modal-client` entry.
+
+A modal may use `context.route(id, creating)` for a read-only, same-origin JSON context
+route instead of `context.fn`. That route returns `{ data, messages }` and composes
+its reads through `ServeContext.call` so each function retains its authorization and
+scope checks. It must not return server-rendered dialog HTML. The runtime handles
+loading, aborts and cache policy for either source.
+
+A successful command may declare `navigate(value, context)` for a same-origin
+location, for example a newly created record or a URL-backed collection filter. The
+runtime performs navigation only after the command succeeds; refusals retain the draft.
+
+Action-only record forms (`data-layout="actions"`) opt out of field-container sizing and retain their intrinsic button width inside a fixed footer. This contract belongs to the shared RecordForm stylesheet.

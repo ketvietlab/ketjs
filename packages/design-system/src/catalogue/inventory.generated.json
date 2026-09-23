@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 77,
-    "cssLines": 15060
+    "cssLines": 15068
   },
   "rows": [
     {
@@ -631,7 +631,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/ui-record-modal.test.tsx"],
       "gapTask": "DS-013"
     },
     {
@@ -7352,8 +7352,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -11714,7 +11714,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 175,
+      "lines": 183,
       "hooks": [
         "bulk-action-list",
         "cell",
