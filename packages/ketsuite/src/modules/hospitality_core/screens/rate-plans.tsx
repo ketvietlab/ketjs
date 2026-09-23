@@ -1,8 +1,9 @@
+import { collectionQueryKeep, prepareCollectionTable } from '../../../ui/index.ts'
 import { ListScreenFrame } from './page-frame.tsx'
 import {
   type Choice,
   choices,
-  dataTable,
+  collectionTable,
   emptyState,
   feedback,
   type Frame,
@@ -36,12 +37,21 @@ export const ratePlansScreen = (
     values?: Record<string, string>
   },
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    { columns: ratePlanColumns(_), rows, id: (row) => row.id },
+    {
+      paginate: true,
+      searchText: (row) => `${row.code} ${row.name} ${row.roomType?.name ?? ''} ${row.amount}`,
+    },
+  )
   const list = (
     <ListScreenFrame
       translator={_}
       title={_('hospitality_core.screen.ratePlans.title')}
-      frame={frame}
-      actions={
+      frame={collection.frame}
+      headerActions={
         roomTypes.length
           ? linkButton({
               label: _('hospitality_core.screen.ratePlans.create'),
@@ -50,11 +60,14 @@ export const ratePlansScreen = (
             })
           : undefined
       }
-      body={stack([
-        feedback(_, state),
+      controls={
         <RecordForm
           action="/admin/hospitality/rate-plans"
           method="get"
+          hidden={collectionQueryKeep(
+            new URL(frame.collectionUrl ?? '/admin/hospitality/rate-plans', 'http://collection.local'),
+            ['property'],
+          )}
           layout="inline"
           submit={_('hospitality_core.action.select')}
           submitVariant="secondary"
@@ -68,7 +81,11 @@ export const ratePlansScreen = (
               required: true,
             },
           ]}
-        />,
+        />
+      }
+      body={stack([
+        feedback(_, state),
+
         roomTypes.length
           ? null
           : emptyState(
@@ -84,8 +101,8 @@ export const ratePlansScreen = (
         <Section
           title={_('hospitality_core.screen.ratePlans.list')}
           body={
-            rows.length
-              ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
+            collection.table.rows.length
+              ? collectionTable(_, collection.table)
               : emptyState(
                   _('hospitality_core.screen.ratePlans.empty'),
                   _('hospitality_core.screen.ratePlans.emptyHint'),

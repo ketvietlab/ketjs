@@ -5,6 +5,7 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode } from '@ketvietlab/ketjs'
+import { Breadcrumbs as DesignSystemBreadcrumbs } from '@ketvietlab/design-system'
 import { icon } from './icons.ts'
 import type { Viewer } from './nav.tsx'
 
@@ -90,6 +91,24 @@ export const pageContext = (o: {
       !!(o.viewer.companyName ?? o.viewer.company ?? o.viewer.branchName) &&
       viewerContext(o.viewer)}
   </div>
+)
+
+const trailItems = (title: string, frame: PageContextFrame) => {
+  const items = activeTrail(frame.menu ?? []).map((node, index) => ({
+    id: `${index}:${node.label}`,
+    label: node.label,
+    ...(node.path ? { href: node.path } : {}),
+  }))
+  if (items.length === 0 || items.at(-1)?.label !== title) items.push({ id: title, label: title })
+  return items
+}
+
+/**
+ * The design-system location strip: breadcrumbs only, no company viewer.
+ * CRM and customer-care headers follow this contract.
+ */
+export const pageTrailFromFrame = (title: string, frame: PageContextFrame): TemplateResult => (
+  <DesignSystemBreadcrumbs label={title} items={trailItems(title, frame)} />
 )
 
 const activeTrail = (nodes: readonly MenuNode[]): MenuNode[] => {

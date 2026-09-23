@@ -18,6 +18,8 @@ details.
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
 | `@ketvietlab/ketjs-view/jsx-runtime` | Automatic JSX runtime. |
 | `@ketvietlab/ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
+| `@ketvietlab/ketjs-view-tools` | Static page rendering, asset bundling, local development, preview, and project validation. |
+| `@ketvietlab/create-view` | Runnable static Ket view project generator. |
 | `@ketvietlab/ketjs-postgres` | Optional PostgreSQL adapter. |
 
 All packages require Node.js 24 or later for their supported server/tooling use. `@ketvietlab/ketjs-view` has no runtime
@@ -151,7 +153,8 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
 | `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `@ketvietlab/ketjs-view` rendering helpers. |
-| `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Server-render, hydrate, and reconcile named islands. |
+| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Type, server-render, hydrate, and reconcile named islands. |
+| `BrowserBehavior`, `BrowserBehaviorContext`, `BrowserNavigation` | Document-wide progressive enhancement and the public fragment-navigation service. |
 | `reachOf`, `functionsOf`, `formatReach`, `formatInventory` | Inspect function and data/effect permission reach. |
 | `permissionInventory` | Build a deterministic, serializable module/function permission inventory, including modules with no functions. |
 | `agentTools`, `agentDescriptor`, `compositionSchema` | Describe the composed application for tooling and agents. |
@@ -206,14 +209,16 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `isResult`, `isEach`, `isMarkup` | Type guards for the three values the renderer understands. |
 | `createRoot`, `hydrateRoot` | Create or hydrate a rendering root. |
 | `mount`, `mountHydrated` | Mount component-style view functions. |
-| `renderToString`, `trustedMarkup` | Server rendering and explicit trusted markup. |
+| `renderToString`, `renderToStaticString`, `trustedMarkup` | Hydratable server rendering, static document rendering, and explicit trusted markup. |
 | `HydrationMismatch`, `HOLE_MARKER`, `HOLE_OPEN` | Hydration diagnostics and the pair of protocol markers. |
 | `EVENT_PREFIX` | The attribute prefix that makes an attribute a listener rather than markup. |
-| `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError`, `ISLAND_TAG` | Island serialization, hydration, reconciliation, disposal, and failures. |
+| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError` | Typed island declarations, serialization, hydration, reconciliation, disposal, and failures. |
+| `ISLAND_TAG`, `ISLAND_HOST_ATTRIBUTE`, `ISLAND_SELECTOR` | Legacy and standard-element island host protocol constants. |
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
 
 The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
-`IslandController`, `IslandManager`, and their related prop/instance types.
+`IslandController`, `IslandMountContext`, `IslandManager`, `IslandHostTag`, `RenderIslandOptions`, and
+their related prop/instance types.
 
 `@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
 may import any of these names from either one.

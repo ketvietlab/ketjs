@@ -1,0 +1,38 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="activity-timeline"],
+  :where([data-kv-design-system]) [data-ui="audit-log"] {
+    display: grid;
+    gap: var(--kv-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="activity-item"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="activity-marker"] {
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-top: var(--kv-space-2);
+    border-radius: 50%;
+    background: var(--kv-color-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="activity-item"] :is(p, time),
+  :where([data-kv-design-system]) [data-ui="audit-item"] :is(time, span) {
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="audit-item"] {
+    display: grid;
+    grid-template-columns: minmax(8rem, auto) minmax(8rem, auto) minmax(0, 1fr);
+    gap: var(--kv-space-3);
+    padding-block: var(--kv-space-2);
+    border-bottom: 1px solid var(--kv-panel-border);
+  }
+}

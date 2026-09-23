@@ -101,6 +101,7 @@ export function compose(
     reports: {},
     regions: { required: [...(opts.requiredRegions ?? [])], provided: {} },
     islands: {},
+    behaviors: {},
     sections: {},
     contentTypes: {},
     taxonomies: {},
@@ -195,17 +196,43 @@ export function compose(
   // stylesheet after it and can override it. That ordering is the point.
   for (const m of order) {
     if (m.assets) manifest.assets[m.name] = typeof m.assets === 'string' ? m.assets : m.assets.pathname
-    for (const href of m.styles) {
+    for (const [index, declared] of m.styles.entries()) {
+      if (declared instanceof URL) {
+        if (declared.protocol !== 'file:') {
+          diag.add({
+            code: 'E_STYLE_URL_PROTOCOL',
+            module: m.name,
+            message: `"${m.name}" declares non-file stylesheet "${declared.href}"`,
+            hint: 'package styles must resolve to a local file URL so they ship with the deployment',
+          })
+          continue
+        }
+        const slash = declared.pathname.lastIndexOf('/')
+        const file = declared.pathname.slice(slash + 1)
+        const owner = `${m.name}.style-${index}`
+        if (!file) {
+          diag.add({
+            code: 'E_STYLE_URL_FILE',
+            module: m.name,
+            message: `"${m.name}" declares stylesheet URL without a file name`,
+            hint: 'resolve the package stylesheet file, not its directory',
+          })
+          continue
+        }
+        manifest.assets[owner] = declared.pathname.slice(0, slash)
+        manifest.styles.push({ by: m.name, href: `/_ket/asset/${owner}/${file}` })
+        continue
+      }
       if (!m.assets) {
         diag.add({
           code: 'E_STYLE_WITHOUT_ASSETS',
           module: m.name,
-          message: `"${m.name}" declares style "${href}" but no assets directory`,
-          hint: 'styles are resolved against the module assets directory, so a module with styles needs one',
+          message: `"${m.name}" declares style "${declared}" but no assets directory`,
+          hint: 'string styles resolve against module assets; use a file URL for a package stylesheet',
         })
         continue
       }
-      manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${href}` })
+      manifest.styles.push({ by: m.name, href: `/_ket/asset/${m.name}/${declared}` })
     }
     for (const [path, make] of Object.entries(m.routes)) {
       let pattern: RoutePattern
@@ -1023,6 +1050,67 @@ export function compose(
           message: `joint "${key}" prop "${name}" has unknown type "${spec}"`,
           hint: 'use a scalar type or a composed view-model key',
         })
+      }
+    }
+  }
+
+  // --- browser behaviours --------------------------------------------------
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.behaviors)) {
+      const existing = manifest.behaviors[name]
+      if (existing) {
+        diag.add({
+          code: 'E_BEHAVIOR_DUPLICATE',
+          module: m.name,
+          message: `browser behavior "${name}" is already provided by "${existing.by}"`,
+        })
+        continue
+      }
+      if (!def || typeof def !== 'object' || typeof def.client !== 'string' || !def.client) {
+        diag.add({
+          code: 'E_BEHAVIOR_SHAPE',
+          module: m.name,
+          message: `browser behavior "${name}" needs a non-empty client module`,
+        })
+        continue
+      }
+      if (!m.assets) {
+        diag.add({
+          code: 'E_BEHAVIOR_WITHOUT_ASSETS',
+          module: m.name,
+          message: `browser behavior "${name}" declares "${def.client}" but "${m.name}" has no assets directory`,
+        })
+        continue
+      }
+      if (
+        def.client.startsWith('/') ||
+        def.client.includes('\\') ||
+        def.client.includes('?') ||
+        def.client.includes('#') ||
+        def.client.split('/').includes('..')
+      ) {
+        diag.add({
+          code: 'E_BEHAVIOR_CLIENT_PATH',
+          module: m.name,
+          message: `browser behavior "${name}" client path must stay inside the module assets directory`,
+        })
+        continue
+      }
+      if (def.when !== undefined && (typeof def.when !== 'string' || !def.when.trim())) {
+        diag.add({
+          code: 'E_BEHAVIOR_SELECTOR',
+          module: m.name,
+          message: `browser behavior "${name}" when must be a non-empty selector`,
+        })
+        continue
+      }
+      manifest.behaviors[name] = {
+        by: m.name,
+        client: {
+          src: `/_ket/asset/${m.name}/${def.client}`,
+          export: def.export ?? 'default',
+        },
+        ...(def.when === undefined ? {} : { when: def.when }),
       }
     }
   }

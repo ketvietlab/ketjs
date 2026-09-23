@@ -3,15 +3,10 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { KanbanCard, KanbanGrid } from '@ketvietlab/design-system'
 
 export const HOOKS = [
-  'kanban',
-  'kanban-card',
-  'kanban-media',
-  'kanban-title',
-  'kanban-meta',
-  'kanban-note',
-  'kanban-actions',
+  // Kanban markup now comes from @ketvietlab/design-system, which declares its hooks.
   'record-list',
   'record-row',
   'record-copy',
@@ -78,21 +73,13 @@ export const kanbanCard = (o: {
   meta?: JSXChild
   note?: string | null
   actions?: JSXChild
-}): TemplateResult => (
-  <article data-ui="kanban-card" data-key={o.key} data-interactive={String(!!o.href)}>
-    {o.media !== undefined && <div data-ui="kanban-media">{o.media}</div>}
-    <h3 data-ui="kanban-title">{o.href ? <a href={o.href}>{o.title}</a> : o.title}</h3>
-    {o.meta !== undefined && <div data-ui="kanban-meta">{o.meta}</div>}
-    {!!o.note && <p data-ui="kanban-note">{o.note}</p>}
-    {o.actions !== undefined && <div data-ui="kanban-actions">{o.actions}</div>}
-  </article>
-)
+}): TemplateResult => <KanbanCard id={o.key} {...o} />
 
 export const kanbanGrid = <T,>(o: {
   rows: readonly T[]
   id: (row: T) => unknown
   card: (row: T) => TemplateResult
-}): TemplateResult => <div data-ui="kanban">{each(o.rows, o.id, (row) => o.card(row))}</div>
+}): TemplateResult => <KanbanGrid {...o} />
 
 /** Compact/mobile operational rows: values stay aligned and the row has one destination. */
 /**

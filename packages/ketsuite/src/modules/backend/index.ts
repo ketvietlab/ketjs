@@ -2,7 +2,7 @@
 //
 // Deliberately NOT a theme. A storefront theme is a stranger's code, so it is
 // written in a restricted language that cannot run (D3, D18). A backend screen is
-// ours: it needs forms, filters and real interaction, so it is written in `html`
+// ours: it needs forms, filters and real interaction, so it uses trusted view helpers
 // with islands like any trusted view. Letting a third party replace a backend
 // template is precisely the mechanism that made the domain contract's upgrades painful.
 //
@@ -17,6 +17,8 @@ import { islands } from './islands.ts'
 import { menus } from './menus.ts'
 import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
+const designSystemStyles = new URL(import.meta.resolve('@ketvietlab/design-system/styles.css'))
+
 export default defineModule({
   name: 'backend',
   version: '0.2.0',
@@ -27,7 +29,7 @@ export default defineModule({
   // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
   styles: [
-    'design-system.css',
+    designSystemStyles,
     'tokens.css',
     'foundation.css',
     'lists.css',
@@ -46,10 +48,18 @@ export default defineModule({
   menus,
   joints,
   islands,
+  behaviors: {
+    'backend.shell': {
+      client: 'client/backend-shell.mjs',
+      export: 'backendShell',
+      when: '[data-kv-design-system] [data-ui="app-shell"]',
+    },
+  },
   fills: {
     'backend:relation.select': `{% island "backend.relation-select" %}`,
-    'backend:runtime': `{% island "backend.table-selection" %}`,
     'backend:screen.chart': `{% island "backend.chart" %}`,
+    'backend:table.grid': `{% island "backend.ket-table" %}`,
+    'backend:search.filter': `{% island "backend.search-filter" %}`,
   },
   messages,
 })
@@ -96,6 +106,69 @@ export { formRefusal, readForm, seeOther } from './forms.ts'
 export type { FormRefusal } from './forms.ts'
 
 /**
+ * The collection controls, for a module that is not in this package.
+ *
+ * `joints.ts` already publishes the two islands a modern list is made of —
+ * `backend:search.filter` and `backend:table.grid` — so a deployment's own
+ * module can mount them. What it could not reach was the half that decides what
+ * goes in them: turning a `ListSearchShape` into the bar's configuration,
+ * reading the viewer's saved searches, and declaring the functions the bar
+ * calls back into. Those are policy, not markup, and a module that cannot
+ * import them has to copy them, which is how two lists stop agreeing about what
+ * a preset or a saved search means.
+ *
+ * Nothing here is new work: these are the same entry points product_backend,
+ * sale_backend and the rest already use, named on the boundary so a private
+ * vertical adopts the collection instead of reproducing it.
+ */
+export {
+  listSearchChrome,
+  listSearchFilterConfig,
+  loadListFavorites,
+  searchFilterBar,
+  searchFilterLabels,
+} from './search-filter.ts'
+export type { ListFavorite, ListSearchFilterOptions } from './search-filter.ts'
+export type {
+  CustomFilterField,
+  SearchFacet,
+  SearchFavorite,
+  SearchFilterConfig,
+  SearchFilterCustomRule,
+  SearchFilterLabels,
+  SearchFilterManager,
+  SearchFilterOption,
+  SearchFilterSize,
+  SearchGroupByOption,
+} from './search-filter.ts'
+export {
+  emptyListState,
+  listSearchFilterFunctions,
+  searchFilterHref,
+  stateFromPayload,
+} from './search-filter-state.ts'
+export type { ListSearchBinding, SearchPayload } from './search-filter-state.ts'
+export { tableGrid } from './ket-table.ts'
+export type {
+  KetTableCellFormat,
+  KetTableColumn,
+  KetTableConfig,
+  KetTableGroup,
+  KetTableManager,
+  KetTableSelection,
+} from './ket-table.ts'
+/** The same bar over a collection a module already holds in memory. */
+export {
+  applyRowListState,
+  defineRowList,
+  ROW_LIST_PAGE_SIZE,
+  rowGroupKey,
+  rowListGroups,
+  rowListSearch,
+} from './row-list.ts'
+export type { RowListSpec, RowPreset } from './row-list.ts'
+
+/**
  * The kit, re-exported.
  *
  * It is not this module's — it lives in `@ketvietlab/ketsuite/ui` so a module can use a button
@@ -128,6 +201,7 @@ export {
   icon,
   hasIcon,
   definitionList,
+  DataMatrix,
   progressBar,
   gantt,
   chart,
@@ -190,6 +264,9 @@ export type {
   ChartKey,
   Column,
   DataTable,
+  DataMatrixColumn,
+  DataMatrixProps,
+  DataMatrixRow,
   TableGroup,
   Tone,
   Frame,

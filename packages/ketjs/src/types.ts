@@ -523,6 +523,31 @@ export type PermissionCatalogue = {
   roleTemplates: Record<string, CompiledRoleTemplate>
 }
 
+/** A browser module mounted once while its selector exists in the document. */
+export type BrowserBehaviorDefinition = {
+  /** Browser module relative to the declaring module's assets directory. */
+  client: string
+  /** Named export; defaults to `default`. */
+  export?: string
+  /** Load and mount only while this selector matches somewhere in the document. */
+  when?: string
+}
+
+export type BrowserNavigation = {
+  navigate(target: string | URL, options?: { replace?: boolean }): Promise<void>
+  apply(response: Response, options?: { signal?: AbortSignal }): Promise<void>
+  replace(target: string | URL): void
+  reload(target?: string | URL): void
+}
+
+export type BrowserBehaviorContext = {
+  document: Document
+  navigation: BrowserNavigation
+  lifetime: AbortSignal
+}
+
+export type BrowserBehavior = (context: BrowserBehaviorContext) => undefined | (() => void)
+
 export type ModuleSpec = ModuleMeta & {
   kind?: 'module' | 'theme'
   name: string
@@ -565,15 +590,18 @@ export type ModuleSpec = ModuleMeta & {
    */
   assets?: URL | string
   /**
-   * Stylesheets for the head of every page, relative to `assets`, in the order
-   * written. Across modules the order is dependency order, so a module that
-   * extends another loads after it and can override it.
+   * Stylesheets for the head of every page, in the order written. String entries
+   * are relative to `assets`. A file URL publishes the stylesheet from its own
+   * package directory, including any relative imports beside it.
+   *
+   * Across modules the order is dependency order, so a module that extends
+   * another loads after it and can override it.
    *
    * Declared rather than linked by hand: a deployment that names another module's
    * stylesheet has to know that module's file layout, and goes on linking it long
    * after the module leaves the composition.
    */
-  styles?: string[]
+  styles?: Array<string | URL>
   /**
    * Routes this module serves, one factory per path or dynamic segment pattern.
    *
@@ -588,7 +616,9 @@ export type ModuleSpec = ModuleMeta & {
   /** Absolute path prefixes this module owns and exposes only via published contributors. */
   reserves?: string[]
   /** Interactive views a theme may place but never write. */
-  islands?: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
+  islands?: Record<string, import('@ketvietlab/ketjs-view').AnyIslandDefinition>
+  /** Document-wide progressive enhancements owned by this module. */
+  behaviors?: Record<string, BrowserBehaviorDefinition>
   sections?: Record<string, SectionDef>
   contentTypes?: Record<string, ContentTypeDef>
   taxonomies?: Record<string, TaxonomyDef>
@@ -619,10 +649,11 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly templates: Record<string, string>
   readonly provides: readonly string[]
   readonly assets: string | URL | null
-  readonly styles: readonly string[]
+  readonly styles: readonly (string | URL)[]
   readonly routes: Record<string, RouteEntry>
   readonly reserves: readonly string[]
-  readonly islands: Record<string, import('@ketvietlab/ketjs-view').IslandDefinition>
+  readonly islands: Record<string, import('@ketvietlab/ketjs-view').AnyIslandDefinition>
+  readonly behaviors: Record<string, BrowserBehaviorDefinition>
   readonly sections: Record<string, SectionDef>
   readonly contentTypes: Record<string, ContentTypeDef>
   readonly taxonomies: Record<string, TaxonomyDef>
@@ -651,13 +682,14 @@ export type Manifest = {
     string,
     { by: string; props: Record<string, string>; key?: string[]; client?: { src: string; export: string } }
   >
+  behaviors: Record<string, { by: string; client: { src: string; export: string }; when?: string }>
   sections: Record<string, SectionDef & { by: string }>
   contentTypes: Record<string, ComposedContentType>
   taxonomies: Record<string, ComposedTaxonomy>
   relations: Record<string, Record<string, ComposedRelation>>
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
-  /** Static file directories, per module, behind /_ket/asset/<module>/. */
+  /** Static file directories, per module or resolved package stylesheet, behind /_ket/asset/. */
   assets: Record<string, string>
   /** Stylesheets in dependency order. */
   styles: Array<{ by: string; href: string }>

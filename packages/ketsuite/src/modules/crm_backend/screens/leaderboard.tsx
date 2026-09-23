@@ -1,12 +1,14 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
-  inline,
   linkButton,
   ListPage,
-  listChrome,
+  pageTrailFromFrame,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -17,6 +19,8 @@ export type LeaderboardProfile = Record<string, unknown>
 
 export type LeaderboardScreenOptions = {
   profiles: LeaderboardProfile[]
+  total?: number
+  offset?: number
   errors?: string[]
   locale?: string
 }
@@ -90,7 +94,7 @@ export const leaderboardScreen = (
 ): TemplateResult => {
   const rows: LeaderboardProfile[] = options.profiles.map((profile, index) => ({
     ...profile,
-    rank: index + 1,
+    rank: profile.rank ?? (options.offset ?? 0) + index + 1,
   }))
   const title = _('crm_backend.leaderboard.title')
   const refresh = (
@@ -105,42 +109,35 @@ export const leaderboardScreen = (
     />
   )
 
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (profile) => String(profile.id),
+      responsive: 'stack',
+      columns: leaderboardColumns(_, options.locale),
+      rowHref: (profile) =>
+        localized(`/admin/users/${encodeURIComponent(String(profile.userId))}`, options.locale ?? ''),
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     title,
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(title, frame)}
       title={title}
       description={_('crm_backend.leaderboard.subtitle')}
-      actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              title,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
-      status={`${title}: ${String(rows.length)}`}
+      actions={collectionActions(_, frame, refresh)}
+      controls={collectionControls(_, title, frame)}
+      status={`${title}: ${String(options.total ?? rows.length)}`}
       body={
         rows.length
-          ? dataTable(_, {
-              rows,
-              id: (profile) => String(profile.id),
-              responsive: 'stack',
-              columns: leaderboardColumns(_, options.locale),
-              rowHref: (profile) =>
-                localized(`/admin/users/${encodeURIComponent(String(profile.userId))}`, options.locale ?? ''),
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('crm_backend.leaderboard.emptyTitle'), _('crm_backend.leaderboard.emptyHint'))
       }
     />,

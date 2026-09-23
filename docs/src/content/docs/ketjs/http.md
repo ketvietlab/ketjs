@@ -95,6 +95,8 @@ Route factories receive live runtime services:
 | `reportsOf(url, request, target)` | Installed reports for a model whose source the viewer may call. |
 | `appsOf(request)` | Installed/available module information for this tenant. |
 | `scopeOf(url, request)` | Company and branch scope resolved from the session or development shim. |
+| `requestIdentityOf(url, request)` | The identity the request runs as, or `null`: user, companies, branches and `origin` — `session` for a cookie session, `request` for an identity `resolveIdentity` asserted. Read the viewer from here, not from `sessionsOf(...).of(request)`, which sees only cookies. |
+| `signOutPath` | Where a viewer with a `request` identity signs out (`serve.signOutPath`), or `null`. A cookie session signs out through `POST /logout`; a gateway login must end at the gateway so its upstream login ends too. |
 | `call(name, input, url, request)` | Function call carrying tenant, session, permissions, actor, and scope. |
 | `callUnchecked(...)` | Internal authorization bootstrap only; deliberately easy to audit by name. |
 | `callUncheckedForVerifiedCompany(...)` | Exact-company function dispatch after an external credential has cryptographically authenticated that company. |
@@ -207,7 +209,19 @@ external URLs, hash-only links, and elements under `data-ket-reload` are left al
 history, back/forward restoration, request cancellation, title, scroll, hash focus, and `aria-busy`,
 and emits `ket:navigation-start`, `ket:navigation-complete`, and `ket:navigation-error`.
 
-An invalid MIME type, missing or duplicate slot, login redirect, unknown island, failed island update,
+Every routed response and the generated browser runtime carry the same `X-Ket-Build` identifier. A
+fragment from a different deployment build is never reconciled into the current document: the browser
+performs a normal navigation to obtain a matching HTML/runtime pair. Low-level servers set
+`createKetServer({ buildId })`; deployment specs set `serve.buildId`. Production should use an immutable
+release or image identifier. The default is a deterministic manifest fingerprint, so changing browser
+code without changing a module version requires an explicit `buildId`.
+
+Module-owned POST enhancement uses the injected `BrowserNavigation` service. Send the normal fragment
+negotiation headers and pass the response to `navigation.apply(response, { signal })`; it applies the
+same cancellation, MIME, slot, island, build, and location checks as link navigation. Do not parse
+`ket-fragments`, mutate slots, or write history independently in each module.
+
+An invalid MIME type, missing or duplicate slot, login redirect, build mismatch, unknown island, failed island update,
 or any reconciliation error falls back to a full navigation. Without JavaScript, every link and form
 continues to use ordinary document navigation.
 

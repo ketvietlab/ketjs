@@ -15,6 +15,7 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { BarChart } from '@ketvietlab/design-system'
 
 export const HOOKS = [
   'chart',
@@ -25,13 +26,6 @@ export const HOOKS = [
   'chart-legend-label',
   'chart-legend-value',
   'chart-empty',
-  'bar-chart',
-  'bar-chart-row',
-  'bar-chart-label',
-  'bar-chart-track',
-  'bar-chart-fill',
-  'bar-chart-value',
-  'bar-chart-scale',
   'delta',
 ] as const
 
@@ -115,10 +109,9 @@ export const chart = (o: {
 /**
  * Magnitudes against the largest of them.
  *
- * Not a canvas, on purpose. Bars run horizontally because the labels are account
- * names, each row links to the ledger behind it, and both of those are things a
- * canvas cannot give — a chart nobody can click into is a number to trust
- * blindly, which is the same objection the trial balance already answers.
+ * The Design System owns the one implementation; this keeps the admin's
+ * original call shape. `caption` stays off the rendered row here because admin
+ * callers used it as data, not as a visible second line.
  */
 export const barChart = (o: {
   bars: readonly ChartBar[]
@@ -126,43 +119,18 @@ export const barChart = (o: {
   /** The scale spelled out under the bars, when the caller wants one printed. */
   scale?: readonly string[]
   empty?: string
-}): TemplateResult => {
-  const bars = o.bars.filter((bar) => finite(bar.value) !== 0)
-  const ceiling = axisCeiling(Math.max(...bars.map((bar) => Math.abs(finite(bar.value))), 0))
-  if (!bars.length) return <p data-ui="chart-empty">{o.empty ?? ''}</p>
-  return (
-    <div data-ui="bar-chart">
-      {each(
-        bars,
-        (bar) => bar.id,
-        (bar, index) => (
-          <div data-ui="bar-chart-row">
-            <span data-ui="bar-chart-label">{bar.href ? <a href={bar.href}>{bar.label}</a> : bar.label}</span>
-            <span data-ui="bar-chart-track">
-              <span
-                data-ui="bar-chart-fill"
-                data-series={slotOf(index + 1)}
-                style={`inline-size: ${ceiling <= 0 ? 0 : ((Math.abs(finite(bar.value)) / ceiling) * 100).toFixed(2)}%`}
-              />
-            </span>
-            <span data-ui="bar-chart-value">{o.value(bar)}</span>
-          </div>
-        ),
-      )}
-      {!!o.scale?.length && (
-        <div data-ui="bar-chart-scale">
-          {each(
-            o.scale,
-            (tick, at) => `${tick}:${at}`,
-            (tick) => (
-              <span>{tick}</span>
-            ),
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+  label?: string
+}): TemplateResult =>
+  BarChart({
+    label: o.label ?? '',
+    bars: o.bars.map((bar) => ({ id: bar.id, label: bar.label, value: bar.value, href: bar.href ?? null })),
+    value: (bar) => {
+      const held = o.bars.find((row) => row.id === bar.id)
+      return held ? o.value(held) : ''
+    },
+    ...(o.scale ? { scale: o.scale } : {}),
+    ...(o.empty !== undefined ? { empty: o.empty } : {}),
+  })
 
 /**
  * A change against a previous period.

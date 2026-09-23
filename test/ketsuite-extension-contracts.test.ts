@@ -30,4 +30,12 @@ test('KetSuite publishes Product Template operation entry points', () => {
     props: { templateId: 'id', locale: 'text?' },
     multiple: true,
   })
+  assert.deepEqual(productBackend.joints['template.tabs'], {
+    props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
+    multiple: true,
+  })
+  assert.deepEqual(productBackend.joints['template.panel'], {
+    props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
+    multiple: true,
+  })
 })

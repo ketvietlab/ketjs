@@ -17,6 +17,7 @@ export type ThemeRuntime = {
   templates: Record<string, Compiled>
   islands: IslandRegistry
   clients: Record<string, { src: string; export: string }>
+  behaviors: Record<string, { src: string; export: string; when?: string }>
   /**
    * The declared tokens of everything this theme actually renders with, as CSS.
    *
@@ -46,6 +47,12 @@ export function createTheme(
     Object.entries(manifest.islands)
       .filter(([, island]) => island.client !== undefined)
       .map(([name, island]) => [name, island.client as { src: string; export: string }]),
+  )
+  const behaviors = Object.fromEntries(
+    Object.entries(manifest.behaviors).map(([name, behavior]) => [
+      name,
+      { ...behavior.client, ...(behavior.when === undefined ? {} : { when: behavior.when }) },
+    ]),
   )
   const sources: Record<string, string> = {}
   const templateOwner: Record<string, KetModule> = {}
@@ -255,5 +262,5 @@ export function createTheme(
     }
   }
 
-  return { renderRegion, templates, islands, clients, tokensCss }
+  return { renderRegion, templates, islands, clients, behaviors, tokensCss }
 }

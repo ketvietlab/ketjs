@@ -129,8 +129,13 @@ const sources = {
   },
   account_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   account_staff_channel: {
@@ -175,6 +180,17 @@ const sources = {
     exemptions: {
       installCatalog: ['internal-route', 'address.trusted-route-worker-or-service'],
     },
+  },
+  address_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
   },
   attendance: {
     posture: 'permission-bearing',
@@ -254,6 +270,19 @@ const sources = {
       contextLabels: ['internal-route', 'company.trusted-route-worker-or-service'],
     },
   },
+  company_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      // The bar reads what the reader may already read, and writes only their
+      // own saved searches.
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   crm: {
     posture: 'permission-bearing',
     bundles: ['agent-operate', 'analytics', 'approve', 'assignment', 'configure', 'merge', 'report', 'view'],
@@ -264,6 +293,7 @@ const sources = {
       'activity.complete': ['approve', 'approve', 'crm.domain-policy'],
       'activity.listMine': ['read', 'view'],
       'activity.schedule': ['operate', 'agent-operate'],
+      'assignmentRule.modalContext': ['read', 'view'],
       'assignmentRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'bootstrap.defaults': ['configure', 'configure', 'crm.configuration-audit'],
       'calendar.list': ['read', 'view'],
@@ -291,16 +321,20 @@ const sources = {
       overview: ['read', 'report'],
       'pipeline.summary': ['read', 'report'],
       'plan.apply': ['configure', 'configure', 'crm.configuration-audit'],
+      'scoreRule.modalContext': ['read', 'view'],
       'scoreRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'stage.list': ['read', 'view'],
+      'stage.modalContext': ['read', 'view'],
       'stage.save': ['configure', 'configure', 'crm.configuration-audit'],
       'tag.archive': ['configure', 'configure', 'crm.configuration-audit'],
       'tag.list': ['read', 'view'],
+      'tag.modalContext': ['read', 'view'],
       'tag.save': ['configure', 'configure', 'crm.configuration-audit'],
       'team.list': ['read', 'view'],
       'team.member.list': ['read', 'view'],
       'team.member.remove': ['configure', 'configure', 'crm.configuration-audit'],
       'team.member.save': ['configure', 'configure', 'crm.configuration-audit'],
+      'team.modalContext': ['read', 'view'],
       'team.save': ['configure', 'configure', 'crm.configuration-audit'],
     },
     exemptions: {},
@@ -437,8 +471,13 @@ const sources = {
 
   flow_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {
       // `exposure: 'internal'`: the generic /_ket/fn/ path refuses these outright.
       // Live Doc calls them through the route that has already run its own record
@@ -453,12 +492,16 @@ const sources = {
     posture: 'permission-bearing',
     bundles: ['approve', 'configure', 'operate', 'view'],
     functions: {
+      applySearchFilter: ['read', 'view'],
+      deleteSearchFavorite: ['operate', 'operate'],
       getFolioBilling: ['read', 'view'],
       invoiceFolio: ['approve', 'approve', 'hospitality_billing.domain-policy'],
       listChargeRules: ['read', 'view'],
       queueClosedFolios: ['operate', 'operate'],
       recordFolioPayment: ['operate', 'operate'],
       saveChargeRule: ['configure', 'configure', 'hospitality_billing.configuration-audit'],
+      saveSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
     },
     exemptions: {},
   },
@@ -518,6 +561,10 @@ const sources = {
       getStay: ['read', ['view', 'night-audit']],
       getTapeChart: ['read', ['view', 'reservation-input', 'revenue-operate']],
       listAmenities: ['read', 'view'],
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
       listAmenityCategories: ['read', 'view'],
       listBuildings: ['read', 'view'],
       listCancellationPolicies: ['read', ['view', 'reservation-input', 'revenue-operate']],
@@ -642,6 +689,17 @@ const sources = {
     },
     exemptions: {},
   },
+  hr_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   inventory_staff_channel: {
     posture: 'projection/bridge',
     bundles: [],
@@ -686,6 +744,10 @@ const sources = {
       'portal.summary': ['operate', 'operate'],
       'program.archive': ['configure', 'configure', 'loyalty.configuration-audit'],
       'program.get': ['read', 'view'],
+      'program.inspect': ['read', 'view'],
+      'program.preview': ['read', 'view'],
+      'program.configure': ['configure', 'configure', 'loyalty.configuration-audit'],
+      'program.transition': ['configure', 'configure', 'loyalty.configuration-audit'],
       'program.list': ['read', 'view'],
       'program.save': ['configure', 'configure', 'loyalty.configuration-audit'],
       'program.setPricelists': ['configure', 'configure', 'loyalty.configuration-audit'],
@@ -716,6 +778,17 @@ const sources = {
     },
     exemptions: {},
   },
+  loyalty_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   loyalty_pos: {
     posture: 'permission-bearing',
     bundles: ['approve', 'configure', 'operate', 'view'],
@@ -731,6 +804,21 @@ const sources = {
       refundOrder: ['approve', 'approve', 'loyalty_pos.domain-policy'],
       removeReward: ['operate', 'operate'],
       validateOrder: ['approve', 'approve', 'loyalty_pos.domain-policy'],
+    },
+    exemptions: {},
+  },
+  loyalty_sale: {
+    posture: 'permission-bearing',
+    bundles: ['approve', 'configure', 'operate'],
+    functions: {
+      applyCode: ['configure', 'configure', 'loyalty_sale.configuration-audit'],
+      applyReward: ['configure', 'configure', 'loyalty_sale.configuration-audit'],
+      backfill: ['operate', 'operate'],
+      cancelOrder: ['approve', 'approve', 'loyalty_sale.domain-policy'],
+      confirmOrder: ['approve', 'approve', 'loyalty_sale.domain-policy'],
+      evaluateOrder: ['operate', 'operate'],
+      refundOrder: ['approve', 'approve', 'loyalty_sale.domain-policy'],
+      removeReward: ['operate', 'operate'],
     },
     exemptions: {},
   },
@@ -797,8 +885,13 @@ const sources = {
   },
   manufacturing_backend: {
     posture: 'permission-bearing',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   oauth: {
@@ -825,8 +918,13 @@ const sources = {
   },
   oauth_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   partner: {
@@ -851,8 +949,13 @@ const sources = {
   },
   partner_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view'],
+    functions: {
+      // Pure URL computation from client-supplied filter state — no model read,
+      // no write, nothing revealed that the caller did not already send. The
+      // same floor as `partner.countPartners`/`listPartners`'s own `view` risk.
+      applyFilter: ['read', 'view'],
+    },
     exemptions: {},
   },
   partner_mail_backend: {
@@ -929,8 +1032,13 @@ const sources = {
   },
   pos_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   pos_channel: {
@@ -944,6 +1052,17 @@ const sources = {
       listDeviceSyncCommands: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
       priceBook: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
     },
+  },
+  pricing_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
   },
   pricing: {
     posture: 'permission-bearing',
@@ -981,21 +1100,31 @@ const sources = {
       listVariants: ['read', 'view'],
       removeAttributeLine: ['configure', 'configure', 'product.configuration-audit'],
       saveAttribute: ['configure', 'configure', 'product.configuration-audit'],
+      saveAttributeDraft: ['configure', 'configure', 'product.configuration-audit'],
       saveAttributeLine: ['configure', 'configure', 'product.configuration-audit'],
       saveAttributeValue: ['configure', 'configure', 'product.configuration-audit'],
       saveBrand: ['configure', 'configure', 'product.configuration-audit'],
       saveCategory: ['configure', 'configure', 'product.configuration-audit'],
       saveTemplate: ['configure', 'configure', 'product.configuration-audit'],
       saveVariant: ['configure', 'configure', 'product.configuration-audit'],
+      saveVariantSetup: ['configure', 'configure', 'product.configuration-audit'],
       setCost: ['configure', 'configure', 'product.configuration-audit'],
       setProductUom: ['configure', 'configure', 'product.configuration-audit'],
+      templateModalContext: ['read', 'view'],
+      attributeModalContext: ['read', 'view'],
     },
     exemptions: {},
   },
   product_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      applyAttributeSearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   product_mail_backend: {
@@ -1054,8 +1183,13 @@ const sources = {
   },
   purchase_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   purchase_staff_channel: {
@@ -1119,8 +1253,13 @@ const sources = {
   },
   sale_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   sale_staff_channel: {
@@ -1192,8 +1331,13 @@ const sources = {
   },
   stock_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   stock_mail_backend: {
@@ -1239,6 +1383,7 @@ const sources = {
       getAttachment: ['read', 'view'],
       listAttachments: ['read', 'view'],
       removeAttachment: ['operate', 'operate'],
+      requestRender: ['operate', 'operate'],
       requestSweep: ['operate', 'operate'],
     },
     exemptions: {
@@ -1288,6 +1433,7 @@ const sources = {
       permissionCatalogue: ['security', 'security', 'user.security-audit'],
       permitted: ['sensitive', 'sensitive', 'user.sensitive-data'],
       previewRoleTemplate: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      provisionUser: ['security', 'security', 'user.security-audit'],
       revokeBranch: ['security', 'security', 'user.security-audit'],
       revokeCompany: ['security', 'security', 'user.security-audit'],
       revokeFunction: ['security', 'security', 'user.security-audit'],
@@ -1297,6 +1443,7 @@ const sources = {
       setDefaultContext: ['security', 'security', 'user.security-audit'],
       unassignRole: ['security', 'security', 'user.security-audit'],
       unassignScopedRole: ['security', 'security', 'user.security-audit'],
+      userModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
     },
     exemptions: {
       authenticate: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
@@ -1313,8 +1460,24 @@ const sources = {
   },
   user_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
+  website_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   website_form: {

@@ -97,6 +97,8 @@ test('payment terms ListPage keeps command controls, summaries, archive state an
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/accounting\/terms\?lang=vi&amp;q=30&amp;create=1"/)
   assert.match(html, /href="\/admin\/accounting\/terms\?lang=vi&amp;q=30&amp;line=1"/)

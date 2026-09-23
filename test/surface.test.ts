@@ -6,6 +6,7 @@ import { html } from '@ketvietlab/ketjs-view'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /**
  * The served surface — routes, assets, stylesheets — is composed from modules for
@@ -81,6 +82,18 @@ test('compose: assets are namespaced by module, so two may ship the same file na
     m.styles.map((s) => s.href),
     ['/_ket/asset/a/base.css', '/_ket/asset/b/base.css'],
   )
+})
+
+test('compose: a module may load a package stylesheet without copying its CSS', () => {
+  const packageRoot = assetDir({ 'package.css': '@import "./theme.css";' })
+  const packageStyle = new URL('package.css', pathToFileURL(`${packageRoot}/`))
+  const module = defineModule({ name: 'package_consumer', styles: [packageStyle] })
+  const manifest = compose([module])
+
+  assert.deepEqual(manifest.styles, [
+    { by: 'package_consumer', href: '/_ket/asset/package_consumer.style-0/package.css' },
+  ])
+  assert.equal(manifest.assets['package_consumer.style-0'], packageRoot)
 })
 
 test('compose: two modules claiming one path is a build error, not a race at boot', () => {
@@ -181,6 +194,48 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
   assert.match(body, /\/_ket\/asset\/skin\/v[0-9a-f]{8}\/extra\.css/)
   assert.ok(body.indexOf('/core/') < body.indexOf('/skin/'), 'and in dependency order')
   await b.close()
+})
+
+test('serving: a package stylesheet is linked, fingerprinted and served from its owner package', async () => {
+  const packageRoot = assetDir({ 'package.css': ':root { --package-style: 1 }' })
+  const packageStyle = new URL('package.css', pathToFileURL(`${packageRoot}/`))
+  const packageModule = defineModule({
+    name: 'package_consumer',
+    styles: [packageStyle],
+    routes: {
+      '/package-style':
+        (ctx: ServeContext): Route =>
+        async (url, req) =>
+          page({
+            body: ctx.document({
+              lang: 'en',
+              head: await ctx.styles(req),
+              body: html`<main>Package style</main>`,
+            }),
+          }),
+    },
+  })
+  const deployment = defineDeployment({
+    name: 'package_style_surface',
+    modules: [packageModule],
+    headless: true,
+    serve: {},
+  })
+  const booted = await bootDeployment(deployment, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:' },
+    port: 0,
+  })
+  const at = `http://127.0.0.1:${booted.port}`
+  try {
+    const body = await fetch(`${at}/package-style`).then((response) => response.text())
+    const href = /\/_ket\/asset\/package_consumer\.style-0\/v[0-9a-f]{8}\/package\.css/.exec(body)?.[0]
+    assert.ok(href)
+    const stylesheet = await fetch(at + href)
+    assert.equal(stylesheet.status, 200)
+    assert.equal(await stylesheet.text(), ':root { --package-style: 1 }')
+  } finally {
+    await booted.close()
+  }
 })
 
 test('serving: dynamic segments are decoded and a static route wins over a parameter', async () => {

@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'address_backend',
@@ -9,6 +10,7 @@ export default defineModule({
   summary: 'Cài đặt và kiểm tra catalog địa giới theo quốc gia.',
   category: 'Danh bạ',
   routes,
+  functions: searchFilterFunctions,
   menus: {
     'admin.addresses': {
       parent: 'admin.config',

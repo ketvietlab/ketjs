@@ -4,26 +4,8 @@ import { callFn, compose, migrateOne, registerFunctions } from '@ketvietlab/ketj
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import { address, partner } from '@ketvietlab/ketsuite'
+import { adminUrl, live } from './postgres-live.ts'
 
-const configured =
-  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
-const adminUrl = new URL(configured)
-adminUrl.pathname = '/postgres'
-
-const reachable = await (async () => {
-  const adapter = postgresAdapter(adminUrl.toString())
-  try {
-    await adapter.open()
-    await adapter.all('SELECT 1')
-    await adapter.close()
-    return true
-  } catch {
-    await adapter.close().catch(() => {})
-    return false
-  }
-})()
-
-const live = { skip: reachable ? false : `no PostgreSQL at ${adminUrl.toString()}` }
 const modules = [address, partner]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
@@ -38,8 +20,8 @@ test('address PostgreSQL: concurrent VN installation and default selection conve
   const first = postgresAdapter(databaseUrl.toString(), { max: 2 })
   const second = postgresAdapter(databaseUrl.toString(), { max: 2 })
   await admin.open()
-  await admin.exec(`CREATE DATABASE "${database}"`)
   try {
+    await admin.exec(`CREATE DATABASE "${database}"`)
     await Promise.all([first.open(), second.open()])
     await migrateOne(first, manifest)
     registerFunctions(modules)

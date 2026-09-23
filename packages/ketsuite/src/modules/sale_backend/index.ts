@@ -1,3 +1,7 @@
+import { loadSaleOrderCollection, loadSalePartnerNames } from './order-collection.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { invoicingPolicyListSearch, quotationListSearch, saleOrderListSearch } from './search.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -174,16 +178,13 @@ const partnerNames = async (
 ): Promise<Map<string, unknown>> => {
   const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
   if (!ids.length) return new Map()
-  // The picker list is capped, so it can no longer double as a name lookup: a
-  // page of orders names exactly the partners it shows, however many the
-  // tenant holds.
-  const partners = (await ctx.call(
-    'partner.listPartners',
-    { ids, includeArchived: true },
-    url,
-    req,
-  )) as AnyRow[]
-  return new Map(partners.map((r) => [String(r.id), r.name]))
+  // Explicit-ID lookups are bounded too; resolve every order's customer before
+  // visible-field search, including customers beyond the first lookup batch.
+  return loadSalePartnerNames(
+    ids,
+    (batch) =>
+      ctx.call('partner.listPartners', { ids: batch, includeArchived: true }, url, req) as Promise<AnyRow[]>,
+  )
 }
 const orderFields = async (
   ctx: ServeContext,
@@ -788,12 +789,35 @@ const en = {
   'invoicePolicy.order': 'Ordered quantities',
   'invoicePolicy.delivery': 'Delivered quantities',
 }
+/** Every sales list shares one set of functions; see `search-functions.ts`. */
+const saleSearchFunctions = {
+  apply: 'sale_backend.applySearchFilter',
+  saveFavorite: 'sale_backend.saveSearchFavorite',
+  deleteFavorite: 'sale_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'sale_backend.setDefaultSearchFavorite',
+}
+
+/** A sales state or status in the reader's language; the value survives as data. */
+const saleGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `sale_backend.${key}.${raw}`
+  return _.resolves(message) ? _(message) : raw
+}
+
 export default defineModule({
   name: 'sale_backend',
   version: '0.1.0',
   depends: ['sale', 'backend', 'partner_backend'],
   assets: new URL('./client/', import.meta.url),
   islands,
+  behaviors: {
+    'sale.editor': {
+      client: 'sale.mjs',
+      export: 'editorBehavior',
+      when: 'form[data-scope="sale-order"]',
+    },
+  },
   joints: {
     'order.loyalty': { props: { orderId: 'id', locale: 'text?' } },
     'order.collaboration': {
@@ -802,6 +826,7 @@ export default defineModule({
     },
     'order.editor': { props: { identity: 'text', orderId: 'id', lang: 'text?' } },
   },
+  functions: searchFilterFunctions,
   title: 'Bán hàng trong quản trị',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
@@ -814,28 +839,26 @@ export default defineModule({
       sequence: 1,
       needs: 'sale.listOrders',
     },
-    'sale.ordersGroup': { parent: 'sale', label: 'menu.ordersGroup', sequence: 10 },
     'sale.quotations': {
-      parent: 'sale.ordersGroup',
+      parent: 'sale',
       label: 'menu.quotations',
       path: '/admin/sales/quotations',
       needs: 'sale.listOrders',
-      sequence: 10,
+      sequence: 1010,
     },
     'sale.orders': {
-      parent: 'sale.ordersGroup',
+      parent: 'sale',
       label: 'menu.orders',
       path: '/admin/sales/orders',
       needs: 'sale.listOrders',
-      sequence: 20,
+      sequence: 1020,
     },
-    'sale.products': { parent: 'sale', label: 'menu.products', sequence: 20 },
     'sale.policies': {
-      parent: 'sale.products',
+      parent: 'sale',
       label: 'menu.policies',
       path: '/admin/sales/invoicing-policies',
       needs: 'sale.setInvoicePolicy',
-      sequence: 10,
+      sequence: 2010,
     },
   },
   routes: {
@@ -884,32 +907,45 @@ export default defineModule({
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const state = url.searchParams.get('state')
-        const rows = (await ctx.call(
-          'sale.listOrders',
-          {
-            ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
-          },
-          url,
-          req,
-        )) as AnyRow[]
+        const rows = await loadSaleOrderCollection(
+          (page) =>
+            ctx.call(
+              'sale.listOrders',
+              { ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }), ...page },
+              url,
+              req,
+            ) as Promise<AnyRow[]>,
+        )
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
-          body: async (_, shell) =>
-            quotationsListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: quotationListSearch,
+              rows: rows
+                .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-quotation-filter',
+              bodyId: 'sale-quotation-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.quotations.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return quotationsListScreen(
               _,
               {
                 createHref: createPath,
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
-                rows: rows
-                  .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                  .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
                 detailSuffix,
               },
-              shell,
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/new':
@@ -947,22 +983,36 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const detailSuffix = localeQuery(url)
-        const rows = (await ctx.call('sale.listOrders', { state: 'sale' }, url, req)) as AnyRow[]
+        const rows = await loadSaleOrderCollection(
+          (page) => ctx.call('sale.listOrders', { state: 'sale', ...page }, url, req) as Promise<AnyRow[]>,
+        )
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
-          body: async (_, shell) =>
-            salesOrdersListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: saleOrderListSearch,
+              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-order-filter',
+              bodyId: 'sale-order-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.orders.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return salesOrdersListScreen(
               _,
               {
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
                 detailSuffix,
               },
-              shell,
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/{id}': detail,
@@ -982,13 +1032,24 @@ export default defineModule({
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
           body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: invoicingPolicyListSearch,
+              rows,
+              frame: shell,
+              name: 'sale-invoicing-policy-filter',
+              bodyId: 'sale-invoicing-policy-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.policies.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
             const workspace = invoicingPoliciesListScreen(
               _,
               {
                 createHref: invoicingPolicyModalPath(url),
-                rows,
+                rows: search.rows,
+                ...(search.groups ? { table: { groups: search.groups } } : {}),
               },
-              shell,
+              search.frame,
             )
             if (url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(

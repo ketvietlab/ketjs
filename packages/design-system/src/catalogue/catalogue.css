@@ -14,12 +14,8 @@
   :where([data-kv-design-system])[data-ui="catalogue"] {
     display: grid;
     min-height: 100dvh;
-    grid-template-columns: 15rem minmax(0, 1fr);
-    background:
-      linear-gradient(var(--kv-color-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--kv-color-line) 1px, transparent 1px), var(--kv-color-canvas);
-    background-size: 4rem 4rem;
-    background-position: -1px -1px;
+    grid-template-columns: 17rem minmax(0, 1fr);
+    background: var(--kv-color-canvas);
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-rail"] {
@@ -63,13 +59,25 @@
     font-family: var(--kv-font-mono);
     font-size: var(--kv-text-xs);
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-nav"] {
     display: grid;
     gap: var(--kv-space-1);
+    padding-bottom: var(--kv-space-6);
+    overflow-y: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-nav-section"] {
+    margin: var(--kv-space-5) var(--kv-space-3) var(--kv-space-1);
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-nav-group"] {
@@ -91,6 +99,12 @@
     color: var(--kv-color-ink);
   }
 
+  :where([data-kv-design-system]) [data-ui="catalogue-nav-group"][aria-current="page"] {
+    box-shadow: inset 0.1875rem 0 var(--kv-color-accent);
+    background: var(--kv-color-accent-soft);
+    color: var(--kv-color-ink);
+  }
+
   :where([data-kv-design-system]) [data-ui="catalogue-nav-count"] {
     color: var(--kv-color-ink-muted);
     font-family: var(--kv-font-mono);
@@ -108,20 +122,9 @@
     grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.45fr);
     gap: var(--kv-space-8);
     align-items: end;
-    min-height: 19rem;
-    margin-bottom: 5rem;
-    padding: clamp(var(--kv-space-6), 5vw, var(--kv-space-12));
-    border: 1px solid var(--kv-color-line-strong);
-    border-radius: var(--kv-radius-lg);
-    background:
-      radial-gradient(
-        circle at 88% 12%,
-        color-mix(in srgb, var(--kv-color-accent) 20%, transparent),
-        transparent 32%
-      ),
-      linear-gradient(142deg, var(--kv-color-surface), var(--kv-color-canvas-raised));
-    box-shadow: var(--kv-shadow-float);
-    overflow: hidden;
+    margin-bottom: var(--kv-space-8);
+    padding-bottom: var(--kv-space-6);
+    border-bottom: 1px solid var(--kv-color-line-strong);
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-hero"] [data-ui="catalogue-kicker"] {
@@ -130,20 +133,165 @@
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-title"] {
-    max-width: 13ch;
+    overflow-wrap: anywhere;
     margin-bottom: var(--kv-space-4);
     font-family: var(--kv-font-display);
-    font-size: var(--kv-text-3xl);
+    font-size: clamp(2.25rem, 5vw, 5rem);
     font-weight: var(--kv-weight-semibold);
-    letter-spacing: -0.035em;
+    letter-spacing: -0.045em;
     line-height: 0.98;
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-intro"] {
     max-width: 52rem;
-    margin-bottom: 0;
+    margin-bottom: var(--kv-space-6);
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-md);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-hero"] [data-ui="button"] + [data-ui="button"] {
+    margin-inline-start: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-metrics"] {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-block: 1px solid var(--kv-color-line-strong);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-metrics"] > article {
+    display: grid;
+    gap: var(--kv-space-1);
+    padding: var(--kv-space-5);
+    border-inline-end: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-metrics"] > article:last-child {
+    border-inline-end: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-metrics"] strong {
+    font-family: var(--kv-font-display);
+    font-size: clamp(1.75rem, 3vw, 2.75rem);
+    font-weight: 650;
+    line-height: 1;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-metrics"] span {
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-xs);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-grid"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"] {
+    display: grid;
+    min-height: 14rem;
+    align-content: start;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-5);
+    border: 1px solid var(--kv-color-line);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-color-canvas-raised);
+    color: var(--kv-color-ink);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"]:hover {
+    border-color: var(--kv-color-accent);
+    box-shadow: inset 0 -0.1875rem var(--kv-color-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"] > span {
+    color: var(--kv-color-accent);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    font-weight: 800;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"] h3 {
+    margin: auto 0 0;
+    font-family: var(--kv-font-display);
+    font-size: var(--kv-text-lg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"] p {
+    margin: 0;
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-doc-card"] > a {
+    color: var(--kv-color-accent);
+    font-size: var(--kv-text-sm);
+    font-weight: 700;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-index"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--kv-space-5);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-list"] {
+    display: grid;
+    align-content: start;
+    border-block-start: 0.1875rem solid var(--kv-color-ink);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-list"] > header {
+    display: flex;
+    min-height: 4.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-3) 0;
+    border-bottom: 1px solid var(--kv-color-line-strong);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-list"] > header h2 {
+    margin: 0;
+    font-size: var(--kv-text-md);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-list"] > header span {
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-link"] {
+    display: flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-3) var(--kv-space-1);
+    border-bottom: 1px solid var(--kv-color-line);
+    color: var(--kv-color-ink);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-link"]:hover {
+    padding-inline: var(--kv-space-3);
+    background: var(--kv-color-surface-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-component-link"] small {
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-governance"] {
+    margin: var(--kv-space-2) 0 0;
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    text-transform: uppercase;
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-controls"] {
@@ -164,7 +312,7 @@
     font-family: var(--kv-font-mono);
     font-size: var(--kv-text-xs);
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 
@@ -187,7 +335,7 @@
   :where([data-kv-design-system]) [data-ui="catalogue-group"] {
     display: grid;
     gap: var(--kv-space-4);
-    margin-top: 5rem;
+    margin-top: var(--kv-space-10);
     scroll-margin-top: var(--kv-space-5);
   }
 
@@ -203,7 +351,7 @@
   :where([data-kv-design-system]) [data-ui="catalogue-group-head"] h2 {
     margin-bottom: 0;
     font-family: var(--kv-font-display);
-    font-size: 1.8rem;
+    font-size: var(--kv-text-xl);
     font-weight: 650;
   }
 
@@ -224,6 +372,14 @@
     background: var(--kv-color-canvas-raised);
     scroll-margin-top: var(--kv-space-5);
     overflow: hidden;
+  }
+
+  /* Overlay specimens must demonstrate the real layer instead of clipping it
+     to the documentation card. The normal clipped border returns when closed. */
+  :where([data-kv-design-system]) [data-ui="catalogue-specimen"]:has([data-ui="menu"][open]) {
+    position: relative;
+    z-index: var(--kv-layer-menu);
+    overflow: visible;
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-specimen-head"] {
@@ -248,15 +404,29 @@
     font-size: var(--kv-text-sm);
   }
 
+  :where([data-kv-design-system]) [data-ui="catalogue-specimen-components"] {
+    margin: var(--kv-space-2) 0 0;
+    color: var(--kv-color-accent);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+  }
+
   :where([data-kv-design-system]) [data-ui="catalogue-stage"] {
     min-width: 0;
-    padding: clamp(var(--kv-space-4), 4vw, var(--kv-space-8));
-    background: radial-gradient(
-      circle at 1px 1px,
-      color-mix(in srgb, var(--kv-color-line) 74%, transparent) 1px,
-      transparent 0
-    );
-    background-size: 1rem 1rem;
+    padding: var(--kv-space-4);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-stage"] > [data-ui="app-shell"][data-mode="embedded"] {
+    height: min(44rem, 88dvh);
+    min-height: 34rem;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="catalogue-stage"]
+    > [data-ui="app-shell"][data-mode="embedded"]
+    [data-ui="app-main"] {
+    overflow-y: auto;
   }
 
   :where([data-kv-design-system]) [data-ui="shell-demo-sidebar"],
@@ -299,6 +469,12 @@
     :where([data-kv-design-system]) [data-ui="catalogue-nav"] {
       display: flex;
       flex: 1;
+      padding-bottom: 0;
+      overflow: visible;
+    }
+
+    :where([data-kv-design-system]) [data-ui="catalogue-nav-section"] {
+      display: none;
     }
 
     :where([data-kv-design-system]) [data-ui="catalogue-nav-group"] {
@@ -321,9 +497,41 @@
       margin-bottom: var(--kv-space-12);
     }
 
+    :where([data-kv-design-system]) [data-ui="catalogue-metrics"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    :where([data-kv-design-system]) [data-ui="catalogue-metrics"] > article:nth-child(2) {
+      border-inline-end: 0;
+    }
+
+    :where([data-kv-design-system]) [data-ui="catalogue-metrics"] > article:nth-child(-n + 2) {
+      border-bottom: 1px solid var(--kv-color-line);
+    }
+
+    :where([data-kv-design-system]) [data-ui="catalogue-doc-grid"],
+    :where([data-kv-design-system]) [data-ui="catalogue-component-index"] {
+      grid-template-columns: 1fr;
+    }
+
     :where([data-kv-design-system]) [data-ui="catalogue-specimen-head"] {
       align-items: stretch;
       flex-direction: column;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="catalogue-stage"]
+      > [data-ui="app-shell"][data-mode="embedded"] {
+      height: auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="catalogue-stage"]
+      > [data-ui="app-shell"][data-mode="embedded"]
+      [data-ui="app-main"] {
+      overflow-y: visible;
     }
   }
 

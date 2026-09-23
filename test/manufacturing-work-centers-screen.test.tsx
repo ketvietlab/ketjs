@@ -59,6 +59,8 @@ test('manufacturing work centers list: ListPage exposes edit and archive without
     ),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/manufacturing\/work-centers\?create=1&amp;lang=vi"/)
   assert.match(html, /data-row-href="\/admin\/manufacturing\/work-centers\?edit=packing&amp;lang=vi"/)

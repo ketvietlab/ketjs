@@ -5,19 +5,19 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import {
-  ListPage as DesignSystemListPage,
+  AppShell,
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
-import { sidebar, sidebarMain } from './nav.tsx'
+import { sidebarMain, sidebarNavigationContent } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
 import { pageContextFromFrame } from './navigation.tsx'
+import { ListPage } from './list-page.tsx'
+import { collectionActions, collectionControls } from './collection.tsx'
 
 export const HOOKS = [
-  'shell',
-  'main',
   'topbar',
   'content',
   'group-title',
@@ -36,6 +36,8 @@ export type Extras = {
 }
 
 export type Frame = {
+  /** Server request URL for native collection controls; never browser state. */
+  collectionUrl?: string
   viewer?: Viewer | null
   indicators?: Indicator[]
   menuFilter?: string | null
@@ -84,6 +86,9 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
   )
 }
 
+const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
+  frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
+
 export const shell = (
   _: Translator,
   title: string,
@@ -103,29 +108,33 @@ export const shell = (
   if (frame.navigation)
     return (
       <ket-fragments data-title={title}>
-        <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
-        <template data-ket-slot="backend.topbar">
-          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
+        <template data-ket-slot="backend.sidebar-main">
+          {sidebarNavigationContent(_, sidebarOptions)}
         </template>
+        <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
+  // The design-system application shell. The theme scope sits above it, as the
+  // shell's own styles expect, in the grouped presentation the product mocks use:
+  // one page gutter token (`--kv-page-padding-x`) for context, header, toolbar and
+  // body. The island runtime stays outside the swapped slots, and the three slots
+  // keep the names fragment navigation reconciles.
   return (
-    <div data-ui="shell" data-kv-design-system>
-      {sidebar(_, sidebarOptions)}
-      <main data-ui="main">
-        {extras.runtime ?? ''}
-        {frame.topbar === false ? (
-          ''
-        ) : (
-          <header data-ui="topbar" data-ket-slot="backend.topbar">
-            {topbarContent(_, title, frame)}
-          </header>
-        )}
-        <div data-ui="content" data-ket-slot="backend.content">
-          {body}
-        </div>
-      </main>
+    <div data-kv-design-system data-presentation="grouped">
+      {AppShell({
+        mode: 'viewport',
+        sidebar: sidebarMain(_, sidebarOptions),
+        main: (
+          <>
+            {extras.runtime ?? ''}
+            <div data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</div>
+            <div data-ui="content" data-ket-slot="backend.content">
+              {body}
+            </div>
+          </>
+        ),
+      })}
     </div>
   )
 }
@@ -181,13 +190,12 @@ export type OperationalScreenOptions = {
    */
   aside?: JSXChild
   asideLabel?: string | null
-  /**
-   * What this screen offers beside its title — the one thing you came here to
-   * start. It shares the row with a list's chrome rather than replacing it, so a
-   * screen can both filter and offer an action; a screen with neither leaves the
-   * row out entirely.
-   */
+  /** Primary list action beside its title. Defaults to frame.chrome.create. */
+  headerActions?: JSXChild
+  /** List tools join primary header actions; record/workspace actions sit beside their title. */
   actions?: JSXChild
+  /** Design-system location strip. CRM and customer-care pass breadcrumbs only. */
+  context?: JSXChild
 }
 
 const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
@@ -204,18 +212,16 @@ const operationalShell = (options: OperationalScreenOptions, body: TemplateResul
 export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
   operationalShell(
     options,
-    <DesignSystemListPage
+    <ListPage
       variant="operational"
-      context={pageContextFromFrame(options.title, options.frame)}
+      frame={options.frame}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
       description={options.subtitle}
-      actions={operationalActions(options)}
-      controls={
-        options.frame.chrome
-          ? listChrome(options.translator, options.title, options.frame.chrome, false)
-          : undefined
-      }
+      headerActions={options.headerActions}
+      actions={collectionActions(options.translator, options.frame, options.actions)}
+      controls={collectionControls(options.translator, options.title, options.frame)}
       body={options.body}
     />,
   )
@@ -225,7 +231,7 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
     options,
     <DesignSystemRecordPage
       variant="operational"
-      context={pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       title={options.title}
       description={options.subtitle}
       actions={operationalActions(options)}
@@ -241,22 +247,31 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
   )
 
 export const workspaceScreen = (
-  options: OperationalScreenOptions & { layout?: 'flow' | 'canvas' },
+  options: OperationalScreenOptions & {
+    layout?: 'flow' | 'canvas'
+    /**
+     * A workspace may lead with domain navigation before the shared list
+     * controls. Supplying the composed control region keeps both inside the
+     * WorkspacePage toolbar instead of pushing tabs into the page body.
+     */
+    controls?: JSXChild
+  },
 ): TemplateResult =>
   operationalShell(
     options,
     <DesignSystemWorkspacePage
       variant="operational"
       layout={options.layout ?? 'flow'}
-      context={pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
       description={options.subtitle}
       actions={operationalActions(options)}
       controls={
-        options.frame.chrome
+        options.controls ??
+        (options.frame.chrome
           ? listChrome(options.translator, options.title, options.frame.chrome, false)
-          : undefined
+          : undefined)
       }
       body={options.body}
     />,

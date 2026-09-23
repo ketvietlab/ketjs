@@ -1,6 +1,15 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { BoardPage, CardGrid, icon, listChrome, Metric, shell, stack } from '../../../ui/index.ts'
+import {
+  BoardPage,
+  CardGrid,
+  icon,
+  listChrome,
+  Metric,
+  pageTrailFromFrame,
+  shell,
+  stack,
+} from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 /** One figure above the board. `icon` is a glyph name, not markup: screens own markup. */
@@ -33,6 +42,7 @@ export const pipelineScreen = (
     <BoardPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(title, frame)}
       title={title}
       description={_('crm_backend.pipeline.subtitle')}
       controls={

@@ -1,3 +1,4 @@
+import { type DataTable, prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
@@ -7,16 +8,17 @@ import {
   actionGroup,
   ContentCard,
   dataTable,
+  collectionTable,
   DashboardPage,
   DefinitionList,
   Delta,
   emptyState,
-  ListScreen,
   icon,
   linkButton,
   Metric,
+  ModalSheet,
+  modalWorkspace,
   Notice,
-  RecordActions,
   RecordForm,
   RecordWorkspace,
   RecordScreen,
@@ -44,7 +46,13 @@ const activeBadge = (_: Translator, active: unknown) =>
     ? badge(_('loyalty_backend.state.active'), 'positive', 'active')
     : badge(_('loyalty_backend.state.archived'), 'neutral', 'archived')
 
-type Stat = { id: string; label: string; value: string; detail?: string | null; tone?: Tone }
+type Stat = {
+  id: string
+  label: string
+  value: string
+  detail?: string | null
+  tone?: Tone
+}
 
 /**
  * The row of figures a list opens with.
@@ -128,6 +136,12 @@ const walletStateBadge = (_: Translator, wallet: AnyRow) => {
 
 /** Where a program stands in its own calendar. */
 const programStateBadge = (_: Translator, program: AnyRow) => {
+  if (program.phase === 'draft') return badge(_('loyalty_backend.state.draft'), 'neutral')
+  if (program.state)
+    return badge(
+      _(`loyalty_backend.state.${String(program.state)}`),
+      program.state === 'running' ? 'positive' : 'neutral',
+    )
   //  is what this module's own archive action writes, so that is
   // what the badge says. A program the operator paused and one they retired are
   // the same row here, and inventing a second word for it would claim otherwise.
@@ -143,8 +157,8 @@ const programStateBadge = (_: Translator, program: AnyRow) => {
 /** The window a program runs in, or that it never closes. */
 const periodOf = (_: Translator, program: AnyRow): string => {
   const day = (value: unknown) => (value ? String(value).slice(0, 10) : null)
-  const start = day(program.dateFrom)
-  const end = day(program.dateTo)
+  const start = day(program.startDate ?? program.dateFrom)
+  const end = day(program.endDate ?? program.dateTo)
   if (!start && !end) return _('loyalty_backend.period.always')
   if (start && !end) return _('loyalty_backend.period.from', { date: start })
   if (!start && end) return _('loyalty_backend.period.until', { date: end })
@@ -164,9 +178,49 @@ const channelsOf = (_: Translator, program: AnyRow): string =>
 export const dashboardScreen = (
   _: Translator,
   frame: Frame,
-  stats: { programs: number; wallets: number; members: number; ledger: number },
-): TemplateResult =>
-  shell(
+  stats: {
+    programs?: number | null
+    wallets?: number | null
+    members?: number | null
+    ledger?: number | null
+  },
+): TemplateResult => {
+  type DashboardCard = { id: string; title: string; value: number | null; href: string }
+  const cards = [
+    Object.hasOwn(stats, 'programs')
+      ? {
+          id: 'programs',
+          title: _('loyalty_backend.menu.programs'),
+          value: stats.programs,
+          href: '/admin/loyalty/programs',
+        }
+      : null,
+    Object.hasOwn(stats, 'wallets')
+      ? {
+          id: 'wallets',
+          title: _('loyalty_backend.menu.wallets'),
+          value: stats.wallets,
+          href: '/admin/loyalty/wallets',
+        }
+      : null,
+    Object.hasOwn(stats, 'members')
+      ? {
+          id: 'members',
+          title: _('loyalty_backend.menu.memberships'),
+          value: stats.members,
+          href: '/admin/loyalty/memberships',
+        }
+      : null,
+    Object.hasOwn(stats, 'ledger')
+      ? {
+          id: 'ledger',
+          title: _('loyalty_backend.menu.ledger'),
+          value: stats.ledger,
+          href: '/admin/loyalty/ledger',
+        }
+      : null,
+  ].filter((card): card is DashboardCard => card !== null)
+  return shell(
     _,
     _('loyalty_backend.dashboard.title'),
     <DashboardPage
@@ -175,34 +229,15 @@ export const dashboardScreen = (
       title={_('loyalty_backend.dashboard.title')}
       body={stack([
         <CardGrid
-          items={[
-            {
-              id: 'programs',
-              title: _('loyalty_backend.menu.programs'),
-              value: stats.programs,
-              href: '/admin/loyalty/programs',
-            },
-            {
-              id: 'wallets',
-              title: _('loyalty_backend.menu.wallets'),
-              value: stats.wallets,
-              href: '/admin/loyalty/wallets',
-            },
-            {
-              id: 'members',
-              title: _('loyalty_backend.menu.memberships'),
-              value: stats.members,
-              href: '/admin/loyalty/memberships',
-            },
-            {
-              id: 'ledger',
-              title: _('loyalty_backend.menu.ledger'),
-              value: stats.ledger,
-              href: '/admin/loyalty/ledger',
-            },
-          ]}
+          items={cards}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
+          card={(item) => (
+            <Metric
+              label={item.title}
+              value={item.value === null ? '—' : figure(item.value)}
+              href={item.href}
+            />
+          )}
         />,
         <Notice
           title={_('loyalty_backend.dashboard.ledgerTitle')}
@@ -213,6 +248,7 @@ export const dashboardScreen = (
     />,
     { ...frame, topbar: false },
   )
+}
 
 /**
  * The programs, and where each one stands today.
@@ -227,350 +263,108 @@ export const programsScreen = (
   frame: Frame,
   programs: AnyRow[],
   totals: AnyRow,
-  createFields: FormField[],
-  errors: string[] = [],
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('loyalty_backend.programs.title')}
-    subtitle={_('loyalty_backend.programs.hint')}
-    frame={frame}
-    body={stack([
-      statRow([
-        { id: 'total', label: _('loyalty_backend.stat.programs'), value: figure(totals.total) },
-        {
-          id: 'running',
-          label: _('loyalty_backend.stat.running'),
-          value: figure(totals.running),
-          tone: 'positive',
-        },
-        {
-          id: 'upcoming',
-          label: _('loyalty_backend.stat.upcoming'),
-          value: figure(totals.upcoming),
-          tone: 'info',
-        },
-        {
-          id: 'archived',
-          label: _('loyalty_backend.stat.archived'),
-          value: figure(totals.archived),
-          detail: _('loyalty_backend.stat.archivedHint'),
-        },
-        { id: 'ended', label: _('loyalty_backend.stat.ended'), value: figure(totals.ended) },
-      ]),
-      programs.length
-        ? dataTable(_, {
-            rows: programs,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('loyalty_backend.field.name'),
-                cell: (row) =>
-                  linkButton({
-                    label: String(row.name),
-                    href: `/admin/loyalty/programs/${String(row.id)}`,
-                    variant: 'tertiary',
-                  }),
-                priority: 'primary',
-              },
-              {
-                key: 'type',
-                label: _('loyalty_backend.field.programType'),
-                cell: (row) =>
-                  badge(labelOf(_, 'programType', row.programType), 'info', String(row.programType)),
-              },
-              {
-                key: 'period',
-                label: _('loyalty_backend.field.period'),
-                cell: (row) => periodOf(_, row),
-                kind: 'date',
-              },
-              {
-                key: 'trigger',
-                label: _('loyalty_backend.field.trigger'),
-                cell: (row) => labelOf(_, 'trigger', row.trigger),
-              },
-              {
-                key: 'scope',
-                label: _('loyalty_backend.field.availableOn'),
-                cell: (row) => channelsOf(_, row),
-              },
-              {
-                key: 'state',
-                label: _('loyalty_backend.field.state'),
-                cell: (row) => programStateBadge(_, row),
-                kind: 'status',
-              },
-            ],
-          })
-        : empty(_),
-      <Section
-        title={_('loyalty_backend.action.createProgram')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/loyalty/programs"
-                fields={createFields}
-                errors={errors}
-                submit={_('loyalty_backend.action.createProgram')}
-                submitVariant="primary"
-              />
-            }
-          />
-        }
-      />,
-    ])}
-  />
-)
-
-/**
- * One program, in the three questions it is set up by.
- *
- * What it is, how points are earned, and what they buy — three tabs rather than
- * three sections down one page, because they are edited on separate occasions
- * and each carries a form. Stacked, adding a reward meant scrolling past every
- * rule to reach the form for it.
- *
- * The settings form stays on the first tab with the identity strip above it, so
- * the state of the program is visible while it is being changed.
- */
-export const programDetailScreen = (
-  _: Translator,
-  frame: Frame,
-  program: AnyRow,
-  options: {
-    programFields: FormField[]
-    ruleFields: FormField[]
-    rewardFields: FormField[]
-    tab?: string
-    errors?: string[]
-  },
+  _createFields: FormField[],
+  _errors: string[] = [],
 ): TemplateResult => {
-  const rules = (program.rules as AnyRow[] | undefined) ?? []
-  const rewards = (program.rewards as AnyRow[] | undefined) ?? []
-  const here = `/admin/loyalty/programs/${String(program.id)}`
-  const tab = options.tab === 'rules' || options.tab === 'rewards' ? options.tab : 'overview'
-  const rulesPane = (
-    <Section
-      title={_('loyalty_backend.rules.title')}
-      description={_('loyalty_backend.rules.hint')}
-      body={stack([
-        ...(rules.length
-          ? [
-              dataTable(_, {
-                rows: rules,
-                id: (row) => String(row.id),
-                columns: [
-                  {
-                    key: 'priority',
-                    label: _('loyalty_backend.field.priority'),
-                    cell: (row) => String(row.priority),
-                  },
-                  {
-                    key: 'mode',
-                    label: _('loyalty_backend.field.mode'),
-                    cell: (row) => labelOf(_, 'trigger', row.mode),
-                  },
-                  {
-                    key: 'points',
-                    label: _('loyalty_backend.field.pointAmount'),
-                    cell: (row) => String(row.pointAmount),
-                  },
-                  {
-                    key: 'basis',
-                    label: _('loyalty_backend.field.pointMode'),
-                    cell: (row) => labelOf(_, 'pointMode', row.pointMode),
-                  },
-                  {
-                    key: 'code',
-                    label: _('loyalty_backend.field.code'),
-                    cell: (row) => code(row.code ? String(row.code) : '—'),
-                  },
-                  {
-                    key: 'state',
-                    label: _('loyalty_backend.field.state'),
-                    cell: (row) => activeBadge(_, row.active),
-                  },
-                ],
-              }),
-            ]
-          : []),
-        <Surface
-          body={
-            <RecordForm
-              action={here}
-              hidden={{ action: 'add-rule' }}
-              fields={options.ruleFields}
-              submit={_('loyalty_backend.action.addRule')}
-              submitVariant="secondary"
-            />
-          }
-        />,
-      ])}
-    />
-  )
-  const rewardsPane = (
-    <Section
-      title={_('loyalty_backend.rewards.title')}
-      description={_('loyalty_backend.rewards.hint')}
-      body={stack([
-        ...(rewards.length
-          ? [
-              dataTable(_, {
-                rows: rewards,
-                id: (row) => String(row.id),
-                columns: [
-                  {
-                    key: 'description',
-                    label: _('loyalty_backend.field.description'),
-                    cell: (row) => String(row.description),
-                    priority: 'primary',
-                  },
-                  {
-                    key: 'type',
-                    label: _('loyalty_backend.field.rewardType'),
-                    cell: (row) => labelOf(_, 'rewardType', row.rewardType),
-                  },
-                  {
-                    key: 'points',
-                    label: _('loyalty_backend.field.requiredPoints'),
-                    cell: (row) => String(row.requiredPoints),
-                  },
-                  {
-                    key: 'discount',
-                    label: _('loyalty_backend.field.discount'),
-                    cell: (row) => String(row.discount),
-                  },
-                  {
-                    key: 'state',
-                    label: _('loyalty_backend.field.state'),
-                    cell: (row) => activeBadge(_, row.active),
-                  },
-                ],
-              }),
-            ]
-          : []),
-        <Surface
-          body={
-            <RecordForm
-              action={here}
-              hidden={{ action: 'add-reward' }}
-              fields={options.rewardFields}
-              submit={_('loyalty_backend.action.addReward')}
-              submitVariant="secondary"
-            />
-          }
-        />,
-      ])}
-    />
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: programs,
+      rowHref: (row) => `/admin/loyalty/programs/${encodeURIComponent(String(row.id))}`,
+      rowLink: false,
+      id: (row) => String(row.id),
+      columns: [
+        {
+          key: 'name',
+          label: _('loyalty_backend.field.name'),
+          cell: (row) => String(row.name),
+          priority: 'primary',
+        },
+        {
+          key: 'type',
+          label: _('loyalty_backend.field.programType'),
+          cell: (row) => badge(labelOf(_, 'programType', row.programType), 'info', String(row.programType)),
+        },
+        {
+          key: 'period',
+          label: _('loyalty_backend.field.period'),
+          cell: (row) => periodOf(_, row),
+          kind: 'date',
+        },
+        {
+          key: 'trigger',
+          label: _('loyalty_backend.field.trigger'),
+          cell: (row) => labelOf(_, 'trigger', row.trigger),
+        },
+        {
+          key: 'scope',
+          label: _('loyalty_backend.field.availableOn'),
+          cell: (row) => channelsOf(_, row),
+        },
+        {
+          key: 'state',
+          label: _('loyalty_backend.field.state'),
+          cell: (row) => programStateBadge(_, row),
+          kind: 'status',
+        },
+      ],
+    },
+    { paginate: false },
   )
   return (
-    <FormScreenFrame
+    <ListScreenFrame
       translator={_}
-      title={String(program.name)}
-      frame={frame}
-      body={
-        <RecordWorkspace
-          kicker={_('loyalty_backend.menu.programs')}
-          title={String(program.name)}
-          subtitle={periodOf(_, program)}
-          imageFallback={icon('gift')}
-          status={programStateBadge(_, program)}
-          badges={[
-            badge(labelOf(_, 'programType', program.programType), 'info', String(program.programType)),
-            badge(labelOf(_, 'trigger', program.trigger), 'neutral', String(program.trigger)),
-          ]}
-          summary={[
-            {
-              id: 'points',
-              label: _('loyalty_backend.field.pointName'),
-              value: String(program.pointName ?? '—'),
-            },
-            { id: 'rules', label: _('loyalty_backend.rules.title'), value: rules.length },
-            { id: 'rewards', label: _('loyalty_backend.rewards.title'), value: rewards.length },
-          ]}
-          navigation={
-            <Tabs
-              label={_('loyalty_backend.program.detail')}
-              items={[
-                {
-                  id: 'overview',
-                  label: _('loyalty_backend.tab.overview'),
-                  href: here,
-                  active: tab === 'overview',
-                },
-                {
-                  id: 'rules',
-                  label: _('loyalty_backend.tab.rules'),
-                  href: `${here}?tab=rules`,
-                  active: tab === 'rules',
-                  count: rules.length,
-                },
-                {
-                  id: 'rewards',
-                  label: _('loyalty_backend.tab.rewards'),
-                  href: `${here}?tab=rewards`,
-                  active: tab === 'rewards',
-                  count: rewards.length,
-                },
-              ]}
-            />
-          }
-          controller={
-            <RecordActions
-              action={here}
-              actions={[
-                {
-                  value: program.active ? 'archive' : 'restore',
-                  label: program.active
-                    ? _('loyalty_backend.action.archive')
-                    : _('loyalty_backend.action.restore'),
-                  variant: program.active ? 'destructive' : 'secondary',
-                },
-              ]}
-            />
-          }
-          body={
-            tab === 'rules' ? (
-              rulesPane
-            ) : tab === 'rewards' ? (
-              rewardsPane
-            ) : (
-              <Section
-                title={_('loyalty_backend.program.detail')}
-                body={
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={here}
-                        hidden={{ action: 'save-program' }}
-                        fields={options.programFields}
-                        errors={options.errors}
-                        submit={_('loyalty_backend.action.save')}
-                        submitVariant="primary"
-                      />
-                    }
-                  />
-                }
-              />
-            )
-          }
-        />
-      }
+      title={_('loyalty_backend.programs.title')}
+      subtitle={_('loyalty_backend.programs.hint')}
+      frame={collection.frame}
+      headerActions={linkButton({
+        label: _('loyalty_backend.action.createProgram'),
+        href: '/admin/loyalty/programs/new',
+        variant: 'primary',
+      })}
+      body={stack([
+        statRow([
+          {
+            id: 'total',
+            label: _('loyalty_backend.stat.programs'),
+            value: figure(totals.total),
+          },
+          {
+            id: 'draft',
+            label: _('loyalty_backend.state.draft'),
+            value: figure(totals.draft),
+          },
+          {
+            id: 'running',
+            label: _('loyalty_backend.stat.running'),
+            value: figure(totals.running),
+            tone: 'positive',
+          },
+          {
+            id: 'upcoming',
+            label: _('loyalty_backend.stat.upcoming'),
+            value: figure(totals.upcoming),
+            tone: 'info',
+          },
+          {
+            id: 'archived',
+            label: _('loyalty_backend.stat.archived'),
+            value: figure(totals.archived),
+            detail: _('loyalty_backend.stat.archivedHint'),
+          },
+          {
+            id: 'ended',
+            label: _('loyalty_backend.stat.ended'),
+            value: figure(totals.ended),
+          },
+        ]),
+        collection.table.rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
     />
   )
 }
 
-/**
- * Every wallet, and how much is sitting in them.
- *
- * The balance total is the number a finance team asks for first — it is a
- * liability, not a statistic — so it sits beside the count rather than under it.
- * Locked and expired are counted apart because an operator undoes them
- * differently.
- */
 export const walletsScreen = (
   _: Translator,
   frame: Frame,
@@ -578,130 +372,144 @@ export const walletsScreen = (
   totals: AnyRow,
   createFields: FormField[],
   errors: string[] = [],
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('loyalty_backend.wallets.title')}
-    subtitle={_('loyalty_backend.wallets.hint')}
-    frame={frame}
-    body={stack([
-      statRow([
-        { id: 'total', label: _('loyalty_backend.stat.wallets'), value: figure(totals.total) },
-        { id: 'balance', label: _('loyalty_backend.stat.balance'), value: figure(totals.balance) },
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: wallets,
+      id: (row) => String(row.id),
+      columns: [
         {
-          id: 'active',
-          label: _('loyalty_backend.stat.walletsActive'),
-          value: figure(totals.active),
-          detail: percent(totals.active, totals.total),
-          tone: 'positive',
+          key: 'code',
+          label: _('loyalty_backend.field.code'),
+          cell: (row) =>
+            linkButton({
+              label: String(row.code),
+              href: `/admin/loyalty/wallets/${String(row.id)}`,
+              variant: 'tertiary',
+            }),
+          priority: 'primary',
+          kind: 'identifier',
         },
         {
-          id: 'locked',
-          label: _('loyalty_backend.stat.walletsLocked'),
-          value: figure(totals.locked),
-          detail: percent(totals.locked, totals.total),
-          tone: 'warning',
+          key: 'partner',
+          label: _('loyalty_backend.field.partner'),
+          cell: (row) => String(row.partnerName ?? '—'),
+          kind: 'person',
         },
         {
-          id: 'expired',
-          label: _('loyalty_backend.stat.walletsExpired'),
-          value: figure(totals.expired),
-          detail: percent(totals.expired, totals.total),
-          tone: 'danger',
+          key: 'program',
+          label: _('loyalty_backend.field.program'),
+          cell: (row) =>
+            row.programId
+              ? linkButton({
+                  label: String(row.programName ?? row.programId),
+                  href: `/admin/loyalty/programs/${String(row.programId)}`,
+                  variant: 'tertiary',
+                })
+              : '—',
         },
-      ]),
-      wallets.length
-        ? dataTable(_, {
-            rows: wallets,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'code',
-                label: _('loyalty_backend.field.code'),
-                cell: (row) =>
-                  linkButton({
-                    label: String(row.code),
-                    href: `/admin/loyalty/wallets/${String(row.id)}`,
-                    variant: 'tertiary',
-                  }),
-                priority: 'primary',
-                kind: 'identifier',
-              },
-              {
-                key: 'partner',
-                label: _('loyalty_backend.field.partner'),
-                cell: (row) => String(row.partnerName ?? '—'),
-                kind: 'person',
-              },
-              {
-                key: 'program',
-                label: _('loyalty_backend.field.program'),
-                cell: (row) =>
-                  row.programId
-                    ? linkButton({
-                        label: String(row.programName ?? row.programId),
-                        href: `/admin/loyalty/programs/${String(row.programId)}`,
-                        variant: 'tertiary',
-                      })
-                    : '—',
-              },
-              {
-                key: 'unit',
-                label: _('loyalty_backend.field.unit'),
-                cell: (row) => badge(labelOf(_, 'walletUnit', row.unit), 'neutral', String(row.unit)),
-              },
-              {
-                key: 'balance',
-                label: _('loyalty_backend.field.balance'),
-                cell: (row) => figure(row.balance),
-                align: 'end',
-                kind: 'number',
-              },
-              // Reserved is money already promised to an order in flight. It is
-              // the difference between what the balance says and what the guest
-              // can actually spend, so both are shown.
-              {
-                key: 'available',
-                label: _('loyalty_backend.field.available'),
-                cell: (row) => figure(row.available),
-                align: 'end',
-                kind: 'number',
-                optional: true,
-              },
-              {
-                key: 'state',
-                label: _('loyalty_backend.field.state'),
-                cell: (row) => walletStateBadge(_, row),
-                kind: 'status',
-              },
-              {
-                key: 'expires',
-                label: _('loyalty_backend.field.expiresAt'),
-                cell: (row) => (row.expiresAt ? String(row.expiresAt).slice(0, 10) : '—'),
-                kind: 'date',
-              },
-            ],
-          })
-        : empty(_),
-      <Section
-        title={_('loyalty_backend.action.createWallet')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/loyalty/wallets"
-                fields={createFields}
-                errors={errors}
-                submit={_('loyalty_backend.action.createWallet')}
-                submitVariant="primary"
-              />
-            }
-          />
-        }
-      />,
-    ])}
-  />
-)
+        {
+          key: 'unit',
+          label: _('loyalty_backend.field.unit'),
+          cell: (row) => badge(labelOf(_, 'walletUnit', row.unit), 'neutral', String(row.unit)),
+        },
+        {
+          key: 'balance',
+          label: _('loyalty_backend.field.balance'),
+          cell: (row) => figure(row.balance),
+          align: 'end',
+          kind: 'number',
+        },
+        // Reserved is money already promised to an order in flight. It is
+        // the difference between what the balance says and what the guest
+        // can actually spend, so both are shown.
+        {
+          key: 'available',
+          label: _('loyalty_backend.field.available'),
+          cell: (row) => figure(row.available),
+          align: 'end',
+          kind: 'number',
+          optional: true,
+        },
+        {
+          key: 'state',
+          label: _('loyalty_backend.field.state'),
+          cell: (row) => walletStateBadge(_, row),
+          kind: 'status',
+        },
+        {
+          key: 'expires',
+          label: _('loyalty_backend.field.expiresAt'),
+          cell: (row) => (row.expiresAt ? String(row.expiresAt).slice(0, 10) : '—'),
+          kind: 'date',
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('loyalty_backend.wallets.title')}
+      subtitle={_('loyalty_backend.wallets.hint')}
+      frame={collection.frame}
+      body={stack([
+        statRow([
+          {
+            id: 'total',
+            label: _('loyalty_backend.stat.wallets'),
+            value: figure(totals.total),
+          },
+          {
+            id: 'balance',
+            label: _('loyalty_backend.stat.balance'),
+            value: figure(totals.balance),
+          },
+          {
+            id: 'active',
+            label: _('loyalty_backend.stat.walletsActive'),
+            value: figure(totals.active),
+            detail: percent(totals.active, totals.total),
+            tone: 'positive',
+          },
+          {
+            id: 'locked',
+            label: _('loyalty_backend.stat.walletsLocked'),
+            value: figure(totals.locked),
+            detail: percent(totals.locked, totals.total),
+            tone: 'warning',
+          },
+          {
+            id: 'expired',
+            label: _('loyalty_backend.stat.walletsExpired'),
+            value: figure(totals.expired),
+            detail: percent(totals.expired, totals.total),
+            tone: 'danger',
+          },
+        ]),
+        collection.table.rows.length ? collectionTable(_, collection.table) : empty(_),
+        <Section
+          title={_('loyalty_backend.action.createWallet')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action="/admin/loyalty/wallets"
+                  fields={createFields}
+                  errors={errors}
+                  submit={_('loyalty_backend.action.createWallet')}
+                  submitVariant="primary"
+                />
+              }
+            />
+          }
+        />,
+      ])}
+    />
+  )
+}
 
 /**
  * One wallet, as the person holding a support ticket about it needs to see it.
@@ -743,13 +551,21 @@ export const walletDetailScreen = (
             ...(wallet.programName ? [badge(String(wallet.programName), 'info')] : []),
           ]}
           summary={[
-            { id: 'balance', label: _('loyalty_backend.field.balance'), value: figure(wallet.balance) },
+            {
+              id: 'balance',
+              label: _('loyalty_backend.field.balance'),
+              value: figure(wallet.balance),
+            },
             {
               id: 'available',
               label: _('loyalty_backend.field.available'),
               value: figure(wallet.available),
             },
-            { id: 'reserved', label: _('loyalty_backend.field.reserved'), value: figure(wallet.reserved) },
+            {
+              id: 'reserved',
+              label: _('loyalty_backend.field.reserved'),
+              value: figure(wallet.reserved),
+            },
           ]}
           navigation={
             <Tabs
@@ -881,9 +697,16 @@ export const walletDetailScreen = (
  * they cannot follow. `wallet` drops out on a wallet's own page, where a column
  * repeating the same code twenty times carries no information.
  */
-const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean; admin?: boolean } = {}) => {
+const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean; admin?: boolean } = {}) =>
+  dataTable(_, ledgerTableConfig(_, rows, options))
+
+const ledgerTableConfig = (
+  _: Translator,
+  rows: AnyRow[],
+  options: { wallet?: boolean; admin?: boolean } = {},
+): DataTable<AnyRow> => {
   const admin = options.admin !== false
-  return dataTable(_, {
+  return {
     rows,
     id: (row) => String(row.id),
     columns: [
@@ -954,7 +777,7 @@ const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean;
           ]
         : []),
     ],
-  })
+  }
 }
 
 /**
@@ -966,221 +789,270 @@ const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean;
  * of entry are chosen in the chrome above, and every figure here answers under
  * that same filter.
  */
-export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals: AnyRow): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('loyalty_backend.ledger.title')}
-    subtitle={_('loyalty_backend.ledger.hint')}
-    frame={frame}
-    body={stack([
-      statRow([
-        {
-          id: 'entries',
-          label: _('loyalty_backend.stat.entries'),
-          value: figure(totals.entries),
-        },
-        {
-          id: 'credit',
-          label: _('loyalty_backend.stat.credit'),
-          value: `+${figure(totals.credit)}`,
-          tone: 'positive',
-        },
-        {
-          id: 'debit',
-          label: _('loyalty_backend.stat.debit'),
-          value: figure(totals.debit),
-          tone: 'danger',
-        },
-        {
-          id: 'closing',
-          label: _('loyalty_backend.stat.closing'),
-          value: figure(totals.closing),
-        },
-        {
-          id: 'opening',
-          label: _('loyalty_backend.stat.opening'),
-          value: figure(totals.opening),
-        },
-      ]),
-      rows.length ? ledgerTable(_, rows) : empty(_),
-    ])}
-  />
-)
+export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals: AnyRow): TemplateResult => {
+  const collection = prepareCollectionTable(_, frame, ledgerTableConfig(_, rows), { paginate: false })
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('loyalty_backend.ledger.title')}
+      subtitle={_('loyalty_backend.ledger.hint')}
+      frame={collection.frame}
+      body={stack([
+        statRow([
+          {
+            id: 'entries',
+            label: _('loyalty_backend.stat.entries'),
+            value: figure(totals.entries),
+          },
+          {
+            id: 'credit',
+            label: _('loyalty_backend.stat.credit'),
+            value: `+${figure(totals.credit)}`,
+            tone: 'positive',
+          },
+          {
+            id: 'debit',
+            label: _('loyalty_backend.stat.debit'),
+            value: figure(totals.debit),
+            tone: 'danger',
+          },
+          {
+            id: 'closing',
+            label: _('loyalty_backend.stat.closing'),
+            value: figure(totals.closing),
+          },
+          {
+            id: 'opening',
+            label: _('loyalty_backend.stat.opening'),
+            value: figure(totals.opening),
+          },
+        ]),
+        collection.table.rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
+    />
+  )
+}
 
 /**
- * The membership base, led by what it is worth.
- *
- * Dormant is counted next to active on purpose: a member whose rolling window
- * has emptied is a customer who stopped coming, and that is the number a
- * marketing team acts on. The tiers and the window settings stay on this page
- * below the list, because they are what the numbers above are computed from.
+ * A bounded window over the member base. Imported memberships are historical
+ * evidence, so this screen never refreshes or rewrites them as a side effect of
+ * reading. Archived partners stay visible and are labelled instead of revived.
  */
 export const membershipsScreen = (
   _: Translator,
   frame: Frame,
-  memberships: AnyRow[],
+  rows: AnyRow[],
   totals: AnyRow,
-  tiers: AnyRow[],
-  tierFields: FormField[],
-  configFields: FormField[],
-  errors: string[] = [],
-): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('loyalty_backend.memberships.title')}
-    subtitle={_('loyalty_backend.memberships.hint')}
-    frame={frame}
-    body={stack([
-      statRow([
-        { id: 'total', label: _('loyalty_backend.stat.members'), value: figure(totals.total) },
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (row) => String(row.id),
+      rowHref: (row) => `/admin/partner/partners/${encodeURIComponent(String(row.partnerId))}`,
+      responsive: 'stack',
+      columns: [
         {
-          id: 'active',
-          label: _('loyalty_backend.stat.membersActive'),
-          value: figure(totals.active),
-          detail: percent(totals.active, totals.total),
-          tone: 'positive',
+          key: 'partner',
+          label: _('loyalty_backend.field.partner'),
+          cell: (row) => String(row.partnerName ?? row.partnerId),
+          priority: 'primary',
         },
         {
-          id: 'dormant',
-          label: _('loyalty_backend.stat.membersDormant'),
-          value: figure(totals.dormant),
-          detail: percent(totals.dormant, totals.total),
-          tone: 'warning',
+          key: 'phone',
+          label: _('loyalty_backend.field.phone'),
+          cell: (row) => String(row.partnerPhone ?? '—'),
         },
-        { id: 'points', label: _('loyalty_backend.stat.points'), value: figure(totals.points) },
-        { id: 'spend', label: _('loyalty_backend.stat.spend'), value: figure(totals.spend) },
-      ]),
-      memberships.length ? membersTable(_, memberships) : empty(_),
-      <Section
-        title={_('loyalty_backend.memberships.config')}
-        description={_('loyalty_backend.memberships.windowHint')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/loyalty/memberships"
-                hidden={{ action: 'config' }}
-                fields={configFields}
-                errors={errors}
-                submit={_('loyalty_backend.action.saveConfig')}
-                submitVariant="primary"
-              />
-            }
-          />
-        }
-      />,
-      <Section
-        title={_('loyalty_backend.tiers.title')}
-        body={stack([
-          ...(tiers.length
-            ? [
-                dataTable(_, {
-                  rows: tiers,
-                  id: (row) => String(row.id),
-                  columns: [
-                    {
-                      key: 'name',
-                      label: _('loyalty_backend.field.name'),
-                      cell: (row) => String(row.name),
-                      priority: 'primary',
-                    },
-                    {
-                      key: 'code',
-                      label: _('loyalty_backend.field.code'),
-                      cell: (row) => code(String(row.code)),
-                    },
-                    {
-                      key: 'minimum',
-                      label: _('loyalty_backend.field.minimumSpend'),
-                      cell: (row) => String(row.minimumSpend),
-                      align: 'end',
-                    },
-                    {
-                      key: 'cap',
-                      label: _('loyalty_backend.field.redeemPercent'),
-                      cell: (row) => `${String(row.redeemPercent)}%`,
-                      align: 'end',
-                    },
-                    {
-                      key: 'state',
-                      label: _('loyalty_backend.field.state'),
-                      cell: (row) => activeBadge(_, row.active),
-                    },
-                  ],
-                }),
-              ]
-            : []),
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/loyalty/memberships"
-                hidden={{ action: 'tier' }}
-                fields={tierFields}
-                submit={_('loyalty_backend.action.addTier')}
-                submitVariant="secondary"
-              />
-            }
-          />,
-        ])}
-      />,
-    ])}
-  />
-)
+        {
+          key: 'tier',
+          label: _('loyalty_backend.field.tier'),
+          cell: (row) => String(row.tierName ?? row.tierCode ?? '—'),
+        },
+        {
+          key: 'spend',
+          label: _('loyalty_backend.field.rollingSpend'),
+          cell: (row) => figure(row.rollingSpend),
+          align: 'end',
+          kind: 'number',
+        },
+        {
+          key: 'activity',
+          label: _('loyalty_backend.field.activity'),
+          cell: (row) =>
+            n(row.rollingSpend) > 0
+              ? badge(_('loyalty_backend.state.active'), 'positive', 'active')
+              : badge(_('loyalty_backend.state.dormant'), 'neutral', 'dormant'),
+          kind: 'status',
+        },
+        {
+          key: 'partnerState',
+          label: _('loyalty_backend.field.partnerState'),
+          cell: (row) => activeBadge(_, row.partnerActive),
+          kind: 'status',
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('loyalty_backend.members.title')}
+      subtitle={_('loyalty_backend.members.hint')}
+      frame={collection.frame}
+      body={stack([
+        statRow([
+          {
+            id: 'members',
+            label: _('loyalty_backend.stat.members'),
+            value: figure(totals.total),
+          },
+          {
+            id: 'active',
+            label: _('loyalty_backend.stat.membersActive'),
+            value: figure(totals.active),
+          },
+          {
+            id: 'dormant',
+            label: _('loyalty_backend.stat.membersDormant'),
+            value: figure(totals.dormant),
+          },
+          {
+            id: 'spend',
+            label: _('loyalty_backend.stat.spend'),
+            value: figure(totals.spend),
+          },
+        ]),
+        collection.table.rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
+    />
+  )
+}
 
-/**
- * One member per row, ranked by what they have spent in the window.
- *
- * Points and spend are both shown because they answer different questions: spend
- * is what earned the tier, points are what the member can still redeem, and a
- * screen that shows one is regularly asked for the other.
- */
-const membersTable = (_: Translator, memberships: AnyRow[]) =>
-  dataTable(_, {
-    rows: memberships,
-    id: (row) => String(row.id),
-    columns: [
-      {
-        key: 'partner',
-        label: _('loyalty_backend.field.partner'),
-        cell: (row) => String(row.partnerName ?? row.partnerId),
-        priority: 'primary',
-        kind: 'person',
-      },
-      {
-        key: 'tier',
-        label: _('loyalty_backend.field.tier'),
-        cell: (row) =>
-          row.tierName ? badge(String(row.tierName), 'info', String(row.tierCode ?? row.tierId ?? '')) : '—',
-        kind: 'status',
-      },
-      {
-        key: 'points',
-        label: _('loyalty_backend.field.points'),
-        cell: (row) => figure(row.points),
-        align: 'end',
-        kind: 'number',
-      },
-      {
-        key: 'spend',
-        label: _('loyalty_backend.field.rollingSpend'),
-        cell: (row) => figure(row.rollingSpend),
-        align: 'end',
-        kind: 'number',
-      },
-      {
-        key: 'window',
-        label: _('loyalty_backend.field.windowMonths'),
-        cell: (row) => _('loyalty_backend.value.months', { count: Number(row.windowMonths ?? 0) }),
-        priority: 'tertiary',
-      },
-      {
-        key: 'refreshed',
-        label: _('loyalty_backend.field.refreshedAt'),
-        cell: (row) => String(row.refreshedAt),
-        kind: 'date',
-      },
-    ],
-  })
+/** Company-wide tiers with a rolling spend window on each threshold. */
+export const tiersScreen = (
+  _: Translator,
+  frame: Frame,
+  tiers: AnyRow[],
+  options: {
+    action: string
+    closeHref: string
+    createHref: string
+    tierHref: (tier: AnyRow) => string
+    tierFields?: FormField[]
+    tierErrors?: string[]
+    tier?: AnyRow | null
+    modal?: boolean
+  },
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: tiers,
+      id: (row) => String(row.id),
+      rowHref: options.tierHref,
+      rowLink: false,
+      responsive: 'stack',
+      columns: [
+        {
+          key: 'name',
+          label: _('loyalty_backend.field.name'),
+          cell: (row) => String(row.name),
+          priority: 'primary',
+        },
+        {
+          key: 'code',
+          label: _('loyalty_backend.field.code'),
+          cell: (row) => code(String(row.code)),
+        },
+        {
+          key: 'minimum',
+          label: _('loyalty_backend.field.minimumSpend'),
+          cell: (row) => figure(row.minimumSpend),
+          align: 'end',
+        },
+        {
+          key: 'window',
+          label: _('loyalty_backend.field.windowMonths'),
+          cell: (row) => figure(row.windowMonths ?? 12),
+          align: 'end',
+        },
+        {
+          key: 'sequence',
+          label: _('loyalty_backend.field.sequence'),
+          cell: (row) => figure(row.sequence),
+          align: 'end',
+        },
+        {
+          key: 'state',
+          label: _('loyalty_backend.field.state'),
+          cell: (row) => activeBadge(_, row.active),
+        },
+      ],
+    },
+    { paginate: true },
+  )
+  const page = (
+    <ListScreenFrame
+      translator={_}
+      title={_('loyalty_backend.memberships.title')}
+      subtitle={_('loyalty_backend.memberships.hint')}
+      frame={collection.frame}
+      headerActions={linkButton({
+        label: _('loyalty_backend.action.addTier'),
+        href: options.createHref,
+        variant: 'primary',
+      })}
+      body={stack([
+        <Section
+          title={_('loyalty_backend.tiers.title')}
+          description={_('loyalty_backend.tiers.hint')}
+          body={collection.table.rows.length ? collectionTable(_, collection.table) : empty(_)}
+        />,
+      ])}
+    />
+  )
+  if (!options.modal || !options.tierFields) return page
+  return modalWorkspace(
+    page,
+    <ModalSheet
+      title={_(options.tier ? 'loyalty_backend.action.editTier' : 'loyalty_backend.action.addTier')}
+      closeHref={options.closeHref}
+      closeLabel={_('loyalty_backend.action.cancel')}
+      presentation="dialog"
+      body={stack([
+        <RecordForm
+          action={options.action}
+          hidden={{
+            action: 'tier',
+            ...(options.tier ? { id: String(options.tier.id) } : {}),
+          }}
+          fields={options.tierFields}
+          errors={options.tierErrors}
+          submit={_('loyalty_backend.action.save')}
+          submitVariant="primary"
+          cancelHref={options.closeHref}
+          cancelLabel={_('loyalty_backend.action.cancel')}
+        />,
+        ...(options.tier
+          ? [
+              <RecordForm
+                action={options.action}
+                hidden={{ action: 'toggle', id: String(options.tier.id) }}
+                fields={[]}
+                submit={_(
+                  options.tier.active ? 'loyalty_backend.action.archive' : 'loyalty_backend.action.restore',
+                )}
+                submitVariant="secondary"
+              />,
+            ]
+          : []),
+      ])}
+    />,
+  )
+}
 
 export const orderLoyaltyScreen = (
   _: Translator,
@@ -1224,7 +1096,13 @@ export const orderLoyaltyScreen = (
                 <RecordForm
                   action={action}
                   hidden={{ action: 'code' }}
-                  fields={[{ name: 'code', label: _('loyalty_backend.field.code'), required: true }]}
+                  fields={[
+                    {
+                      name: 'code',
+                      label: _('loyalty_backend.field.code'),
+                      required: true,
+                    },
+                  ]}
                   submit={_('loyalty_backend.action.applyCode')}
                   submitVariant="primary"
                 />
@@ -1238,7 +1116,9 @@ export const orderLoyaltyScreen = (
               return (
                 <Section
                   title={String(program.programName)}
-                  description={_('loyalty_backend.order.pointsEarned', { points: String(program.points) })}
+                  description={_('loyalty_backend.order.pointsEarned', {
+                    points: String(program.points),
+                  })}
                   body={stack([
                     ...(program.ineligibleReasons && (program.ineligibleReasons as unknown[]).length
                       ? [
@@ -1295,7 +1175,10 @@ export const orderLoyaltyScreen = (
                       : [empty(_)]),
                     <RecordForm
                       action={action}
-                      hidden={{ action: 'remove', programId: String(program.programId) }}
+                      hidden={{
+                        action: 'remove',
+                        programId: String(program.programId),
+                      }}
                       fields={[]}
                       submit={_('loyalty_backend.action.removeReward')}
                       submitVariant="destructive"
@@ -1401,6 +1284,10 @@ export const portalScreen = (_: Translator, frame: Frame, summary: AnyRow): Temp
 export const extensionLink = (_: Translator, href: string): JSXChild => (
   <Surface
     tone="subtle"
-    body={linkButton({ label: _('loyalty_backend.action.openOrderLoyalty'), href, variant: 'secondary' })}
+    body={linkButton({
+      label: _('loyalty_backend.action.openOrderLoyalty'),
+      href,
+      variant: 'secondary',
+    })}
   />
 )

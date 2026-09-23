@@ -3,6 +3,7 @@
 
 import { isVersioned } from './assets.ts'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { isNavigationRequest, navigablePage } from './respond.ts'
 import type { RouteResult } from './respond.ts'
@@ -71,6 +72,14 @@ export type ServeOpts = {
   islandClients?:
     | ThemeRuntime['clients']
     | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['clients']>)
+  /** All island names, including server-only islands without browser modules. */
+  islandNames?: readonly string[] | ((url: URL, req: IncomingMessage) => Promise<readonly string[]>)
+  /** Document-wide browser behaviors available to this request. */
+  browserBehaviors?:
+    | ThemeRuntime['behaviors']
+    | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['behaviors']>)
+  /** Immutable deployment identifier used to reject stale browser runtimes. */
+  buildId?: string
   port?: number
   /** Defaults to a table on the deployment adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
@@ -274,9 +283,13 @@ const withThemeTokens = (body: string, css: string): string => {
     : body.slice(0, closingHead) + tokensLink + body.slice(closingHead)
 }
 
-const bootstrapDocument = (body: string): string => {
+const bootstrapDocument = (body: string, force = false): string => {
+  const isDocument = body.includes('</body>') || /<!doctype html|<html(?:\s|>)/i.test(body)
   if (
-    (!body.includes('<ket-island') && !body.includes('data-ket-slot=')) ||
+    ((!force || !isDocument) &&
+      !body.includes('<ket-island') &&
+      !body.includes('data-ket-island') &&
+      !body.includes('data-ket-slot=')) ||
     body.includes('src="/_ket/islands.js"')
   )
     return body
@@ -286,12 +299,22 @@ const bootstrapDocument = (body: string): string => {
     : body.slice(0, closingBody) + islandScript + body.slice(closingBody)
 }
 
-const browserBootstrap = (clients: ThemeRuntime['clients']): string => `import {
+const browserBootstrap = (
+  clients: ThemeRuntime['clients'],
+  islandNames: readonly string[],
+  behaviors: ThemeRuntime['behaviors'],
+  buildId: string,
+): string => `import {
   createIslandManager,
   domHost,
+  ISLAND_SELECTOR,
 } from ${JSON.stringify(viewRuntimeUrl)}
 
 const definitions = ${JSON.stringify(clients)}
+const behaviorDefinitions = ${JSON.stringify(behaviors)}
+const buildId = ${JSON.stringify(buildId)}
+document.documentElement.dataset.ketBuild = buildId
+const knownIslands = new Set([...Object.keys(definitions), ...${JSON.stringify(islandNames)}])
 const registry = Object.create(null)
 const loading = new Map()
 const loadFactory = async (name) => {
@@ -312,9 +335,15 @@ const loadFactory = async (name) => {
   try { return await pending } finally { loading.delete(name) }
 }
 const loadPlaced = async (root, requireKnown = false) => {
-  const names = new Set(Array.from(root.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')).filter(Boolean))
+  // A client view may add the island host itself as the root, and querySelectorAll
+  // never matches the element it is called on: without this the island's module
+  // was not loaded, the manager skipped the unknown island, and the host stayed
+  // empty until something else happened to load the same module.
+  const placed = Array.from(root.querySelectorAll(ISLAND_SELECTOR))
+  if (root.matches?.(ISLAND_SELECTOR)) placed.push(root)
+  const names = new Set(placed.map((element) => element.getAttribute('data-island')).filter(Boolean))
   if (requireKnown) {
-    const unknown = Array.from(names).find((name) => !definitions[name])
+    const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
   }
   await Promise.all(Array.from(names, loadFactory))
@@ -323,13 +352,91 @@ const loadPlaced = async (root, requireKnown = false) => {
 await loadPlaced(document)
 const islands = createIslandManager(domHost(), registry, { strict: false })
 islands.hydrate(document)
+// A client-rendered view (a record modal, say) places island hosts after the page
+// hydrated. It asks here rather than keeping a second registry of island clients.
+document.addEventListener('ket:islands-attach', (event) => {
+  const root = event.detail?.root
+  if (!root) return
+  loadPlaced(root, true)
+    .then(() => islands.mount(root))
+    .catch((error) => console.error('island attach failed', error))
+})
+document.addEventListener('ket:islands-detach', (event) => {
+  const root = event.detail?.root
+  if (root) islands.dispose(root)
+})
 
 const event = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }))
 const hardNavigate = (target) => window.location.assign(String(target))
 const fragmentsType = 'text/vnd.ket.fragments+html'
 const slotSelector = (name) => '[data-ket-slot="' + name + '"]'
+const mountedBehaviors = new Map()
+const loadingBehaviors = new Map()
+let navigation
+const requireActive = (signal) => {
+  if (signal?.aborted) throw new DOMException('Navigation aborted', 'AbortError')
+}
 
-const applyFragments = async (markup) => {
+const loadBehavior = async (name, definition) => {
+  if (loadingBehaviors.has(name)) return loadingBehaviors.get(name)
+  const pending = (async () => {
+    const module = await import(definition.src)
+    const factory = module[definition.export]
+    if (typeof factory !== 'function')
+      throw new TypeError('browser behavior "' + name + '" does not export "' + definition.export + '"')
+    return factory
+  })()
+  loadingBehaviors.set(name, pending)
+  try { return await pending } finally { loadingBehaviors.delete(name) }
+}
+
+const reportBehaviorError = (name, error) => {
+  event('ket:behavior-error', { name, error })
+  console.error('browser behavior "' + name + '" failed', error)
+}
+const behaviorMatches = (name, definition) => {
+  try {
+    return definition.when === undefined || Boolean(document.querySelector(definition.when))
+  } catch (error) {
+    reportBehaviorError(name, error)
+    return false
+  }
+}
+const syncBehaviors = async () => {
+  for (const [name, mounted] of mountedBehaviors) {
+    const definition = behaviorDefinitions[name]
+    if (definition && behaviorMatches(name, definition)) continue
+    mountedBehaviors.delete(name)
+    mounted.lifetime.abort()
+    try {
+      mounted.dispose?.()
+    } catch (error) {
+      reportBehaviorError(name, error)
+    }
+  }
+  await Promise.all(Object.entries(behaviorDefinitions).map(async ([name, definition]) => {
+    try {
+      if (mountedBehaviors.has(name) || !behaviorMatches(name, definition)) return
+      const factory = await loadBehavior(name, definition)
+      if (!behaviorMatches(name, definition) || mountedBehaviors.has(name)) return
+      const lifetime = new AbortController()
+      try {
+        const dispose = factory({ document, navigation, lifetime: lifetime.signal })
+        if (dispose !== undefined && typeof dispose !== 'function')
+          throw new TypeError('browser behavior "' + name + '" must return a cleanup function or undefined')
+        mountedBehaviors.set(name, { lifetime, dispose })
+      } catch (error) {
+        lifetime.abort()
+        throw error
+      }
+    } catch (error) {
+      reportBehaviorError(name, error)
+    }
+  }))
+}
+
+const applyFragments = async (markup, signal) => {
+  requireActive(signal)
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
   const envelope = parsed.querySelector('ket-fragments')
   if (!envelope) throw new Error('navigation response has no ket-fragments envelope')
@@ -344,6 +451,7 @@ const applyFragments = async (markup) => {
       throw new Error('current document does not have exactly one slot named "' + name + '"')
   }
   await Promise.all(templates.map((template) => loadPlaced(template.content, true)))
+  requireActive(signal)
   const changed = []
   for (const template of templates) {
     const name = template.getAttribute('data-ket-slot')
@@ -353,6 +461,25 @@ const applyFragments = async (markup) => {
   }
   const title = envelope.getAttribute('data-title')
   if (title !== null) document.title = title
+  await syncBehaviors()
+  requireActive(signal)
+  return changed
+}
+
+const applyResponse = async (response, signal) => {
+  requireActive(signal)
+  const responseBuild = response.headers.get('x-ket-build')
+  if (responseBuild !== buildId) {
+    hardNavigate(response.url || location.href)
+    throw new Error('server and browser builds differ')
+  }
+  if (!response.headers.get('content-type')?.toLowerCase().startsWith(fragmentsType))
+    throw new Error('server did not return a navigation fragment')
+  const markup = await response.text()
+  requireActive(signal)
+  const changed = await applyFragments(markup, signal)
+  const location = response.headers.get('x-ket-location')
+  if (location) history.replaceState(history.state ?? {}, '', location)
   return changed
 }
 
@@ -396,15 +523,16 @@ const navigate = async (asked, mode = 'push', scroll = null) => {
       headers: {
         accept: fragmentsType + ', text/html;q=0.9',
         'x-ket-navigation': 'fragment-v1',
+        'x-ket-build': buildId,
       },
       signal: controller.signal,
     })
     fallback = response.url || fallback
-    if (!response.ok || !response.headers.get('content-type')?.toLowerCase().startsWith(fragmentsType))
-      throw new Error('server did not return a navigation fragment')
-    const changed = await applyFragments(await response.text())
+    if (!response.ok) throw new Error('server refused the navigation request')
+    const changed = await applyResponse(response, controller.signal)
     const finalUrl = new URL(response.url || target.href)
     if (mode === 'push') history.pushState({ __ketScroll: [0, 0] }, '', finalUrl.href)
+    if (mode === 'replace') history.replaceState({ ...(history.state ?? {}), __ketScroll: [0, 0] }, '', finalUrl.href)
     focusAfterNavigation(finalUrl, changed, scroll)
     event('ket:navigation-complete', { url: finalUrl.href, mode })
   } catch (caught) {
@@ -452,21 +580,44 @@ document.addEventListener('submit', (submit) => {
 if (navigationEnabled) {
   history.scrollRestoration = 'manual'
   if (!history.state?.__ketScroll) history.replaceState({ ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }, '', location.href)
-  window.addEventListener('popstate', (pop) => void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0]))
+  window.addEventListener('popstate', (pop) => {
+    // A client-owned history entry — a record modal opening over its collection —
+    // changes the URL without changing the server screen. Its owner cancels this
+    // event so going back closes the modal instead of re-fetching the page.
+    const owned = new CustomEvent('ket:popstate', { cancelable: true, detail: { url: location.href, state: pop.state } })
+    if (!document.dispatchEvent(owned)) return
+    void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0])
+  })
 }
-globalThis.__ketNavigation = { applyFragments, navigate, islands }
+navigation = {
+  navigate: (target, options = {}) => navigate(target, options.replace ? 'replace' : 'push'),
+  apply: (response, options = {}) => applyResponse(response, options.signal),
+  replace: (target) => history.replaceState(history.state ?? {}, '', new URL(target, location.href)),
+  reload: (target = location.href) => hardNavigate(target),
+}
+await syncBehaviors()
+globalThis.__ketNavigation = { ...navigation, applyFragments, islands }
 `
 
-const send = async (res: ServerResponse, result: RouteResult): Promise<void> => {
+const send = async (
+  res: ServerResponse,
+  result: RouteResult,
+  buildId?: string,
+  forceBootstrap = false,
+): Promise<void> => {
   if (typeof result.body === 'string' || result.body instanceof Uint8Array) {
     const body =
       typeof result.body === 'string' &&
       (result.type ?? 'text/html').toLowerCase().startsWith('text/html') &&
-      (result.body.includes('<ket-island') || result.body.includes('data-ket-slot='))
-        ? bootstrapDocument(result.body)
+      (forceBootstrap ||
+        result.body.includes('<ket-island') ||
+        result.body.includes('data-ket-island') ||
+        result.body.includes('data-ket-slot='))
+        ? bootstrapDocument(result.body, forceBootstrap)
         : result.body
     res.writeHead(result.status ?? 200, {
       'content-type': contentType(result.type ?? 'text/html'),
+      ...(buildId === undefined ? {} : { 'x-ket-build': buildId }),
       ...result.headers,
     })
     res.end(body)
@@ -474,6 +625,7 @@ const send = async (res: ServerResponse, result: RouteResult): Promise<void> => 
   }
   res.writeHead(result.status ?? 200, {
     'content-type': contentType(result.type ?? 'text/html'),
+    ...(buildId === undefined ? {} : { 'x-ket-build': buildId }),
     ...result.headers,
   })
   // pipeline owns backpressure and destroys the source when the client disappears.
@@ -574,6 +726,26 @@ export async function createKetServer(o: ServeOpts) {
       message: 'a pool needs resolveDatastore to know which database a request belongs to',
     })
   const maxJsonBodyBytes = o.maxJsonBodyBytes ?? 1024 * 1024
+  const buildId =
+    o.buildId ??
+    createHash('sha256')
+      .update(
+        JSON.stringify({
+          ket: o.manifest.ket,
+          modules: o.manifest.order.map((name) => [name, o.manifest.modules[name]?.version]),
+          islands: o.manifest.islands,
+          behaviors: o.manifest.behaviors,
+        }),
+      )
+      .digest('hex')
+      .slice(0, 16)
+  if (!/^[\x21-\x7e]{1,128}$/.test(buildId))
+    throw new KetErr({
+      code: 'E_BUILD_ID',
+      message: 'buildId must be 1-128 visible ASCII characters without spaces',
+    })
+  const forceBrowserBootstrap =
+    o.browserBehaviors !== undefined || Object.keys(o.manifest.behaviors ?? {}).length > 0
   if (!Number.isSafeInteger(maxJsonBodyBytes) || maxJsonBodyBytes <= 0)
     throw new KetErr({
       code: 'E_JSON_BODY_LIMIT',
@@ -637,6 +809,22 @@ export async function createKetServer(o: ServeOpts) {
   ): Promise<ThemeRuntime['clients']> => {
     if (typeof o.islandClients === 'function') return o.islandClients(url, req)
     return o.islandClients ?? theme?.clients ?? {}
+  }
+  const resolveIslandNames = async (
+    url: URL,
+    req: IncomingMessage,
+    theme?: ThemeRuntime | null,
+  ): Promise<readonly string[]> => {
+    if (typeof o.islandNames === 'function') return o.islandNames(url, req)
+    return o.islandNames ?? Object.keys(theme?.islands ?? {})
+  }
+  const resolveBrowserBehaviors = async (
+    url: URL,
+    req: IncomingMessage,
+    theme?: ThemeRuntime | null,
+  ): Promise<ThemeRuntime['behaviors']> => {
+    if (typeof o.browserBehaviors === 'function') return o.browserBehaviors(url, req)
+    return o.browserBehaviors ?? theme?.behaviors ?? {}
   }
 
   const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
@@ -738,7 +926,7 @@ export async function createKetServer(o: ServeOpts) {
       if (matched) {
         route = matched.path
         const r = await matched.value(url, req, matched.params)
-        return await send(res, r)
+        return await send(res, r, buildId, forceBrowserBootstrap)
       }
 
       // Framework endpoints name themselves: the paths are fixed, so there is no
@@ -771,11 +959,14 @@ export async function createKetServer(o: ServeOpts) {
         route = url.pathname
         const theme = await resolveTheme(url, req)
         const clients = await resolveIslandClients(url, req, theme)
+        const islandNames = await resolveIslandNames(url, req, theme)
+        const behaviors = await resolveBrowserBehaviors(url, req, theme)
         res.writeHead(200, {
           'content-type': 'text/javascript; charset=utf-8',
           'cache-control': 'no-cache',
+          'x-ket-build': buildId,
         })
-        return res.end(browserBootstrap(clients))
+        return res.end(browserBootstrap(clients, islandNames, behaviors, buildId))
       }
 
       // Resumable stream: the client reconnects with ?from=<cursor> and gets
@@ -887,13 +1078,16 @@ export async function createKetServer(o: ServeOpts) {
             privatePage
               ? { ...fragment, headers: { ...fragment.headers, ...PRIVATE_PAGE_HEADERS } }
               : fragment,
+            buildId,
           )
         }
         const fullHtml = bootstrapDocument(
           withThemeTokens(theme.renderRegion('layout', scope), theme.tokensCss),
+          forceBrowserBootstrap,
         )
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
+          'x-ket-build': buildId,
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
           ...(privatePage ? PRIVATE_PAGE_HEADERS : {}),
         })

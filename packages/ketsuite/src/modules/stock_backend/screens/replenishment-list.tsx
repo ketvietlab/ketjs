@@ -2,14 +2,14 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -109,52 +109,42 @@ export const replenishmentListScreen = (
   options: ReplenishmentListScreenOptions,
   frame: Frame = {},
 ): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: replenishmentListColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      ...options.table,
+    },
+    { paginate: options.total === undefined && !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
-  const selection = options.table?.selection ?? frame.chrome?.selection
+  const selection = options.table?.selection ?? collection.frame.chrome?.selection
 
   return shell(
     _,
     _('stock_backend.replenishment'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('stock_backend.replenishment.title')}
       description={_('stock_backend.replenishment.subtitle')}
-      actions={inline([
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />,
-        selection ? bulkActions(_, selection) : '',
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('stock_backend.replenishment.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }
-      status={`${_('stock_backend.replenishment.summary.rules')}: ${String(total)}`}
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('stock_backend.replenishment.title'), collection.frame)}
+      footer={`${_('stock_backend.replenishment.summary.rules')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length
-          ? dataTable(_, {
-              columns: replenishmentListColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              ...options.table,
-            })
+          ? collectionTable(_, collection.table)
           : emptyState(_('stock_backend.replenishment.empty'), _('stock_backend.replenishment.emptyHint'), {
               icon: icon('warehouse'),
             })
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

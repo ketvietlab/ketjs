@@ -15,6 +15,8 @@ import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
+import { collectionTable, recordModalHost } from '@ketvietlab/ketsuite/ui'
+import { bulkActions, listChrome } from '../packages/ketsuite/src/ui/chrome.tsx'
 import {
   actionGroup,
   attachmentPanel,
@@ -133,7 +135,7 @@ const MENU: MenuNode[] = [
   }),
   // An icon this build does not carry: the entry keeps its row and falls back to
   // a monogram, which is the case that has to be styled.
-  node('other', { icon: 'no-such-glyph' }),
+  node('other', { icon: 'no-such-glyph', children: [node('other.home', { path: '/other' })] }),
 ]
 
 /** Every control at once — the contract test only sees what is rendered. */
@@ -235,6 +237,70 @@ test('KetSuite ListPage derives breadcrumbs and company context from its frame',
   assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
   assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
   assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite ListPage keeps external bulk submission beside Create while only selected tools are hidden', () => {
+  const selection = CHROME.selection!
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: { chrome: CHROME },
+      title: 'Pages',
+      actions: bulkActions(_, selection),
+      controls: listChrome(_, 'Pages', { search: CHROME.search, create: null, selection: null }, false),
+      body: collectionTable(_, {
+        rows: [page()],
+        id: (row) => row.id,
+        selection,
+        columns: [{ key: 'title', label: 'Title', cell: (row) => row.title }],
+      }),
+    }),
+  )
+  const headerStart = output.indexOf('data-ui="list-page-header"')
+  const headerEnd = output.indexOf('</header>', headerStart)
+  const header = output.slice(headerStart, headerEnd)
+  assert.match(
+    header,
+    /data-ui="list-page-actions"[^>]*>[\s\S]*?href="\/admin\/pages\/new"[\s\S]*?data-ui="list-page-tools"[^>]* hidden/,
+  )
+  assert.doesNotMatch(header, /data-ui="list-page-actions"[^>]* hidden/)
+  assert.match(
+    header,
+    /<form data-ui="bulk-form" id="page-bulk" method="post" action="\/admin\/pages\/bulk" hidden/,
+  )
+  assert.match(header, /name="returnTo" value="\/admin\/pages"/)
+  assert.match(header, /name="action" value="archive"/)
+  assert.equal(output.match(/id="page-bulk"/g)?.length, 1)
+  const afterHeader = output.slice(headerEnd)
+  assert.match(afterHeader, /name="selected.p" value="1" form="page-bulk"/)
+  assert.doesNotMatch(
+    afterHeader,
+    /data-ui="list-page-actions"|data-ui="list-page-tools"|data-ui="bulk-form"/,
+  )
+})
+
+test('KetSuite ListPage explicit null Create keeps secondary header actions without reviving the frame create link', () => {
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: { chrome: CHROME },
+      title: 'Pages',
+      headerActions: null,
+      actions: linkButton({ label: 'Export', href: '/admin/pages/export?q=x&lang=vi' }),
+      controls: 'Filters',
+      body: 'Rows',
+    }),
+  )
+  const headerStart = output.indexOf('data-ui="list-page-header"')
+  const headerEnd = output.indexOf('</header>', headerStart)
+  const header = output.slice(headerStart, headerEnd)
+  assert.match(
+    header,
+    /data-ui="list-page-tools"[^>]*>[\s\S]*?href="\/admin\/pages\/export\?q=x&amp;lang=vi"/,
+  )
+  assert.doesNotMatch(header, /data-ui="list-page-tools"[^>]* hidden/)
+  assert.doesNotMatch(output, /href="\/admin\/pages\/new"/)
+  assert.doesNotMatch(output.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
 })
 
 test('KetSuite FormPage derives its operational topbar from the application frame', () => {
@@ -654,6 +720,11 @@ const componentContract = [
 ]
 
 const everything = [
+  // Record/workspace chrome retains this compatibility hook. Collection pages
+  // now render their create action through the shared ListPage header instead.
+  listChrome(_, 'Workspace', { create: { label: 'Create', path: '/records/new' } }, false),
+  listChrome(_, 'Custom search', { searchContent: 'Search filter island' }, false),
+  recordModalHost('ketsuite.example'),
   shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
   pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {
     menu: MENU,
@@ -1144,6 +1215,46 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
 })
 
+test('sidebar footer: a gateway viewer signs out where the deployment says, or has no control', () => {
+  const gateway = renderToString(
+    pagesScreen(_, [page()], {
+      menu: MENU,
+      viewer: {
+        name: 'Ngọc Linh',
+        company: 'acme',
+        companies: ['acme'],
+        signOut: { action: '/auth/logout' },
+      },
+    }),
+  )
+  assert.match(gateway, /<details data-ui="viewer">/)
+  assert.match(gateway, /<form data-ui="signout" method="post" action="\/auth\/logout">/)
+  assert.doesNotMatch(gateway, /action="\/logout"/)
+
+  const undeclared = renderToString(
+    pagesScreen(_, [page()], {
+      menu: MENU,
+      viewer: { name: 'Ngọc Linh', company: 'acme', companies: ['acme'], signOut: null },
+    }),
+  )
+  // The viewer still shows who is signed in; only the control that would point nowhere is gone.
+  assert.match(undeclared, /<details data-ui="viewer">/)
+  assert.doesNotMatch(undeclared, /data-ui="signout"/)
+})
+
+test('sidebar: modules expand in place and only submenu links carry active state', () => {
+  const html = renderToString(pagesScreen(_, [page()], { menu: MENU }))
+  assert.match(html, /data-ui="app-navigation"/)
+  assert.equal([...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"/g)].length, 2)
+  assert.equal(
+    [...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"[^>]*open="true"/g)].length,
+    1,
+  )
+  assert.doesNotMatch(html, /data-ui="navigation-branch"[^>]*data-active=/)
+  assert.match(html, /data-ui="navigation-item" data-active="true"[^>]*href="\/admin"/)
+  assert.doesNotMatch(html, /data-ui="navigation-item-count"/)
+})
+
 test('backend shell: fragment navigation emits only replaceable slots', () => {
   const html = renderToString(
     pagesScreen(_, [page()], {
@@ -1159,6 +1270,52 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
     ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
   )
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+})
+
+test('backend shell: the document uses the design-system application shell', () => {
+  const html = renderToString(
+    shell(_, 'Page title', html2`<p>Page body</p>`, {
+      menu: MENU,
+      extras: { runtime: html2`<span data-ui="runtime-probe"></span>`, 'sidebar.foot': 'persistent foot' },
+    }),
+  ).replace(/<!--k\[?\]?-->/g, '')
+  assert.match(
+    html,
+    /^<div data-kv-design-system(?:="true")? data-presentation="grouped"><div data-ui="app-shell"/,
+    'the grouped presentation gives every screen the mocks page gutter',
+  )
+  assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
+  assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
+  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
+  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.content'])
+    assert.equal(
+      (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
+      1,
+      slot,
+    )
+  assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  const runtimeAt = html.indexOf('runtime-probe')
+  const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
+  assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')
+})
+
+test('backend shell: suppressed topbar content keeps the stable navigation slot', () => {
+  const html = renderToString(shell(_, 'List title', html2`<p>Page body</p>`, { topbar: false }))
+  assert.equal((html.match(/data-ket-slot="backend\.topbar"/g) ?? []).length, 1)
+  assert.doesNotMatch(html, /data-ui="topbar"|List title|data-ui="title"/)
+})
+
+test('backend shell: visible topbar stays inside the stable navigation slot', () => {
+  const html = renderToString(shell(_, 'Page title', html2`<p>Page body</p>`))
+  assert.match(
+    html,
+    /<div data-ket-slot="backend\.topbar">[\s\S]*?<header data-ui="topbar">[\s\S]*?Page title/,
+  )
+  const navigation = renderToString(shell(_, 'Next title', html2`<p>Next body</p>`, { navigation: true }))
+  assert.match(
+    navigation,
+    /<template data-ket-slot="backend\.topbar">[\s\S]*?<header data-ui="topbar">[\s\S]*?Next title/,
+  )
 })
 
 test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
@@ -1181,10 +1338,10 @@ test('backend layout: canonical screen wrappers supply context and flatten aroun
   )
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
   assert.equal(rich.match(/data-pattern="record"/g)?.length, 1)
-  assert.match(rich, /data-ui="form-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.match(rich, /data-ui="record-page-context"[\s\S]*data-ui="breadcrumbs"/)
 
   const css = ADMIN_CSS
-  assert.match(css, /\[data-ui="form-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
+  assert.match(css, /\[data-ui="record-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
 })
 
 test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {
@@ -1192,7 +1349,7 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
   assert.match(
     css,
-    /\[data-ui="main"\]:has\(> \[data-ui="topbar"\] > \*\) \[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
+    /\[data-ui="app-main"\]:has\(> \[data-ket-slot="backend\.topbar"\] > \[data-ui="topbar"\] > \*\)[\s\S]*?\[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
   )
 })
 
@@ -1381,20 +1538,67 @@ test('backend layout: a workspace screen uses one identity band with navigation 
   )
   assert.match(listed, /data-ui="chrome-create"/)
   assert.equal(listed.match(/data-ui="title"/g), null)
+
+  const composed = renderToString(
+    WorkspaceScreen({
+      translator: vi,
+      title: 'Điều chuyển',
+      frame: { menu, chrome: { create: { label: 'Không render', path: '/x' } } },
+      controls: html2`<nav aria-label="Phạm vi">Tự soạn</nav>`,
+      body: surface({ body: 'x' }),
+    }),
+  )
+  assert.match(composed, /data-ui="dashboard-page-controls"[\s\S]*aria-label="Phạm vi"/)
+  assert.doesNotMatch(composed, /data-ui="chrome-create"/)
 })
 
 test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
   // As a plain grid item the sidebar stretched to the shell's row — the content's
   // height — so on a long list the systray, the message and activity counts and the
   // settings link sat hundreds of pixels below the fold. It is the window's height
-  // and it sticks; `sidebar-nav` takes the overflow inside it.
-  const css = ADMIN_CSS
-  const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
-  assert.match(rule, /position:\s*sticky;/)
-  assert.match(rule, /inset-block-start:\s*0;/)
-  assert.match(rule, /block-size:\s*100dvh;/)
-  assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
-  assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
+  // and it sticks; the design-system navigation region takes the overflow inside it.
+  // The design-system `AppShell` owns that: its sidebar region sticks at the
+  // window's height, and the admin keeps it a column that hides its own overflow.
+  const shellCss = readFileSync('packages/design-system/src/layouts/shell/styles.css', 'utf8')
+  const region = shellCss.match(/\[data-ui="app-sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(region, /position:\s*sticky;/)
+  assert.match(region, /top:\s*0;/)
+  assert.match(region, /height:\s*100dvh;/, 'an explicit height, so the grid cannot stretch it to the page')
+  const admin = ADMIN_CSS.match(/\[data-ui="app-sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(admin, /flex-direction:\s*column;/)
+  assert.match(admin, /overflow:\s*hidden;/)
+  assert.doesNotMatch(
+    ADMIN_CSS,
+    /\[data-ui="(?:shell|sidebar|sidebar-main)"\]/,
+    'no legacy shell selectors remain',
+  )
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
+})
+
+test('app navigation: cluster icons own the Demo 2 metric', () => {
+  const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  const rule = css.match(/\[data-ui="navigation-item-leading"\]\s*\[data-ui="icon"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /width:\s*var\(--kv-text-xl\);/)
+  assert.match(rule, /height:\s*var\(--kv-text-xl\);/)
+  assert.match(rule, /flex:\s*0 0 var\(--kv-text-xl\);/)
+})
+
+test('list chrome: mobile sort can shrink without widening the page', () => {
+  const css = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const mobile =
+    css.match(/@media \(max-width: 47\.9375rem\) \{(?<body>[\s\S]+?)\n {2}\}/)?.groups?.body ?? ''
+  assert.match(mobile, /\[data-ui="list-sort"\] \{[\s\S]*?flex:\s*1 1 8rem;/)
+  assert.match(mobile, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/)
+  assert.match(mobile, /min-width:\s*0;/)
+  assert.match(mobile, /max-width:\s*100%;/)
+})
+
+test('data table: compound cells keep their title and supporting text distinct', () => {
+  const css = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8')
+  assert.match(css, /\[data-ui="cell"\][\s\S]*?:is\(strong, small\) \{[\s\S]*?display:\s*block;/)
+  assert.match(css, /\[data-ui="cell"\][\s\S]*?small \{[\s\S]*?color:\s*var\(--kv-text-muted\);/)
+  assert.match(css, /\[data-ui="row-link"\]:has\(small\) \{[\s\S]*?flex-direction:\s*column;/)
 })
 
 test('design density: controls and fields follow the canonical component dimensions', () => {
@@ -1814,34 +2018,13 @@ test('a browser navigating gets the page; a client calling gets the JSON', () =>
   )
 })
 
-test('backend shell: the phone menu has one definition, and it says the rest is there', () => {
-  // Two stylesheets used to define the mobile shell at the same breakpoint, in
-  // the same layer, at the same specificity. Which one applied was decided by
-  // the order of `styles` in the backend module and by nothing else: swapping
-  // `responsive.css` and `content.css` made the phone menu disappear whole.
-  const phoneBlocks = ADMIN_STYLESHEETS.map((path) => {
-    const source = readFileSync(path, 'utf8')
-    const at = source.indexOf('@media (max-width: 47.9375rem)')
-    const blocks: string[] = []
-    for (let index = at; index >= 0; index = source.indexOf('@media (max-width: 47.9375rem)', index + 1))
-      blocks.push(source.slice(index, source.indexOf('\n  }', index)))
-    return [path, blocks.join('\n')] as const
-  })
-  const declaring = phoneBlocks
-    .filter(([, block]) => /\[data-ui="sidebar-nav"\][^{]*\{[^}]*display:/u.test(block))
-    .map(([path]) => path.split('/').pop())
-  assert.deepEqual(declaring, ['content.css'], 'only one stylesheet may decide whether the phone menu exists')
-
-  const strip = ADMIN_CSS.match(/\[data-ui="sidebar-nav"\]\s*\{[^}]*overflow-x: auto[^}]*\}/u)?.[0]
-  // Two thirds of this strip is off-screen on a phone. The desktop sidebar hides
-  // its scrollbar because a tall column shows its own cut edge; lying on its
-  // side it shows nothing, so the hidden part has to announce itself.
-  assert.match(strip ?? '', /scrollbar-width: thin/u, 'the strip says it scrolls')
-  assert.match(strip ?? '', /mask-image: linear-gradient/u, 'and fades where it continues')
-
-  // The search box is the only other way out of a screen once the app list is
-  // folded away, and the grid already reserves a column for it.
-  const compact = readFileSync('packages/ketsuite/src/modules/backend/design/content.css', 'utf8')
-  const search = compact.match(/\[data-ui="sidebar-search"\]\s*\{[^}]*display: flex[^}]*\}/u)?.[0]
-  assert.ok(search, 'the reserved column holds something')
+test('backend shell: the phone menu uses the design-system left drawer', () => {
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  const mobile = navigationCss.match(
+    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
+  )?.groups?.body
+  assert.match(mobile ?? '', /\[data-ui="navigation-trigger"\] \{[\s\S]*?display: flex/)
+  assert.match(mobile ?? '', /\[data-ui="navigation-layer"\] \{[\s\S]*?position: fixed/)
+  assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
+  assert.match(mobile ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
 })

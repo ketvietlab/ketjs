@@ -1,10 +1,22 @@
-import { each, html, signal } from '@ketvietlab/ketjs-view'
-import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { defineIsland, each, html, signal } from '@ketvietlab/ketjs-view'
 import { createAddressFormView } from './client/address-view.mjs'
 
 const runtime = { each, html, signal }
-export const islands: Record<string, IslandDefinition> = {
-  'partner.address-form': {
+type AddressFormProps = {
+  action: string
+  address: unknown
+  countries: unknown
+  provinces: unknown
+  provinceId?: string
+  divisions: unknown
+  uses: unknown
+  labels: unknown
+  submitLabel: string
+  defaultCountry?: string
+}
+
+export const islands = {
+  'partner.address-form': defineIsland<AddressFormProps>()({
     props: {
       action: 'text',
       address: 'json',
@@ -19,6 +31,6 @@ export const islands: Record<string, IslandDefinition> = {
     },
     client: 'address.mjs',
     export: 'form',
-    view: (props: IslandProps) => createAddressFormView(runtime, props),
-  },
+    view: (props) => createAddressFormView(runtime, props),
+  }),
 }

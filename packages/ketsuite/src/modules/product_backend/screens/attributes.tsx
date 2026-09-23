@@ -1,166 +1,131 @@
 import type { Translator } from '@ketvietlab/ketjs'
-import { each } from '@ketvietlab/ketjs-view'
-import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import { Badge, Inline, Notice, Stack } from '@ketvietlab/design-system'
 import {
-  badge,
-  CardGrid,
-  ContentCard,
-  emptyState,
-  ListScreen,
-  icon,
-  inline,
-  RecordForm,
-  Section,
-  stack,
-  Surface,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  ListPage,
+  prepareCollectionTable,
+  recordModalHref,
+  shell,
 } from '../../../ui/index.ts'
-import type { Frame } from '../../../ui/index.ts'
-import { localized } from '../../backend/screen.ts'
-import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
+import type { Column, Frame } from '../../../ui/index.ts'
+import { ATTRIBUTE_SEARCH_FILTERS } from '../attributes-search.ts'
+import { localized, selectionLabel } from '../../backend/screen.ts'
 
-type AttributeRow = Record<string, unknown>
-
-/** A stable product code in the reader's language; the code itself survives as data. */
-const selectionLabel = (_: Translator, group: string, value: unknown): string =>
-  resolveSelection(_, 'product_backend', group, value)
-
-const ValueBadges = ({
-  _,
-  values,
-}: {
-  _: Translator
-  values: Array<Record<string, unknown>>
-}): TemplateResult =>
-  inline([
-    values.length
-      ? each(
-          values,
-          (value) => value.id,
-          (value) => badge(String(value.name)),
-        )
-      : badge(_('product_backend.attributes.noValues')),
-  ])
-
-const AttributeCard = ({
-  _,
-  row,
-  locale,
-}: {
-  _: Translator
-  row: AttributeRow
-  locale: string
-}): TemplateResult => {
-  const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
-  const body: JSXChild = stack(
-    [
-      <ValueBadges _={_} values={values} />,
-      <RecordForm
-        scope="product-attribute-value"
-        action={localized(`/admin/product/attributes/${String(row.id)}/values`, locale)}
-        submit={_('product_backend.action.add')}
-        submitVariant="secondary"
-        fields={[
-          {
-            name: 'name',
-            label: _('product_backend.attributes.valueName'),
-            required: true,
-            span: 'full',
-          },
-          {
-            name: 'sequence',
-            label: _('product_backend.col.sequence'),
-            type: 'number',
-            value: 10,
-            span: 'full',
-          },
-        ]}
-      />,
-    ],
-    'compact',
-  )
-  return (
-    <ContentCard
-      title={String(row.name)}
-      summary={`${selectionLabel(_, 'displayType', row.displayType)} · ${selectionLabel(_, 'createVariant', row.createVariant)}`}
-      body={body}
-    />
-  )
+export type AttributeListRow = {
+  id: string
+  name: string
+  displayType: string
+  createVariant: string
+  values: Array<{ id: string; name: string; htmlColor?: string | null; sequence?: number }>
+  editHref?: string
 }
+export const attributeListColumns = (_: Translator): Column<AttributeListRow>[] => [
+  {
+    key: 'name',
+    label: _('product_backend.field.name'),
+    priority: 'primary',
+    width: 'wide',
+    cell: (row) => row.name,
+  },
+  {
+    key: 'values',
+    label: _('product_backend.attributes.values'),
+    priority: 'primary',
+    cell: (row) => (
+      <Inline
+        items={[
+          ...row.values.slice(0, 3).map((value) => <Badge label={value.name} />),
+          ...(row.values.length > 3 ? [<Badge label={`+${row.values.length - 3}`} />] : []),
+          ...(!row.values.length ? [<Badge label={_('product_backend.attributes.noValues')} />] : []),
+        ]}
+      />
+    ),
+  },
+  {
+    key: 'displayType',
+    label: _('product_backend.attributes.displayType'),
+    cell: (row) => selectionLabel(_, 'product_backend', 'displayType', row.displayType),
+  },
+  {
+    key: 'createVariant',
+    label: _('product_backend.attributes.createVariant'),
+    cell: (row) => selectionLabel(_, 'product_backend', 'createVariant', row.createVariant),
+  },
+]
 
-export const attributesScreen = (
+/** The same bare presenter is used by the application shell and framework-native mock. */
+export const attributesListPage = (
   _: Translator,
-  rows: AttributeRow[],
+  rows: AttributeListRow[],
   frame: Frame,
   errors?: string[],
   locale = '',
 ): TemplateResult => {
-  const createForm: JSXChild = (
-    <RecordForm
-      id="product-attribute-create"
-      scope="product-attribute-create"
-      action={localized('/admin/product/attributes', locale)}
-      submit={_('product_backend.action.create')}
-      submitVariant="primary"
-      errors={errors}
-      fields={[
-        { name: 'name', label: _('product_backend.field.name'), required: true },
-        { name: 'sequence', label: _('product_backend.col.sequence'), type: 'number', value: 10 },
-        {
-          name: 'displayType',
-          label: _('product_backend.attributes.displayType'),
-          type: 'select',
-          options: ['radio', 'pills', 'select', 'color', 'multi'].map((value) => ({
-            value,
-            label: selectionLabel(_, 'displayType', value),
-          })),
-        },
-        {
-          name: 'createVariant',
-          label: _('product_backend.attributes.createVariant'),
-          type: 'select',
-          options: [
-            { value: 'always', label: _('product_backend.attributes.always') },
-            { value: 'no_variant', label: _('product_backend.attributes.never') },
-          ],
-        },
-      ]}
-    />
+  const url = frame.collectionUrl ?? localized('/admin/product/attributes', locale)
+  const location = new URL(url, 'http://ket.local')
+  const active = ATTRIBUTE_SEARCH_FILTERS.map((filter) => ({
+    ...filter,
+    values: filter.values.filter((value) =>
+      (location.searchParams.get(filter.key) ?? '').split(',').includes(value),
+    ),
+  }))
+  const orderedRows = rows.map((row) => ({
+    ...row,
+    values: [...row.values].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.id.localeCompare(b.id)),
+  }))
+  const prepared = prepareCollectionTable(
+    _,
+    {
+      ...frame,
+      collectionUrl: url,
+      chrome: {
+        ...frame.chrome,
+        search: undefined,
+      },
+    },
+    {
+      rows: orderedRows.filter((row) =>
+        active.every((filter) => !filter.values.length || filter.values.includes(row[filter.key])),
+      ),
+      columns: attributeListColumns(_),
+      id: (row) => row.id,
+      rowHref: (row) => row.editHref ?? recordModalHref(url, { kind: 'product.attribute', id: row.id }),
+    },
+    { paginate: true, searchText: (row) => `${row.name} ${row.values.map((value) => value.name).join(' ')}` },
   )
-  const configured: JSXChild = rows.length ? (
-    <CardGrid
-      items={rows}
-      id={(row) => row.id}
-      card={(row) => <AttributeCard _={_} row={row} locale={locale} />}
-    />
-  ) : (
-    <Surface
-      padding="compact"
-      body={emptyState(_('product_backend.attributes.empty'), _('product_backend.attributes.emptyHint'), {
-        icon: icon('sliders-horizontal'),
-      })}
-    />
-  )
-
+  if (prepared.frame.chrome) prepared.frame.chrome.search = undefined
   return (
-    <ListScreen
-      translator={_}
+    <ListPage
+      variant="operational"
+      frame={prepared.frame}
       title={_('product_backend.attributes.title')}
-      frame={frame}
-      body={stack(
-        [
-          <Section
-            title={_('product_backend.attributes.createTitle')}
-            description={_('product_backend.attributes.createHint')}
-            body={<Surface padding="compact" body={createForm} />}
-          />,
-          <Section
-            title={_('product_backend.attributes.configuredTitle')}
-            description={_('product_backend.attributes.configuredHint')}
-            body={configured}
-          />,
-        ],
-        'loose',
-      )}
+      actions={collectionActions(_, prepared.frame)}
+      controls={collectionControls(_, _('product_backend.attributes.title'), prepared.frame)}
+      body={
+        <Stack
+          items={[
+            ...(errors?.length
+              ? [<Notice tone="danger" title={_('recordModal.errorTitle')} message={errors.join(' · ')} />]
+              : []),
+            collectionTable(_, prepared.table),
+          ]}
+        />
+      }
     />
   )
 }
+export const attributesScreen = (
+  _: Translator,
+  rows: AttributeListRow[],
+  frame: Frame,
+  errors?: string[],
+  locale = '',
+): TemplateResult =>
+  shell(_, _('product_backend.attributes.title'), attributesListPage(_, rows, frame, errors, locale), {
+    ...frame,
+    chrome: null,
+    topbar: false,
+  })
