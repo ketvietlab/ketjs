@@ -19,12 +19,28 @@ packages/ketsuite/src/ui/client/live-doc.mjs.map
 # backend asset root by tools/build-backend-client.mjs.
 packages/ketsuite/src/ui/client/mail-bundle.mjs
 packages/ketsuite/src/ui/client/mail-bundle.mjs.map
+packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs
+packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs.map
+packages/ketsuite/src/modules/user_backend/client/user-modal.mjs
+packages/ketsuite/src/modules/user_backend/client/user-modal.mjs.map
+packages/ketsuite/src/modules/product_backend/client/product-modal.mjs
+packages/ketsuite/src/modules/product_backend/client/product-modal.mjs.map
+packages/ketsuite/src/modules/product_backend/client/attribute-modal.mjs
+packages/ketsuite/src/modules/product_backend/client/attribute-modal.mjs.map
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
+packages/ketsuite/src/modules/backend/design/client/lightbox.mjs
+packages/ketsuite/src/modules/backend/design/client/lightbox.mjs.map
+packages/ketsuite/src/modules/product_backend/client/variant-editor.mjs
+packages/ketsuite/src/modules/product_backend/client/variant-editor.mjs.map
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs.map
 packages/ketsuite/src/modules/backend/design/client/backend-shell.mjs
 packages/ketsuite/src/modules/backend/design/client/backend-shell.mjs.map
+packages/ketsuite/src/modules/backend/design/client/ket-table.mjs
+packages/ketsuite/src/modules/backend/design/client/ket-table.mjs.map
+packages/ketsuite/src/modules/backend/design/client/search-filter.mjs
+packages/ketsuite/src/modules/backend/design/client/search-filter.mjs.map
 # The public design-system entry is bundled into the backend asset root so
 # source-mode development and production serve the same fingerprinted bytes.
 packages/ketsuite/src/modules/backend/design/design-system.css
@@ -32,6 +48,10 @@ packages/ketsuite/src/modules/backend/design/design-system.css
 # reason the Live Doc editor does — tools/build-chart-client.mjs, on every build.
 packages/ketsuite/src/modules/backend/design/client/chart.mjs
 packages/ketsuite/src/modules/backend/design/client/chart.mjs.map
+# The KetAtlas island runtime bundles @ketvietlab/ketjs-view itself (a self-contained
+# mock has no server to resolve it from) — tools/build-design-system-atlas-runtime.mjs,
+# on every build.
+packages/design-system/src/atlas/island-runtime.mjs
 coverage/
 .release/
 *.tsbuildinfo

@@ -97,7 +97,7 @@
     min-inline-size: 0;
     overflow-wrap: anywhere;
     color: var(--admin-accent-text);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     text-decoration: none;
   }
@@ -131,235 +131,6 @@
     font: inherit;
   }
 
-  /* Relational selectors keep the short path compact and put full CRUD in the
-     modal. The footer action remains visible even when the relation is empty. */
-  [data-ui="relation-select"] {
-    position: relative;
-    inline-size: 100%;
-    min-inline-size: 0;
-  }
-  [data-ui="relation-native"] {
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-    inline-size: 1px;
-    block-size: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
-  [data-ui="relation-trigger"] {
-    display: flex;
-    inline-size: 100%;
-    min-inline-size: 0;
-    min-block-size: var(--admin-field-height);
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--admin-gap-sm);
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    color: var(--admin-ink);
-    font: inherit;
-    /* The same type metrics as [data-ui="form-control"]. Without them the button
-       inherits the body's larger line box and stands 2px taller than every other
-       control on the row. */
-    font-size: 0.8125rem;
-    line-height: 1.3;
-    text-align: start;
-    cursor: pointer;
-  }
-  [data-ui="relation-trigger"][data-empty="true"] {
-    color: var(--admin-ink-muted);
-  }
-  [data-ui="relation-trigger"]:focus-visible {
-    border-color: var(--admin-focus-border);
-    box-shadow: 0 0 0 3px var(--admin-focus-ring);
-    outline: none;
-  }
-  [data-ui="relation-value"] {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* A multi-valued relation shows what it holds beneath the trigger, so the
-     trigger itself stays an "add another" affordance at a fixed height. */
-  [data-ui="relation-chips"] {
-    display: flex;
-    flex-wrap: wrap;
-    margin: var(--admin-gap-xs) 0 0;
-    padding: 0;
-    gap: var(--admin-gap-xs);
-    list-style: none;
-  }
-  [data-ui="relation-chip"] {
-    display: inline-flex;
-    align-items: center;
-    max-inline-size: 100%;
-    gap: 0.25rem;
-    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface-subtle);
-    color: var(--admin-ink);
-  }
-  [data-ui="relation-chip"] > span {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  [data-ui="relation-chip-clear"] {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
-    flex: none;
-    padding: 0;
-    border: 0;
-    border-radius: var(--admin-radius-sm);
-    background: transparent;
-    color: var(--admin-ink-muted);
-    font: inherit;
-    line-height: 1;
-    cursor: pointer;
-  }
-  [data-ui="relation-chip-clear"]:is(:hover, :focus-visible) {
-    color: var(--admin-ink);
-  }
-  [data-ui="relation-chip-clear"]:focus-visible {
-    outline: 2px solid var(--admin-focus-border);
-    outline-offset: 1px;
-  }
-  [data-ui="relation-option"][data-selected="true"]::after,
-  [data-ui="relation-dialog-row"][data-selected="true"] [data-ui="relation-dialog-main"] strong::after {
-    content: " ✓";
-    color: var(--admin-ink-muted);
-  }
-  [data-ui="relation-menu"] {
-    position: absolute;
-    inset-block-start: calc(100% + 0.25rem);
-    inset-inline: 0;
-    z-index: 40;
-    display: grid;
-    min-inline-size: min(22rem, calc(100vw - 2rem));
-    overflow: hidden;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    box-shadow: var(--admin-shadow-float);
-  }
-  [data-ui="relation-search"] {
-    inline-size: calc(100% - var(--admin-gap-sm) * 2);
-    min-block-size: var(--admin-field-height);
-    margin: var(--admin-gap-sm);
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface);
-    color: var(--admin-ink);
-    font: inherit;
-  }
-  [data-ui="relation-options"] {
-    display: grid;
-    max-block-size: 16rem;
-    overflow: auto;
-  }
-  [data-ui="relation-option"] {
-    display: grid;
-    min-block-size: var(--admin-control-height);
-    padding: 0.375rem 0.625rem;
-    border: 0;
-    background: transparent;
-    color: var(--admin-ink);
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-  }
-  [data-ui="relation-option"]:is(:hover, :focus-visible),
-  [data-ui="relation-option"][aria-selected="true"] {
-    background: var(--admin-accent-soft);
-    outline: none;
-  }
-  [data-ui="relation-option"] small {
-    color: var(--admin-ink-muted);
-  }
-  [data-ui="relation-footer"] {
-    display: flex;
-    justify-content: flex-start;
-    padding: var(--admin-gap-xs) var(--admin-gap-sm);
-    border-block-start: 1px solid var(--admin-line);
-  }
-  [data-ui="relation-dialog-toolbar"] {
-    display: flex;
-    align-items: center;
-    gap: var(--admin-gap-sm);
-    margin-block-end: var(--admin-gap);
-  }
-  [data-ui="relation-dialog-toolbar"] [data-ui="form-control"] {
-    flex: 1 1 auto;
-  }
-  [data-ui="relation-dialog-list"] {
-    display: grid;
-    margin: 0;
-    padding: 0;
-    border-block-start: 1px solid var(--admin-line);
-    list-style: none;
-  }
-  [data-ui="relation-dialog-row"] {
-    display: grid;
-    min-inline-size: 0;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--admin-gap-sm);
-    padding: var(--admin-gap-sm) 0;
-    border-block-end: 1px solid var(--admin-line);
-  }
-  [data-ui="relation-dialog-main"] {
-    display: grid;
-    min-inline-size: 0;
-    gap: 0.125rem;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--admin-ink);
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-  }
-  [data-ui="relation-dialog-main"]:focus-visible {
-    outline: 2px solid var(--admin-focus-border);
-    outline-offset: 2px;
-  }
-  [data-ui="relation-dialog-meta"] {
-    overflow: hidden;
-    color: var(--admin-ink-muted);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  [data-ui="relation-dialog-actions"] {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--admin-gap-xs);
-  }
-  [data-ui="relation-editor"] {
-    display: grid;
-    gap: var(--admin-gap);
-    margin-block-end: var(--admin-gap);
-    padding: var(--admin-gap);
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface-subtle);
-  }
-  [data-ui="relation-empty"] {
-    margin: 0;
-    padding: var(--admin-gap);
-    color: var(--admin-ink-muted);
-    text-align: center;
-  }
   [data-ui="modal-sheet"][data-size="large"] {
     inline-size: min(56rem, calc(100vw - var(--admin-gap-lg)));
   }
@@ -376,26 +147,13 @@
     overflow: hidden;
   }
 
-  /*
-   * A dialog that asked to be large is a workbench, not a form.
-   *
-   * Two things were wrong with it. `data-size` had no say at all, because
-   * `[data-presentation="dialog"] [data-ui="modal-sheet"]` matches with one
-   * more attribute than `[data-ui="modal-sheet"][data-size="large"]`, so every
-   * screen that asked for both got the width of a form. And the sheet was
-   * sized to its content, so a workbench with tabs was a different dialog on
-   * each tab — growing, shrinking and shifting under the cursor on every
-   * switch, which is the one thing a row of tabs exists to promise it will not
-   * do.
-   *
-   * It takes a fixed frame now. The height is the tall one a workbench wants
-   * until the screen cannot give it, and then it is the screen less a margin,
-   * so the dialog never runs off the top and bottom. The body scrolls inside
-   * it, which the sheet's own grid rows were already written for.
-   */
+  /* Large describes the working width, not a required amount of empty height.
+     Content determines the block size until the viewport cap is reached; the
+     sheet body already owns overflow for genuinely long workbenches. */
   [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size="large"] {
     inline-size: min(1200px, 100%);
-    block-size: min(1000px, calc(100dvh - 100px));
+    block-size: auto;
+    max-block-size: calc(100dvh - 100px);
   }
 
   /* URL-addressable modal workspace. The backdrop is a real close link and
@@ -458,6 +216,13 @@
     display: grid;
     min-inline-size: 0;
     gap: var(--admin-gap-xs);
+  }
+  /* The title and what state its record is in read as one line. */
+  [data-ui="modal-title-row"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-sm);
   }
   [data-ui="modal-title"] {
     min-inline-size: 0;
@@ -579,7 +344,7 @@
     background: var(--admin-surface);
     color: var(--admin-ink-secondary);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1;
   }
@@ -682,7 +447,7 @@
     color: var(--admin-ink);
     background: var(--admin-control-bg);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     transition:
       border-color var(--admin-motion-fast),
@@ -858,7 +623,7 @@
     color: var(--admin-ink);
     background: var(--admin-surface);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     color-scheme: light dark;
     transition:
@@ -1213,5 +978,104 @@
   [data-ui="form-field"][data-kind="group"] > [data-ui="disclosure"] {
     inline-size: 100%;
     min-inline-size: 0;
+  }
+
+  /* The image owns a column beside the form. Both remain in flow, so adding
+     identity fields or wrapping image actions cannot cover an input. */
+  [data-ui="record-form-with-image"] {
+    --record-image-size: 6rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--record-image-size);
+    gap: var(--space-4, 16px);
+    align-items: start;
+  }
+  [data-ui="record-form-with-image"] > [data-ui="record-image"] {
+    position: static;
+  }
+  [data-ui="record-form-with-image"] > [data-ui="record-form"] {
+    min-inline-size: 0;
+  }
+  [data-ui="record-image"] {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-1, 4px);
+    inline-size: var(--record-image-size, 6rem);
+  }
+  [data-ui="record-image-frame"] {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--record-image-size, 6rem);
+    block-size: var(--record-image-size, 6rem);
+    overflow: hidden;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-md, 7px);
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="record-image-frame"] [data-ui="lightbox-thumb"] {
+    --lightbox-thumb-size: var(--record-image-size, 6rem);
+    border: 0;
+    border-radius: 0;
+  }
+  [data-ui="record-image-empty"] {
+    padding: var(--space-2, 8px);
+    color: var(--admin-ink-muted);
+    font-size: var(--font-size-xs, 0.8125rem);
+    text-align: center;
+  }
+  [data-ui="record-image"][data-record-dropzone] [data-ui="record-image-empty"] {
+    align-self: stretch;
+    justify-self: stretch;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--admin-line-strong);
+    border-radius: inherit;
+  }
+  [data-ui="record-image"][data-drag="1"] [data-ui="record-image-frame"] {
+    outline: 2px dashed var(--admin-focus-border);
+    outline-offset: 2px;
+    background: var(--admin-card);
+  }
+  [data-ui="record-image"][data-busy="true"] [data-ui="record-image-frame"] {
+    opacity: 0.6;
+  }
+  [data-ui="record-image-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 var(--space-2, 8px);
+    font-size: var(--font-size-xs, 0.8125rem);
+  }
+  [data-ui="record-image-upload"] {
+    position: relative;
+    color: var(--admin-accent-text);
+    cursor: pointer;
+  }
+  [data-ui="record-image-upload"] input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  [data-ui="record-image-upload"]:focus-within {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 5px);
+  }
+  [data-ui="record-image-actions"] [data-ui="action"] {
+    min-block-size: 0;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="record-form-with-image"] > [data-ui="record-image"] {
+      margin-block-end: 0;
+    }
+    [data-ui="record-form-with-image"] {
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
   }
 }

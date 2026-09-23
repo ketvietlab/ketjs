@@ -4,6 +4,7 @@ import { HOOKS as fieldHooks } from '../primitives/field/index.tsx'
 import { HOOKS as statusHooks } from '../primitives/status/index.tsx'
 import { HOOKS as navigationHooks } from '../primitives/navigation/index.tsx'
 import { HOOKS as progressHooks } from '../primitives/progress/index.tsx'
+import { HOOKS as reorderListHooks } from '../interactions/reorder-list/index.tsx'
 import { HOOKS as menuHooks } from '../interactions/menu/index.tsx'
 import { HOOKS as popoverHooks } from '../interactions/popover/index.tsx'
 import { HOOKS as tooltipHooks } from '../interactions/tooltip/index.tsx'
@@ -11,6 +12,10 @@ import { HOOKS as dialogHooks } from '../interactions/dialog/index.tsx'
 import { HOOKS as toastHooks } from '../interactions/toast/index.tsx'
 import { HOOKS as spinnerHooks } from '../interactions/spinner/index.tsx'
 import { HOOKS as skeletonHooks } from '../interactions/skeleton/index.tsx'
+import { HOOKS as lightboxHooks } from '../interactions/lightbox/index.tsx'
+import { HOOKS as relationSelectHooks } from '../interactions/relation-select/index.tsx'
+import { HOOKS as searchFilterHooks } from '../interactions/search-filter/index.tsx'
+import { HOOKS as ketTableHooks } from '../interactions/ket-table/index.tsx'
 import { HOOKS as scalarFieldHooks } from '../forms/scalar-fields/index.tsx'
 import { HOOKS as comboboxHooks } from '../forms/combobox/index.tsx'
 import { HOOKS as dateTimeHooks } from '../forms/date-time/index.tsx'
@@ -21,6 +26,9 @@ import { HOOKS as inlineEditHooks } from '../data-operations/inline-edit/index.t
 import { HOOKS as resourceListHooks } from '../data-display/resource-list/index.tsx'
 import { HOOKS as dataGridHooks } from '../data-display/data-grid/index.tsx'
 import { HOOKS as treeHooks } from '../data-display/tree/index.tsx'
+import { HOOKS as matrixHooks } from '../data-display/matrix/index.tsx'
+import { HOOKS as barChartHooks } from '../data-display/bar-chart/index.tsx'
+import { HOOKS as timeframeHooks } from '../data-operations/timeframe-filter/index.tsx'
 import { HOOKS as recordDisplayHooks } from '../record/display/index.tsx'
 import { HOOKS as formattedValueHooks } from '../record/formatted-values/index.tsx'
 import { HOOKS as recordCompositionHooks } from '../record/composition/index.tsx'
@@ -48,12 +56,17 @@ const GROUPS = {
   navigation: navigationHooks,
   progress: progressHooks,
   menu: menuHooks,
+  reorderList: reorderListHooks,
   popover: popoverHooks,
   tooltip: tooltipHooks,
   dialog: dialogHooks,
   toast: toastHooks,
   spinner: spinnerHooks,
   skeleton: skeletonHooks,
+  lightbox: lightboxHooks,
+  relationSelect: relationSelectHooks,
+  searchFilter: searchFilterHooks,
+  ketTable: ketTableHooks,
   scalarFields: scalarFieldHooks,
   combobox: comboboxHooks,
   dateTime: dateTimeHooks,
@@ -64,6 +77,9 @@ const GROUPS = {
   resourceList: resourceListHooks,
   dataGrid: dataGridHooks,
   tree: treeHooks,
+  matrix: matrixHooks,
+  barChart: barChartHooks,
+  timeframe: timeframeHooks,
   recordDisplay: recordDisplayHooks,
   formattedValues: formattedValueHooks,
   recordComposition: recordCompositionHooks,

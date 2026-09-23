@@ -1,4 +1,4 @@
-import { and, asc, defineFn, deleteFrom, desc, eq, from, gt, lte } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, deleteFrom, desc, eq, from, gt, inArray, lte } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
 import { decimal, invalid, issue, n, now } from './engine.ts'
 
@@ -109,7 +109,7 @@ export const membershipFunctions: Record<string, FnSpec> = {
    */
   'membership.list': defineFn({
     input: { tierId: 'id?', state: 'text?', limit: 'int?', offset: 'int?' },
-    effects: ['read:loyalty.Membership', 'read:loyalty.Tier'],
+    effects: ['read:loyalty.Membership', 'read:loyalty.Tier', 'read:partner.Partner'],
     agent: true,
     handler: async (ctx, args) => {
       const M = ctx.table('loyalty.Membership')
@@ -123,14 +123,26 @@ export const membershipFunctions: Record<string, FnSpec> = {
       const size = Math.min(1000, Math.max(1, n(args.limit ?? 100)))
       const skip = Math.max(0, n(args.offset ?? 0))
 
+      const memberships = await ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))
+      const partnerIds = [...new Set(memberships.map((membership) => String(membership.partnerId)))]
+      const P = ctx.table('partner.Partner')
+      const partners = new Map(
+        (partnerIds.length ? await ctx.db.all(from(P).where(inArray(P.id, partnerIds))) : []).map(
+          (partner) => [String(partner.id), partner],
+        ),
+      )
       const tiers = new Map((await ctx.db.select('loyalty.Tier')).map((tier) => [String(tier.id), tier]))
-      return (await ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))).map(
-        (membership) => ({
+      return memberships.map((membership) => {
+        const partner = partners.get(String(membership.partnerId))
+        return {
           ...membership,
           tierCode: membership.tierId ? tiers.get(String(membership.tierId))?.code : null,
           tierName: membership.tierId ? tiers.get(String(membership.tierId))?.name : null,
-        }),
-      )
+          partnerName: partner?.name ?? membership.partnerId,
+          partnerPhone: partner?.phone ?? null,
+          partnerActive: partner?.active ?? false,
+        }
+      })
     },
   }),
 

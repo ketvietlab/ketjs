@@ -8,7 +8,7 @@ export type ListFacet = {
   label: string
   href: string
   active?: boolean
-  count?: number
+  count?: number | string
 }
 
 export type ListSearch = {
@@ -74,6 +74,11 @@ export type PagerBarProps = {
 
 export type ListChromeProps = {
   filtersLabel?: string
+  /**
+   * Filters that pick from a list rather than toggle — a compact `Menu` each.
+   * They lead the facet row, at the facets' height.
+   */
+  filterMenus?: JSXChild
   viewsLabel?: string
   search?: ListSearch
   facets?: readonly ListFacet[]
@@ -92,6 +97,7 @@ export const HOOKS = [
   'list-search-label',
   'list-search-input',
   'list-search-submit',
+  'list-filter-menus',
   'list-facets',
   'list-facet',
   'list-facet-count',
@@ -104,6 +110,7 @@ export const HOOKS = [
   'list-actions',
   'bulk-actions',
   'bulk-summary',
+  'bulk-count',
   'bulk-action-list',
   'pager-bar',
   'pager-summary',
@@ -196,10 +203,16 @@ const SortControl = (props: ListSort): TemplateResult => (
 export const BulkActions = (props: BulkActionsProps): TemplateResult => (
   <div
     data-ui="bulk-actions"
+    data-form={props.form ?? null}
     data-has-selection={props.selectedCount && props.selectedCount > 0 ? 'true' : null}
   >
     <div data-ui="bulk-summary">
-      {props.summary ?? `${props.selectedCount ?? 0} selected`}
+      {/* `bulk-count` is the live figure the runtime updates as rows are checked. */}
+      {props.summary ?? (
+        <>
+          <span data-ui="bulk-count">{String(props.selectedCount ?? 0)}</span> selected
+        </>
+      )}
       {props.clearHref && (
         <LinkButton
           href={props.clearHref}
@@ -281,8 +294,12 @@ export const PagerBar = (props: PagerBarProps): TemplateResult => (
 
 export const ListChrome = (props: ListChromeProps): TemplateResult => {
   const filters =
-    (props.facets?.length ?? 0) > 0 || (props.views?.length ?? 0) > 0 || props.sort ? (
+    props.filterMenus !== undefined ||
+    (props.facets?.length ?? 0) > 0 ||
+    (props.views?.length ?? 0) > 0 ||
+    props.sort ? (
       <div data-ui="list-chrome-row" data-row="filters">
+        {props.filterMenus !== undefined && <div data-ui="list-filter-menus">{props.filterMenus}</div>}
         {props.facets && props.facets.length > 0 && (
           <FacetNav
             label={props.filtersLabel ?? 'Filters'}
@@ -318,7 +335,7 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
       </div>
     ) : null
   return (
-    <div data-ui="list-chrome">
+    <div data-ui="list-chrome" data-pattern="list-chrome">
       <div data-ui="list-chrome-row" data-row="query">
         {props.search && <SearchControl {...props.search} />}
         {tail}

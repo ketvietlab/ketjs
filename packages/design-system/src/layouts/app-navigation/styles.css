@@ -171,6 +171,15 @@
     color: var(--kv-text-main);
   }
 
+  /* Root sections read one weight step above their children: the section list is
+     the page's primary navigation, the children are its detail. */
+  :where([data-kv-design-system])
+  :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]):not(
+    [data-ui="navigation-children"] *
+  ) {
+    font-weight: var(--kv-weight-medium);
+  }
+
   :where([data-kv-design-system]) [data-ui="navigation-item"][data-active="true"] {
     border-color: var(--kv-border-default);
     background: var(--kv-accent-subtle);
@@ -204,6 +213,14 @@
     width: var(--kv-space-5);
     place-items: center;
     color: var(--kv-text-muted);
+    font-size: var(--kv-text-xl);
+    line-height: 1;
+  }
+
+  :where([data-kv-design-system]) [data-ui="navigation-item-leading"] [data-ui="icon"] {
+    width: var(--kv-text-xl);
+    height: var(--kv-text-xl);
+    flex: 0 0 var(--kv-text-xl);
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-copy"] {

@@ -133,12 +133,11 @@
       --admin-topbar-height: calc(3.25rem + 10px);
     }
 
-    [data-ui="shell"] {
+    [data-ui="app-shell"] {
       display: block;
     }
 
-    [data-ui="sidebar"],
-    body > [data-ui="shell"] > [data-ui="sidebar"] {
+    [data-ui="app-sidebar"] {
       position: sticky;
       inset-block-start: 0;
       z-index: 30;
@@ -153,7 +152,7 @@
       border-block-end: 1px solid var(--admin-divider-subtle);
     }
 
-    [data-ui="sidebar-main"] {
+    [data-ui="app-sidebar"] > [data-ui="app-navigation"] {
       inline-size: 100%;
       overflow: visible;
     }
@@ -191,7 +190,7 @@
       box-shadow: inset 0 -2px 0 var(--admin-accent);
     }
 
-    body > [data-ui="shell"] [data-ui="topbar"] {
+    [data-ui="app-main"] [data-ui="topbar"] {
       position: static;
       flex-wrap: wrap;
       min-block-size: var(--admin-topbar-height);
@@ -211,7 +210,7 @@
       flex: 1 0 100%;
     }
 
-    [data-ui="main"]:has(
+    [data-ui="app-main"]:has(
         > [data-ket-slot="backend.topbar"]
           > [data-ui="topbar"]
           [data-ui="list-chrome"][data-layout="catalogue"]
@@ -301,12 +300,12 @@
   }
 
   @media print {
-    [data-ui="sidebar"],
+    [data-ui="app-sidebar"],
     [data-ui="catalogue-nav"] {
       display: none;
     }
 
-    [data-ui="shell"] {
+    [data-ui="app-shell"] {
       display: block;
     }
 

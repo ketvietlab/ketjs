@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from '@ketvietlab/ketjs'
 import type { MultipartPart, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { inlineTypes } from './policy.ts'
+import { inlineTypes, isRenditionSize, renderableTypes, renditionKey } from './policy.ts'
 
 export type Attachment = {
   id: string
@@ -13,6 +13,7 @@ export type Attachment = {
   url?: string
   storeKey?: string
   publicStoreKey?: string
+  checksum?: string | null
   mimetype: string
   size: number
   public: boolean
@@ -140,8 +141,9 @@ const download =
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return text('GET or HEAD', { status: 405 })
-    const sessions = await ctx.sessionsOf(url, req)
-    const authenticated = sessions ? Boolean(await sessions.of(req)) : true
+    // Use the same resolved identity and permission boundary as every function
+    // call. A verified gateway identity need not have a local session cookie.
+    const authenticated = await ctx.allows('storage.getAttachment', url, req)
     const publicAttachment = (await ctx
       .call('storage.getPublicAttachment', { id: params.id }, url, req)
       .catch((error: unknown) => {
@@ -163,6 +165,33 @@ const download =
     if (attachment.kind === 'url' && attachment.url)
       return withHeaders(text('', { status: 302 }), { ...redirect, location: attachment.url })
     if (!attachment.storeKey) return text('attachment has no stored object', { status: 404 })
+    // `?size=thumb|medium|large` serves the job-made WebP copy once it exists, and
+    // the original until then, so a page can always ask for the size it wants. The
+    // copy's key is derived from the original's company and checksum (policy.ts),
+    // so the access decision above — this attachment, for this caller — covers it.
+    const size = url.searchParams.get('size')
+    const company = /^blobs\/([^/]+)\//u.exec(attachment.storeKey)?.[1]
+    if (
+      size &&
+      isRenditionSize(size) &&
+      company &&
+      attachment.checksum &&
+      renderableTypes.has(attachment.mimetype)
+    ) {
+      const found = await (await ctx.storageOf(url, req)).get(
+        renditionKey(company, attachment.checksum, size),
+      )
+      if (found)
+        return withHeaders(streamed(found.body, { type: 'image/webp' }), {
+          'x-content-type-options': 'nosniff',
+          'content-disposition': disposition(`${attachment.name.replace(/\.[^.]+$/u, '')}.webp`, true),
+          // Keyed by checksum and size, so a public copy never changes behind this URL.
+          // A private one is not cached at all: the access check must run per request,
+          // exactly as it does for the original.
+          'cache-control': attachment.public ? 'public, max-age=86400' : 'private, no-store',
+          'content-length': String(found.meta.size),
+        })
+    }
     const root = await ctx.storageOf(url, req)
     const showInline = inlineTypes.has(attachment.mimetype)
     const published = attachment.public && showInline && attachment.publicStoreKey ? root.public : undefined

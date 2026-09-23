@@ -1,15 +1,28 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { ReorderList } from '../interactions/reorder-list/index.tsx'
 import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
-import { Breadcrumbs, NavList, Tabs } from '../primitives/navigation.tsx'
+import { Breadcrumbs, NavList, TabbedView, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
-import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import {
+  CardGrid,
+  ContentCard,
+  Disclosure,
+  Grid,
+  Inline,
+  KanbanCard,
+  KanbanGrid,
+  Metric,
+  Section,
+  Stack,
+  Surface,
+} from '../layouts/index.tsx'
 import { AppShell, Page } from '../layouts/shell.tsx'
 import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
-import { ListChrome } from '../patterns/list-chrome.tsx'
+import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
 import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
@@ -26,6 +39,10 @@ import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
 import { ToastRegion } from '../interactions/toast/index.tsx'
 import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
+import { createSearchFilterView } from '../interactions/search-filter/index.tsx'
+import { searchFilterDemoConfig } from '../interactions/search-filter/demo.ts'
+import { createKetTableView, KetTable } from '../interactions/ket-table/index.tsx'
+import { ketTableDemoConfig, ketTableGroupedDemoConfig } from '../interactions/ket-table/demo.ts'
 import {
   Checkbox,
   CheckboxGroup,
@@ -54,11 +71,18 @@ import { InlineEdit } from '../data-operations/inline-edit/index.tsx'
 import { ResourceList } from '../data-display/resource-list/index.tsx'
 import { DataGrid } from '../data-display/data-grid/index.tsx'
 import { Tree, TreeGrid } from '../data-display/tree/index.tsx'
+import { DataMatrix } from '../data-display/matrix/index.tsx'
+import { BarChart } from '../data-display/bar-chart/index.tsx'
+import { TimeframeFilter } from '../data-operations/timeframe-filter/index.tsx'
 import { AvatarGroup, DescriptionList, Person, Status } from '../record/display/index.tsx'
 import { FormattedDate, FormattedMoney, FormattedNumber } from '../record/formatted-values/index.tsx'
 import { RecordActions, RecordRail, RecordSummary } from '../record/composition/index.tsx'
 import { ActivityTimeline, AuditLog } from '../record/activity/index.tsx'
 import { Attachments, MediaGallery } from '../record/media/index.tsx'
+import { lightboxDemoConfig } from '../interactions/lightbox/demo.ts'
+import { createLightboxView } from '../interactions/lightbox/index.tsx'
+import { relationSelectDemoConfig } from '../interactions/relation-select/demo.ts'
+import { createRelationSelectView } from '../interactions/relation-select/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -410,6 +434,31 @@ export const componentGroups: readonly ComponentGroup[] = [
     description: 'Native controls with one label, help and error contract.',
     examples: [
       {
+        id: 'reorder-list',
+        name: 'Reorder list',
+        description:
+          'Controlled editable rows emit ordered ids through one native change field; move controls accompany drag handles.',
+        render: () => (
+          <ReorderList
+            id="reorder-demo"
+            name="order"
+            label="Values"
+            labels={{
+              add: 'Add value',
+              remove: 'Remove',
+              up: 'Move up',
+              down: 'Move down',
+              drag: 'Drag',
+              empty: 'No values',
+            }}
+            items={[
+              { id: 'red', content: <Field id="reorder-red" name="red" label="Value" value="Red" /> },
+              { id: 'blue', content: <Field id="reorder-blue" name="blue" label="Value" value="Blue" /> },
+            ]}
+          />
+        ),
+      },
+      {
         id: 'field',
         name: 'Field',
         description: 'Text, select, checkbox and error states without application-owned markup.',
@@ -535,6 +584,19 @@ export const componentGroups: readonly ComponentGroup[] = [
                     ],
                   },
                   {
+                    id: 'settings-branches',
+                    name: 'branches',
+                    label: 'Branches',
+                    type: 'checkbox-group',
+                    optionsOrientation: 'vertical',
+                    span: 'full',
+                    options: [
+                      { value: 'district-1', label: 'District 1 · Head office', checked: true },
+                      { value: 'thao-dien', label: 'Thao Dien', checked: true },
+                      { value: 'cau-giay', label: 'Cau Giay · North' },
+                    ],
+                  },
+                  {
                     id: 'settings-address',
                     name: 'address',
                     label: 'Delivery address',
@@ -624,30 +686,55 @@ export const componentGroups: readonly ComponentGroup[] = [
         name: 'Content card',
         description: 'A composable record summary with valid nested actions.',
         render: () => (
-          <Grid
-            columns={3}
+          <CardGrid
             items={[
-              <ContentCard
-                title="Commerce"
-                summary="General retail operations"
-                body="24 ready tenants"
-                meta={<Badge label="Stable" tone="positive" />}
-                href="#content-card"
-              />,
-              <ContentCard
-                title="Cosmetic"
-                summary="Care and marketplace workflows"
-                body="9 ready tenants"
-                meta={<Badge label="Review" tone="warning" />}
-                selected
-              />,
-              <ContentCard
-                title="Hospitality"
-                summary="Property and OTA operations"
-                body="6 ready tenants"
-                actions={<Button label="Open cohort" size="compact" />}
-              />,
+              { id: 'commerce', name: 'Commerce', summary: 'General retail operations', state: 'Stable' },
+              {
+                id: 'cosmetic',
+                name: 'Cosmetic',
+                summary: 'Care and marketplace workflows',
+                state: 'Review',
+              },
+              {
+                id: 'hospitality',
+                name: 'Hospitality',
+                summary: 'Property and OTA operations',
+                state: 'Pilot',
+              },
             ]}
+            id={(item) => item.id}
+            card={(item) => (
+              <ContentCard
+                eyebrow="Deployment"
+                title={item.name}
+                summary={item.summary}
+                body="Operational components and workflow recipes"
+                status={<Badge label={item.state} tone={item.state === 'Stable' ? 'positive' : 'warning'} />}
+                href="#content-card"
+                selected={item.id === 'cosmetic'}
+                tone={item.id === 'hospitality' ? 'subtle' : 'default'}
+              />
+            )}
+          />
+        ),
+      },
+      {
+        id: 'kanban-card',
+        name: 'Kanban cards',
+        description: 'Compact record cards keep board metadata and actions consistent across workflows.',
+        render: () => (
+          <KanbanGrid
+            rows={orders}
+            id={(row) => row.id}
+            card={(row) => (
+              <KanbanCard
+                id={row.id}
+                title={`${row.id} · ${row.customer}`}
+                href="#kanban-card"
+                meta={<Badge label={row.state} tone={toneOf(row.state)} />}
+                note={row.total}
+              />
+            )}
           />
         ),
       },
@@ -717,7 +804,12 @@ export const componentGroups: readonly ComponentGroup[] = [
                 context="Sales / Sales orders"
                 title="Sales orders"
                 description="Review demand, fulfillment and payment state from one operational list."
-                actions={<Button label="Create order" variant="primary" />}
+                headerActions={<Button label="Create order" variant="primary" />}
+                actionsPlacement="header"
+                actionsHidden
+                actions={
+                  <BulkActions selectedCount={0} actions={[{ id: 'archive', label: 'Archive selected' }]} />
+                }
                 controls={<ListDemoChrome id="app-shell" />}
                 body={<OrdersTable title="Order list" />}
               />
@@ -1000,9 +1092,12 @@ export const componentGroups: readonly ComponentGroup[] = [
             items={[
               <Breadcrumbs
                 label="Current location"
+                maxItems={3}
+                overflowLabel="Show intermediate locations"
                 items={[
                   { label: 'Workspace', href: '#navigation-items' },
                   { label: 'Sales', href: '#navigation-items' },
+                  { label: 'South region', href: '#navigation-items' },
                   { label: 'Orders' },
                 ]}
               />,
@@ -1014,13 +1109,15 @@ export const componentGroups: readonly ComponentGroup[] = [
                   { label: 'Inventory', href: '#navigation-items', leading: '≡' },
                 ]}
               />,
-              <Tabs
+              <TabbedView
+                id="catalogue-record-views"
                 label="Record views"
                 items={[
                   { id: 'summary', label: 'Summary', href: '#navigation-items', active: true },
                   { id: 'activity', label: 'Activity', href: '#navigation-items', count: 8 },
                   { id: 'files', label: 'Files', href: '#navigation-items', count: 3 },
                 ]}
+                body={<p>The active panel owns vertical rhythm and scrolling, without horizontal padding.</p>}
                 extension={
                   <a data-ui="tab" href="#navigation-items">
                     Extension
@@ -1104,7 +1201,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'list-page',
         name: 'List page',
         description:
-          'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
+          'The canonical collection hierarchy: identity with primary actions, URL-driven controls, tool actions and records.',
         render: () => (
           <ListPage
             variant="operational"
@@ -1112,7 +1209,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             eyebrow="Sales"
             title="Sales orders"
             description="Review demand, fulfillment and payment state from one operational list."
-            actions={<Button label="Create order" variant="primary" />}
+            headerActions={<Button label="Create order" variant="primary" />}
+            actions={<Button label="Export orders" variant="secondary" />}
             controls={
               <ListChrome
                 search={{
@@ -1483,8 +1581,16 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="Record actions"
                 open
                 items={[
+                  { id: 'record-label', kind: 'label', label: 'Record' },
                   { id: 'open', label: 'Open record', href: '#record-page' },
-                  { id: 'duplicate', label: 'Duplicate', value: 'duplicate' },
+                  { id: 'watch', label: 'Watch changes', value: 'watch', checked: true, shortcut: 'W' },
+                  { id: 'separator', kind: 'separator' },
+                  {
+                    id: 'duplicate',
+                    label: 'Duplicate',
+                    value: 'duplicate',
+                    description: 'Create a new draft',
+                  },
                   { id: 'archive', label: 'Archive', value: 'archive', destructive: true },
                 ]}
               />,
@@ -1576,6 +1682,91 @@ export const componentGroups: readonly ComponentGroup[] = [
             ]}
           />
         ),
+      },
+      {
+        id: 'search-filter',
+        name: 'Search filter',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+        render: () =>
+          createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
+      },
+      {
+        id: 'search-filter-presets',
+        name: 'Preset search filter',
+        description:
+          'The same compact search with only supported preset facets; unsupported custom rules, grouping and favorites are omitted.',
+        render: () =>
+          createSearchFilterView({
+            id: 'demo-search-filter-presets',
+            config: {
+              ...searchFilterDemoConfig,
+              size: 'compact',
+              capabilities: { groupBy: false, favorites: false, customFilters: false },
+              facets: searchFilterDemoConfig.facets.filter((facet) => facet.type === 'filter'),
+              groupBy: [],
+              favorites: [],
+              customFilterFields: [],
+            },
+          }).view(),
+      },
+      {
+        id: 'ket-table',
+        name: 'Ket table',
+        description:
+          'Selectable table island with either manager RPCs or native URL navigation. Shown flat, grouped with preloaded rows, and URL-driven with an active sort. The last specimen delegates paging to its surrounding toolbar. Demo links target this catalogue section; production routes supply real sort, group and page URLs.',
+        render: () => (
+          <Stack
+            items={[
+              createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              <KetTable
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Server collection',
+                    cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
+                    sortHref: '#ket-table',
+                  },
+                ]}
+                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                id={(row) => row.id}
+                rowHref={() => '#ket-table'}
+                caption="URL-driven server collection"
+                labels={ketTableDemoConfig.labels}
+              />,
+              createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
+              createKetTableView({
+                id: 'demo-ket-table-navigation',
+                config: {
+                  ...ketTableDemoConfig,
+                  manager: undefined,
+                  pager: false,
+                  sort: { field: 'name', direction: 'asc' },
+                  columns: ketTableDemoConfig.columns.map((column) => ({
+                    ...column,
+                    sortable: false,
+                    sortHref: column.key === 'name' ? '#ket-table' : undefined,
+                  })),
+                },
+              }).view(),
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'relation-select',
+        name: 'Relation select',
+        description:
+          'Unlike its neighbors above, this is a ketjs-view island — it owns state and fetches its own results client-side, so it keeps working after this static snapshot only once the page hydrates it. Shown in its default (closed) state with one value already chosen; distinct from RelationPicker below, which is href-driven and receives results pre-fetched by the server.',
+        render: () =>
+          createRelationSelectView({ id: 'demo-relation-select', config: relationSelectDemoConfig }).view(),
+      },
+      {
+        id: 'lightbox',
+        name: 'Lightbox',
+        description:
+          'A Fancybox-style image viewer, also an island: thumbnails open a full-screen stage with zoom (buttons, wheel, click to toggle 2×), drag to pan, pinch on a touch screen, previous/next and a counter; Escape closes and returns focus to the thumbnail. `createLightbox` is the same viewer without thumbnails, for a view that renders its own.',
+        render: () => createLightboxView({ id: 'demo-lightbox', config: lightboxDemoConfig }).view(),
       },
     ],
   },
@@ -1889,6 +2080,126 @@ export const componentGroups: readonly ComponentGroup[] = [
               { key: 'customer', label: 'Customer', cell: (row) => row.customer, width: '18rem' },
               { key: 'total', label: 'Total', cell: (row) => row.total, width: '10rem' },
               { key: 'state', label: 'State', cell: (row) => row.state, width: '9rem' },
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'timeframe-filter',
+        name: 'Timeframe filter',
+        description:
+          'The period a screen reports on: every option is a link, with the resolved range and build time beside it.',
+        render: () => (
+          <TimeframeFilter
+            id="specimen-period"
+            label="Report period"
+            options={[
+              { id: 'today', label: 'Today', href: '#timeframe-filter' },
+              { id: 'last_7_days', label: 'Last 7 days', href: '#timeframe-filter' },
+              { id: 'last_30_days', label: 'Last 30 days', href: '#timeframe-filter', active: true },
+              { id: 'this_month', label: 'This month', href: '#timeframe-filter' },
+            ]}
+            range="2026-08-06 → 2026-09-04"
+            asOf="2026-09-04 09:40"
+            asOfLabel="Updated"
+            note="Asia/Ho_Chi_Minh"
+          />
+        ),
+      },
+      {
+        id: 'bar-chart',
+        name: 'Bar chart',
+        description:
+          'Magnitudes on one scale as real text: plain bars for ranking, a fixed maximum for rates, segments for a split.',
+        render: () => (
+          <Stack
+            items={[
+              <BarChart
+                label="Lost opportunities by reason"
+                bars={[
+                  { id: 'price', label: 'Price or budget', value: 9, caption: '42.9%' },
+                  { id: 'fit', label: 'Not a fit', value: 6, caption: '28.6%' },
+                  { id: 'competitor', label: 'Chose a competitor', value: 4, caption: '19.0%' },
+                ]}
+                value={(bar) => String(bar.value)}
+              />,
+              <BarChart
+                label="Support SLA"
+                max={100}
+                bars={[
+                  { id: 'met', label: 'Met', value: 94.2, caption: '194 requests' },
+                  { id: 'breached', label: 'Breached', value: 2.4, caption: '5 requests' },
+                ]}
+                value={(bar) => `${bar.value}%`}
+                scale={['0%', '50%', '100%']}
+              />,
+              <BarChart
+                label="Revenue by customer type"
+                keys={[
+                  { id: 'returning', label: 'Returning', series: 1 },
+                  { id: 'new', label: 'New', series: 2 },
+                ]}
+                bars={[
+                  {
+                    id: 'jul',
+                    label: 'July',
+                    value: 379,
+                    segments: [
+                      { series: 1, value: 147 },
+                      { series: 2, value: 232 },
+                    ],
+                  },
+                  {
+                    id: 'aug',
+                    label: 'August',
+                    value: 428.6,
+                    segments: [
+                      { series: 1, value: 164.6 },
+                      { series: 2, value: 264 },
+                    ],
+                  },
+                ]}
+                value={(bar) => `${bar.value}m`}
+              />,
+              <BarChart label="Empty" bars={[]} value={() => ''} empty="No data in this period" />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'data-matrix',
+        name: 'Data matrix',
+        description:
+          'Ordered rows compare the same dimensions while workflow content stays application-owned.',
+        render: () => (
+          <DataMatrix
+            label="Care checkpoints and evidence"
+            rowLabel="Checkpoint"
+            eyebrow="Outcome tracking"
+            title="Barrier recovery routine"
+            description="Started 01 September 2026"
+            summary={<Badge label="2 / 3 complete" tone="info" />}
+            columns={[
+              { id: 'front', label: 'Front', description: 'Required' },
+              { id: 'left', label: 'Left profile' },
+              { id: 'right', label: 'Right profile' },
+            ]}
+            rows={[
+              {
+                id: 'day-1',
+                label: 'D+1 · Baseline',
+                description: '02/09/2026',
+                status: <Badge label="Complete" tone="positive" />,
+                cells: { front: 'Photo 01', left: 'Photo 02', right: 'Photo 03' },
+              },
+              {
+                id: 'day-7',
+                label: 'D+7 · Adaptation',
+                description: '08/09/2026',
+                status: <Badge label="Planned" tone="warning" />,
+                actions: <Button label="Open checkpoint" size="compact" />,
+                cells: { front: 'Upload', left: 'Upload', right: 'Not required' },
+              },
             ]}
           />
         ),

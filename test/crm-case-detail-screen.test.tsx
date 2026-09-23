@@ -129,6 +129,7 @@ test('crm case detail: remains a specialized record workspace with all business 
   assert.match(rendered, /data-ui="record-workspace"/)
   assert.match(rendered, /data-ui="record-page"[^>]*data-pattern="record"/)
   assert.match(rendered, /data-ui="record-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(rendered, /data-ui="page-context-viewer"/)
   assert.match(rendered, /Cơ hội Denim Việt/)
   assert.match(rendered, /Denim Việt · Đề xuất/)
   assert.match(rendered, /Đang mở/)

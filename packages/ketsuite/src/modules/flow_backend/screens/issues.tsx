@@ -1,14 +1,15 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
-  inline,
-  LinkButton,
   linkButton,
+  LinkButton,
   ListPage,
-  listChrome,
   modalForm,
+  prepareCollectionTable,
   Progress,
   shell,
   stack,
@@ -76,8 +77,85 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
   const groups = options.groups ?? []
   const fields = options.fields ?? []
   const locale = options.locale ?? ''
-  const hasActions = options.createHref || options.archivedHref || frame.extras?.['topbar.end'] !== undefined
+  const _hasActions = options.archivedHref || frame.extras?.['topbar.end'] !== undefined
 
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      groups,
+      id: (row) => String(row.id),
+      rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+      columns: [
+        {
+          key: 'title',
+          label: _('flow_backend.field.title'),
+          priority: 'primary',
+          cell: (row) =>
+            linkButton({
+              href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+              label: String(row.title),
+              variant: 'tertiary',
+              size: 'compact',
+            }),
+        },
+        {
+          key: 'column',
+          label: _('flow_backend.field.column'),
+          cell: (row) => String(row.columnName ?? '—'),
+        },
+        {
+          key: 'assignee',
+          label: _('flow_backend.field.assignee'),
+          cell: (row) => String(row.assigneeName ?? '—'),
+        },
+        {
+          key: 'priority',
+          label: _('flow_backend.field.priority'),
+          cell: (row) => priorityBadge(_, row.priority),
+        },
+        {
+          key: 'dueDate',
+          label: _('flow_backend.field.dueDate'),
+          kind: 'date',
+          cell: (row) => when(row.dueDate),
+        },
+        // One column per field the project defined, after everything Flow
+        // itself asks about. A select shows the option's label rather
+        // than its code — the code is what the filter speaks, not what
+        // anybody named it.
+        ...fields.map((field) => ({
+          key: `field:${String(field.code)}`,
+          label: String(field.name),
+          cell: (row: AnyRow) => {
+            const held = (row.fieldValues as Record<string, unknown> | undefined)?.[String(field.id)]
+            if (held == null || held === '') return '\u2014'
+            const choices = ((field.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? []
+            const chosen = choices.find((choice) => String(choice.code) === String(held))
+            return String(chosen?.label ?? held)
+          },
+        })),
+        {
+          key: 'progress',
+          label: _('flow_backend.field.progress'),
+          cell: (row) => (
+            <Progress
+              value={row.progress == null ? null : Number(row.progress)}
+              label={_('flow_backend.field.progress')}
+              text={
+                row.progress == null
+                  ? null
+                  : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+              }
+            />
+          ),
+        },
+      ],
+    },
+    { paginate: false },
+  )
+  frame = prepared.frame
   return shell(
     _,
     options.projectName,
@@ -86,126 +164,32 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
       frame={frame}
       title={options.projectName}
       description={_('flow_backend.issues.subtitle')}
-      actions={
-        hasActions
-          ? inline([
-              options.archivedHref ? (
-                <LinkButton
-                  label={_(
-                    options.showingArchived
-                      ? 'flow_backend.issue.hideArchived'
-                      : 'flow_backend.issue.showArchived',
-                  )}
-                  href={options.archivedHref}
-                  variant="secondary"
-                />
-              ) : (
-                ''
-              ),
-              options.createHref ? (
-                <LinkButton
-                  label={_('flow_backend.action.create')}
-                  href={options.createHref}
-                  variant="primary"
-                />
-              ) : (
-                ''
-              ),
-              frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
+      headerActions={
+        options.createHref ? (
+          <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : (
+          ''
+        )
       }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              options.projectName,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(
+        _,
+        frame,
+        options.archivedHref ? (
+          <LinkButton
+            label={_(
+              options.showingArchived ? 'flow_backend.issue.hideArchived' : 'flow_backend.issue.showArchived',
+            )}
+            href={options.archivedHref}
+            variant="secondary"
+          />
+        ) : undefined,
+      )}
+      controls={collectionControls(_, options.projectName, frame)}
       status={`${options.projectName}: ${String(options.total)}`}
       body={stack([
         options.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,
         options.rows.length || groups.length
-          ? dataTable(_, {
-              rows: options.rows,
-              groups,
-              id: (row) => String(row.id),
-              rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
-              columns: [
-                {
-                  key: 'title',
-                  label: _('flow_backend.field.title'),
-                  priority: 'primary',
-                  cell: (row) =>
-                    linkButton({
-                      href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
-                      label: String(row.title),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                },
-                {
-                  key: 'column',
-                  label: _('flow_backend.field.column'),
-                  cell: (row) => String(row.columnName ?? '—'),
-                },
-                {
-                  key: 'assignee',
-                  label: _('flow_backend.field.assignee'),
-                  cell: (row) => String(row.assigneeName ?? '—'),
-                },
-                {
-                  key: 'priority',
-                  label: _('flow_backend.field.priority'),
-                  cell: (row) => priorityBadge(_, row.priority),
-                },
-                {
-                  key: 'dueDate',
-                  label: _('flow_backend.field.dueDate'),
-                  kind: 'date',
-                  cell: (row) => when(row.dueDate),
-                },
-                // One column per field the project defined, after everything Flow
-                // itself asks about. A select shows the option's label rather
-                // than its code — the code is what the filter speaks, not what
-                // anybody named it.
-                ...fields.map((field) => ({
-                  key: `field:${String(field.code)}`,
-                  label: String(field.name),
-                  cell: (row: AnyRow) => {
-                    const held = (row.fieldValues as Record<string, unknown> | undefined)?.[String(field.id)]
-                    if (held == null || held === '') return '\u2014'
-                    const choices = ((field.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? []
-                    const chosen = choices.find((choice) => String(choice.code) === String(held))
-                    return String(chosen?.label ?? held)
-                  },
-                })),
-                {
-                  key: 'progress',
-                  label: _('flow_backend.field.progress'),
-                  cell: (row) => (
-                    <Progress
-                      value={row.progress == null ? null : Number(row.progress)}
-                      label={_('flow_backend.field.progress')}
-                      text={
-                        row.progress == null
-                          ? null
-                          : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
-                      }
-                    />
-                  ),
-                },
-              ],
-            })
+          ? collectionTable(_, prepared.table)
           : emptyState(_('flow_backend.empty.title'), _('flow_backend.empty.hint')),
       ])}
     />,

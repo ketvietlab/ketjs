@@ -64,58 +64,22 @@
     scrollbar-width: thin;
   }
 
-  /* ── Application shell ─────────────────────────────────────────────────── */
+  /* ── Application shell ─────────────────────────────────────────────────────
+     The grid, the sticky 100dvh sidebar and the main region come from the
+     design-system `AppShell`. The admin keeps one column that carries the brand,
+     a menu search, the apps, the open app's menu and the systray at the foot; the
+     navigation takes the overflow inside so the document stays the scroller. */
 
-  [data-ui="shell"] {
-    display: grid;
-    grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
-    min-inline-size: 0;
-    background: var(--admin-bg);
-  }
-
-  body > [data-ui="shell"] {
-    min-block-size: 100dvh;
-  }
-
-  /* ── Sidebar ───────────────────────────────────────────────────────────────
-     The shell uses a 228px quiet tinted ground and one column that
-     carries the brand, a menu search, the apps, the open app's menu, and the
-     systray at the foot. There is no application bar across the top — the row
-     above the content is the control panel, and it belongs to the view. */
-
-  /* The sidebar is as tall as the window, not as tall as the page.
-     As a plain grid item it stretched to the shell's row, which is the content's
-     height — so on a list of forty rows the systray, the message and activity
-     counts and the settings link sat eight hundred pixels below the fold, and you
-     scrolled the whole page to reach them. Sticky at 100dvh keeps the document the
-     scroller, so the browser's own scrollbar and the navigation runtime's scroll
-     restoration go on working; `navigation-groups` takes the overflow inside. */
-  [data-ui="sidebar"] {
+  [data-ui="app-sidebar"] {
     z-index: 20;
     display: flex;
-    position: sticky;
-    inset-block-start: 0;
-    min-inline-size: 0;
-    align-self: start;
-    block-size: 100dvh;
     flex-direction: column;
     overflow: hidden;
     padding: 0;
-    background: var(--admin-sidebar-bg);
-    border-inline-end: 1px solid var(--admin-divider-subtle);
     white-space: nowrap;
   }
 
-  [data-ui="sidebar-main"] {
-    display: flex;
-    min-block-size: 0;
-    min-inline-size: 0;
-    flex: 1 1 auto;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  [data-ui="sidebar-main"] > [data-ui="app-navigation"] {
+  [data-ui="app-sidebar"] > [data-ui="app-navigation"] {
     flex: 1 1 auto;
     min-block-size: 0;
   }
@@ -157,7 +121,7 @@
     background: var(--admin-control-bg);
     color: var(--admin-ink);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.3;
     outline: none;
     transition:
@@ -177,7 +141,7 @@
   [data-ui="sidebar-empty"] {
     margin: 0.5rem;
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     white-space: normal;
   }
 
@@ -188,7 +152,7 @@
     place-items: center;
     border-radius: var(--admin-radius-xs);
     background: var(--admin-surface-hover);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
   }
 

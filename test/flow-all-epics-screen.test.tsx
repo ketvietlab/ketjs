@@ -73,7 +73,7 @@ test('flow all epics: ListPage preserves project identity, list state and locali
     html,
     /data-ui="record-workspace"|data-ui="form-page"|data-ui="modal-layer"|livedoc\.editor/,
   )
-  assert.match(textContent, /data-ui="list-page-title">All epics/)
+  assert.match(textContent, /data-ui="list-page-title"[^>]*>All epics/)
   assert.match(textContent, /data-ui="list-page-footer">All epics: 4/)
   assert.match(html, /name="q"[^>]*value="release"/)
   assert.match(html, /name="lang" value="en"/)

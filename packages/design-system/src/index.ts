@@ -12,13 +12,30 @@ export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.ts
 export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
 export type { FieldOption, FieldProps } from './primitives/field/index.tsx'
-export { Breadcrumbs, NavItem, NavList, Tabs } from './primitives/navigation/index.tsx'
-export type { BreadcrumbItem, NavItemProps, TabItem } from './primitives/navigation/index.tsx'
+export {
+  Breadcrumbs,
+  NavItem,
+  NavList,
+  Tab,
+  TabPanel,
+  TabbedView,
+  Tabs,
+} from './primitives/navigation/index.tsx'
+export type {
+  BreadcrumbItem,
+  BreadcrumbsProps,
+  NavItemProps,
+  TabItem,
+  TabPanelProps,
+  TabProps,
+  TabbedViewProps,
+  TabsProps,
+} from './primitives/navigation/index.tsx'
 export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'
 
 export { ActionMenu, Menu } from './interactions/menu/index.tsx'
-export type { MenuItem, MenuProps } from './interactions/menu/index.tsx'
+export type { MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './interactions/menu/index.tsx'
 export { Popover } from './interactions/popover/index.tsx'
 export type { PopoverProps } from './interactions/popover/index.tsx'
 export { Tooltip } from './interactions/tooltip/index.tsx'
@@ -28,6 +45,56 @@ export { Toast, ToastRegion } from './interactions/toast/index.tsx'
 export type { ToastProps } from './interactions/toast/index.tsx'
 export { Spinner } from './interactions/spinner/index.tsx'
 export { Skeleton } from './interactions/skeleton/index.tsx'
+export { createRelationSelectView, relationSelect } from './interactions/relation-select/index.tsx'
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from './interactions/relation-select/index.tsx'
+export {
+  createLightbox,
+  createLightboxView,
+  lightbox,
+  LightboxThumb,
+} from './interactions/lightbox/index.tsx'
+export type {
+  LightboxConfig,
+  LightboxController,
+  LightboxIslandProps,
+  LightboxItem,
+  LightboxLabels,
+} from './interactions/lightbox/index.tsx'
+export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
+export type {
+  CustomFilterField,
+  SearchFacet,
+  SearchFavorite,
+  SearchFilterCustomRule,
+  SearchFilterConfig,
+  SearchFilterFieldType,
+  SearchFilterLabels,
+  SearchFilterManager,
+  SearchFilterOperator,
+  SearchFilterSize,
+  SearchFilterOption,
+  SearchGroupByOption,
+} from './interactions/search-filter/index.tsx'
+export { createKetTableView, ketTable, KetTable } from './interactions/ket-table/index.tsx'
+export type { KetTableServerProps } from './interactions/ket-table/index.tsx'
+export type {
+  KetTableCellFormat,
+  KetTableColumn,
+  KetTableConfig,
+  KetTableExtensions,
+  KetTableGroup,
+  KetTableLabels,
+  KetTableManager,
+  KetTableRow,
+  KetTableSelection,
+  KetTableSort,
+} from './interactions/ket-table/index.tsx'
 export { attachDesignSystemInteractions } from './runtime/index.js'
 
 export {
@@ -80,6 +147,17 @@ export { DataGrid } from './data-display/data-grid/index.tsx'
 export type { DataGridColumn, DataGridProps } from './data-display/data-grid/index.tsx'
 export { Tree, TreeGrid } from './data-display/tree/index.tsx'
 export type { TreeGridColumn, TreeGridRow, TreeNode } from './data-display/tree/index.tsx'
+export { DataMatrix } from './data-display/matrix/index.tsx'
+export type { DataMatrixColumn, DataMatrixProps, DataMatrixRow } from './data-display/matrix/index.tsx'
+export { BarChart } from './data-display/bar-chart/index.tsx'
+export type {
+  BarChartBar,
+  BarChartKey,
+  BarChartProps,
+  BarChartSegment,
+} from './data-display/bar-chart/index.tsx'
+export { TimeframeFilter } from './data-operations/timeframe-filter/index.tsx'
+export type { TimeframeFilterProps, TimeframeOption } from './data-operations/timeframe-filter/index.tsx'
 
 export { AvatarGroup, DescriptionList, KeyValue, Person, Status } from './record/display/index.tsx'
 export type { KeyValueProps, PersonProps } from './record/display/index.tsx'
@@ -95,16 +173,26 @@ export { Attachments, MediaGallery } from './record/media/index.tsx'
 export type { AttachmentItem, MediaItem } from './record/media/index.tsx'
 
 export {
+  CardGrid,
   ContentCard,
   Disclosure,
   Grid,
   Inline,
+  KanbanCard,
+  KanbanGrid,
   Metric,
   Section,
   Stack,
   Surface,
 } from './layouts/layout/index.tsx'
+export type {
+  CardGridProps,
+  ContentCardProps,
+  KanbanCardProps,
+  KanbanGridProps,
+} from './layouts/layout/index.tsx'
 export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export type { PageHeaderProps, PageProps } from './layouts/shell/index.tsx'
 export {
   AppNavigation,
   NavigationDrawer,
@@ -161,3 +249,6 @@ export { RecordForm } from './patterns/record-form/index.tsx'
 export type { RecordFormProps } from './patterns/record-form/index.tsx'
 
 export { HOOKS, OWNERS } from './contract/index.ts'
+
+export { ReorderList } from './interactions/reorder-list/index.tsx'
+export type { ReorderListProps } from './interactions/reorder-list/index.tsx'

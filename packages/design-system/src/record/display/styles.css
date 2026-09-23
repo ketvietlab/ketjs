@@ -31,13 +31,13 @@
     overflow-wrap: anywhere;
   }
 
-  :where([data-kv-design-system]) [data-ui="person"] {
+  :where([data-kv-design-system]) [data-ui="person"][data-pattern="person"] {
     display: inline-flex;
     align-items: center;
     gap: var(--kv-space-2);
   }
 
-  :where([data-kv-design-system]) [data-ui="person-body"] {
+  :where([data-kv-design-system]) [data-ui="person"][data-pattern="person"] [data-ui="person-body"] {
     display: grid;
     gap: 1px;
   }

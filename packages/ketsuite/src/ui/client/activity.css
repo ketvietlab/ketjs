@@ -33,7 +33,7 @@
 
   [data-ui="activity-title"] {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
   [data-ui="activity-schedule-trigger"] {
     flex: 0 0 auto;
@@ -57,7 +57,7 @@
     align-items: center;
     gap: var(--admin-gap-sm);
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   [data-ui="activity-field"] > :is(input, select, textarea) {
     grid-column: 2;
@@ -73,7 +73,7 @@
     align-items: center;
     gap: var(--admin-gap-xs);
     color: var(--admin-ink-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   [data-ui="activity-submit"] {
     flex: 0 0 auto;
@@ -124,14 +124,14 @@
   [data-ui="activity-loading"],
   [data-ui="activity-empty"] {
     color: var(--admin-ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   [data-ui="activity-state"] {
     padding: 0.2rem 0.5rem;
     border-radius: 999px;
     background: var(--admin-neutral-soft);
     color: var(--admin-status-fixed-ink);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 700;
   }
   [data-ui="activity-item-note"] {
@@ -144,7 +144,7 @@
   [data-ui="activity-attachments"] {
     margin: var(--admin-gap-sm) 0;
     padding-inline-start: 1.25rem;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
   }
   [data-ui="activity-complete"],
   [data-ui="activity-reschedule"] {

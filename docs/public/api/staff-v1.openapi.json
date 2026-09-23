@@ -20,6 +20,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -178,6 +181,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -239,6 +245,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -434,6 +443,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -675,6 +687,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -822,6 +837,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -919,6 +937,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -1247,6 +1268,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -1560,6 +1584,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -1872,6 +1899,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -2169,6 +2199,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -2227,6 +2260,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -2370,6 +2406,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -2448,6 +2487,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -2526,6 +2568,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -3070,6 +3115,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -3156,6 +3204,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -3347,6 +3398,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "requestBody": {
@@ -3671,6 +3725,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -3969,6 +4026,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -4332,6 +4392,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -4695,6 +4758,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -5075,6 +5141,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -5435,6 +5504,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -5800,6 +5872,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -6171,6 +6246,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -6547,6 +6625,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -6622,6 +6703,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -6703,6 +6787,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -6835,6 +6922,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -6929,6 +7019,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -7088,6 +7181,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -7247,6 +7343,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -7338,6 +7437,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -7442,6 +7544,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -7868,6 +7973,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -8082,6 +8190,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -8420,6 +8531,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -8682,6 +8796,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -8884,6 +9001,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -9065,6 +9185,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -9490,6 +9613,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -9631,6 +9757,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -9772,6 +9901,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -9984,6 +10116,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -10175,6 +10310,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "requestBody": {
@@ -10491,6 +10629,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -10624,6 +10765,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -10857,6 +11001,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -11207,6 +11354,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -11477,6 +11627,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -11747,6 +11900,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -11908,6 +12064,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12041,6 +12200,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -12090,6 +12252,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12172,6 +12337,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "responses": {
@@ -12225,6 +12393,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12321,6 +12492,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12409,6 +12583,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12525,6 +12702,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12632,6 +12812,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -12791,6 +12974,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -13131,6 +13317,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -13528,6 +13717,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -13966,6 +14158,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -14363,6 +14558,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -14760,6 +14958,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -15157,6 +15358,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -15583,6 +15787,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -15756,6 +15963,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -15904,6 +16114,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -16133,6 +16346,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -16339,6 +16555,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -16543,6 +16762,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -16648,6 +16870,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -16753,6 +16978,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "requestBody": {
@@ -16894,6 +17122,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17064,6 +17295,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17180,6 +17414,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17287,6 +17524,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17551,6 +17791,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17685,6 +17928,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -17949,6 +18195,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -18284,6 +18533,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -18660,6 +18912,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -18985,6 +19240,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -19306,6 +19564,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -19444,6 +19705,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -19792,6 +20056,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -20225,6 +20492,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -20772,6 +21042,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -21319,6 +21592,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -21909,6 +22185,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -22083,6 +22362,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -22296,6 +22578,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -22436,6 +22721,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -22637,6 +22925,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -22857,6 +23148,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -23041,6 +23335,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -23267,6 +23564,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -23491,6 +23791,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -23773,6 +24076,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -24045,6 +24351,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -24206,6 +24515,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -24367,6 +24679,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -24532,6 +24847,9 @@
           },
           {
             "staffCookie": []
+          },
+          {
+            "staffGateway": []
           }
         ],
         "parameters": [
@@ -24694,6 +25012,11 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "ket_session"
+      },
+      "staffGateway": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-ket-gateway-assertion"
       }
     }
   }

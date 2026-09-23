@@ -24,7 +24,7 @@ test('search, pagination, columns, view switching and record navigation work', a
   await expect(page.getByRole('heading', { name: 'Danh mục sản phẩm' })).toBeVisible()
   await expect(page.locator('[data-ui="list-page-actions"] [data-ui="action"]')).toHaveAttribute(
     'href',
-    /\/admin\/product\/templates\/new/,
+    /record=product\.template%3Anew/,
   )
   await expect(page.locator('[data-ui="list-page"]')).toHaveAttribute('data-variant', 'operational')
   await expect(page.locator('[data-ui="list-page-context"]')).toContainText(/Sản phẩm\s*Danh mục sản phẩm/)
@@ -43,7 +43,8 @@ test('search, pagination, columns, view switching and record navigation work', a
   const firstRecord = page.locator('[data-ui="row-link"]').first()
   await expect(firstRecord).toBeVisible()
   await firstRecord.click()
-  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
+  await expect(page).toHaveURL(/record=product\.template(?:%3A|:)/)
+  await expect(page.getByRole('dialog')).toBeVisible()
 
   await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   const inlineSearch = page.locator(
@@ -62,7 +63,8 @@ test('search, pagination, columns, view switching and record navigation work', a
   await page.getByRole('link', { name: 'Thẻ' }).click()
   await expect(page).toHaveURL(/view=kanban/)
   await page.locator('[data-ui="kanban-title"] a').first().click()
-  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
+  await expect(page).toHaveURL(/record=product\.template(?:%3A|:)/)
+  await expect(page.getByRole('dialog')).toBeVisible()
 })
 
 test('selects table rows without navigating from the checkbox cell', async ({ page }) => {
@@ -89,8 +91,10 @@ test('selects table rows without navigating from the checkbox cell', async ({ pa
   await selectAll.uncheck()
   await expect(page.locator('[data-ui="row-select"]:checked')).toHaveCount(0)
 
-  await firstRow.locator('[data-ui="cell"]').nth(1).click()
-  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+/)
+  // The row's full-row link overlays every non-checkbox cell, so this click
+  // lands on it — exactly the row-opens-on-click behavior under test.
+  await firstRow.locator('[data-ui="cell"]').nth(1).click({ force: true })
+  await expect(page).toHaveURL(/record=product\.template(?:%3A|:)/)
 })
 
 for (const viewport of [

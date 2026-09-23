@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Installed by `npm install`'s `prepare` script (`git config core.hooksPath
+# .githooks`), so this runs for every contributor without anyone remembering
+# to opt in. Mirrors the fast, no-build checks from the "quality contracts"
+# CI job — the same ones a stray legacy-terminology reference or a
+# regenerated-but-unstaged inventory file slipped past before this hook
+# existed. Deliberately leaves
+# out anything that needs a full build or the test suite (lint/check:api/
+# check/type-proof/test:built): those stay CI's and `npm run verify`'s job,
+# not a per-commit tax on every commit in a monorepo this size.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: formatting"
+npm run --silent format:check
+echo "pre-commit: lint"
+npm run --silent lint
+echo "pre-commit: terminology"
+npm run --silent audit:terminology
+echo "pre-commit: design-system inventory"
+npm run --silent design:inventory:check
+echo "pre-commit: design-system governance"
+npm run --silent design:governance:check

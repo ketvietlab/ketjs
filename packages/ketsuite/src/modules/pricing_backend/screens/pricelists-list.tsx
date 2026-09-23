@@ -1,13 +1,26 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, code, dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import {
+  badge,
+  code,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import { pricingSelectionLabel } from './shared.ts'
 import type { PricelistRow } from './shared.ts'
 
 export type PricelistsScreenOptions = {
   rows: readonly PricelistRow[]
   createHref: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<PricelistRow>>
 }
 
 export const pricelistColumns = (_: Translator): Array<Column<PricelistRow>> => [
@@ -27,30 +40,40 @@ export const pricelistsScreen = (
   _: Translator,
   frame: Frame,
   options: PricelistsScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: pricelistColumns(_),
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('pricing_backend.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('pricing_backend.title')}
+      controls={collectionControls(_, _('pricing_backend.title'), frame)}
       description={_('pricing_backend.subtitle')}
-      actions={inline([
-        <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+      headerActions={
+        <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />
+      }
+      actions={collectionActions(_, frame)}
       status={`${_('pricing_backend.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              columns: pricelistColumns(_),
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : emptyState(_('pricing_backend.empty'), _('pricing_backend.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

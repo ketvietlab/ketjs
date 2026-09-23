@@ -41,6 +41,89 @@ transparent scrolling viewport inside; never wrap it in another `Surface`.
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
+### Popups close on an outside click and on Escape
+
+Every popup built on `<details>` behaves like the action menu: a click outside it
+closes it, and Escape closes the open one and returns focus to its summary. This
+covers `Menu` (`data-ui="menu"`), the period choice of `TimeframeFilter`
+(`data-ui="timeframe-menu"`) and list view settings (`data-ui="view-settings"`).
+The runtime lists the non-menu popups in `DISMISSIBLE_POPUPS`; a new popup component
+adds its hook there instead of wiring its own document listener.
+
+### Collections open records in a modal
+
+A row of a `DataTable` (or `ResourceList`, `DataGrid`) and a `KanbanCard` always open
+their record in a `ModalSheet` on top of the collection. They never navigate to a
+separate record page. The reader keeps the collection's filters, scroll position,
+selection and board column while working on one record, and closing the modal
+returns them exactly where they were.
+
+- `rowHref` and `KanbanCard href` point at the modal trigger for that record, not at
+  a record route. Create actions on the same collection follow the same rule.
+- The modal is a client-side island. It owns open and close, focus trapping and
+  restoration, Escape and backdrop closing, background inertness, tabs inside the
+  record, unsaved-change prompts and completion feedback. Opening, switching tabs
+  and closing do not reload the page or rebuild the collection on the server.
+- Modal state is not a separate page state. A deep link may ask the island to open a
+  record after hydration, but the server always renders the collection with a closed
+  modal host, so the server and first client render stay identical.
+- Size follows content: a short record uses the default size, and only long content
+  such as a multi-tab record uses the large size with an internal scroll region.
+- A record with more than one tab passes `height: 'fixed'` to `ModalSheet`: the dialog
+  holds the viewport cap (`data-height="fixed"`) so switching between tabs of different
+  heights never resizes it. `TabbedView` keeps the tab bar visible and only `TabPanel`
+  scrolls. The panel deliberately owns no left or right padding; the containing modal
+  supplies the horizontal inset. A
+  single-view record and its nested dialogs keep `height: 'content'` (the default).
+- A child action of the record (reassign, postpone, confirm) opens inside the same
+  island as a nested step, not as another page.
+- `RecordPage` remains for records reached directly rather than from a collection,
+  such as a shared link or a record without a parent list. It is never the target of
+  a collection row or card.
+
+### Option groups
+
+`checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
+fields with those types) keep one label on the left and the options on the right,
+each option's text after its control. `optionsOrientation` sets how the options flow:
+
+- `horizontal` (default): options wrap on one line. Use for a few short choices.
+- `vertical`: one option per line, rendered as `data-orientation="vertical"` on
+  `field-options`. Use when the choices should scan as a list, such as companies,
+  branches or job roles.
+
+Do not restyle `field-options` in an application to stack options; pass
+`optionsOrientation: 'vertical'` instead.
+
+### Relation pickers
+
+`RelationSelect` (`createRelationSelectView`/`relationSelect`) is a live client
+island, unlike the rest of the package's progressively enhanced controls: it owns
+its own state and calls `/_ket/fn/<name>` itself through `RelationSelectConfig.manager`
+(`listFunction`, optional `saveFunction`/`removeFunction`). A consuming app mounts
+it through its own island runtime (`defineIsland` in `@ketvietlab/ketjs-view`) and
+supplies a JSON-serializable config; nothing about it depends on server-rendered
+markup, so it may be cold-mounted anywhere the host places a matching island
+element — including inside a view that is itself already client-rendered, such as
+a modal a JavaScript runtime opened — not only hydrated from the page's initial HTML.
+
+Its option rows (`relation-option`, `relation-dialog-row`) show the current
+selection as a trailing mark on the label's own line, never on a line of its own
+below a description. The dialog's "more" action is a full-width row like the
+options above it, not a chip-sized button; a consumer overriding the footer should
+widen it to match, not narrow it to its label's content.
+
+Its inline dropdown is not a `<details>`, so the shared outside-click delegator
+(above) does not see it; the component closes it on an outside click itself,
+same contract, different mechanism. Choosing a value also fires a real `change`
+on the hidden native select (bubbling, a microtask after the choice settles) so
+a host page's own `change`-driven wiring keeps working — a second field whose
+options depend on this one's choice can key off it exactly as it would a plain
+`<select>`. Rendering the picker itself through `each`, keyed on whatever the
+dependency is, is what a host needs to swap it for a fresh instance when that
+key changes: the component holds no `update()`, so a config change alone (a new
+`manager.listInput`, a new options list) never reaches an already-mounted one.
+
 The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
 with `layout="flow"`), and canvas workspace (`WorkspacePage` with
@@ -57,6 +140,10 @@ Only leaf links expose the active state. Top-level branches form one accordion a
 the complete sidebar, and the interaction adapter keeps the open branch from being
 collapsed without choosing another branch. Use `expanded` when a branch should start
 open without an active descendant.
+Top-level navigation rows use the shared dense metrics: a 30px row, 13px label,
+10px content gap and an 18px leading icon. Icon size belongs to `AppNavigation`, so
+application shells and catalogue demos render the same geometry without local icon
+overrides.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 
@@ -178,7 +265,7 @@ The contract is intentionally strict:
 - component CSS consumes semantic/component roles, not numbered palette swatches.
 
 The public entry exports actions, status and feedback objects, fields, navigation,
-tabs, progress, layout primitives, the responsive application navigation, the
+`Tab`, `Tabs`, `TabPanel` and `TabbedView`, progress, layout primitives, the responsive application navigation, the
 three-region app shell, page/record layouts,
 `ListChrome` with `BulkActions` and `PagerBar`, the canonical list and record page
 compositions, data tables, forms, and modal sheets. Use `ListPage` for operational

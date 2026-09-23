@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { LinkButton } from '../packages/ketsuite/src/ui/index.ts'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import { vendorPricelistCreateScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens/vendor-pricelist-create.tsx'
 import { vendorPricelistsListScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens/vendor-pricelists-list.tsx'
@@ -52,6 +53,15 @@ test('purchase vendor pricelists list: keeps policy action, price columns, curre
   const html = renderToString(
     vendorPricelistsListScreen(translate, {
       frame: {
+        extras: {
+          'topbar.end': (
+            <LinkButton
+              label="Export vendor prices"
+              href="/admin/purchase/vendor-pricelists/export?lang=vi"
+              variant="secondary"
+            />
+          ),
+        },
         chrome: {
           search: { name: 'q', value: 'bàn', placeholder: 'Tìm bảng giá…' },
           pager: { from: 1, to: 1, total: 8, next: '/vi/admin/purchase/vendor-pricelists?page=2' },
@@ -91,11 +101,19 @@ test('purchase vendor pricelists list: keeps policy action, price columns, curre
     }),
   )
 
+  assert.match(html, /data-ui="ket-table"/)
+  assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/vi\/admin\/purchase\/vendor-pricelists\/new"/)
   assert.match(html, /data-ui="chrome-search"[\s\S]*?name="q"[\s\S]*?value="bàn"/)
   assert.match(html, /data-ui="pager-range"[^>]*>[\s\S]*?1-1 \/ 8/)
   assert.match(html, /name="action" value="method"/)
+  const headerStart = html.indexOf('data-ui="list-page-header"')
+  const header = html.slice(headerStart, html.indexOf('</header>', headerStart))
+  assert.match(header, /data-ui="list-page-tools"[\s\S]*?Export vendor prices/)
+  assert.doesNotMatch(header, /data-ui="record-form"|data-ui="disclosure"|name="purchaseMethod"/)
+  assert.ok(html.indexOf('data-ui="list-page-body"') < html.indexOf('name="action" value="method"'))
+  assert.ok(html.indexOf('name="action" value="method"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /action="\/vi\/admin\/purchase\/vendor-pricelists"/)
   assert.match(html, /name="templateId"[\s\S]*?name="purchaseMethod"/)
   assert.match(html, /data-col="vendor"[\s\S]*?NCC An Phú/)

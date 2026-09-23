@@ -1,11 +1,14 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  dataTable,
+  collectionTable,
+  collectionControls,
   emptyState,
   ListPage,
   linkButton,
+  pageTrailFromFrame,
   modalForm,
   modalWorkspace,
   Notice,
@@ -32,6 +35,7 @@ export const plannerScreen = (
     tab: string
     activities: AnyRow[]
     plans: AnyRow[]
+    total?: number
     events: AnyRow[]
     activityTypes: AnyRow[]
     controls?: { caseId?: JSXChild; assignee?: JSXChild }
@@ -138,24 +142,33 @@ export const plannerScreen = (
           },
         ]
   const scheduleHref = `${endpoint}&schedule=1`
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    { rows, id: (item) => String(item.id), columns, responsive: 'stack' },
+    { paginate: options.tab !== 'calendar' },
+  )
+  frame = prepared.frame
   const workspace = shell(
     _,
     _('crm_backend.planner.title'),
     <ListPage
       variant="operational"
       frame={frame}
+      context={pageTrailFromFrame(_('crm_backend.planner.title'), frame)}
       title={_('crm_backend.planner.title')}
       description={_('crm_backend.planner.subtitle')}
-      actions={
+      headerActions={
         options.tab === 'mine'
           ? linkButton({
               href: scheduleHref,
               label: _('crm_backend.activity.schedule'),
               variant: 'primary',
             })
-          : undefined
+          : null
       }
-      controls={
+      controls={stack([
+        collectionControls(_, _('crm_backend.planner.title'), frame),
         <Tabs
           label={_('crm_backend.planner.title')}
           items={['mine', 'plans', 'calendar'].map((id) => ({
@@ -164,9 +177,9 @@ export const plannerScreen = (
             href: localized(`/admin/crm/activities?tab=${id}`, options.locale ?? ''),
             active: options.tab === id,
           }))}
-        />
-      }
-      status={`${rows.length}`}
+        />,
+      ])}
+      status={`${options.total ?? rows.length}`}
       body={stack([
         ...(options.errors?.length && options.failedAction !== 'schedule'
           ? [
@@ -177,9 +190,7 @@ export const plannerScreen = (
               />,
             ]
           : []),
-        rows.length
-          ? dataTable(_, { rows, id: (item) => String(item.id), columns, responsive: 'stack' })
-          : empty(_),
+        rows.length ? collectionTable(_, prepared.table) : empty(_),
       ])}
     />,
     { ...frame, chrome: null, topbar: false },

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { auditCompatibilityConsumers } from './design-system-consumer-admission.mjs'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,8 +56,8 @@ assert(
 
 const registeredNames = [...registry.matchAll(/entry\(\s*'([^']+)'/gu)].map((match) => match[1])
 assert(
-  registeredNames.length === 106,
-  `component registry has ${registeredNames.length} entries, expected 106`,
+  registeredNames.length === 127,
+  `component registry has ${registeredNames.length} entries, expected 127`,
 )
 for (const name of registeredNames) {
   const row = inventory.rows.find(
@@ -94,34 +94,11 @@ assert(
   'runtime infrastructure allowlist is stale',
 )
 
-let diff = ''
-if (existsSync(join(root, '.git'))) {
-  const base = process.env.DESIGN_SYSTEM_AUDIT_BASE ?? 'origin/develop'
-  execFileSync('git', ['rev-parse', '--verify', `${base}^{commit}`], {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  diff = execFileSync(
-    'git',
-    [
-      'diff',
-      '--unified=0',
-      `${base}...HEAD`,
-      '--',
-      'packages/ketsuite/src/modules',
-      'apps',
-      ':(exclude)apps/design-system',
-    ],
-    { cwd: root, encoding: 'utf8' },
-  )
-} else {
+const addedDeprecatedUses = existsSync(join(root, '.git'))
+  ? auditCompatibilityConsumers(root, process.env.DESIGN_SYSTEM_AUDIT_BASE ?? 'origin/develop')
+  : []
+if (!existsSync(join(root, '.git')))
   process.stdout.write('Source archive detected; skipped the Git consumer-admission check.\n')
-}
-const addedDeprecatedUses = diff
-  .split('\n')
-  .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-  .filter((line) => /\b(?:FormPage|DashboardPage|BoardPage)\b/u.test(line))
 assert(
   addedDeprecatedUses.length === 0,
   `new compatibility page consumers are forbidden:\n${addedDeprecatedUses.join('\n')}`,

@@ -1,0 +1,109 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="timeframe"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-1) var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-menu"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-trigger"] {
+    display: inline-flex;
+    min-height: var(--kv-control-height-sm);
+    align-items: center;
+    gap: var(--kv-space-2);
+    padding-inline: var(--kv-space-3);
+    border: 1px solid var(--kv-border-strong);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-color-ink);
+    cursor: pointer;
+    font-size: var(--kv-text-sm);
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-trigger"]::-webkit-details-marker {
+    display: none;
+  }
+
+  /* The chevron is decoration for a disclosure the markup already states. */
+  :where([data-kv-design-system]) [data-ui="timeframe-trigger"]::after {
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    margin-inline-start: var(--kv-space-1);
+    border-inline-end: 1.5px solid var(--kv-color-ink-secondary);
+    border-block-end: 1.5px solid var(--kv-color-ink-secondary);
+    content: "";
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-menu"][open] > [data-ui="timeframe-trigger"]::after {
+    transform: translateY(1px) rotate(225deg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-label"] {
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-value"] {
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-content"] {
+    position: absolute;
+    z-index: var(--kv-layer-menu);
+    inset-block-start: calc(100% + var(--kv-space-1));
+    inset-inline-start: 0;
+    display: grid;
+    min-inline-size: 14rem;
+    max-block-size: 24rem;
+    padding: var(--kv-space-1);
+    overflow: auto;
+    border: 1px solid var(--kv-border-strong);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-option"] {
+    display: grid;
+    min-height: var(--kv-control-height-sm);
+    align-content: center;
+    padding: var(--kv-space-1) var(--kv-space-2);
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-color-ink);
+    font-size: var(--kv-text-sm);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system])
+    :is([data-ui="timeframe-option"]:hover, [data-ui="timeframe-option"][data-active="true"]) {
+    background: var(--kv-accent-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-option-label"] {
+    font-weight: var(--kv-weight-medium);
+  }
+
+  :where([data-kv-design-system]) [data-ui="timeframe-option-detail"] {
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system])
+    :is([data-ui="timeframe-range"], [data-ui="timeframe-asof"], [data-ui="timeframe-note"]) {
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+}

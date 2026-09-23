@@ -87,7 +87,14 @@
     [data-ui="modal-layer"][data-presentation="dialog"]
     [data-ui="modal-sheet"][data-size="large"] {
     width: min(75rem, 100%);
-    height: min(62.5rem, calc(100dvh - var(--kv-space-12)));
+    height: auto;
+  }
+
+  /* A tabbed dialog keeps one height so switching tabs never resizes it; the body scrolls. */
+  :where([data-kv-design-system])
+    [data-ui="modal-layer"][data-presentation="dialog"]
+    [data-ui="modal-sheet"][data-height="fixed"] {
+    height: calc(100dvh - var(--kv-space-12));
   }
 
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {
@@ -113,6 +120,14 @@
     display: grid;
     min-width: 0;
     gap: var(--kv-space-1);
+  }
+
+  /* The title and what state its record is in read as one line. */
+  :where([data-kv-design-system]) [data-ui="modal-title-row"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--kv-space-2);
   }
 
   :where([data-kv-design-system]) [data-ui="modal-title"] {
@@ -141,11 +156,15 @@
     width: 2rem;
     height: 2rem;
     place-items: center;
+    appearance: none;
+    border: none;
     border-radius: 50%;
+    background: none;
     color: var(--kv-color-ink-muted);
     font-size: 1.4rem;
     line-height: 1;
     text-decoration: none;
+    cursor: pointer;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-close"]:hover {
@@ -158,6 +177,12 @@
     overflow: auto;
     padding: var(--kv-space-5);
     overscroll-behavior: contain;
+  }
+
+  /* TabbedView owns the scroll container so its navigation stays visible. */
+  :where([data-kv-design-system]) [data-ui="modal-body"]:has(> [data-ui="tabbed-view"]) {
+    min-height: 0;
+    overflow: hidden;
   }
 
   :where([data-kv-design-system]) [data-ui="modal-actions"] {
