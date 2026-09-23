@@ -109,6 +109,8 @@
 
   [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tail"] {
     flex-wrap: wrap;
+    max-inline-size: 100%;
+    justify-content: flex-end;
     margin-inline-start: auto;
   }
 
