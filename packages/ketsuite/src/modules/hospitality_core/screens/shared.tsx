@@ -32,7 +32,7 @@ import {
   Surface,
   WorkspaceScreen,
 } from '../../../ui/index.ts'
-import type { Column, FormField, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, FormField, Frame } from '../../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from '../calendar.ts'
 import {
   ACCOMMODATION_TYPES,
@@ -87,7 +87,7 @@ export {
   ROOM_STATUSES,
   ROOM_VIEW_TYPES,
 }
-export type { Translator, TemplateResult, Column, FormField, Frame }
+export type { Translator, TemplateResult, Column, DataTable, FormField, Frame }
 
 export const providerName = (_: Translator, provider: string): string =>
   BOOKING_PROVIDERS.includes(provider as (typeof BOOKING_PROVIDERS)[number])

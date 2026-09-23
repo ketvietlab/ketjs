@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'hr_backend',
@@ -9,6 +10,7 @@ export default defineModule({
   summary: 'Hồ sơ, ca xoay và nghỉ phép.',
   category: 'Nhân sự',
   routes,
+  functions: searchFilterFunctions,
   menus: {
     hr: {
       label: 'menu.app',

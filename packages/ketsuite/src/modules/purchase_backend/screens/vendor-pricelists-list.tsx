@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
+  collectionControls,
   collectionTable,
   Disclosure,
   emptyState,
   formatMoney,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   RecordForm,
   Section,
   shell,
@@ -124,23 +125,8 @@ export const vendorPricelistsListScreen = (
           variant="primary"
         />
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.pricelists.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('purchase_backend.pricelists.title'), collection.frame)}
       footer={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
       body={stack(
         [

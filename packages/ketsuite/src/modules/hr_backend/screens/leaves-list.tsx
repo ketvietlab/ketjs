@@ -3,17 +3,18 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
-  inline,
   ListPage,
-  listChrome,
   Notice,
+  prepareCollectionTable,
   RecordActions,
   shell,
   stack,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type LeaveListRow = {
   id: string
@@ -31,6 +32,8 @@ export type LeavesListScreenOptions = {
   errors?: readonly string[]
   rows: LeaveListRow[]
   total: number
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<LeaveListRow>>
 }
 
 const stateBadge = (_: Translator, state: string) =>
@@ -110,13 +113,22 @@ export const leavesListScreen = (
   frame: Frame,
   options: LeavesListScreenOptions,
 ): TemplateResult => {
-  const table = options.rows.length
-    ? collectionTable(_, {
-        rows: options.rows,
-        id: (row) => row.id,
-        columns: leaveListColumns(_),
-      })
-    : emptyState(_('hr_backend.empty.leaves'), _('hr_backend.empty.leavesHint'))
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      columns: leaveListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = collection.frame
+  const table =
+    options.rows.length || options.table?.groups?.length
+      ? collectionTable(_, collection.table)
+      : emptyState(_('hr_backend.empty.leaves'), _('hr_backend.empty.leavesHint'))
   const body = options.errors?.length
     ? stack([
         <Notice
@@ -136,17 +148,8 @@ export const leavesListScreen = (
       frame={frame}
       title={_('hr_backend.leaves.title')}
       description={_('hr_backend.leaves.subtitle')}
-      actions={frame.extras?.['topbar.end'] !== undefined ? inline([frame.extras['topbar.end']]) : undefined}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('hr_backend.leaves.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, _('hr_backend.leaves.title'), frame)}
       status={`${_('hr_backend.leaves.title')}: ${String(options.total)}`}
       body={body}
     />,

@@ -58,7 +58,7 @@ for (const [path, filter] of [
     const { default: purchaseBackend } = await import(
       '../packages/ketsuite/src/modules/purchase_backend/index.ts'
     )
-    const url = new URL(`https://ket.test${path}?q=needle&group=vendor&lang=vi`)
+    const url = new URL(`https://ket.test${path}?q=needle&group=partnerName&lang=vi`)
     const calls: Array<Record<string, unknown>> = []
     const ctx = {
       call: async (
@@ -88,7 +88,7 @@ for (const [path, filter] of [
       calls.map((call) => call.offset),
       [0, 500, 1000, 1500, 2000],
     )
-    for (const call of calls)
-      assert.deepEqual(call, { ...filter, search: 'needle', limit: 500, offset: call.offset })
+    // The query narrows the collection in memory now, so the read stays whole.
+    for (const call of calls) assert.deepEqual(call, { ...filter, limit: 500, offset: call.offset })
   })
 }

@@ -1,16 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   avatar,
   CardGrid,
-  deadline,
+  collectionActions,
+  collectionControls,
   collectionTable,
+  deadline,
   emptyState,
   linkButton,
   ListPage,
-  listChrome,
   Metric,
+  prepareCollectionTable,
   Progress,
   RecordList,
   Section,
@@ -224,23 +225,8 @@ export const crossProjectScreen = (
       frame={frame}
       title={title}
       description={_('flow_backend.issues.subtitle')}
-      actions={frame.extras?.['topbar.end']}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              title,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, title, frame)}
       status={`${title}: ${String(overview?.total ?? rows.length)}`}
       body={stack([
         overview?.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,

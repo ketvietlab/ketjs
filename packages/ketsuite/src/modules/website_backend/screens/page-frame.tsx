@@ -65,7 +65,7 @@ export const FormScreenFrame = ({
       frame={frame}
       title={title}
       description={subtitle ?? undefined}
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={body}
       width={width}
     />,

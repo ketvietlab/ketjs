@@ -1,15 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   CardGrid,
+  collectionActions,
+  collectionControls,
   collectionTable,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
   Metric,
+  prepareCollectionTable,
   Progress,
   RecordList,
   Section,
@@ -101,7 +101,7 @@ export const projectsListScreen = (
   overview: ProjectsOverview,
 ): TemplateResult => {
   const title = _('flow_backend.projects.title')
-  const hasActions = frame.extras?.['topbar.end'] !== undefined
+  const _hasActions = frame.extras?.['topbar.end'] !== undefined
 
   frame = { ...frame, chrome: { ...frame.chrome, pager: overview.pager ?? frame.chrome?.pager } }
   const prepared = prepareCollectionTable(
@@ -175,23 +175,8 @@ export const projectsListScreen = (
           ''
         )
       }
-      actions={hasActions ? inline([frame.extras?.['topbar.end'] ?? '']) : undefined}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              title,
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame)}
+      controls={collectionControls(_, title, frame)}
       status={`${title}: ${String(overview.projectCount)}`}
       body={stack([
         overviewCards(_, overview),

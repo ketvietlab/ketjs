@@ -1,4 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { functions } from './functions.ts'
 import { islands } from './islands.ts'
 import { routes } from './routes.ts'
 
@@ -8,6 +9,7 @@ export default defineModule({
   depends: ['stock', 'backend'],
   assets: new URL('./client/', import.meta.url),
   islands,
+  functions,
   behaviors: {
     'stock.editor': {
       client: 'stock.mjs',
@@ -449,6 +451,17 @@ export default defineModule({
       'kind.pull_push': 'Kéo và đẩy hàng',
       'kind.auto': 'Tự động',
       'kind.manual': 'Thủ công',
+      'location.filter.stockHolding': 'Vị trí giữ hàng',
+      'location.filter.counterparty': 'Vị trí đối tác',
+      'location.filter.virtual': 'Vị trí ảo',
+      'lot.filter.inStock': 'Còn tồn',
+      'lot.filter.empty': 'Hết tồn',
+      'stockRoute.filter.configured': 'Đã có quy tắc',
+      'stockRoute.filter.unconfigured': 'Chưa có quy tắc',
+      'replenishment.filter.toOrder': 'Cần đặt hàng',
+      'replenishment.filter.covered': 'Đã đủ hàng',
+      'warehouse.filter.stagedReception': 'Nhận hàng qua nhiều bước',
+      'warehouse.filter.stagedDelivery': 'Giao hàng qua nhiều bước',
       'receptionSteps.one_step': 'Nhận hàng trực tiếp',
       'receptionSteps.two_steps': 'Nhập qua khu vực đầu vào',
       'receptionSteps.three_steps': 'Đầu vào, kiểm tra chất lượng, nhập kho',
@@ -854,6 +867,17 @@ export default defineModule({
       'kind.pull_push': 'Pull and push',
       'kind.auto': 'Automatic',
       'kind.manual': 'Manual',
+      'location.filter.stockHolding': 'Stock-holding locations',
+      'location.filter.counterparty': 'Counterparty locations',
+      'location.filter.virtual': 'Virtual locations',
+      'lot.filter.inStock': 'In stock',
+      'lot.filter.empty': 'Out of stock',
+      'stockRoute.filter.configured': 'Has rules',
+      'stockRoute.filter.unconfigured': 'No rules',
+      'replenishment.filter.toOrder': 'To order',
+      'replenishment.filter.covered': 'Covered',
+      'warehouse.filter.stagedReception': 'Staged reception',
+      'warehouse.filter.stagedDelivery': 'Staged delivery',
       'receptionSteps.one_step': 'Receive goods directly',
       'receptionSteps.two_steps': 'Receive goods in input and then stock',
       'receptionSteps.three_steps': 'Input, quality, then stock',

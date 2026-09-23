@@ -1,18 +1,19 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  collectionTable,
+  collectionActions,
   collectionControls,
+  collectionTable,
   emptyState,
   LinkButton,
   ListPage,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type EmployeeListRow = {
   id: string
@@ -30,6 +31,8 @@ export type EmployeesListScreenOptions = {
   createHref: string
   /** Locale-aware collection endpoint for archive and restore commands. */
   action: string
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<EmployeeListRow>>
 }
 
 export const employeeListColumns = (_: Translator, action: string): Array<Column<EmployeeListRow>> => [
@@ -96,8 +99,9 @@ export const employeesListScreen = (
       id: (row) => row.id,
       rowHref: (row) => row.editHref,
       columns: employeeListColumns(_, options.action),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   frame = prepared.frame
   return shell(
@@ -111,9 +115,9 @@ export const employeesListScreen = (
       headerActions={
         <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />
       }
-      actions={frame.extras?.['topbar.end']}
+      actions={collectionActions(_, frame)}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, prepared.table)
           : emptyState(_('hr_backend.empty.employees'), _('hr_backend.empty.employeesHint'))
       }

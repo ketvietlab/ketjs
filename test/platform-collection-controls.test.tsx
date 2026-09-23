@@ -87,8 +87,6 @@ test('users already paged by the route retain their row and exact total with too
         ],
         total: 31,
         createHref: '/admin/users/new?lang=en',
-        toggleHref: '/admin/users?lang=en',
-        includeArchived: true,
       },
     ),
   )

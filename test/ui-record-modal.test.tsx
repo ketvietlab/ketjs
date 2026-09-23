@@ -131,12 +131,12 @@ test('record modal: a definition may put a footer of actions outside the scrolli
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
   assert.match(call, /actions: context \? definition\.actions\?\.\(context\) : undefined/u)
-  // A dialog layer never gets one — it already carries its own in-body submit button.
+  // A nested dialog owns its own fixed actions, independent of the record footer.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
-  assert.doesNotMatch(dialogLayer, /actions:/u)
+  assert.match(dialogLayer, /actions: spec.actions\?\.\(context\)/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -177,7 +177,7 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /'idempotency-key'/u)
   assert.match(runtime, /new CustomEvent\('ket:records-changed'/u)
   // A view never fetches: only the runtime calls the function endpoint and `/files`.
-  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 2)
+  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 3)
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
@@ -391,4 +391,72 @@ test('record modal: unsaved fields on another tab survive remounts and reverting
   assert.equal(recordDraftHasChanges(record), true, 'unchecked options are also unsaved edits')
   record.checks['tags\u0000one'] = true
   assert.equal(recordDraftHasChanges(record), false)
+})
+
+test('record modal: route contexts preserve authorization failures and abort signals, reject external origins', async (t) => {
+  const { readRecordContextRoute } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  Object.defineProperty(globalThis, 'location', {
+    value: new URL('https://care.test/admin/crm/followups'),
+    configurable: true,
+  })
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'location', original)
+    else Reflect.deleteProperty(globalThis, 'location')
+  })
+  const controller = new AbortController()
+  const fetcher = t.mock.method(
+    globalThis,
+    'fetch',
+    async (input: string | URL | Request, init?: RequestInit) => {
+      assert.equal(input, 'https://care.test/_care/context?id=one')
+      assert.equal(init?.credentials, 'same-origin')
+      assert.equal(init?.signal, controller.signal)
+      return new Response(JSON.stringify({ data: { id: 'one' } }), { status: 200 })
+    },
+  )
+  assert.deepEqual(await readRecordContextRoute('/_care/context?id=one', controller.signal), {
+    ok: true,
+    value: { data: { id: 'one' } },
+  })
+  await assert.rejects(readRecordContextRoute('https://external.test/context'), /same-origin/)
+  assert.equal(fetcher.mock.callCount(), 1)
+  fetcher.mock.mockImplementation(async () => new Response(null, { status: 403 }))
+  assert.deepEqual(await readRecordContextRoute('/private'), {
+    ok: false,
+    issues: [],
+    message: null,
+    status: 403,
+  })
+})
+
+test('record modal: public forms associate fixed-footer submitters and retain command fields', async () => {
+  const { RecordModalForm } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const { Button } = await import('@ketvietlab/design-system')
+  const html = await renderToString(
+    ModalSheet({
+      id: 'nested',
+      title: 'Milestone',
+      mode: 'client',
+      closeLabel: 'Close',
+      body: RecordModalForm({
+        kind: 'care.program',
+        id: 'milestone-form',
+        hidden: { __command: 'saveMilestone', id: 'one' },
+        fields: [{ id: 'title', name: 'title', label: 'Title', required: true }],
+      }),
+      actions: Button({ type: 'submit', form: 'milestone-form', label: 'Save' }),
+    }),
+  )
+  assert.match(html, /id="milestone-form"/)
+  assert.match(html, /name="__command" value="saveMilestone"/)
+  assert.match(html, /form="milestone-form"/)
+  assert.ok(html.indexOf('form="milestone-form"') > html.indexOf('</form>'))
+})
+
+test('record modal: action forms opt out of field container sizing in fixed footers', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const actionRule = css.match(/\[data-ui="record-form"\]\[data-layout="actions"\]\s*\{([^}]+)\}/u)?.[1] ?? ''
+  assert.match(actionRule, /container-type:\s*normal/u)
+  assert.match(actionRule, /flex:\s*0 0 auto/u)
 })

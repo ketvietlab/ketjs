@@ -23,6 +23,7 @@ export const RecordModalForm = (props: {
   dirty?: boolean
   actions?: readonly JSXChild[]
   command?: string | null
+  hidden?: Readonly<Record<string, string>>
   /** Lets a button outside this form submit it via the HTML `form` attribute. */
   id?: string
 }): TemplateResult => (
@@ -42,6 +43,9 @@ export const RecordModalForm = (props: {
     ) : (
       ''
     )}
+    {Object.entries(props.hidden ?? {}).map(([name, value]) => (
+      <input type="hidden" name={name} value={value} autocomplete="off" />
+    ))}
     <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
     {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}

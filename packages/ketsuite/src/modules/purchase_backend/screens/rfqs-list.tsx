@@ -1,7 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
+import {
+  collectionActions,
+  collectionControls,
+  emptyState,
+  icon,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+  stack,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { emptyState, icon, LinkButton, ListPage, listChrome, shell, stack } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
 import {
   purchaseOrderListColumns,
@@ -21,12 +30,17 @@ export type RfqsListScreenOptions = {
 }
 
 export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): TemplateResult => {
-  const collection = prepareCollectionTable(_, options.frame, {
-    rows: options.rows,
-    columns: purchaseOrderListColumns(_),
-    id: (row) => String(row.id),
-    ...options.table,
-  })
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      columns: purchaseOrderListColumns(_),
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const table =
     options.rows.length || options.table?.groups?.length
@@ -52,23 +66,8 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
           variant="primary"
         />
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.rfqs.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('purchase_backend.rfqs.title'), collection.frame)}
       footer={summary}
       body={stack([options.setup ? missingSetup(_, options.setup) : null, table], 'loose')}
     />,

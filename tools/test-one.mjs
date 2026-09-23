@@ -3,6 +3,10 @@
 import { spawnSync } from 'node:child_process'
 import { extname, join, normalize } from 'node:path'
 
+// A test that stops making progress must fail rather than stall the run, and a
+// leaked handle must not keep the child alive after the last test has reported.
+const RUNNER_FLAGS = ['--test', '--test-timeout=120000', '--test-force-exit']
+
 const requested = process.argv.slice(2)
 if (!requested.length) {
   console.error('usage: npm run test:one -- test/name.test.ts')
@@ -19,6 +23,6 @@ const artifacts = requested.map((input) => {
   return join('.build', source.slice(0, -extension.length) + '.js')
 })
 
-const result = spawnSync(process.execPath, ['--test', ...artifacts], { stdio: 'inherit' })
+const result = spawnSync(process.execPath, [...RUNNER_FLAGS, ...artifacts], { stdio: 'inherit' })
 if (result.error) throw result.error
 process.exit(result.status ?? 1)
