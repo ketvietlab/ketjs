@@ -1,3 +1,5 @@
+import { rowListSearch } from '../backend/row-list.ts'
+import { chargeRuleListSearch, folioBillingListSearch } from './search.ts'
 import { createHash } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -8,6 +10,14 @@ import type { ChargeRuleRow, ChoiceRow, FolioBillingRow } from './screens/index.
 
 type Called = { ok?: boolean }
 type Row = Record<string, unknown>
+
+/** Both billing lists share one set of functions; see `search-functions.ts`. */
+const billingSearchFunctions = {
+  apply: 'hospitality_billing.applySearchFilter',
+  saveFavorite: 'hospitality_billing.saveSearchFavorite',
+  deleteFavorite: 'hospitality_billing.deleteSearchFavorite',
+  setDefaultFavorite: 'hospitality_billing.setDefaultSearchFavorite',
+}
 
 const redirected = (url: URL, state: 'saved' | 'invoiced' | 'paid' | 'queued' | 'invalid') => {
   const params = new URLSearchParams(url.searchParams)
@@ -110,17 +120,34 @@ export const routes: Record<string, RouteEntry> = {
 
       return adminPage(ctx, url, req, {
         title: 'hospitality_billing.chargeRules.title',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const selected = rules.find((row) => row.chargeType === url.searchParams.get('rule'))
+          const search = await rowListSearch(ctx, url, req, {
+            spec: chargeRuleListSearch,
+            rows: rules,
+            frame,
+            name: 'hospitality-charge-rule-filter',
+            bodyId: 'hospitality-charge-rule-list',
+            functions: billingSearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_billing.chargeRules.title') },
+            groupLabel: (key, value) =>
+              key === 'configured'
+                ? _(
+                    value === true || value === 'true'
+                      ? 'hospitality_billing.chargeRules.configured'
+                      : 'hospitality_billing.chargeRules.missing',
+                  )
+                : String(value ?? ''),
+          })
           return chargeRulesScreen(
             _,
-            rules,
+            search.rows,
             taxes
               .filter((row) => ['sale', 'none'].includes(String(row.typeTaxUse)))
               .map((row) => ({ id: String(row.id), name: String(row.name) })),
             choices(accounts.filter((row) => String(row.accountType).startsWith('income'))),
             choices(accounts.filter((row) => String(row.accountType).startsWith('liability'))),
-            frame,
+            search.frame,
             url.searchParams.get('status'),
             {
               open: url.searchParams.get('create') === '1',
@@ -139,6 +166,7 @@ export const routes: Record<string, RouteEntry> = {
                 ),
               ),
             },
+            search.groups ? { groups: search.groups } : undefined,
           )
         },
       })
@@ -229,7 +257,18 @@ export const routes: Record<string, RouteEntry> = {
 
       return adminPage(ctx, url, req, {
         title: 'hospitality_billing.screen.title',
-        body: (_, frame) => billingScreen(_, rows, frame, url.searchParams.get('status')),
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: folioBillingListSearch,
+            rows,
+            frame,
+            name: 'hospitality-billing-filter',
+            bodyId: 'hospitality-billing-list',
+            functions: billingSearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_billing.screen.title') },
+          })
+          return billingScreen(_, search.rows, search.frame, url.searchParams.get('status'))
+        },
       })
     },
 }

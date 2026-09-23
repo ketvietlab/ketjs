@@ -1,3 +1,4 @@
+import { installBulkSelection } from './bulk-selection.ts'
 import { installUserWorkflow } from './user-workflow.ts'
 import type { BrowserBehavior, BrowserNavigation } from '@ketvietlab/ketjs'
 import { attachDesignSystemInteractions } from '@ketvietlab/design-system'
@@ -94,17 +95,16 @@ const installThemeToggle = (signal: AbortSignal): void => {
 }
 
 const updateSelection = (table: Element): void => {
-  const rows = [...table.querySelectorAll<HTMLInputElement>('[data-ui="row-select"]:not(:disabled)')]
+  const rows = [
+    ...table.querySelectorAll<HTMLInputElement>(
+      ':is([data-ui="row-select"], [data-ui="kt-row-select"]):not(:disabled)',
+    ),
+  ]
   const checked = rows.filter((input) => input.checked).length
-  const all = table.querySelector<HTMLInputElement>('[data-ui="select-all"]')
+  const all = table.querySelector<HTMLInputElement>('[data-ui="select-all"], [data-ui="kt-select-all"]')
   if (all) {
     all.checked = rows.length > 0 && checked === rows.length
     all.indeterminate = checked > 0 && checked < rows.length
-  }
-  if (!checked) {
-    const shell = table.closest('[data-ui="app-shell"]')
-    for (const menu of shell?.querySelectorAll<HTMLDetailsElement>('[data-ui="bulk-actions"][open]') ?? [])
-      menu.removeAttribute('open')
   }
 }
 
@@ -114,11 +114,20 @@ const installTableSelection = (signal: AbortSignal, navigation: BrowserNavigatio
     (event) => {
       const target = eventElement(event)
       if (!(target instanceof HTMLInputElement)) return
-      if (!target.matches('[data-ui="select-all"], [data-ui="row-select"]')) return
-      const table = target.closest('[data-ui="table"]')
+      if (
+        !target.matches(
+          '[data-ui="select-all"], [data-ui="row-select"], [data-ui="ket-table"][data-server="true"] input',
+        )
+      )
+        return
+      const table = target.closest(
+        '[data-ui="table"], [data-ui="ket-table"][data-server="true"] [data-ui="kt-grid"]',
+      )
       if (!table) return
-      if (target.matches('[data-ui="select-all"]'))
-        for (const input of table.querySelectorAll<HTMLInputElement>('[data-ui="row-select"]:not(:disabled)'))
+      if (target.matches('[data-ui="select-all"], [data-ui="kt-select-all"]'))
+        for (const input of table.querySelectorAll<HTMLInputElement>(
+          ':is([data-ui="row-select"], [data-ui="kt-row-select"]):not(:disabled)',
+        ))
           input.checked = target.checked
       updateSelection(table)
     },
@@ -140,11 +149,13 @@ const installTableSelection = (signal: AbortSignal, navigation: BrowserNavigatio
       const target = eventElement(event)
       if (
         target?.closest(
-          'a, button, input, select, textarea, label, summary, details, [data-ui="select-cell"]',
+          'a, button, input, select, textarea, label, summary, details, [data-ui="select-cell"], [data-ui="kt-select-cell"]',
         )
       )
         return
-      const row = target?.closest<HTMLElement>('[data-ui="row"][data-row-href]')
+      const row = target?.closest<HTMLElement>(
+        '[data-ui="row"][data-row-href], [data-ui="kt-row"][data-row-href]',
+      )
       const href = row?.getAttribute('data-row-href')
       if (!href) return
       event.preventDefault()
@@ -157,7 +168,9 @@ const installTableSelection = (signal: AbortSignal, navigation: BrowserNavigatio
     (event) => {
       if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
       const target = eventElement(event)
-      const row = target?.matches('[data-ui="row"][data-row-href][tabindex="0"]') ? target : null
+      const row = target?.matches(':is([data-ui="row"], [data-ui="kt-row"])[data-row-href][tabindex="0"]')
+        ? target
+        : null
       const href = row?.getAttribute('data-row-href')
       if (!href) return
       event.preventDefault()
@@ -502,12 +515,14 @@ export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
   const cleanupUserWorkflow = installUserWorkflow(lifetime)
   installThemeToggle(lifetime)
   installTableSelection(lifetime, navigation)
+  const cleanupBulkSelection = installBulkSelection(document, lifetime)
   installDropdownDismiss(lifetime)
   installGlobalFilter(lifetime)
   const cleanupRouteModal = installRouteModal(lifetime, navigation)
   const cleanupLiveRegion = installLiveRegion(lifetime, navigation)
   return () => {
     cleanupDesignSystem()
+    cleanupBulkSelection()
     cleanupLiveRegion?.()
     cleanupRouteModal()
     cleanupUserWorkflow()

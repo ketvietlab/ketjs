@@ -61,7 +61,7 @@ export const overviewScreen = (
       label: _('sale_backend.dashboard.draft'),
       value: o.counts.draft,
       detail: _('sale_backend.dashboard.draftToday', { count: String(o.counts.draftToday) }),
-      href: `${quotations}${quotations.includes('?') ? '&' : '?'}state=draft`,
+      href: `${quotations}${quotations.includes('?') ? '&' : '?'}preset=draft`,
       tone: 'neutral' as const,
     },
     {
@@ -69,7 +69,7 @@ export const overviewScreen = (
       label: _('sale_backend.dashboard.sent'),
       value: o.counts.sent,
       detail: _('sale_backend.dashboard.sentValue', { amount: money(o.counts.sentTotal) }),
-      href: `${quotations}${quotations.includes('?') ? '&' : '?'}state=sent`,
+      href: `${quotations}${quotations.includes('?') ? '&' : '?'}preset=sent`,
       tone: 'info' as const,
     },
     {

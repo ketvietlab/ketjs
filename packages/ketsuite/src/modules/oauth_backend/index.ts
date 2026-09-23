@@ -2,6 +2,7 @@ import { defineModule } from '@ketvietlab/ketjs'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'oauth_backend',
@@ -11,6 +12,7 @@ export default defineModule({
   summary: 'Cấu hình đăng nhập OIDC và quản lý danh tính đã liên kết.',
   category: 'Hệ thống',
   routes,
+  functions: searchFilterFunctions,
   menus,
   messages,
   fills: {

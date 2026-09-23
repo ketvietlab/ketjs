@@ -1,5 +1,5 @@
 import { each, effect, signal } from '@ketvietlab/ketjs-view'
-import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { IslandController, IslandProps, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Avatar, Badge, Code } from '../../primitives/status/index.tsx'
 import type { Tone } from '../../primitives/status/index.tsx'
 import { EmptyState, Notice } from '../../primitives/feedback/index.tsx'
@@ -30,6 +30,8 @@ export const HOOKS = [
   'kt-pager-label',
   'kt-pager-button',
   'kt-select-persisted',
+  'kt-caption',
+  'kt-tools',
 ] as const
 
 export type KetTableRow = Record<string, unknown>
@@ -61,6 +63,10 @@ export type KetTableColumn = {
   sortable?: boolean
   /** Native URL-driven sorting; takes precedence over the RPC sort handler. */
   sortHref?: string
+  sortLabel?: string
+  sortDirection?: 'asc' | 'desc' | null
+  /** Semantic presentation hint for server-rendered custom cells. */
+  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person' | 'media'
 }
 
 export type KetTableSort = { field: string; direction: 'asc' | 'desc' }
@@ -156,6 +162,85 @@ export type KetTableExtensions = Record<
   (value: unknown, row: KetTableRow, options: Record<string, unknown> | undefined) => TemplateResult
 >
 
+/** Server-owned collection cells keep their semantic markup and exact values.
+ * URL navigation and native external-form controls require no island props.
+ * The same KetTable renderer and CSS serve both this surface and the island.
+ */
+export type KetTableServerProps<Row> = {
+  columns: Array<Omit<KetTableColumn, 'format' | 'sortable'> & { cell: (row: Row) => JSXChild }>
+  rows: readonly Row[]
+  id: (row: Row) => string
+  rowHref?: (row: Row) => string
+  rowLink?: boolean
+  caption?: string | null
+  tools?: JSXChild
+  responsive?: 'scroll' | 'stack'
+  gutter?: 'compact'
+  selection?: KetTableSelection
+  groups?: readonly (Omit<KetTableGroup, 'rows' | 'children' | 'href'> & {
+    href: string
+    rows?: readonly Row[]
+    children?: KetTableServerProps<Row>['groups']
+  })[]
+  sort?: KetTableSort | null
+  labels: KetTableLabels
+}
+
+type ServerRendering = {
+  rowHref?: (row: KetTableRow) => string
+  rowLink?: boolean
+  caption?: string | null
+  tools?: JSXChild
+  responsive?: 'scroll' | 'stack'
+  gutter?: 'compact'
+}
+
+export const KetTable = <Row,>(props: KetTableServerProps<Row>): TemplateResult => {
+  const wrap = (row: Row): KetTableRow => ({ id: props.id(row), source: row })
+  const groups = (nodes: NonNullable<KetTableServerProps<Row>['groups']>): KetTableGroup[] =>
+    nodes.map((node) => ({
+      ...node,
+      rows: node.rows?.map(wrap),
+      children: node.children ? groups(node.children) : undefined,
+    }))
+  const extensions: KetTableExtensions = Object.fromEntries(
+    props.columns.map((column) => [
+      column.key,
+      (_value: unknown, row: KetTableRow) => <>{column.cell(row.source as Row)}</>,
+    ]),
+  )
+  return createKetTableView(
+    {
+      id: 'server-collection',
+      config: {
+        columns: props.columns.map(({ cell: _cell, ...column }) => ({
+          ...column,
+          sortable: false,
+          format: { kind: 'custom', field: 'source', renderer: column.key },
+        })),
+        rows: props.rows.map(wrap),
+        total: props.rows.length,
+        idField: 'id',
+        groupBy: props.groups?.length ? ['server'] : [],
+        groups: props.groups ? groups(props.groups) : undefined,
+        selection: props.selection,
+        sort: props.sort,
+        pager: false,
+        labels: props.labels,
+      },
+    },
+    extensions,
+    {
+      rowHref: props.rowHref ? (row) => props.rowHref!(row.source as Row) : undefined,
+      rowLink: props.rowLink,
+      caption: props.caption,
+      tools: props.tools,
+      responsive: props.responsive,
+      gutter: props.gutter,
+    },
+  ).view() as TemplateResult
+}
+
 type KetTableIslandProps = IslandProps & { id: string; config: KetTableConfig }
 type ApiPayload = { ok?: boolean; value?: unknown; message?: unknown; errors?: Array<{ message?: unknown }> }
 
@@ -207,6 +292,7 @@ const updateNodeAt = (
 export function createKetTableView(
   props: KetTableIslandProps,
   extensions?: KetTableExtensions,
+  server?: ServerRendering,
 ): IslandController {
   const { config } = props
   const labels = config.labels
@@ -458,12 +544,22 @@ export function createKetTableView(
   }
 
   const tableRow = (row: KetTableRow): TemplateResult => (
-    <tr data-ui="kt-row" data-row={idOf(row)} data-selected={isSelected(row) ? 'true' : null}>
+    <tr
+      data-ui="kt-row"
+      data-row={idOf(row)}
+      data-selected={isSelected(row) ? 'true' : null}
+      data-row-href={server?.rowHref?.(row)}
+      tabindex={server?.rowHref && server.rowLink === false ? 0 : null}
+    >
       {config.selection ? (
         <td data-ui="kt-select-cell">
           <input
             data-ui="kt-row-select"
             type="checkbox"
+            autocomplete="off"
+            name={server ? `${config.selection.fieldName ?? 'selected'}.${idOf(row)}` : undefined}
+            value={server ? '1' : undefined}
+            form={server ? config.selection.formId : undefined}
             checked={isSelected(row)}
             aria-label={`${labels.selectRow}: ${idOf(row)}`}
             onChange={() => toggleSelect(row)}
@@ -478,10 +574,12 @@ export function createKetTableView(
             data-ui="kt-cell"
             data-col={column.key}
             data-align={column.align ?? 'start'}
+            data-kind={column.kind ?? column.format.kind}
             data-priority={column.priority ?? 'secondary'}
+            data-label={server?.responsive === 'stack' ? column.label : null}
           >
-            {index === 0 && config.rowHrefTemplate ? (
-              <a data-ui="kt-row-link" data-primary="true" href={rowHrefFor(row)}>
+            {index === 0 && (config.rowHrefTemplate || (server?.rowHref && server.rowLink !== false)) ? (
+              <a data-ui="kt-row-link" data-primary="true" href={server?.rowHref?.(row) ?? rowHrefFor(row)}>
                 {renderCell(row, column.format)}
               </a>
             ) : (
@@ -575,19 +673,20 @@ export function createKetTableView(
 
   const columnHeader = (column: KetTableColumn): TemplateResult => {
     const active = sort()?.field === column.key
-    const direction = active ? (sort()?.direction ?? null) : null
+    const direction = column.sortDirection ?? (active ? (sort()?.direction ?? null) : null)
     return (
       <th
         data-ui="kt-col"
         data-col={column.key}
         data-align={column.align ?? 'start'}
+        data-kind={column.kind ?? column.format.kind}
         data-priority={column.priority ?? 'secondary'}
         data-width={column.width ?? null}
         aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : null}
         scope="col"
       >
         {column.sortHref ? (
-          <a data-ui="kt-sort-button" href={column.sortHref}>
+          <a data-ui="kt-sort-button" href={column.sortHref} aria-label={column.sortLabel}>
             <span>{column.label}</span>
             {direction ? (
               <span data-ui="kt-sort-icon" aria-hidden="true">
@@ -665,7 +764,7 @@ export function createKetTableView(
   }
 
   const persistedInputs = (): TemplateResult | null =>
-    config.selection ? (
+    config.selection && !server ? (
       <div data-ui="kt-select-persisted" aria-hidden="true">
         {each(
           [...selectedIds()],
@@ -684,7 +783,14 @@ export function createKetTableView(
 
   return {
     view: () => (
-      <div data-ui="ket-table" data-busy={loading() ? 'true' : null}>
+      <div
+        data-ui="ket-table"
+        data-server={server ? 'true' : null}
+        data-responsive={server?.responsive}
+        data-gutter={server?.gutter}
+        data-busy={loading() ? 'true' : null}
+      >
+        {server?.tools !== undefined && <div data-ui="kt-tools">{server.tools}</div>}
         {error() ? (
           <Notice
             tone="danger"
@@ -703,6 +809,7 @@ export function createKetTableView(
         ) : (
           <div data-ui="kt-scroll">
             <table data-ui="kt-grid">
+              {server?.caption && <caption data-ui="kt-caption">{server.caption}</caption>}
               <thead>
                 <tr>
                   {config.selection ? (
@@ -710,6 +817,7 @@ export function createKetTableView(
                       <input
                         data-ui="kt-select-all"
                         type="checkbox"
+                        autocomplete="off"
                         checked={allVisibleSelected()}
                         aria-label={labels.selectAll}
                         onChange={toggleSelectAllVisible}

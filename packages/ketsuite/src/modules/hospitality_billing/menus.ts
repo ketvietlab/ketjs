@@ -8,12 +8,12 @@ import type { MenuDef } from '@ketvietlab/ketjs'
  */
 export const menus: Record<string, MenuDef> = {
   'hospitality.billing': {
-    parent: 'hospitality.operations',
+    parent: 'hospitality',
     label: 'menu.billing',
     path: '/admin/hospitality/billing',
     needs: 'hospitality_billing.getFolioBilling',
     for: ['hospitality_billing.recordFolioPayment', 'hospitality_billing.invoiceFolio'],
-    sequence: 56,
+    sequence: 1056,
   },
   'hospitality.billingRules': {
     parent: 'hospitality.configuration',

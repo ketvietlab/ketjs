@@ -1,4 +1,5 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { ReorderList } from '../interactions/reorder-list/index.tsx'
 import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
@@ -21,7 +22,7 @@ import {
 import { AppShell, Page } from '../layouts/shell.tsx'
 import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
-import { ListChrome } from '../patterns/list-chrome.tsx'
+import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
 import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
@@ -40,7 +41,7 @@ import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
 import { createSearchFilterView } from '../interactions/search-filter/index.tsx'
 import { searchFilterDemoConfig } from '../interactions/search-filter/demo.ts'
-import { createKetTableView } from '../interactions/ket-table/index.tsx'
+import { createKetTableView, KetTable } from '../interactions/ket-table/index.tsx'
 import { ketTableDemoConfig, ketTableGroupedDemoConfig } from '../interactions/ket-table/demo.ts'
 import {
   Checkbox,
@@ -433,6 +434,31 @@ export const componentGroups: readonly ComponentGroup[] = [
     description: 'Native controls with one label, help and error contract.',
     examples: [
       {
+        id: 'reorder-list',
+        name: 'Reorder list',
+        description:
+          'Controlled editable rows emit ordered ids through one native change field; move controls accompany drag handles.',
+        render: () => (
+          <ReorderList
+            id="reorder-demo"
+            name="order"
+            label="Values"
+            labels={{
+              add: 'Add value',
+              remove: 'Remove',
+              up: 'Move up',
+              down: 'Move down',
+              drag: 'Drag',
+              empty: 'No values',
+            }}
+            items={[
+              { id: 'red', content: <Field id="reorder-red" name="red" label="Value" value="Red" /> },
+              { id: 'blue', content: <Field id="reorder-blue" name="blue" label="Value" value="Blue" /> },
+            ]}
+          />
+        ),
+      },
+      {
         id: 'field',
         name: 'Field',
         description: 'Text, select, checkbox and error states without application-owned markup.',
@@ -778,7 +804,12 @@ export const componentGroups: readonly ComponentGroup[] = [
                 context="Sales / Sales orders"
                 title="Sales orders"
                 description="Review demand, fulfillment and payment state from one operational list."
-                actions={<Button label="Create order" variant="primary" />}
+                headerActions={<Button label="Create order" variant="primary" />}
+                actionsPlacement="header"
+                actionsHidden
+                actions={
+                  <BulkActions selectedCount={0} actions={[{ id: 'archive', label: 'Archive selected' }]} />
+                }
                 controls={<ListDemoChrome id="app-shell" />}
                 body={<OrdersTable title="Order list" />}
               />
@@ -1170,7 +1201,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'list-page',
         name: 'List page',
         description:
-          'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
+          'The canonical collection hierarchy: identity with primary actions, URL-driven controls, tool actions and records.',
         render: () => (
           <ListPage
             variant="operational"
@@ -1178,7 +1209,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             eyebrow="Sales"
             title="Sales orders"
             description="Review demand, fulfillment and payment state from one operational list."
-            actions={<Button label="Create order" variant="primary" />}
+            headerActions={<Button label="Create order" variant="primary" />}
+            actions={<Button label="Export orders" variant="secondary" />}
             controls={
               <ListChrome
                 search={{
@@ -1660,6 +1692,25 @@ export const componentGroups: readonly ComponentGroup[] = [
           createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
       },
       {
+        id: 'search-filter-presets',
+        name: 'Preset search filter',
+        description:
+          'The same compact search with only supported preset facets; unsupported custom rules, grouping and favorites are omitted.',
+        render: () =>
+          createSearchFilterView({
+            id: 'demo-search-filter-presets',
+            config: {
+              ...searchFilterDemoConfig,
+              size: 'compact',
+              capabilities: { groupBy: false, favorites: false, customFilters: false },
+              facets: searchFilterDemoConfig.facets.filter((facet) => facet.type === 'filter'),
+              groupBy: [],
+              favorites: [],
+              customFilterFields: [],
+            },
+          }).view(),
+      },
+      {
         id: 'ket-table',
         name: 'Ket table',
         description:
@@ -1668,6 +1719,21 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Stack
             items={[
               createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              <KetTable
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Server collection',
+                    cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
+                    sortHref: '#ket-table',
+                  },
+                ]}
+                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                id={(row) => row.id}
+                rowHref={() => '#ket-table'}
+                caption="URL-driven server collection"
+                labels={ketTableDemoConfig.labels}
+              />,
               createKetTableView({ id: 'demo-ket-table-grouped', config: ketTableGroupedDemoConfig }).view(),
               createKetTableView({
                 id: 'demo-ket-table-navigation',

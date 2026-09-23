@@ -1,7 +1,17 @@
+import {
+  code,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { code, dataTable, emptyState, inline, LinkButton, ListPage, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type BomListRow = {
   id: string
@@ -11,6 +21,8 @@ export type BomListRow = {
 }
 
 export type BomsListScreenOptions = {
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<BomListRow>>
   rows: BomListRow[]
   /** Locale-aware URL that opens the create modal over this collection. */
   createHref: string
@@ -44,31 +56,41 @@ export const bomsListScreen = (
   _: Translator,
   options: BomsListScreenOptions,
   frame: Frame = {},
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      columns: bomListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  return shell(
     _,
     _('manufacturing_backend.boms.title'),
     <ListPage
       variant="operational"
-      frame={frame}
+      frame={collection.frame}
       title={_('manufacturing_backend.boms.title')}
-      actions={inline([
+      controls={collectionControls(_, _('manufacturing_backend.boms.title'), collection.frame)}
+      headerActions={
         <LinkButton
           label={_('manufacturing_backend.boms.create')}
           href={options.createHref}
           variant="primary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
+        />
+      }
+      actions={collectionActions(_, collection.frame)}
+      footer={`${_('manufacturing_backend.boms.title')}: ${String(collection.total)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              columns: bomListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, collection.table)
           : emptyState(_('manufacturing_backend.empty.boms'), _('manufacturing_backend.empty.bomsHint'))
       }
     />,
-    { ...frame, chrome: null, topbar: false },
+    { ...collection.frame, chrome: null, topbar: false },
   )
+}
