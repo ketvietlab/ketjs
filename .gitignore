@@ -23,6 +23,8 @@ packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs
 packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs.map
 packages/ketsuite/src/modules/user_backend/client/user-modal.mjs
 packages/ketsuite/src/modules/user_backend/client/user-modal.mjs.map
+packages/ketsuite/src/modules/user_backend/client/role-modal.mjs
+packages/ketsuite/src/modules/user_backend/client/role-modal.mjs.map
 packages/ketsuite/src/modules/product_backend/client/product-modal.mjs
 packages/ketsuite/src/modules/product_backend/client/product-modal.mjs.map
 packages/ketsuite/src/modules/product_backend/client/attribute-modal.mjs

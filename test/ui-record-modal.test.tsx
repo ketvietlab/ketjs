@@ -183,6 +183,44 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
 })
 
+test('record modal: a preview command changes nothing and leaves its answer on screen', () => {
+  const branch = /if \(command\.preview\) \{([\s\S]*?)\n        \}/u.exec(runtime)
+  assert.ok(branch, 'the submit path has a preview branch')
+  const body = branch[1]!
+
+  // It hands the answer to the view and stops. The selection needs no saving here:
+  // every submit snapshots its layer before it runs, and a preview clears nothing.
+  assert.match(body, /outcome\.set\(\{ command: name, value: result\.value \}\)/u)
+  assert.match(body, /return/u)
+  assert.doesNotMatch(body, /Drafts\.set|drafts\.set/u, 'a preview does not touch the drafts')
+  // Nothing is dropped, re-read or announced: the record did not change.
+  assert.doesNotMatch(body, /cache\.delete|announce\(\)|load\(/u)
+  assert.ok(
+    runtime.indexOf('if (command.preview)') < runtime.indexOf('cache.delete(current.id)'),
+    'the preview returns before the runtime treats the submit as a change',
+  )
+
+  // An answer is only ever read beside the selection it was computed from, so
+  // everything that moves the layer clears it: another record, a closed modal, a
+  // closed or newly opened dialog, another tab, a refusal, and a real write.
+  for (const [what, near] of [
+    ['another record', /outcome\.set\(null\)\n        dialog\.set/u],
+    ['a closed modal', /outcome\.set\(null\)\n      status\.set\('idle'\)/u],
+    ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
+    ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
+    ['another tab', /outcome\.set\(null\)\n              show\(/u],
+    ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
+  ] as const)
+    assert.match(runtime, near, `${what} clears the answer`)
+  // A write keeps its answer only when it stays in the layer, which is how a
+  // credential the server says once reaches the reader.
+  assert.match(
+    runtime,
+    /outcome\.set\(after_\(command\) === 'stay' \? \{ command: name, value: result\.value \} : null\)/u,
+  )
+  assert.match(runtime, /held\?\.command === command \? \(held\.value as T\) : null/u)
+})
+
 test('record modal: tabs another module adds follow the declared ones through the same filter', () => {
   const visible = runtime.slice(
     runtime.indexOf('const visibleTabs = '),
