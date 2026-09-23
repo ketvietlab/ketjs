@@ -3,15 +3,17 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
   inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { CompanyRow } from './types.ts'
 
 export type CompanyListRow = CompanyRow & { detailHref: string }
@@ -21,8 +23,8 @@ export type CompaniesListScreenOptions = {
   total: number
   createHref: string
   hierarchyHref: string
-  toggleHref: string
-  includeArchived: boolean
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<CompanyListRow>>
 }
 
 export const companyListColumns = (_: Translator): Array<Column<CompanyListRow>> => [
@@ -60,8 +62,21 @@ export const companiesListScreen = (
   _: Translator,
   frame: Frame,
   options: CompaniesListScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => row.id,
+      rowHref: (row) => row.detailHref,
+      columns: companyListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('company_backend.screen.title'),
     <ListPage
@@ -69,45 +84,29 @@ export const companiesListScreen = (
       frame={frame}
       title={_('company_backend.screen.title')}
       description={_('company_backend.screen.subtitle')}
-      actions={inline([
-        <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />,
-        <LinkButton
-          label={_('company_backend.action.hierarchy')}
-          href={options.hierarchyHref}
-          variant="secondary"
-        />,
-        <LinkButton
-          label={
-            options.includeArchived
-              ? _('company_backend.filter.activeOnly')
-              : _('company_backend.filter.includeArchived')
-          }
-          href={options.toggleHref}
-          variant="tertiary"
-        />,
-        frame.extras?.['topbar.end'] ?? '',
-      ])}
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('company_backend.screen.title'),
-              { ...frame.chrome, layout: 'command', section: undefined, create: null, selection: null },
-              false,
-            )
-          : undefined
+      headerActions={
+        <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />
       }
+      actions={collectionActions(
+        _,
+        frame,
+        // The bar owns the archived toggle now, so only the tree link is left.
+        inline([
+          <LinkButton
+            label={_('company_backend.action.hierarchy')}
+            href={options.hierarchyHref}
+            variant="secondary"
+          />,
+        ]),
+      )}
+      controls={collectionControls(_, _('company_backend.screen.title'), frame)}
       status={`${_('company_backend.screen.title')}: ${String(options.total)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => row.id,
-              rowHref: (row) => row.detailHref,
-              columns: companyListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : emptyState(_('company_backend.screen.empty'), _('company_backend.screen.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

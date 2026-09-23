@@ -16,6 +16,8 @@ export type PageIdentityProps = {
   description?: string | null
   status?: JSXChild
   actions?: JSXChild
+  /** Retain action content while removing an empty or conditional identity slot from layout. */
+  actionsHidden?: boolean
   meta?: JSXChild
 }
 
@@ -40,7 +42,11 @@ export const pageIdentityContent = (
           {props.title}
         </h1>
         {props.actions !== undefined && (
-          <div data-ui={`${kind}-actions`} data-kv-page-identity="actions">
+          <div
+            data-ui={`${kind}-actions`}
+            data-kv-page-identity="actions"
+            hidden={props.actionsHidden === true}
+          >
             {props.actions}
           </div>
         )}

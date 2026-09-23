@@ -1,11 +1,24 @@
+import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, ListPage, RecordActions, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import {
+  collectionControls,
+  badge,
+  collectionTable,
+  emptyState,
+  ListPage,
+  RecordActions,
+  shell,
+} from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 import type { CatalogRow } from './types.ts'
 
 export type CatalogListRow = CatalogRow & { detailHref: string; installAction: string }
-export type CatalogsListScreenOptions = { rows: readonly CatalogListRow[] }
+export type CatalogsListScreenOptions = {
+  rows: readonly CatalogListRow[]
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<CatalogListRow>>
+}
 
 export const catalogListColumns = (_: Translator): Array<Column<CatalogListRow>> => [
   {
@@ -51,26 +64,36 @@ export const catalogsScreen = (
   _: Translator,
   frame: Frame,
   options: CatalogsListScreenOptions,
-): TemplateResult =>
-  shell(
+): TemplateResult => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows: options.rows,
+      id: (row) => `${row.countryCode}:${row.version}`,
+      rowHref: (row) => row.detailHref,
+      columns: catalogListColumns(_),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
+  frame = prepared.frame
+  return shell(
     _,
     _('address_backend.title'),
     <ListPage
       variant="operational"
       frame={frame}
       title={_('address_backend.title')}
+      controls={collectionControls(_, _('address_backend.title'), frame)}
       description={_('address_backend.hint')}
       status={`${_('address_backend.title')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length
-          ? dataTable(_, {
-              rows: options.rows,
-              id: (row) => `${row.countryCode}:${row.version}`,
-              rowHref: (row) => row.detailHref,
-              columns: catalogListColumns(_),
-            })
+        options.rows.length || options.table?.groups?.length
+          ? collectionTable(_, prepared.table)
           : emptyState(_('address_backend.empty'), _('address_backend.emptyHint'))
       }
     />,
     { ...frame, chrome: null, topbar: false },
   )
+}

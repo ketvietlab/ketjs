@@ -1,0 +1,26 @@
+import { html } from '@ketvietlab/ketjs-view'
+import { definePage, island } from '@ketvietlab/ketjs-view-tools'
+import counter from '../islands/counter.ts'
+
+export default definePage({
+  head: {
+    title: '__NAME__',
+    description: 'A static site powered by Ket view.',
+    lang: 'en',
+    links: [{ rel: 'icon', href: './favicon.svg', type: 'image/svg+xml' }],
+  },
+  view: () => html`
+    <header class="site-header">
+      <a class="brand" href="./">__NAME__</a>
+      <nav aria-label="Main navigation"><a href="./about/">About</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Ket view static starter</p>
+        <h1>Ship plain HTML.<br />Add JavaScript only where it earns its place.</h1>
+        <p class="lede">The page stays marker-free. The counter below is an explicit island.</p>
+        ${island('counter', counter, { initial: 0 })}
+      </section>
+    </main>
+  `,
+})

@@ -127,4 +127,4 @@ export const productDefaults = (name: string) => ({
   defaultTimezone: 'Asia/Ho_Chi_Minh',
 })
 
-export const productQueues = { default: 10, maintenance: 2, mail: 5 }
+export const productQueues = { default: 10, maintenance: 2, mail: 5, media: 2 }

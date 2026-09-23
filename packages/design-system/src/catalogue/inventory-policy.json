@@ -119,6 +119,34 @@
       "wave": 2,
       "gapTask": "DS-014"
     },
+    "./interactions/relation-select/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-044"
+    },
+    "./interactions/lightbox/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-047"
+    },
+    "./interactions/search-filter/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-045"
+    },
+    "./interactions/ket-table/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-046"
+    },
     "./interactions/skeleton/index.tsx": {
       "owner": "Feedback",
       "maturity": "stable",
@@ -307,6 +335,13 @@
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-017"
+    },
+    "./interactions/reorder-list/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
     }
   },
   "compatibilityModules": {
@@ -365,6 +400,20 @@
       "target": "Public core",
       "wave": 4,
       "gapTask": "DS-027"
+    },
+    "./collection-state.ts": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./collection.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "KetSuite",
+      "wave": 1,
+      "gapTask": "DS-044"
     },
     "./dashboard-page.tsx": {
       "owner": "Page recipes",

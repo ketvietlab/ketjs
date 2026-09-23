@@ -5,6 +5,11 @@ import {
   CardGrid,
   ContentCard,
   dataTable,
+  collectionTable,
+  prepareCollectionTable,
+  collectionActions,
+  collectionControls,
+  ListPage,
   DashboardPage,
   emptyState,
   formatMoney,
@@ -19,7 +24,7 @@ import {
   stack,
   Surface,
 } from '../../ui/index.ts'
-import type { FormField, Frame } from '../../ui/index.ts'
+import type { DataTable, FormField, Frame } from '../../ui/index.ts'
 import { minorText, scaleOf, sumMoneyMinor } from '../account/money.ts'
 import { selectionLabel } from '../backend/screen.ts'
 
@@ -94,51 +99,57 @@ export const configsScreen = (
   frame: Frame,
   rows: AnyRow[],
   fields: FormField[],
-): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('pos_backend.configs.title')}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/pos/configurations"
-            submit={_('pos_backend.action.saveConfig')}
-            submitVariant="primary"
-            fields={fields}
-          />
-        }
-      />,
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (r) => String(r.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('pos_backend.field.name'),
-                cell: (r) => String(r.name),
-                priority: 'primary',
-              },
-              {
-                key: 'warehouse',
-                label: _('pos_backend.field.warehouse'),
-                cell: (r) => String(r.warehouseName ?? r.warehouseId),
-              },
-              {
-                key: 'difference',
-                label: _('pos_backend.field.maximumDifference'),
-                cell: (r) => formatMoney(_, r.maximumDifference, r.currency),
-                align: 'end',
-                kind: 'currency',
-              },
-            ],
-          })
-        : empty(_),
-    ])}
-  />
-)
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (r) => String(r.id),
+      columns: [
+        {
+          key: 'name',
+          label: _('pos_backend.field.name'),
+          cell: (r) => String(r.name),
+          priority: 'primary',
+        },
+        {
+          key: 'warehouse',
+          label: _('pos_backend.field.warehouse'),
+          cell: (r) => String(r.warehouseName ?? r.warehouseId),
+        },
+        {
+          key: 'difference',
+          label: _('pos_backend.field.maximumDifference'),
+          cell: (r) => formatMoney(_, r.maximumDifference, r.currency),
+          align: 'end',
+          kind: 'currency',
+        },
+      ],
+    },
+    { paginate: true, searchText: (row) => `${row.name ?? ''} ${row.warehouseName ?? ''}` },
+  )
+  return (
+    <ListScreen
+      translator={_}
+      title={_('pos_backend.configs.title')}
+      frame={collection.frame}
+      body={stack([
+        <Surface
+          body={
+            <RecordForm
+              action="/admin/pos/configurations"
+              submit={_('pos_backend.action.saveConfig')}
+              submitVariant="primary"
+              fields={fields}
+            />
+          }
+        />,
+        rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
+    />
+  )
+}
 
 export const methodsScreen = (
   _: Translator,
@@ -146,120 +157,132 @@ export const methodsScreen = (
   rows: AnyRow[],
   fields: FormField[],
   linkFields: FormField[],
-): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('pos_backend.methods.title')}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/pos/payment-methods"
-            submit={_('pos_backend.action.saveMethod')}
-            submitVariant="secondary"
-            hidden={{ action: 'save' }}
-            fields={fields}
-          />
-        }
-      />,
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/pos/payment-methods"
-            submit={_('pos_backend.action.linkMethod')}
-            submitVariant="secondary"
-            hidden={{ action: 'link' }}
-            fields={linkFields}
-          />
-        }
-      />,
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (r) => String(r.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('pos_backend.field.name'),
-                cell: (r) => String(r.name),
-                priority: 'primary',
-              },
-              {
-                key: 'journal',
-                label: _('pos_backend.field.journal'),
-                cell: (r) => String(r.journalName ?? r.journalId),
-              },
-              {
-                key: 'cash',
-                label: _('pos_backend.field.isCash'),
-                cell: (r) => (r.isCash ? _('pos_backend.yes') : _('pos_backend.no')),
-              },
-            ],
-          })
-        : empty(_),
-    ])}
-  />
-)
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (r) => String(r.id),
+      columns: [
+        {
+          key: 'name',
+          label: _('pos_backend.field.name'),
+          cell: (r) => String(r.name),
+          priority: 'primary',
+        },
+        {
+          key: 'journal',
+          label: _('pos_backend.field.journal'),
+          cell: (r) => String(r.journalName ?? r.journalId),
+        },
+        {
+          key: 'cash',
+          label: _('pos_backend.field.isCash'),
+          cell: (r) => (r.isCash ? _('pos_backend.yes') : _('pos_backend.no')),
+        },
+      ],
+    },
+    { paginate: true, searchText: (row) => `${row.name ?? ''} ${row.journalName ?? ''}` },
+  )
+  return (
+    <ListScreen
+      translator={_}
+      title={_('pos_backend.methods.title')}
+      frame={collection.frame}
+      body={stack([
+        <Surface
+          body={
+            <RecordForm
+              action="/admin/pos/payment-methods"
+              submit={_('pos_backend.action.saveMethod')}
+              submitVariant="secondary"
+              hidden={{ action: 'save' }}
+              fields={fields}
+            />
+          }
+        />,
+        <Surface
+          body={
+            <RecordForm
+              action="/admin/pos/payment-methods"
+              submit={_('pos_backend.action.linkMethod')}
+              submitVariant="secondary"
+              hidden={{ action: 'link' }}
+              fields={linkFields}
+            />
+          }
+        />,
+        rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
+    />
+  )
+}
 
 export const sessionsScreen = (
   _: Translator,
   frame: Frame,
   rows: AnyRow[],
   fields: FormField[],
-): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('pos_backend.sessions.title')}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/pos/sessions"
-            submit={_('pos_backend.action.createSession')}
-            submitVariant="primary"
-            fields={fields}
-          />
-        }
-      />,
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (r) => String(r.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('pos_backend.field.session'),
-                cell: (r) =>
-                  linkButton({
-                    label: String(r.name),
-                    href: `/admin/pos/sessions/${String(r.id)}`,
-                    variant: 'tertiary',
-                  }),
-                priority: 'primary',
-              },
-              {
-                key: 'config',
-                label: _('pos_backend.field.config'),
-                cell: (r) => String(r.configName ?? r.configId),
-              },
-              {
-                key: 'state',
-                label: _('pos_backend.field.state'),
-                cell: (r) => badge(labelOf(_, 'sessionState', r.state), 'neutral', String(r.state)),
-              },
-              {
-                key: 'start',
-                label: _('pos_backend.field.startAt'),
-                cell: (r) => String(r.startAt ?? '—').slice(0, 19),
-              },
-            ],
-          })
-        : empty(_),
-    ])}
-  />
-)
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    {
+      rows,
+      id: (r) => String(r.id),
+      columns: [
+        {
+          key: 'name',
+          label: _('pos_backend.field.session'),
+          cell: (r) =>
+            linkButton({
+              label: String(r.name),
+              href: `/admin/pos/sessions/${String(r.id)}`,
+              variant: 'tertiary',
+            }),
+          priority: 'primary',
+        },
+        {
+          key: 'config',
+          label: _('pos_backend.field.config'),
+          cell: (r) => String(r.configName ?? r.configId),
+        },
+        {
+          key: 'state',
+          label: _('pos_backend.field.state'),
+          cell: (r) => badge(labelOf(_, 'sessionState', r.state), 'neutral', String(r.state)),
+        },
+        {
+          key: 'start',
+          label: _('pos_backend.field.startAt'),
+          cell: (r) => String(r.startAt ?? '—').slice(0, 19),
+        },
+      ],
+    },
+    { paginate: true, searchText: (row) => `${row.name ?? ''} ${labelOf(_, 'sessionState', row.state)}` },
+  )
+  return (
+    <ListScreen
+      translator={_}
+      title={_('pos_backend.sessions.title')}
+      frame={collection.frame}
+      body={stack([
+        <Surface
+          body={
+            <RecordForm
+              action="/admin/pos/sessions"
+              submit={_('pos_backend.action.createSession')}
+              submitVariant="primary"
+              fields={fields}
+            />
+          }
+        />,
+        rows.length ? collectionTable(_, collection.table) : empty(_),
+      ])}
+    />
+  )
+}
 
 export const sessionDetail = (
   _: Translator,
@@ -344,46 +367,66 @@ export const sessionDetail = (
   )
 }
 
-const orderTable = (_: Translator, rows: AnyRow[]) =>
-  dataTable(_, {
-    rows,
-    id: (r) => String(r.id),
-    columns: [
-      {
-        key: 'reference',
-        label: _('pos_backend.field.receipt'),
-        cell: (r) =>
-          linkButton({
-            label: String(r.posReference),
-            href: `/admin/pos/orders/${String(r.id)}`,
-            variant: 'tertiary',
-          }),
-        priority: 'primary',
-      },
-      { key: 'customer', label: _('pos_backend.field.customer'), cell: (r) => String(r.partnerName ?? '—') },
-      {
-        key: 'state',
-        label: _('pos_backend.field.state'),
-        cell: (r) => badge(labelOf(_, 'orderState', r.state), 'neutral', String(r.state)),
-      },
-      {
-        key: 'total',
-        label: _('pos_backend.field.total'),
-        cell: (r) => formatMoney(_, r.amountTotal, r.currency),
-        align: 'end',
-        kind: 'currency',
-      },
-    ],
-  })
+const orderTable = (_: Translator, rows: AnyRow[]) => dataTable(_, orderTableConfig(_, rows))
 
-export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => (
-  <ListScreen
-    translator={_}
-    title={_('pos_backend.orders.title')}
-    frame={frame}
-    body={rows.length ? orderTable(_, rows) : empty(_)}
-  />
-)
+const orderTableConfig = (_: Translator, rows: AnyRow[]): DataTable<AnyRow> => ({
+  rows,
+  id: (r) => String(r.id),
+  columns: [
+    {
+      key: 'reference',
+      label: _('pos_backend.field.receipt'),
+      cell: (r) =>
+        linkButton({
+          label: String(r.posReference),
+          href: `/admin/pos/orders/${String(r.id)}`,
+          variant: 'tertiary',
+        }),
+      priority: 'primary',
+    },
+    { key: 'customer', label: _('pos_backend.field.customer'), cell: (r) => String(r.partnerName ?? '—') },
+    {
+      key: 'state',
+      label: _('pos_backend.field.state'),
+      cell: (r) => badge(labelOf(_, 'orderState', r.state), 'neutral', String(r.state)),
+    },
+    {
+      key: 'total',
+      label: _('pos_backend.field.total'),
+      cell: (r) => formatMoney(_, r.amountTotal, r.currency),
+      align: 'end',
+      kind: 'currency',
+    },
+  ],
+})
+
+export const ordersScreen = (
+  _: Translator,
+  frame: Frame,
+  rows: AnyRow[],
+  /** What the search-filter bar decided about the table, such as its groups. */
+  table?: Partial<DataTable<AnyRow>>,
+): TemplateResult => {
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    { ...orderTableConfig(_, rows), ...table },
+    { paginate: !table?.groups },
+  )
+  return shell(
+    _,
+    _('pos_backend.orders.title'),
+    <ListPage
+      variant="operational"
+      frame={collection.frame}
+      title={_('pos_backend.orders.title')}
+      controls={collectionControls(_, _('pos_backend.orders.title'), collection.frame)}
+      actions={collectionActions(_, collection.frame)}
+      body={rows.length || table?.groups?.length ? collectionTable(_, collection.table) : empty(_)}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
+}
 
 export const registerScreen = (
   _: Translator,

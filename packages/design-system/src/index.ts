@@ -45,6 +45,56 @@ export { Toast, ToastRegion } from './interactions/toast/index.tsx'
 export type { ToastProps } from './interactions/toast/index.tsx'
 export { Spinner } from './interactions/spinner/index.tsx'
 export { Skeleton } from './interactions/skeleton/index.tsx'
+export { createRelationSelectView, relationSelect } from './interactions/relation-select/index.tsx'
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from './interactions/relation-select/index.tsx'
+export {
+  createLightbox,
+  createLightboxView,
+  lightbox,
+  LightboxThumb,
+} from './interactions/lightbox/index.tsx'
+export type {
+  LightboxConfig,
+  LightboxController,
+  LightboxIslandProps,
+  LightboxItem,
+  LightboxLabels,
+} from './interactions/lightbox/index.tsx'
+export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
+export type {
+  CustomFilterField,
+  SearchFacet,
+  SearchFavorite,
+  SearchFilterCustomRule,
+  SearchFilterConfig,
+  SearchFilterFieldType,
+  SearchFilterLabels,
+  SearchFilterManager,
+  SearchFilterOperator,
+  SearchFilterSize,
+  SearchFilterOption,
+  SearchGroupByOption,
+} from './interactions/search-filter/index.tsx'
+export { createKetTableView, ketTable, KetTable } from './interactions/ket-table/index.tsx'
+export type { KetTableServerProps } from './interactions/ket-table/index.tsx'
+export type {
+  KetTableCellFormat,
+  KetTableColumn,
+  KetTableConfig,
+  KetTableExtensions,
+  KetTableGroup,
+  KetTableLabels,
+  KetTableManager,
+  KetTableRow,
+  KetTableSelection,
+  KetTableSort,
+} from './interactions/ket-table/index.tsx'
 export { attachDesignSystemInteractions } from './runtime/index.js'
 
 export {
@@ -199,3 +249,6 @@ export { RecordForm } from './patterns/record-form/index.tsx'
 export type { RecordFormProps } from './patterns/record-form/index.tsx'
 
 export { HOOKS, OWNERS } from './contract/index.ts'
+
+export { ReorderList } from './interactions/reorder-list/index.tsx'
+export type { ReorderListProps } from './interactions/reorder-list/index.tsx'

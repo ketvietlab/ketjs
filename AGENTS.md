@@ -10,6 +10,14 @@ These rules apply to every change in this repository. The public design-system c
 - Keep server views render-pure. Browser state, focus, history, network calls, and DOM access belong in a client runtime or island; server and shared views must not use browser globals.
 - Extend an existing public component compatibly when possible. When adding a new hook, update the hook contract, catalogue/inventory, documentation, and tests in the same change.
 
+## Collection lists
+
+- Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell, breadcrumbs/context, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
+- Declare the create link in `frame.chrome.create`; the shared list wrapper places it at the right of the title, above filters. Use `headerActions` for an explicit permission-controlled primary action. Do not put a create link into `actions`, the filter region, or module-local positioned markup.
+- `actions` is for secondary collection commands and bulk operations beside the primary action in the header. Do not render a separate action bar below filters. Bulk actions appear only while their own collection has selected rows; hiding them must never hide the primary action. Preserve native links, permissions, query state and external bulk forms when moving controls. On narrow screens, the shared header stacks its action group beneath the title; modules must not override that layout.
+- Existing inline creation forms (such as period closing) may remain in their documented disclosure/body compatibility boundary. Do not move a whole form into the header to imitate a create button.
+- New list screens must include a rendered contract check for title/create, filters, tools and table ordering, including the absence of a create action when it is not authorized.
+
 ## Tabs
 
 - Use `Tab` for one route-navigation item, `Tabs` for the navigation bar, `TabPanel` for panel content, and `TabbedView` for the complete bar-and-panel layout. Do not hand-build a tab bar or tab body in a feature module.

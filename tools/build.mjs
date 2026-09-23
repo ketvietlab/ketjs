@@ -20,6 +20,7 @@ import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildBackendClients } from './build-backend-client.mjs'
 import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
+import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
 
@@ -157,6 +158,7 @@ try {
   await buildBackendClients()
   await buildChartClient()
   await buildFlowClient()
+  await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
   if (current === fingerprint && artifactsExist()) {
@@ -206,7 +208,7 @@ try {
         cpSync(join(stageDist, name), dist, { recursive: true })
       }
 
-      for (const name of ['ketjs', 'ketsuite']) {
+      for (const name of ['create-view', 'ketjs', 'ketjs-view-tools', 'ketsuite']) {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }

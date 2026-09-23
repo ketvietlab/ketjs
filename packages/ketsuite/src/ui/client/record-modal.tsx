@@ -141,8 +141,40 @@ export type RecordModalContext<Data> = {
 /** Attachments a command uploaded before its function ran, by form field. */
 export type RecordUploads = Record<string, { id: string; name: string | null }>
 
+/** Read-only context routes compose permission-checked function calls on the server. */
+export const readRecordContextRoute = async <Data,>(
+  href: string,
+  signal?: AbortSignal,
+): Promise<RecordCallResult<Data | null>> => {
+  const url = new URL(href, location.href)
+  if (url.origin !== location.origin) throw new Error('Record context must stay same-origin')
+  const response = await fetch(url.href, {
+    credentials: 'same-origin',
+    signal,
+    headers: { accept: 'application/json' },
+  })
+  if (!response.ok) return { ok: false, issues: [], message: null, status: response.status }
+  return { ok: true, value: (await response.json()) as Data | null }
+}
+
+/** One extra call of a multi-step command — see `RecordModalCommand.also`. */
+export type RecordModalCommandStep<Data> = {
+  fn: string
+  input: (
+    form: FormData,
+    context: RecordModalContext<Data>,
+    uploads: RecordUploads,
+  ) => Record<string, unknown>
+  /** Skip this step — a module not installed, a permission the viewer lacks. */
+  when?: (context: RecordModalContext<Data>) => boolean
+}
+
 export type RecordModalCommand<Data> = {
   fn: string
+  /** Same-origin destination after a successful command; evaluated by the runtime. */
+  navigate?: (value: unknown, context: RecordModalContext<Data>) => string
+  /** Map server paths to stable native field names using the submitted snapshot. */
+  issueField?: (field: string, form: FormData, context: RecordModalContext<Data>) => string
   /** Map the submitted form to the function's input. */
   input: (
     form: FormData,
@@ -150,11 +182,22 @@ export type RecordModalCommand<Data> = {
     uploads: RecordUploads,
   ) => Record<string, unknown>
   /**
+   * Further calls made right after `fn`/`input` succeeds, in order, as part of
+   * the same user-facing action — one busy state, one success notice, one set
+   * of field refusals — stopping at the first one that fails. For an edit that
+   * spans functions in different modules that cannot call one another (a
+   * single `product.saveTemplate` cannot also configure stock tracking or
+   * tax), this is what lets one "Save" button still read as one save.
+   */
+  also?: readonly RecordModalCommandStep<Data>[]
+  /**
    * File fields stored through `/files` before the function runs, each mapped to
    * the attachment's metadata (`resModel`, `resId`, `resField`, `public`). The
    * stored attachment ids reach `input` as its third argument.
    */
   upload?: Record<string, (form: FormData, context: RecordModalContext<Data>) => Record<string, string>>
+  /** A destructive command asks first; declining leaves the record untouched. */
+  confirm?: (context: RecordModalContext<Data>) => string | null
   /**
    * What happens after success. Defaults to `close`. `reload` reads the record
    * again behind a loading state and closes a dialog; `refresh` reads it again in
@@ -190,17 +233,28 @@ export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
   size?: 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
+  /** Fixed actions for this dialog layer, outside its scrolling body. */
+  actions?: (context: RecordModalContext<Data>) => JSXChild
 }
 
 export type RecordModalDefinition<Data> = {
   kind: string
   size?: 'default' | 'large'
   /**
+   * Caps a tabbed record's fixed height (a CSS length or `min()`/`calc()`
+   * expression) below the viewport-filling default, for a record whose own
+   * content is shorter than that — see `ModalSheet.fixedHeight`. Ignored for a
+   * record with one tab or none, since those never turn on `height: 'fixed'`.
+   */
+  fixedHeight?: string
+  /**
    * A permission-checked read returning `{ data, messages }`. For a create action
    * the default input is `{}` (no id): the read returns the empty record's defaults,
    * the choices its form needs and the viewer's permissions.
    */
-  context: { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+  context:
+    | { fn: string; input?: (id: string, creating: boolean) => Record<string, unknown> }
+    | { route: (id: string, creating: boolean) => string; query?: readonly string[] }
   title: (context: RecordModalContext<Data>) => string
   description?: (context: RecordModalContext<Data>) => string | null
   /**
@@ -211,7 +265,21 @@ export type RecordModalDefinition<Data> = {
   status?: (context: RecordModalContext<Data>) => JSXChild
   /** A strip above the body — a customer, a summary — for what a badge cannot hold. */
   header?: (context: RecordModalContext<Data>) => JSXChild
+  /**
+   * A footer strip below the body, outside the scrolling area and the same on
+   * every tab — the natural home for a record's primary actions (save, close,
+   * more) so they stay reachable without hunting through the tab that happens
+   * to hold the save button. Return `undefined` (not `''`) to render no footer
+   * at all, e.g. while creating, when the create form owns its own submit.
+   */
+  actions?: (context: RecordModalContext<Data>) => JSXChild | undefined
   tabs?: readonly RecordModalTab<Data>[]
+  /**
+   * Tabs other modules add to this record, read from its context: they follow the
+   * declared tabs, in composition order, and render through the same TabbedView.
+   * A module that owns the record cannot know them when it is built.
+   */
+  extensionTabs?: (context: RecordModalContext<Data>) => readonly RecordModalTab<Data>[]
   /** The body of a record without tabs. */
   body?: (context: RecordModalContext<Data>) => JSXChild
   dialogs?: Record<string, RecordModalDialog<Data>>
@@ -301,6 +369,7 @@ const focusablesIn = (element: HTMLElement): HTMLElement[] =>
 
 /** Whether anything in a layer was typed into since it rendered. Same rule as route modals. */
 export const recordLayerHasDraft = (layer: HTMLElement): boolean => {
+  if (layer.querySelector('[data-record-dirty="true"]')) return true
   for (const field of layer.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')) {
     if (field.disabled) continue
     if (field.type === 'checkbox' || field.type === 'radio') {
@@ -483,7 +552,9 @@ export const createRecordModal =
         params,
       )
     const visibleTabs = (context: RecordModalContext<Data>) =>
-      (definition.tabs ?? []).filter((tab) => tab.visible?.(context) ?? true)
+      [...(definition.tabs ?? []), ...(definition.extensionTabs?.(context) ?? [])].filter(
+        (tab) => tab.visible?.(context) ?? true,
+      )
 
     const contextFor = (
       current: { id: string; tab: string },
@@ -536,18 +607,17 @@ export const createRecordModal =
       failure.set(null)
       try {
         const creating = id === RECORD_NEW_ID
-        const input = definition.context.input
-          ? definition.context.input(id, creating)
-          : creating
-            ? {}
-            : { id }
-        const result = await callRecordFunction<RecordContextEnvelope<Data> | null>(
-          definition.context.fn,
-          input,
-          {
-            signal: controller.signal,
-          },
-        )
+        const result =
+          'route' in definition.context
+            ? await readRecordContextRoute<RecordContextEnvelope<Data>>(
+                definition.context.route(id, creating),
+                controller.signal,
+              )
+            : await callRecordFunction<RecordContextEnvelope<Data> | null>(
+                definition.context.fn,
+                definition.context.input ? definition.context.input(id, creating) : creating ? {} : { id },
+                { signal: controller.signal },
+              )
         if (controller.signal.aborted) return
         if (!result.ok || !result.value) {
           failure.set(result.ok ? 'recordModal.notFound' : (result.message ?? 'recordModal.loadFailed'))
@@ -558,8 +628,6 @@ export const createRecordModal =
         if (definition.cache !== false) remember(id, result.value)
         envelope.set(result.value)
         status.set('ready')
-        // The record replaced the loading state: measure what it actually needs.
-        requestAnimationFrame(holdHeight)
       } catch (caught) {
         if (controller.signal.aborted || (caught as Error)?.name === 'AbortError') return
         failure.set('recordModal.loadFailed')
@@ -609,26 +677,7 @@ export const createRecordModal =
       return globalThis.confirm(t('recordModal.unsaved'))
     }
 
-    // The tallest this record's dialog has been. A tabbed dialog holds it as a
-    // min-height so moving between tabs never resizes it, while a record whose
-    // tabs are all short still gets a dialog the size of what is in it. It is the
-    // record that owns the number: opening another one starts again.
-    let tallest = 0
-    const holdHeight = (): void => {
-      if ((definition.tabs?.length ?? 0) <= 1) return
-      const sheet = root?.querySelector<HTMLElement>(
-        '[data-ui="modal-layer"][data-client-modal="true"] [data-ui="modal-sheet"][data-height="fixed"]',
-      )
-      if (!sheet) return
-      // Measured with the hold released, so a dialog that has grown is not read
-      // back as its own floor for ever.
-      sheet.style.minHeight = ''
-      tallest = Math.max(tallest, sheet.offsetHeight)
-      sheet.style.minHeight = `${tallest}px`
-    }
-
     const afterRender = (preferred?: () => HTMLElement | null): void => {
-      requestAnimationFrame(holdHeight)
       requestAnimationFrame(() => {
         const currentLayers = layers()
         const record = currentLayers[0]
@@ -664,7 +713,6 @@ export const createRecordModal =
         dialogDrafts.set(emptyDraftState())
         viewState.set({})
         outcome.set(null)
-        tallest = 0
         dialog.set(null)
         dialogReturnFocus = null
         envelope.set(null)
@@ -673,6 +721,15 @@ export const createRecordModal =
       open.set({ id, tab: nextTab })
       const href = recordModalHref(location.href, { kind: definition.kind, id, tab: nextTab || null })
       if (how === 'push') {
+        // The shell's own navigation snapshots scroll onto the entry it leaves
+        // before pushing (`saveScroll` in packages/ketjs/src/server/http.ts) so
+        // going back restores it; this push must do the same, or closing the
+        // modal later restores no scroll and the page it sits over jumps to top.
+        history.replaceState(
+          { ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] },
+          '',
+          location.href,
+        )
         history.pushState({ ...(history.state ?? {}), __ketRecordModal: definition.kind }, '', href)
         pushed = true
       } else if (how === 'replace') history.replaceState(history.state ?? {}, '', href)
@@ -690,7 +747,6 @@ export const createRecordModal =
       dialogDrafts.set(emptyDraftState())
       viewState.set({})
       outcome.set(null)
-      tallest = 0
       status.set('idle')
       envelope.set(null)
       releaseInert?.()
@@ -734,6 +790,10 @@ export const createRecordModal =
       const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
       keepDrafts(currentLayer, scope)
       const context = contextFor(current, data, scope)
+      if (command.confirm) {
+        const message = command.confirm(context)
+        if (message && !globalThis.confirm(message)) return
+      }
       setRunning(true)
       issues.set([])
       try {
@@ -766,16 +826,30 @@ export const createRecordModal =
             name: typeof stored.name === 'string' ? stored.name : null,
           }
         }
-        const result = await callRecordFunction(command.fn, command.input(formData, context, uploads), {
-          idempotencyKey: uuid(),
-        })
+        const invoke = (fn: string, input: Record<string, unknown>) =>
+          callRecordFunction(fn, input, { idempotencyKey: uuid() })
+        let result = await invoke(command.fn, command.input(formData, context, uploads))
+        // Further calls run only once the first succeeds, and stop at the first
+        // one that does not — a later step's success never papers over an
+        // earlier failure.
+        for (const step of result.ok ? (command.also ?? []) : []) {
+          if (step.when && !step.when(context)) continue
+          result = await invoke(step.fn, step.input(formData, context, uploads))
+          if (!result.ok) break
+        }
         if (!result.ok) {
           // The layer was snapshotted before the busy state rendered, including unchecked controls.
           // A refused submit leaves an answer that was computed from something else.
           outcome.set(null)
           issues.set(
             result.issues.length
-              ? result.issues
+              ? result.issues.map((issue) => ({
+                  ...issue,
+                  field:
+                    issue.field && command.issueField
+                      ? command.issueField(issue.field, formData, context)
+                      : issue.field,
+                }))
               : [
                   {
                     field: null,
@@ -817,6 +891,14 @@ export const createRecordModal =
               detail: { kind: definition.kind, ids: [createdId ?? current.id] },
             }),
           )
+        }
+        if (command.navigate) {
+          const destination = new URL(command.navigate(result.value, context), location.href)
+          if (destination.origin !== location.origin)
+            throw new Error('Record navigation must stay same-origin')
+          hide('none')
+          location.assign(destination.href)
+          return
         }
         const after = after_(command)
         // A modal that closes says so by closing; one that stays owes an answer.
@@ -948,6 +1030,7 @@ export const createRecordModal =
         presentation: 'dialog',
         size: spec.size ?? 'default',
         title: spec.title(context),
+        actions: spec.actions?.(context),
         closeLabel: t('recordModal.close'),
         body: (
           <>
@@ -975,10 +1058,15 @@ export const createRecordModal =
               size: definition.size ?? 'default',
               // Tabs have different heights; a fixed dialog does not jump when the reader switches
               // tabs, nor when the loading state gives way to the record.
-              height: (definition.tabs?.length ?? 0) > 1 ? 'fixed' : 'content',
+              // A definition that takes extension tabs may gain one at any time, so it
+              // keeps the fixed height its declared tabs would otherwise earn.
+              height:
+                (definition.tabs?.length ?? 0) + (definition.extensionTabs ? 1 : 0) > 1 ? 'fixed' : 'content',
+              fixedHeight: definition.fixedHeight,
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               status: context ? definition.status?.(context) : undefined,
+              actions: context ? definition.actions?.(context) : undefined,
               closeLabel: t('recordModal.close'),
               body: recordBody(),
             })}
@@ -1006,7 +1094,13 @@ export const createRecordModal =
             const element = event.target instanceof Element ? event.target : null
             const inModal = element?.closest('[data-ui="modal-layer"][data-client-modal="true"]')
             if (inModal && root?.contains(inModal)) {
-              if (element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"]')) {
+              // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
+              // marks a module's own labeled close button placed elsewhere in the body
+              // (the two can't share one attribute — a labeled button needs `data-ui="action"`
+              // for its styling, not the icon-only close control's).
+              if (
+                element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"], [data-record-close]')
+              ) {
                 event.preventDefault()
                 close()
                 return
@@ -1058,6 +1152,23 @@ export const createRecordModal =
             if (!target || target.kind !== definition.kind) return
             event.preventDefault()
             const current = open()
+            const contextQuery = 'route' in definition.context ? (definition.context.query ?? []) : []
+            const previousUrl = new URL(location.href)
+            const changedContext = contextQuery.some(
+              (key) => previousUrl.searchParams.get(key) !== url.searchParams.get(key),
+            )
+            if (changedContext) {
+              // These keys belong to the context reader (for example item pagination).
+              // Preserve collection filters and record drafts while replacing this slice.
+              keepDrafts(recordLayer(), 'record')
+              for (const key of contextQuery) {
+                const value = url.searchParams.get(key)
+                if (value === null) previousUrl.searchParams.delete(key)
+                else previousUrl.searchParams.set(key, value)
+              }
+              history.replaceState(history.state ?? {}, '', previousUrl.href)
+              if (current?.id === target.id) void load(current.id)
+            }
             if (current?.id === target.id) {
               if ((target.tab ?? '') === current.tab) return
               // Switching tab is not discarding: what was typed rides along as drafts,
@@ -1159,6 +1270,10 @@ export const createRecordModal =
 
         // An input or select carrying `data-record-state` feeds view state as it
         // changes; a file chosen in a `data-record-submit` input submits its form.
+        // A design-system `RelationSelect`'s own hidden native select carries no
+        // such marker (the package knows nothing of this runtime), but it fires a
+        // real `change` too — keyed by its `name`, which every field in this kit
+        // already sets to the same key `state()` reads it back under.
         document.addEventListener(
           'change',
           (event) => {
@@ -1185,15 +1300,14 @@ export const createRecordModal =
                 return
               }
             }
-            if (
-              (control instanceof HTMLSelectElement || control instanceof HTMLInputElement) &&
-              control.hasAttribute('data-record-state')
-            ) {
+            const stateKey =
+              control.getAttribute('data-record-state') ??
+              (['relation-native', 'reorder-list-value'].includes(control.getAttribute('data-ui') ?? '')
+                ? control.getAttribute('name')
+                : null)
+            if ((control instanceof HTMLSelectElement || control instanceof HTMLInputElement) && stateKey) {
               keepAllDrafts()
-              viewState.set({
-                ...viewState(),
-                [control.getAttribute('data-record-state') ?? '']: control.value,
-              })
+              viewState.set({ ...viewState(), [stateKey]: control.value })
               return
             }
             if (
@@ -1330,3 +1444,12 @@ export {
   recordModalClosedHref,
   readRecordModalTarget,
 }
+
+export {
+  RecordModalForm,
+  RecordActionForm,
+  RecordCloseTrigger,
+  RecordDialogTrigger,
+  RecordCommandForm,
+  recordStateSelectControl,
+} from './record-modal-form.tsx'

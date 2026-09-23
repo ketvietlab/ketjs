@@ -110,32 +110,33 @@ test('record modal: client sheets carry no route-modal marker and close with but
   assert.match(route, /<a data-ui="modal-close" href="\/list"/u)
 })
 
-test('record modal: a record with several tabs keeps one height while tabs switch', () => {
+test('record modal: a record with several tabs keeps one height while tabs switch, and a definition may cap it', () => {
   // The record layer asks for a fixed dialog only when there is more than one tab to switch between.
   const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
   const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
-  assert.match(call, /height: \(definition\.tabs\?\.length \?\? 0\) > 1 \? 'fixed' : 'content'/u)
-
-  // That height is the tallest tab this record has shown, not the viewport: it is
-  // measured with the hold released, only ever grows, and belongs to one record.
-  const hold = /const holdHeight = \(\): void => \{([\s\S]*?)\n    \}/u.exec(runtime)
-  assert.ok(hold, 'the runtime holds the height itself')
-  assert.match(hold[1]!, /if \(\(definition\.tabs\?\.length \?\? 0\) <= 1\) return/u)
-  assert.match(hold[1]!, /sheet\.style\.minHeight = ''[\s\S]*?Math\.max\(tallest, sheet\.offsetHeight\)/u)
-  assert.match(hold[1]!, /sheet\.style\.minHeight = `\$\{tallest\}px`/u)
-  assert.equal((runtime.match(/tallest = 0/gu) ?? []).length, 3, 'reset on open, on close, and declared')
-  // The stylesheet no longer forces a tabbed dialog to the full viewport.
-  const sheetCss = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
-  const fixed = /\[data-ui="modal-sheet"\]\[data-height="fixed"\] \{([^}]*)\}/u.exec(sheetCss)
-  assert.ok(fixed)
-  assert.match(fixed[1]!, /height: auto/u)
-  assert.doesNotMatch(fixed[1]!, /100dvh/u)
+  assert.match(
+    call,
+    /height:\s*\(definition\.tabs\?\.length \?\? 0\) \+ \(definition\.extensionTabs \? 1 : 0\) > 1 \? 'fixed' : 'content'/u,
+  )
+  assert.match(call, /fixedHeight: definition\.fixedHeight/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
   assert.doesNotMatch(dialogLayer, /height:/u)
+})
+
+test('record modal: a definition may put a footer of actions outside the scrolling body', () => {
+  const recordLayer = runtime.slice(runtime.indexOf('id: `record-modal-${definition.kind'))
+  const call = recordLayer.slice(0, recordLayer.indexOf('body: recordBody()'))
+  assert.match(call, /actions: context \? definition\.actions\?\.\(context\) : undefined/u)
+  // A nested dialog owns its own fixed actions, independent of the record footer.
+  const dialogLayer = runtime.slice(
+    runtime.indexOf('const dialogLayer = '),
+    runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
+  )
+  assert.match(dialogLayer, /actions: spec.actions\?\.\(context\)/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -145,6 +146,20 @@ test('record modal: going back over a client-owned entry does not refetch the pa
   assert.ok(dispatchAt > 0 && navigateAt > dispatchAt, 'the owner is asked before the page is re-fetched')
   assert.match(popstate.slice(dispatchAt, navigateAt), /if \(!document\.dispatchEvent\(owned\)\) return/u)
   assert.match(runtime, /'ket:popstate'[\s\S]*?event\.preventDefault\(\)/u)
+})
+
+test("record modal: opening a record saves the list page's scroll position before pushing, so closing restores it", () => {
+  // Mirrors `saveScroll` in packages/ketjs/src/server/http.ts: without this, going back
+  // out of the modal restores no scroll (the entry never carried one) and the page jumps
+  // to the top, since the shell's own `popstate` handler falls back to `__ketScroll ?? [0, 0]`.
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  const pushBranch = show.slice(show.indexOf("if (how === 'push') {"))
+  const scrollSaveAt = pushBranch.indexOf('__ketScroll: [window.scrollX, window.scrollY]')
+  const pushStateAt = pushBranch.indexOf('history.pushState(')
+  assert.ok(
+    scrollSaveAt > 0 && pushStateAt > scrollSaveAt,
+    'scroll is snapshotted before the new entry is pushed',
+  )
 })
 
 test('record modal: the runtime owns focus, escape, inertness, drafts and collection refresh', () => {
@@ -162,7 +177,7 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   assert.match(runtime, /'idempotency-key'/u)
   assert.match(runtime, /new CustomEvent\('ket:records-changed'/u)
   // A view never fetches: only the runtime calls the function endpoint and `/files`.
-  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 2)
+  assert.equal((runtime.match(/fetch\(/gu) ?? []).length, 3)
   assert.match(runtime, /fetch\('\/files'/u, 'uploads go through storage, never a module route')
   assert.match(runtime, /'ket:islands-attach'/u)
   assert.match(bootstrap, /addEventListener\('ket:islands-attach'[\s\S]*?islands\.mount\(root\)/u)
@@ -189,8 +204,8 @@ test('record modal: a preview command changes nothing and leaves its answer on s
   // everything that moves the layer clears it: another record, a closed modal, a
   // closed or newly opened dialog, another tab, a refusal, and a real write.
   for (const [what, near] of [
-    ['another record', /outcome\.set\(null\)\n        tallest = 0/u],
-    ['a closed modal', /outcome\.set\(null\)\n      tallest = 0\n      status\.set\('idle'\)/u],
+    ['another record', /outcome\.set\(null\)\n        dialog\.set/u],
+    ['a closed modal', /outcome\.set\(null\)\n      status\.set\('idle'\)/u],
     ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
     ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
     ['another tab', /outcome\.set\(null\)\n              show\(/u],
@@ -204,6 +219,18 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     /outcome\.set\(after_\(command\) === 'stay' \? \{ command: name, value: result\.value \} : null\)/u,
   )
   assert.match(runtime, /held\?\.command === command \? \(held\.value as T\) : null/u)
+})
+
+test('record modal: tabs another module adds follow the declared ones through the same filter', () => {
+  const visible = runtime.slice(
+    runtime.indexOf('const visibleTabs = '),
+    runtime.indexOf('const contextFor = '),
+  )
+  assert.match(
+    visible,
+    /\[\.\.\.\(definition\.tabs \?\? \[\]\), \.\.\.\(definition\.extensionTabs\?\.\(context\) \?\? \[\]\)\]/u,
+  )
+  assert.match(visible, /tab\.visible\?\.\(context\) \?\? true/u)
 })
 
 test('record modal: tab layout is owned by the runtime instead of module views', () => {
@@ -346,6 +373,22 @@ test('record modal: a command that leaves the modal open says it worked', () => 
   assert.match(hide.slice(0, hide.indexOf('releaseInert?.()')), /saved\.set\(false\)/u)
 })
 
+test('record modal: a multi-step command stops at the first failing call and skips a step whose `when` says no', () => {
+  // A "save" spanning functions in different modules — none may call another —
+  // still reads as one action: one busy state, one notice, stopping on the first
+  // call that fails rather than papering over it with a later step's success.
+  assert.match(runtime, /command\.also \?\? \[\]/u)
+  assert.match(runtime, /if \(step\.when && !step\.when\(context\)\) continue/u)
+  assert.match(runtime, /if \(!result\.ok\) break/u)
+})
+
+test('record modal: a command may ask before it runs, and a decline leaves the record untouched', () => {
+  const runAt = runtime.indexOf('const run = async')
+  const run = runtime.slice(runAt, runtime.indexOf('setRunning(true)', runAt))
+  assert.match(run, /if \(command\.confirm\)/u)
+  assert.match(run, /if \(message && !globalThis\.confirm\(message\)\) return/u)
+})
+
 test('record modal: a record wears its state beside the title, inside the head', () => {
   const html = renderToString(
     ModalSheet({
@@ -367,4 +410,72 @@ test('record modal: a record wears its state beside the title, inside the head',
     ModalSheet({ id: 'sheet', mode: 'client', title: 'Qualified', closeLabel: 'Đóng', body: '' }),
   )
   assert.match(plain, /data-ui="modal-title-row"/u)
+})
+
+test('record modal: route contexts preserve authorization failures and abort signals, reject external origins', async (t) => {
+  const { readRecordContextRoute } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  Object.defineProperty(globalThis, 'location', {
+    value: new URL('https://care.test/admin/crm/followups'),
+    configurable: true,
+  })
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'location', original)
+    else Reflect.deleteProperty(globalThis, 'location')
+  })
+  const controller = new AbortController()
+  const fetcher = t.mock.method(
+    globalThis,
+    'fetch',
+    async (input: string | URL | Request, init?: RequestInit) => {
+      assert.equal(input, 'https://care.test/_care/context?id=one')
+      assert.equal(init?.credentials, 'same-origin')
+      assert.equal(init?.signal, controller.signal)
+      return new Response(JSON.stringify({ data: { id: 'one' } }), { status: 200 })
+    },
+  )
+  assert.deepEqual(await readRecordContextRoute('/_care/context?id=one', controller.signal), {
+    ok: true,
+    value: { data: { id: 'one' } },
+  })
+  await assert.rejects(readRecordContextRoute('https://external.test/context'), /same-origin/)
+  assert.equal(fetcher.mock.callCount(), 1)
+  fetcher.mock.mockImplementation(async () => new Response(null, { status: 403 }))
+  assert.deepEqual(await readRecordContextRoute('/private'), {
+    ok: false,
+    issues: [],
+    message: null,
+    status: 403,
+  })
+})
+
+test('record modal: public forms associate fixed-footer submitters and retain command fields', async () => {
+  const { RecordModalForm } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const { Button } = await import('@ketvietlab/design-system')
+  const html = await renderToString(
+    ModalSheet({
+      id: 'nested',
+      title: 'Milestone',
+      mode: 'client',
+      closeLabel: 'Close',
+      body: RecordModalForm({
+        kind: 'care.program',
+        id: 'milestone-form',
+        hidden: { __command: 'saveMilestone', id: 'one' },
+        fields: [{ id: 'title', name: 'title', label: 'Title', required: true }],
+      }),
+      actions: Button({ type: 'submit', form: 'milestone-form', label: 'Save' }),
+    }),
+  )
+  assert.match(html, /id="milestone-form"/)
+  assert.match(html, /name="__command" value="saveMilestone"/)
+  assert.match(html, /form="milestone-form"/)
+  assert.ok(html.indexOf('form="milestone-form"') > html.indexOf('</form>'))
+})
+
+test('record modal: action forms opt out of field container sizing in fixed footers', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const actionRule = css.match(/\[data-ui="record-form"\]\[data-layout="actions"\]\s*\{([^}]+)\}/u)?.[1] ?? ''
+  assert.match(actionRule, /container-type:\s*normal/u)
+  assert.match(actionRule, /flex:\s*0 0 auto/u)
 })

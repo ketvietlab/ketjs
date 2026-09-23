@@ -1,3 +1,14 @@
+import { rowListSearch } from '../backend/row-list.ts'
+import {
+  locationListSearch,
+  lotListSearch,
+  pickingTypeListSearch,
+  replenishmentListSearch,
+  stockRouteListSearch,
+  transferListSearch,
+  warehouseListSearch,
+} from './search.ts'
+
 import { randomUUID } from 'node:crypto'
 import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
@@ -53,6 +64,35 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
 import { adminPage, frameOf, inLocale, printGroup } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+
+/**
+ * A group heading in the reader's language: a selection code reads as its
+ * label, anything else — a warehouse or location name — reads as itself.
+ */
+const GROUP_MESSAGES: Record<string, string> = {
+  state: 'state',
+  usage: 'usage',
+  code: 'pickingType',
+  createBackorder: 'backorder',
+  trigger: 'trigger',
+  receptionSteps: 'receptionSteps',
+  deliverySteps: 'deliverySteps',
+}
+
+const stockGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `stock_backend.${GROUP_MESSAGES[key] ?? key}.${raw}`
+  return _.resolves(message) ? _(message) : raw
+}
+
+/** Every stock list shares one set of search-filter functions; see `functions.ts`. */
+const stockSearchFunctions = {
+  apply: 'stock_backend.applySearchFilter',
+  saveFavorite: 'stock_backend.saveSearchFavorite',
+  deleteFavorite: 'stock_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'stock_backend.setDefaultSearchFavorite',
+}
 
 const options = (rows: AnyRow[]) => rows.map((row) => ({ value: String(row.id), label: String(row.name) }))
 /** A stable stock code in the reader's language; the code itself survives as data. */
@@ -299,24 +339,36 @@ export const routes: Record<string, RouteEntry> = {
       const pickingTypesById = new Map(data.pickingTypes.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.transfers',
-        body: (_, frame) =>
-          transfersListScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: transferListSearch,
+            frame,
+            rows: pickings.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
+              source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
+              destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
+              scheduledDate: dateTimeLabel(row.scheduledDate, lang),
+              state: String(row.state),
+              href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
+            })),
+            name: 'stock-transfer-filter',
+            bodyId: 'stock-transfer-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.transfers') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
+          return transfersListScreen(
             _,
             {
-              rows: pickings.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                operationType: pickingTypesById.get(String(row.pickingTypeId)) ?? String(row.pickingTypeId),
-                source: locationsById.get(String(row.locationId)) ?? String(row.locationId),
-                destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
-                scheduledDate: dateTimeLabel(row.scheduledDate, lang),
-                state: String(row.state),
-                href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: inLocale(url, '/admin/stock/transfers/new'),
             },
-            frame,
-          ),
+            search.frame,
+          )
+        },
       })
     },
 
@@ -563,21 +615,32 @@ export const routes: Record<string, RouteEntry> = {
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: 'stock_backend.warehouses',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/warehouses')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: warehouseListSearch,
+            frame,
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              code: String(row.code),
+              receptionSteps: String(row.receptionSteps),
+              deliverySteps: String(row.deliverySteps),
+            })),
+            name: 'stock-warehouse-filter',
+            bodyId: 'stock-warehouse-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.warehouses') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
           const list = warehousesListScreen(
             _,
             {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                receptionSteps: String(row.receptionSteps),
-                deliverySteps: String(row.deliverySteps),
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/warehouses'),
             },
-            frame,
+            search.frame,
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -651,20 +714,31 @@ export const routes: Record<string, RouteEntry> = {
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.locations',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/locations')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: locationListSearch,
+            frame,
+            rows: data.locations.map((row) => ({
+              id: String(row.id),
+              completeName: completeLocationName(row, nameById),
+              usage: String(row.usage),
+              warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+            })),
+            name: 'stock-location-filter',
+            bodyId: 'stock-location-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.locations') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
           const list = locationsListScreen(
             _,
             {
-              rows: data.locations.map((row) => ({
-                id: String(row.id),
-                completeName: completeLocationName(row, nameById),
-                usage: String(row.usage),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/locations'),
             },
-            frame,
+            search.frame,
           )
           if (!createModalOpen(url)) return list
           return modalWorkspace(
@@ -747,23 +821,34 @@ export const routes: Record<string, RouteEntry> = {
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.pickingTypes',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/picking-types')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: pickingTypeListSearch,
+            frame,
+            rows: data.pickingTypes.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              code: String(row.code),
+              warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
+              source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
+              destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
+              createBackorder: String(row.createBackorder ?? 'ask'),
+            })),
+            name: 'stock-picking-type-filter',
+            bodyId: 'stock-picking-type-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.pickingTypes') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
           const list = pickingTypesListScreen(
             _,
             {
-              rows: data.pickingTypes.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                code: String(row.code),
-                warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
-                source: completeLocationNameById.get(String(row.defaultLocationSrcId)) ?? '',
-                destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
-                createBackorder: String(row.createBackorder ?? 'ask'),
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/picking-types'),
             },
-            frame,
+            search.frame,
           )
           if (!createModalOpen(url)) return list
           return modalWorkspace(
@@ -862,24 +947,35 @@ export const routes: Record<string, RouteEntry> = {
       })
       return adminPage(ctx, url, req, {
         title: 'stock_backend.lots',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/lots')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: lotListSearch,
+            frame,
+            rows: lots.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              product: productById.get(String(row.productId)) ?? String(row.productId),
+              reference: String(row.ref ?? ''),
+              onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
+              onHandValue: onHandByLot.get(String(row.id)) ?? 0,
+              active: row.active !== false,
+              href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
+            })),
+            name: 'stock-lot-filter',
+            bodyId: 'stock-lot-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.lots') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
           const list = lotsListScreen(
             _,
             {
-              rows: lots.map((row) => ({
-                id: String(row.id),
-                name: String(row.name),
-                product: productById.get(String(row.productId)) ?? String(row.productId),
-                reference: String(row.ref ?? ''),
-                onHand: number.format(onHandByLot.get(String(row.id)) ?? 0),
-                onHandValue: onHandByLot.get(String(row.id)) ?? 0,
-                active: row.active !== false,
-                href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/lots'),
             },
-            frame,
+            search.frame,
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -1074,21 +1170,32 @@ export const routes: Record<string, RouteEntry> = {
       }
       return adminPage(ctx, url, req, {
         title: 'stock_backend.routes',
-        body: (_, frame) => {
+        body: async (_, frame) => {
           const collection = inLocale(url, '/admin/stock/routes')
+          const search = await rowListSearch(ctx, url, req, {
+            spec: stockRouteListSearch,
+            frame,
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              name: localizedGeneratedRouteName(_, row),
+              sequence: Number(row.sequence),
+              ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
+              href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
+            })),
+            name: 'stock-route-filter',
+            bodyId: 'stock-route-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.routes') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
           const list = stockRoutesListScreen(
             _,
             {
-              rows: rows.map((row) => ({
-                id: String(row.id),
-                name: localizedGeneratedRouteName(_, row),
-                sequence: Number(row.sequence),
-                ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
-                href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
-              })),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: createModalHref(url, '/admin/stock/routes'),
             },
-            frame,
+            search.frame,
           )
           return createModalOpen(url)
             ? modalWorkspace(
@@ -1285,47 +1392,58 @@ export const routes: Record<string, RouteEntry> = {
       const unitRecordById = new Map(data.units.map((row) => [String(row.id), row]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.replenishment',
-        body: (_, frame) =>
-          replenishmentListScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: replenishmentListSearch,
+            frame,
+            rows: points.map((row, index) => {
+              const forecasted = String(forecasts[index]?.forecasted ?? '0')
+              const baseUom = unitRecordById.get(productUomById.get(String(row.productId)) ?? '')
+              const replenishmentUom = unitRecordById.get(
+                String(row.replenishmentUomId ?? productUomById.get(String(row.productId)) ?? ''),
+              )
+              const baseQuantity = Math.max(0, Number(row.maxQuantity) - Number(forecasted))
+              const rawQuantity =
+                baseUom && replenishmentUom
+                  ? (baseQuantity * Number(baseUom.absoluteFactor)) / Number(replenishmentUom.absoluteFactor)
+                  : baseQuantity
+              const rounding = Math.max(Number(replenishmentUom?.rounding ?? 1), 1e-12)
+              const quantity =
+                Number(forecasted) < Number(row.minQuantity)
+                  ? Math.ceil(rawQuantity / rounding - 1e-12) * rounding
+                  : 0
+              return {
+                id: String(row.id),
+                product: productById.get(String(row.productId)) ?? String(row.productId),
+                warehouse: warehouseById.get(String(row.warehouseId)) ?? String(row.warehouseId),
+                location: locationById.get(String(row.locationId)) ?? String(row.locationId),
+                trigger: String(row.trigger),
+                triggerLabel: selectionLabel(_, 'trigger', row.trigger),
+                minQuantity: String(row.minQuantity),
+                maxQuantity: String(row.maxQuantity),
+                forecasted,
+                toOrder: String(quantity),
+                replenishmentUom:
+                  unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
+                runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
+              }
+            }),
+            name: 'stock-replenishment-filter',
+            bodyId: 'stock-replenishment-list',
+            functions: stockSearchFunctions,
+            labels: { searchPlaceholder: _('stock_backend.replenishment') },
+            groupLabel: (key, value) => stockGroupLabel(_, key, value),
+          })
+          return replenishmentListScreen(
             _,
             {
-              rows: points.map((row, index) => {
-                const forecasted = String(forecasts[index]?.forecasted ?? '0')
-                const baseUom = unitRecordById.get(productUomById.get(String(row.productId)) ?? '')
-                const replenishmentUom = unitRecordById.get(
-                  String(row.replenishmentUomId ?? productUomById.get(String(row.productId)) ?? ''),
-                )
-                const baseQuantity = Math.max(0, Number(row.maxQuantity) - Number(forecasted))
-                const rawQuantity =
-                  baseUom && replenishmentUom
-                    ? (baseQuantity * Number(baseUom.absoluteFactor)) /
-                      Number(replenishmentUom.absoluteFactor)
-                    : baseQuantity
-                const rounding = Math.max(Number(replenishmentUom?.rounding ?? 1), 1e-12)
-                const quantity =
-                  Number(forecasted) < Number(row.minQuantity)
-                    ? Math.ceil(rawQuantity / rounding - 1e-12) * rounding
-                    : 0
-                return {
-                  id: String(row.id),
-                  product: productById.get(String(row.productId)) ?? String(row.productId),
-                  warehouse: warehouseById.get(String(row.warehouseId)) ?? String(row.warehouseId),
-                  location: locationById.get(String(row.locationId)) ?? String(row.locationId),
-                  trigger: String(row.trigger),
-                  triggerLabel: selectionLabel(_, 'trigger', row.trigger),
-                  minQuantity: String(row.minQuantity),
-                  maxQuantity: String(row.maxQuantity),
-                  forecasted,
-                  toOrder: String(quantity),
-                  replenishmentUom:
-                    unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
-                  runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
-                }
-              }),
+              rows: search.rows,
+              ...(search.groups ? { table: { groups: search.groups } } : {}),
               createHref: inLocale(url, '/admin/stock/replenishment/new'),
             },
-            frame,
-          ),
+            search.frame,
+          )
+        },
       })
     },
 

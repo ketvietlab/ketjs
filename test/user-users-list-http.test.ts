@@ -39,6 +39,7 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   const app = await boot(t)
   const first = await (await app.client.get('/admin/users?lang=en')).text()
   assert.match(first, /data-ui="list-page"/)
+  assert.match(first, /data-island="backend\.search-filter"/)
   assert.match(first, /1-30 \/ 31/)
   assert.doesNotMatch(first, /user-31/)
 
@@ -58,10 +59,10 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   assert.match(byName, /needle@example\.test|login-08/)
 
   const stateful = await (await app.client.get('/admin/users?q=user&archived=1&page=2&lang=en')).text()
-  assert.match(stateful, /name="q"[^>]*value="user"/)
-  assert.match(stateful, /type="hidden" name="archived" value="1"/)
-  assert.match(stateful, /type="hidden" name="lang" value="en"/)
-  assert.match(stateful, /href="\/admin\/users\?q=user&amp;lang=en"/)
+  // The search-filter bar owns the query and the archived toggle now, so what
+  // the page must keep is the state the URL names, not a GET form.
+  assert.match(stateful, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(stateful, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.equal((await app.client.request('/admin/users?lang=en', { method: 'PUT' })).status, 405)
 })
 

@@ -1,0 +1,10 @@
+import { defineConfig } from '@ketvietlab/ketjs-view-tools'
+
+export default defineConfig({
+  pages: 'src/pages',
+  styles: ['src/styles/main.css'],
+  islands: {
+    counter: 'src/islands/counter.ts',
+  },
+  base: './',
+})

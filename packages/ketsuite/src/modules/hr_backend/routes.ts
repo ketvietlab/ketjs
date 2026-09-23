@@ -3,11 +3,29 @@ import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ke
 import { modalWorkspace } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { withParam } from '../backend/paging.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { employeeFormModal, employeesListScreen, leavesListScreen, rosterScreen } from './screens/index.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { employeeListSearch, leaveListSearch } from './search.ts'
 import type { EmployeeFormValues } from './screens/index.ts'
+
+const hrSearchFunctions = {
+  apply: 'hr_backend.applySearchFilter',
+  saveFavorite: 'hr_backend.saveSearchFavorite',
+  deleteFavorite: 'hr_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'hr_backend.setDefaultSearchFavorite',
+}
+
+/** A leave state, or an archived employee, in the reader's language. */
+const hrGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return _(`hr_backend.state.${raw === 'false' ? 'archived' : 'active'}`)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `hr_backend.state.${raw}`
+  return key === 'state' && _.resolves(message) ? _(message) : raw
+}
 
 const errors = (result: unknown, _: Translator) => resultErrors(result, _, 'hr_backend.error.invalid')
 
@@ -59,8 +77,6 @@ const rosterWorkflowPath = (url: URL, roster: AnyRow, branchId: string, weekStar
     url,
     `/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`,
   )
-
-const leaveStates = ['requested', 'approved', 'rejected', 'cancelled'] as const
 
 const leaveListUrl = (url: URL): URL => {
   const next = new URL(url.href)
@@ -149,7 +165,7 @@ const employeesPage = async (
   adminPage(ctx, url, req, {
     title: 'hr_backend.employees.title',
     active: '/admin/hr',
-    body: (_, frame: Frame) => {
+    body: async (_, frame: Frame) => {
       const collection = employeeListPath(url)
       const branchNames = new Map(
         branches.map((row) => [
@@ -159,22 +175,33 @@ const employeesPage = async (
             : String(row.id),
         ]),
       )
+      const search = await rowListSearch(ctx, url, req, {
+        spec: employeeListSearch,
+        rows: rows.map((row) => ({
+          id: String(row.id),
+          code: String(row.code),
+          name: String(row.name),
+          branch: branchNames.get(String(row.homeBranchId)) ?? String(row.homeBranchId),
+          timezone: String(row.timezone),
+          active: row.active !== false,
+          editHref: employeeModalPath(url, String(row.id)),
+        })),
+        frame,
+        name: 'hr-employee-filter',
+        bodyId: 'hr-employee-list',
+        functions: hrSearchFunctions,
+        labels: { searchPlaceholder: _('hr_backend.employees.title') },
+        groupLabel: (key, value) => hrGroupLabel(_, key, value),
+      })
       const list = employeesListScreen(
         _,
         {
           action: collection,
           createHref: employeeModalPath(url),
-          rows: rows.map((row) => ({
-            id: String(row.id),
-            code: String(row.code),
-            name: String(row.name),
-            branch: branchNames.get(String(row.homeBranchId)) ?? String(row.homeBranchId),
-            timezone: String(row.timezone),
-            active: row.active !== false,
-            editHref: employeeModalPath(url, String(row.id)),
-          })),
+          rows: search.rows,
+          ...(search.groups ? { table: { groups: search.groups } } : {}),
         },
-        frame,
+        search.frame,
       )
       if (!forceModal && url.searchParams.get('create') !== '1' && !url.searchParams.get('edit')) return list
       const formValues = editing
@@ -324,12 +351,8 @@ export const routes: Record<string, RouteEntry> = {
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
       const viewUrl = leaveListUrl(url)
-      const askedState = viewUrl.searchParams.get('state') ?? ''
-      const state = leaveStates.includes(askedState as (typeof leaveStates)[number]) ? askedState : ''
-      const search = searchOf(viewUrl) ?? ''
-      const page = pageOf(viewUrl)
       const [requests, employees] = await Promise.all([
-        ctx.call('hr.leave.manageList', state ? { state } : {}, url, req) as Promise<AnyRow[]>,
+        ctx.call('hr.leave.manageList', {}, url, req) as Promise<AnyRow[]>,
         ctx.call('hr.employee.manageList', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
       ])
       const employeeNames = new Map(
@@ -338,74 +361,15 @@ export const routes: Record<string, RouteEntry> = {
           row.name ? `${String(row.code)} · ${String(row.name)}` : String(row.code ?? row.id),
         ]),
       )
-      const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
-      const matching = requests
-        .map(
-          (row): AnyRow => ({
-            ...row,
-            employee: employeeNames.get(String(row.employeeId)) ?? String(row.employeeId),
-          }),
-        )
-        .filter((row) =>
-          needle
-            ? [
-                row.id,
-                row.employee,
-                row.employeeId,
-                row.leaveTypeId,
-                row.dateFrom,
-                row.dateTo,
-                row.reason,
-                row.state,
-              ].some((value) =>
-                String(value ?? '')
-                  .toLocaleLowerCase(ctx.localeOf(url, req))
-                  .includes(needle),
-              )
-            : true,
-        )
-      const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'hr_backend.leaves.title',
         active: '/admin/hr/leaves',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: _('hr_backend.search.leaves'),
-              keep: {
-                ...(state ? { state } : {}),
-                ...(viewUrl.searchParams.get('lang') ? { lang: viewUrl.searchParams.get('lang')! } : {}),
-              },
-              facets: state
-                ? [
-                    {
-                      label: _(`hr_backend.state.${state}`),
-                      without: withParam(viewUrl, 'state', null),
-                    },
-                  ]
-                : [],
-              menus: [
-                {
-                  id: 'state',
-                  label: _('backend.chrome.filters'),
-                  items: leaveStates.map((value) => ({
-                    id: `state:${value}`,
-                    label: _(`hr_backend.state.${value}`),
-                    path: withParam(viewUrl, 'state', state === value ? null : value),
-                    active: state === value,
-                  })),
-                },
-              ],
-            },
-            pager: pager(viewUrl, page, rows.length, matching.length),
-          }
-          return leavesListScreen(_, frame, {
-            errors: errors(result, _),
-            rows: rows.map((row) => ({
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: leaveListSearch,
+            rows: requests.map((row) => ({
               id: String(row.id),
-              employee: String(row.employee),
+              employee: employeeNames.get(String(row.employeeId)) ?? String(row.employeeId),
               leaveType: String(row.leaveTypeId),
               dateFrom: String(row.dateFrom),
               dateTo: String(row.dateTo),
@@ -414,7 +378,20 @@ export const routes: Record<string, RouteEntry> = {
               state: String(row.state),
               action: withParam(viewUrl, 'id', String(row.id), false),
             })),
-            total: matching.length,
+            frame,
+            name: 'hr-leave-filter',
+            bodyId: 'hr-leave-list',
+            functions: hrSearchFunctions,
+            labels: { searchPlaceholder: _('hr_backend.search.leaves') },
+            groupLabel: (key, value) => hrGroupLabel(_, key, value),
+          })
+          return leavesListScreen(_, search.frame, {
+            errors: errors(result, _),
+            rows: search.rows,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
+            total: search.groups
+              ? search.groups.reduce((sum, group) => sum + group.count, 0)
+              : search.rows.length,
           })
         },
       })

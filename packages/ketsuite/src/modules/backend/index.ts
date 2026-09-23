@@ -58,6 +58,8 @@ export default defineModule({
   fills: {
     'backend:relation.select': `{% island "backend.relation-select" %}`,
     'backend:screen.chart': `{% island "backend.chart" %}`,
+    'backend:table.grid': `{% island "backend.ket-table" %}`,
+    'backend:search.filter': `{% island "backend.search-filter" %}`,
   },
   messages,
 })
@@ -102,6 +104,69 @@ export type {
 } from './relation-select.ts'
 export { formRefusal, readForm, seeOther } from './forms.ts'
 export type { FormRefusal } from './forms.ts'
+
+/**
+ * The collection controls, for a module that is not in this package.
+ *
+ * `joints.ts` already publishes the two islands a modern list is made of —
+ * `backend:search.filter` and `backend:table.grid` — so a deployment's own
+ * module can mount them. What it could not reach was the half that decides what
+ * goes in them: turning a `ListSearchShape` into the bar's configuration,
+ * reading the viewer's saved searches, and declaring the functions the bar
+ * calls back into. Those are policy, not markup, and a module that cannot
+ * import them has to copy them, which is how two lists stop agreeing about what
+ * a preset or a saved search means.
+ *
+ * Nothing here is new work: these are the same entry points product_backend,
+ * sale_backend and the rest already use, named on the boundary so a private
+ * vertical adopts the collection instead of reproducing it.
+ */
+export {
+  listSearchChrome,
+  listSearchFilterConfig,
+  loadListFavorites,
+  searchFilterBar,
+  searchFilterLabels,
+} from './search-filter.ts'
+export type { ListFavorite, ListSearchFilterOptions } from './search-filter.ts'
+export type {
+  CustomFilterField,
+  SearchFacet,
+  SearchFavorite,
+  SearchFilterConfig,
+  SearchFilterCustomRule,
+  SearchFilterLabels,
+  SearchFilterManager,
+  SearchFilterOption,
+  SearchFilterSize,
+  SearchGroupByOption,
+} from './search-filter.ts'
+export {
+  emptyListState,
+  listSearchFilterFunctions,
+  searchFilterHref,
+  stateFromPayload,
+} from './search-filter-state.ts'
+export type { ListSearchBinding, SearchPayload } from './search-filter-state.ts'
+export { tableGrid } from './ket-table.ts'
+export type {
+  KetTableCellFormat,
+  KetTableColumn,
+  KetTableConfig,
+  KetTableGroup,
+  KetTableManager,
+  KetTableSelection,
+} from './ket-table.ts'
+/** The same bar over a collection a module already holds in memory. */
+export {
+  applyRowListState,
+  defineRowList,
+  ROW_LIST_PAGE_SIZE,
+  rowGroupKey,
+  rowListGroups,
+  rowListSearch,
+} from './row-list.ts'
+export type { RowListSpec, RowPreset } from './row-list.ts'
 
 /**
  * The kit, re-exported.

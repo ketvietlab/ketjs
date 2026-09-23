@@ -555,6 +555,30 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     assert.match(bootstrapSource, /navigation fragment contains unknown island/)
     assert.match(bootstrapSource, /server and browser builds differ/)
 
+    // A client view may hand the island host itself to `ket:islands-attach`. The
+    // loader has to load that island's module too, not only the islands inside it.
+    const loaderSource = bootstrapSource.slice(
+      bootstrapSource.indexOf('const loadPlaced = '),
+      bootstrapSource.indexOf('\nawait loadPlaced(document)'),
+    )
+    const loaded: string[] = []
+    const loadPlaced = new Function(
+      'ISLAND_SELECTOR',
+      'knownIslands',
+      'loadFactory',
+      `${loaderSource}\nreturn loadPlaced`,
+    )('ket-island', new Set(['website.search']), async (name: string) => loaded.push(name)) as (
+      root: unknown,
+      requireKnown?: boolean,
+    ) => Promise<void>
+    const host = {
+      matches: (selector: string) => selector === 'ket-island',
+      querySelectorAll: () => [],
+      getAttribute: (name: string) => (name === 'data-island' ? 'website.search' : null),
+    }
+    await loadPlaced(host, true)
+    assert.deepEqual(loaded, ['website.search'])
+
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)
     assert.match(runtime.headers.get('content-type') ?? '', /^text\/javascript/)

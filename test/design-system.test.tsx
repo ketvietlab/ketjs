@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { ketTableGroupedDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
+import { createKetTableView } from '../packages/design-system/src/interactions/ket-table/index.tsx'
 import {
   AppShell,
   AppNavigation,
@@ -845,6 +847,25 @@ test('design system: operational tables expose sort, selection, grouping and row
   assert.match(selectRule, /padding: 0\.4375rem var\(--kv-space-3\)/)
 })
 
+test('design system: grouped KetTable pages each leaf without dropping later rows', () => {
+  const firstGroup = ketTableGroupedDemoConfig.groups?.[0]
+  assert.ok(firstGroup)
+  const html = renderToString(
+    createKetTableView({
+      id: 'paged-grouped-table',
+      config: {
+        ...ketTableGroupedDemoConfig,
+        manager: { listFunction: 'orders.list', pageSize: 1 },
+        groups: [{ ...firstGroup, count: 2, rows: firstGroup.rows?.slice(0, 1), offset: 0 }],
+      },
+    }).view(),
+  )
+  assert.match(html, /data-ui="kt-group-pager"[\s\S]*?1–1 \/ 2/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="prev"[^>]*disabled/)
+  assert.match(html, /data-ui="kt-pager-button"[^>]*data-direction="next"/)
+  assert.match(css, /\[data-ui="kt-group-pager"\] td\s*\{[^}]*padding: var\(--kv-space-2\)/)
+})
+
 test('design system: ListChrome assembles URL-driven collection controls', () => {
   const chrome = renderToString(
     <ListChrome
@@ -1140,15 +1161,41 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     />,
   )
   assert.match(fixed, /data-ui="modal-sheet"[^>]*data-height="fixed"/)
+  // No fixedHeight given: no inline override, so the CSS default (below) applies.
+  assert.doesNotMatch(fixed, /style="[^"]+"/)
   const fixedDialog =
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
-  // The marker is for the owner that measures, not a height of its own: the sheet
-  // sizes to its content and its owner holds the tallest tab as a min-height, so a
-  // short record never renders a dialog the height of the screen.
-  assert.match(fixedDialog, /height: auto/)
-  assert.doesNotMatch(fixedDialog, /100dvh/)
+  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+
+  // A module whose own content is shorter than the viewport caps the fixed height instead.
+  // Set inline with `!important`, not a plain CSS rule: a legacy admin stylesheet targets
+  // these same hooks at equal specificity and would otherwise win by loading later.
+  const capped = renderToString(
+    <ModalSheet
+      id="edit-template"
+      title="Edit template"
+      closeLabel="Close"
+      presentation="dialog"
+      height="fixed"
+      fixedHeight="min(48rem, calc(100dvh - var(--kv-space-12)))"
+      body="Template tabs"
+    />,
+  )
+  assert.match(capped, /style="height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\) !important"/)
+  // Ignored outside `height: 'fixed'` — a content-sized dialog has nothing to cap.
+  const contentSized = renderToString(
+    <ModalSheet
+      id="edit-note"
+      title="Edit note"
+      closeLabel="Close"
+      presentation="dialog"
+      fixedHeight="40rem"
+      body="Note fields"
+    />,
+  )
+  assert.doesNotMatch(contentSized, /style="[^"]+"/)
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
@@ -1186,6 +1233,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       variant="operational"
       context="Sales / Sales orders"
       title="Sales orders"
+      headerActions={<Button label="Create order" variant="primary" />}
+      actions={<Button label="Export orders" variant="secondary" />}
       controls="Search orders"
       body="Order rows"
       status="148 orders"
@@ -1201,6 +1250,14 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
     /data-ui="list-page-body"[^>]*>[\s\S]*?Order rows[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?148 orders/,
   )
   assert.match(operationalList, /data-ui="list-page-toolbar"[\s\S]*?Search orders/)
+  const header = operationalList.slice(
+    operationalList.indexOf('data-ui="list-page-header"'),
+    operationalList.indexOf('</header>'),
+  )
+  assert.match(header, /data-ui="list-page-actions"[\s\S]*?Create order/)
+  assert.doesNotMatch(header, /Export orders/)
+  assert.ok(operationalList.indexOf('Search orders') < operationalList.indexOf('Export orders'))
+  assert.ok(operationalList.indexOf('Export orders') < operationalList.indexOf('Order rows'))
   assert.doesNotMatch(operationalList, /data-ui="list-page-status"/)
 
   const dashboardPage = renderToString(
@@ -1491,6 +1548,51 @@ test('design system: interaction essentials preserve native and accessible fallb
   assert.match(menu, /type="submit" name="intent" value="archive" form="record"/)
   assert.match(menu, /role="menuitem" aria-disabled="true"/)
   assert.match(renderToString(<ActionMenu id="more" label="More" items={[]} />), /data-align="end"/)
+  assert.match(menu, /data-ui="menu"[^>]*data-placement="bottom"/, 'opens downward by default')
+  const upward = renderToString(<Menu id="footer-more" label="More" items={[]} placement="top" />)
+  assert.match(upward, /data-ui="menu"[^>]*data-placement="top"/)
+  assert.match(
+    css,
+    /\[data-ui="menu"\]\[data-placement="top"\] \[data-ui="menu-panel"\]\s*\{\s*top: auto;\s*bottom: calc\(100% \+ var\(--kv-space-1\)\);/,
+  )
+
+  // A filter that picks people: an icon trigger at the facets' height, a count of
+  // what is picked, and a search that keeps the rest of the query.
+  const people = renderToString(
+    <ListChrome
+      filterMenus={
+        <Menu
+          id="assignee"
+          label="Filter by assignee"
+          size="compact"
+          count={2}
+          trigger={<span>@</span>}
+          search={{
+            action: '/followups',
+            name: 'assigneeQ',
+            value: 'ng',
+            label: 'Search people',
+            hidden: { bucket: 'due', assignee: 'u1,u2' },
+          }}
+          items={[{ id: 'u1', label: 'Ngọc Linh', href: '?assignee=u2', checked: true }]}
+        />
+      }
+      facets={[{ id: 'required', label: 'Required', href: '?required=1' }]}
+    />,
+  ).replaceAll(/<!--k[[\]]?-->/gu, '')
+  assert.match(
+    people,
+    /data-row="filters"><div data-ui="list-filter-menus"><details[^>]*data-size="compact"[^>]*data-active="true"/,
+  )
+  assert.match(people, /list-filter-menus[\s\S]*data-ui="list-facets"/, 'menus lead the facets')
+  assert.match(people, /<summary[^>]*aria-label="Filter by assignee" title="Filter by assignee"/)
+  assert.match(people, /data-ui="menu-trigger-count">2</)
+  assert.match(people, /<form data-ui="menu-search" role="search" method="get" action="\/followups">/)
+  assert.match(people, /type="hidden" name="bucket" value="due"/)
+  assert.match(people, /type="hidden" name="assignee" value="u1,u2"/)
+  assert.match(people, /data-ui="menu-search-input" type="search" name="assigneeQ" value="ng"/)
+  const quiet = renderToString(<Menu id="plain" label="Plain" items={[]} count={0} />)
+  assert.doesNotMatch(quiet, /menu-trigger-count|data-active|data-size|aria-label="Plain" title/)
 
   const closed = renderToString(
     <Popover
@@ -1881,7 +1983,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 115)
+  assert.equal(names.length, 127)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1918,10 +2020,10 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 221)
-  assert.equal(designSystemInventory.summary.runtimeExports, 120)
+  assert.equal(designSystemInventory.summary.publicExports, 267)
+  assert.equal(designSystemInventory.summary.runtimeExports, 132)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
-  assert.equal(designSystemInventory.summary.compatibilityModules, 41)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
     designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),
