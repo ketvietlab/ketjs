@@ -241,6 +241,35 @@ test('redirects screen: one already off offers the way back on', () => {
   assert.equal(html.includes('action.deactivate'), false)
 })
 
+test('redirects screen: editing preserves collection state and changing state clears the editor and page', () => {
+  const html = renderToString(
+    redirectsScreen(translate, [redirect({ id: 'r/1', fromPath: '/old', active: false })], [], 'site1', {
+      collectionUrl: '/admin/website/redirects?site=site1&lang=en&state=inactive&q=old&page=2&edit=previous',
+    }),
+  )
+  const links = [...html.matchAll(/href="([^"]*)"/g)].map(
+    (match) => new URL(match[1]!.replaceAll('&amp;', '&'), 'http://test.local'),
+  )
+  const edit = links.find((url) => url.searchParams.get('edit') === 'r/1')
+  assert.ok(edit)
+  assert.deepEqual(Object.fromEntries(edit.searchParams), {
+    site: 'site1',
+    lang: 'en',
+    state: 'inactive',
+    q: 'old',
+    page: '2',
+    edit: 'r/1',
+  })
+  const active = links.find((url) => url.searchParams.get('state') === 'active')
+  assert.ok(active)
+  assert.deepEqual(Object.fromEntries(active.searchParams), {
+    site: 'site1',
+    lang: 'en',
+    state: 'active',
+    q: 'old',
+  })
+})
+
 test('redirects screen: ?edit points the form at that row rather than a new one', () => {
   const html = renderToString(
     redirectsScreen(translate, [redirect()], [], 'site1', {}, { editing: redirect() }),

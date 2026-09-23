@@ -107,6 +107,19 @@
     }
   }
 
+  /* Full-row controls share the label track of either half-row field. At
+     narrower desktop widths, 35% of a half-row is smaller than the 9rem cap. */
+  @media (min-width: 48rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-grid"]
+      > [data-ui="field"][data-span="full"]:not([data-kind="group"]) {
+      grid-template-columns: minmax(0, min(9rem, calc((100% - var(--kv-gap-field-group)) * 0.175))) minmax(
+          0,
+          1fr
+        );
+    }
+  }
+
   @media (max-width: 47.9375rem) {
     :where([data-kv-design-system]) [data-ui="list-chrome-row"][data-row="query"] {
       flex-wrap: wrap;
@@ -169,6 +182,19 @@
     justify-content: flex-end;
     padding-top: var(--kv-space-4);
     border-top: 1px solid var(--kv-panel-divider);
+  }
+
+  /* Full-row controls share the label track of either half-row field. At
+     narrower desktop widths, 35% of a half-row is smaller than the 9rem cap. */
+  @media (min-width: 48rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-grid"]
+      > [data-ui="field"][data-span="full"]:not([data-kind="group"]) {
+      grid-template-columns: minmax(0, min(9rem, calc((100% - var(--kv-gap-field-group)) * 0.175))) minmax(
+          0,
+          1fr
+        );
+    }
   }
 
   @media (max-width: 47.9375rem) {

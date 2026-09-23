@@ -990,6 +990,7 @@ test('design system: form rows collapse while field pairs remain inline', () => 
     assert.match(source, /@media \(max-width: 47\.9375rem\)/)
     assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/)
   }
+  assert.match(patterns, /min\(9rem, calc\(\(100% - var\(--kv-gap-field-group\)\) \* 0\.175\)\)/)
   assert.doesNotMatch(patterns, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(compatibility, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(partner, /\[data-ui="form-field"\]/)

@@ -8,6 +8,8 @@ import { ketsuite } from '../apps/ketsuite/deployment.ts'
 const form = { 'content-type': 'application/x-www-form-urlencoded' }
 const post = { headers: form, redirect: 'manual' as const }
 
+import { renderCaseModal, type CaseModalPayload } from './crm-case-modal-helper.ts'
+
 const boot = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite)
   t.after(() => app.close())
@@ -177,27 +179,28 @@ test('crm backend: the case workspace exposes assign, merge and the close decisi
     idempotencyKey: 'save-twin-0001',
   })
   const page = await app.client.get('/admin/crm/cases/workspace?lang=en')
-  const html = await page.text()
+  const html = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id: 'workspace', locale: 'en' }),
+  )
   assert.equal(page.status, 200)
   // Relational fields render as pickers, not as selects carrying every row.
-  assert.match(html, /data-ui="relation-select"/)
+  assert.match(html, /data-island="backend.relation-select"/)
   assert.doesNotMatch(html, /<select[^>]*name="partnerId"[^>]*>\s*<option[^>]*>—/)
-  // Assignment and merging remain inline; closing opens the one decision dialog.
-  assert.match(html, /name="action" value="assign"/)
-  assert.match(html, /name="action" value="merge"/)
-  assert.doesNotMatch(html, /name="lostReason"/)
-  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=overview&amp;modal=close&amp;lang=en"/)
-  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=timeline&amp;lang=en"/)
-  assert.match(html, /action="\/admin\/crm\/cases\/workspace\?lang=en"/)
-  assert.match(html, /action="\/admin\/crm\/cases\/workspace\/attachments\?lang=en"/)
+  assert.match(html, /data-record-dialog="assign"/)
+  assert.match(html, /data-record-dialog="merge"/)
+  assert.match(html, /data-record-dialog="close"/)
   // Duplicate detection has always run here; now it renders what it found.
   assert.match(html, /Possible duplicates/)
   assert.match(html, /Workspace twin/)
 
   const closePage = await app.client.get('/admin/crm/cases/workspace?modal=close&lang=en')
-  const closeHtml = await closePage.text()
+  const closeHtml = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id: 'workspace', locale: 'en' }),
+    'overview',
+    'close',
+  )
   assert.equal(closePage.status, 200)
-  assert.match(closeHtml, /name="terminal"/)
+  assert.match(closeHtml, /name="__command" value="won"/)
   assert.match(closeHtml, /name="closeReason"/)
   assert.match(closeHtml, /name="confirm"/)
 
@@ -252,7 +255,11 @@ test('crm backend: the timeline reads as words, not as message keys', async (t) 
     idempotencyKey: 'save-readable-1',
   })
   const page = await app.client.get('/admin/crm/cases/readable?tab=timeline&lang=en')
-  const html = await page.text()
+  assert.equal(page.status, 200)
+  const html = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id: 'readable', locale: 'en' }),
+    'timeline',
+  )
   assert.match(html, /Record created/)
   assert.doesNotMatch(html.replace(/<[^>]*>/g, ' '), /crm\.timeline\./)
 })
@@ -277,9 +284,13 @@ test('crm backend: an activity can be completed from the case and from the plann
   assert.equal(scheduled.ok, true)
 
   const casePage = await app.client.get('/admin/crm/cases/follow-up?tab=activities&lang=en')
-  const caseHtml = await casePage.text()
+  assert.equal(casePage.status, 200)
+  const caseHtml = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', { id: 'follow-up', locale: 'en' }),
+    'activities',
+  )
   assert.match(caseHtml, /Call the buyer/, 'the case lists the activities it owns')
-  assert.match(caseHtml, /name="action" value="completeActivity"/)
+  assert.match(caseHtml, /data-record-dialog="complete"/)
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')
   const plannerHtml = await planner.text()
@@ -860,7 +871,15 @@ test('crm sale: a quotation is written with the line the form asked for', async 
   const product = products[0]!
 
   const page = await app.client.get('/admin/crm/cases/quotable?tab=sales&lang=en')
-  assert.match(await page.text(), /name="quantity"/, 'the quotation form asks for a line')
+  assert.equal(page.status, 200)
+  assert.match(
+    renderCaseModal(
+      await call<CaseModalPayload>('crm.case.modalContext', { id: 'quotable', locale: 'en' }),
+      'sales',
+      'quotation',
+    ),
+    /name="quantity"/,
+  )
 
   const created = await app.client.post(
     '/admin/crm/cases/quotable?tab=sales&lang=en',
@@ -879,7 +898,32 @@ test('crm sale: a quotation is written with the line the form asked for', async 
   assert.notEqual(Number(quotations[0]!.amountTotal), 0, 'the quotation has a line, so it has a total')
 
   const withQuotation = await app.client.get('/admin/crm/cases/quotable?tab=sales&lang=en')
-  assert.match(await withQuotation.text(), /Quotations/)
+  assert.equal(withQuotation.status, 200)
+  assert.match(
+    renderCaseModal(
+      await call<CaseModalPayload>('crm.case.modalContext', { id: 'quotable', locale: 'en' }),
+      'sales',
+    ),
+    /Quotations/,
+  )
+
+  const { caseModalDefinition } = await import(
+    '../packages/ketsuite/src/modules/crm_backend/modal/case-modal-view.tsx'
+  )
+  const { caseContext } = await import('./crm-case-modal-helper.ts')
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', { id: 'quotable', locale: 'en' })
+  const form = new FormData()
+  form.set('productId', String(product.id))
+  form.set('warehouseId', 'main')
+  form.set('quantity', '2')
+  const input = caseModalDefinition.commands!.quotation!.input(
+    form,
+    caseContext(payload, 'sales', 'quotation'),
+    {},
+  )
+  assert.equal((input.products as Row[])[0]!.productUomId, product.uomId)
+  const fromModal = await call<Row>('crm_sale.sale.createQuotation', input)
+  assert.equal(fromModal.ok, true, JSON.stringify(fromModal))
 
   // A quotation with no product is refused rather than silently created empty.
   const empty = await call<Row>('crm_sale.sale.createQuotation', {
@@ -960,7 +1004,14 @@ test('crm pipeline: a column offers only the record kind that column can hold', 
   const create = await app.client.get(
     '/admin/crm/cases/new?stageId=crm-stage-proposition&kind=opportunity&lang=en',
   )
-  const html = await create.text()
+  assert.equal(create.status, 200)
+  const html = renderCaseModal(
+    await call<CaseModalPayload>('crm.case.modalContext', {
+      kind: 'opportunity',
+      stageId: 'crm-stage-proposition',
+      locale: 'en',
+    }),
+  )
   assert.match(
     html,
     /<select[^>]*name="stageId"[\s\S]*?<option[^>]*value="crm-stage-proposition"[^>]*selected/,
@@ -991,11 +1042,13 @@ test('crm pipeline: a column offers only the record kind that column can hold', 
   })
   const detail = await app.client.get('/admin/crm/cases/held-record?lang=en')
   assert.equal(detail.status, 200)
-  const detailHtml = await detail.text()
-  assert.match(detailHtml, /name="action" value="move"/, 'the move action is still the way')
+  const payload = await call<CaseModalPayload>('crm.case.modalContext', { id: 'held-record', locale: 'en' })
+  const detailHtml = renderCaseModal(payload)
+  assert.match(detailHtml, /data-record-dialog="move"/, 'the move action is still the way')
   // One `stageId` on the page, and it belongs to that action. A second one in the
   // record form would write the same column without recording the move.
-  assert.equal(detailHtml.match(/name="stageId"/g)?.length, 1)
+  assert.doesNotMatch(detailHtml, /name="stageId"/)
+  assert.match(renderCaseModal(payload, 'overview', 'move'), /name="stageId"/)
 })
 
 test('crm: a pipeline card carries its tags and the next thing owed on it', async (t) => {

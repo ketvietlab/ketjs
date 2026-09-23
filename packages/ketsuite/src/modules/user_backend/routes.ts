@@ -103,7 +103,10 @@ const accessOptions = async (ctx: ServeContext, url: URL, req: Req) => {
     )
   ).flat()
   return {
-    companies: companies.map((company) => ({ value: String(company.id), label: String(company.name) })),
+    companies: companies.map((company) => ({
+      value: String(company.id),
+      label: String(company.name),
+    })),
     branches: branches.map((branch) => ({
       value: String(branch.id),
       label: `${String(branch.code)} · ${String(branch.name)}`,
@@ -213,7 +216,9 @@ export const routes: Record<string, RouteEntry> = {
               : search.rows.length,
             createHref: deploymentCreatesAccounts
               ? withUserReturnTo(url, '/admin/users/new', returnTo)
-              : recordModalCreateHref(`${url.pathname}${url.search}`, { kind: 'user.user' }),
+              : recordModalCreateHref(`${url.pathname}${url.search}`, {
+                  kind: 'user.user',
+                }),
             ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
@@ -225,6 +230,59 @@ export const routes: Record<string, RouteEntry> = {
   // from role templates until custom roles are assignable; the screen, its record
   // modal (`modal/role-modal-view.tsx`) and `user.roleModalContext` stay in source,
   // unregistered, for when they are.
+
+  '/admin/users/new':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      if ((await ctx.live(req)).routes[accountCreationRoute])
+        return seeOther(inLocale(url, accountCreationRoute))
+      return seeOther(
+        recordModalCreateHref(new URL(safeUserReturnTo(url, url.searchParams.get('returnTo')), url), {
+          kind: 'user.user',
+        }),
+      )
+    },
+  '/admin/users/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const user = await ctx.call('user.getUser', { id: params.id }, url, req)
+      if (!user) return text('not found', { status: 404 })
+      return seeOther(
+        recordModalHref(new URL(safeUserReturnTo(url, url.searchParams.get('returnTo')), url), {
+          kind: 'user.user',
+          id: params.id,
+          tab: url.searchParams.get('tab') ?? 'profile',
+        }),
+      )
+    },
+  '/admin/users/{id}/sessions/{sessionId}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = await readForm(req)
+      if (form.action !== 'revoke') return text('invalid action', { status: 400 })
+      const sessions = await ctx.sessionsOf(url, req)
+      if (!sessions)
+        return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.sessionsUnavailable'), {
+          status: 501,
+        })
+      const current = await sessions.of(req)
+      if (!current)
+        return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.unauthorized'), { status: 401 })
+      // Session management remains self-service; administrators use password reset.
+      if (params.id !== current.userId) return text('Forbidden', { status: 403 })
+      const held = (await sessions.store.listUser(params.id)).find((row) => row.id === params.sessionId)
+      if (held) await sessions.store.destroy(held.id)
+      await ctx.call('user.recordSecurityEvent', { event: 'session.revoke', userId: params.id }, url, req)
+      return seeOther(
+        params.id === current?.userId
+          ? inLocale(url, '/admin/profile')
+          : userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
+      )
+    },
 
   '/admin/profile':
     (ctx: ServeContext): Route =>

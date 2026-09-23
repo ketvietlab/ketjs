@@ -1,4 +1,11 @@
 const vi = {
+  'error.interactionKeyConflict': 'Khóa thao tác đã được dùng cho tương tác khác.',
+  'error.invalidLostReason': 'Nhóm lý do mất không hợp lệ.',
+  'error.invalidReportPeriod': 'Khoảng báo cáo không hợp lệ (tối đa 10 năm).',
+  'error.invalidTimezone': 'Múi giờ không hợp lệ.',
+  'error.invalidInteraction': 'Kênh hoặc kết quả tương tác không hợp lệ.',
+  'error.invalidInteractionTime': 'Thời điểm tương tác phải từ lúc tạo hồ sơ đến hiện tại.',
+  'timeline.interaction': 'Đã ghi nhận tương tác khách hàng',
   'app.title': 'CRM',
   'app.summary': 'Pipeline bán hàng cho lead và cơ hội.',
   'app.category': 'Bán hàng',
@@ -49,6 +56,13 @@ const vi = {
 } as const
 
 const en: Record<keyof typeof vi, string> = {
+  'error.interactionKeyConflict': 'This operation key was already used for a different interaction.',
+  'error.invalidLostReason': 'Invalid loss reason category.',
+  'error.invalidReportPeriod': 'Invalid report period (maximum 10 years).',
+  'error.invalidTimezone': 'Invalid timezone.',
+  'error.invalidInteraction': 'Invalid interaction channel or outcome.',
+  'error.invalidInteractionTime': 'Interaction time must be between case creation and now.',
+  'timeline.interaction': 'Customer interaction recorded',
   'app.title': 'CRM',
   'app.summary': 'Sales pipeline for leads and opportunities.',
   'app.category': 'Sales',

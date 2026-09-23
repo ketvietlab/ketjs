@@ -361,13 +361,12 @@ const caseCreateHref = (
   url: URL,
   preset: { stageId?: string; kind?: 'lead' | 'opportunity' } = {},
 ): string => {
-  const target = new URL('/admin/crm/cases/new', 'http://ket.local')
+  const target = new URL(String(url))
   if (preset.stageId) target.searchParams.set('stageId', preset.stageId)
   if (preset.kind) target.searchParams.set('kind', preset.kind)
   const lang = url.searchParams.get('lang')
   if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('returnTo', `${url.pathname}${url.search}`)
-  return `${target.pathname}${target.search}`
+  return recordModalCreateHref(target, { kind: 'crm.case' })
 }
 
 /** Only CRM views and a Partner record are valid destinations carried through the create form. */
@@ -706,6 +705,7 @@ export const routes: Record<string, RouteEntry> = {
               return {
                 id: row.id,
                 name: row.name,
+                href: recordModalHref(url, { kind: 'crm.case', id: String(row.id) }),
                 kind: row.kind,
                 stageId: row.stageId,
                 priority: String(row.priority ?? '1'),
@@ -965,6 +965,7 @@ export const routes: Record<string, RouteEntry> = {
             groups,
             total: Number(result.total ?? 0),
             createHref: live.functions['crm.case.save'] ? caseCreateHref(url) : undefined,
+            recordBase: `${url.pathname}${url.search}`,
             locale: localeQuery(url),
           })
         },
@@ -998,12 +999,28 @@ export const routes: Record<string, RouteEntry> = {
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return caseCreatePage(ctx, url, req, { actionPath: '/admin/crm/cases/new' })
+      const destination = new URL(caseReturnTo(url, url.searchParams.get('returnTo')), url)
+      for (const key of ['kind', 'stageId', 'partnerId', 'lang']) {
+        if (url.searchParams.has(key)) destination.searchParams.set(key, url.searchParams.get(key)!)
+      }
+      return seeOther(recordModalCreateHref(destination, { kind: 'crm.case' }))
     },
 
   '/admin/crm/cases/{id}':
     (ctx): Route =>
     async (url, req, params) => {
+      if (req.method === 'GET') {
+        const record = await ctx.call('crm.case.get', { id: params.id }, url, req)
+        if (!record) return text('not found', { status: 404 })
+        const destination = new URL(inLocale(url, '/admin/crm/cases'), url)
+        return seeOther(
+          recordModalHref(destination, {
+            kind: 'crm.case',
+            id: String(params.id),
+            tab: url.searchParams.get('tab') ?? 'overview',
+          }),
+        )
+      }
       const refused = refusePost(req)
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))

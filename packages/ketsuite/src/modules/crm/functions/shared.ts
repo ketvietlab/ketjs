@@ -6,7 +6,7 @@ import {
   actorRequired,
   addTimeline,
   canEditCase,
-  closedAtFor,
+  closingValues,
   commandKey,
   invalid,
   issue,
@@ -14,6 +14,7 @@ import {
   normalized,
   now,
 } from '../operations.ts'
+import { LOST_REASON_CODES } from '../reporting.ts'
 import type { CrmResult } from '../operations.ts'
 
 export const caseReadEffects = [
@@ -149,6 +150,7 @@ export async function moveToTerminal(
     id: string
     expectedVersion: number
     terminal: string
+    lostReasonCode?: string
     lostReason?: string
     closeReason?: string
     idempotencyKey: string
@@ -170,11 +172,8 @@ export async function moveToTerminal(
       (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
     )[0]
     if (!stage) return invalid(issue('stageId', 'crm.error.invalidStage'))
-    if (held.kind === 'opportunity' && input.terminal === 'lost') {
-      const detail = (await tx.db.select('crm.SalesDetail', { caseId: input.id }))[0]
-      if (detail)
-        await tx.db.update('crm.SalesDetail', { id: detail.id }, { lostReason: input.lostReason ?? null })
-    }
+    if (input.lostReasonCode && !LOST_REASON_CODES.includes(input.lostReasonCode as never))
+      return invalid(issue('lostReasonCode', 'crm.error.invalidLostReason'))
     const timestamp = now()
     const changed = await tx.db.compareAndSet(
       'crm.Case',
@@ -186,18 +185,31 @@ export async function moveToTerminal(
         active: true,
         version: n(held.version) + 1,
         updatedAt: timestamp,
-        closedAt: closedAtFor(held, input.terminal, timestamp),
+        ...closingValues(held, input.terminal, timestamp),
       },
     )
     if (!('dryRun' in changed) && !changed.matched)
       return invalid(issue('version', 'crm.error.stageConflict', { current: held.version }))
+    if (input.terminal === 'lost') {
+      const detail = (await tx.db.select('crm.SalesDetail', { caseId: input.id }))[0]
+      if (detail)
+        await tx.db.update(
+          'crm.SalesDetail',
+          { id: detail.id },
+          { lostReason: input.lostReason ?? null, lostReasonCode: input.lostReasonCode || null },
+        )
+    }
     const event = input.terminal === 'won' ? 'won' : 'lost'
     await addTimeline(tx, {
       id: `timeline:${input.id}:${event}:${input.idempotencyKey}`,
       caseId: input.id,
       eventType: event,
       body: `crm.timeline.${event}`,
-      metadata: input.closeReason ? { reason: input.closeReason } : undefined,
+      metadata: {
+        reason: input.closeReason ?? null,
+        lostReasonCode: input.lostReasonCode ?? null,
+        ...closingValues(held, input.terminal, timestamp),
+      },
       customerVisible: false,
       occurredAt: timestamp,
     })

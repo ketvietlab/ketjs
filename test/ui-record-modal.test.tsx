@@ -169,7 +169,7 @@ test('record modal: the runtime owns focus, escape, inertness, drafts and collec
   // The layer is snapshotted before the guard goes up, so what was typed survives
   // the render that disables the form.
   assert.match(runtime, /keepDrafts\(currentLayer, scope\)[\s\S]*?setRunning\(true\)/u)
-  assert.match(runtime, /kept\.checks\[draftCheckKey\(control\.name, control\.value\)\] = control\.checked/u)
+  assert.match(runtime, /kept\.checks\[key\] = control\.checked/u)
   assert.match(runtime, /if \(!mayDiscard\(topLayer\(\)\)\) return/u)
   assert.match(runtime, /record\.inert = currentLayers\.length > 1/u)
   assert.match(runtime, /dialogReturnFocus/u)
@@ -410,6 +410,25 @@ test('record modal: a record wears its state beside the title, inside the head',
     ModalSheet({ id: 'sheet', mode: 'client', title: 'Qualified', closeLabel: 'Đóng', body: '' }),
   )
   assert.match(plain, /data-ui="modal-title-row"/u)
+})
+
+test('record modal: unsaved fields on another tab survive remounts and reverting clears the guard', async () => {
+  const { recordDraftHasChanges } = await import('../packages/ketsuite/src/ui/client/record-modal.tsx')
+  const record = {
+    values: { name: 'Edited', body: '' },
+    initialValues: { name: 'Saved', body: '' },
+    checks: { 'tags\u0000one': false },
+    initialChecks: { 'tags\u0000one': true },
+  }
+  assert.equal(recordDraftHasChanges(record), true)
+  // Capturing an untouched dialog must not clear the underlying record's guard.
+  const dialog = { values: { reason: '' }, initialValues: { reason: '' }, checks: {}, initialChecks: {} }
+  assert.equal(recordDraftHasChanges(dialog), false)
+  assert.equal(recordDraftHasChanges(record), true)
+  record.values.name = 'Saved'
+  assert.equal(recordDraftHasChanges(record), true, 'unchecked options are also unsaved edits')
+  record.checks['tags\u0000one'] = true
+  assert.equal(recordDraftHasChanges(record), false)
 })
 
 test('record modal: route contexts preserve authorization failures and abort signals, reject external origins', async (t) => {
