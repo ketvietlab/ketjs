@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { scaffoldKetsuite } from './scaffold/index.ts'
 import { watchKetsuite } from './cli-watch.ts'
 
-const VERSION = '0.1.23'
+const VERSION = '0.1.26'
 const DEFAULT_KETSUITE_DEPLOYMENT = 'commerce'
 const DEPLOYMENTS = ['commerce', 'hospitality', 'office', 'dev']
 const CHOICES = DEPLOYMENTS.join(' | ')

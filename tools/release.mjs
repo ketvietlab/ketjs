@@ -26,14 +26,17 @@ const workspaces = [
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
     // The public 115-component catalogue includes its machine-readable inventory and KetAtlas adapter.
-    // 0.1.16 packed 187 KB; 0.1.17 adds BarChart, TimeframeFilter, DataMatrix and page identity (224 KB).
-    maxPackedBytes: 250_000,
+    // 0.1.26 packs 321 KB: 127 components, inventory, search/filter and table interactions.
+    maxPackedBytes: 350_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
   { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 4_000_000 },
+  // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
+  // filter menu, with no stray files — about half the package is source maps.
+  // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 5_200_000 },
 ]
 
 /** @param {string} message @returns {never} */
