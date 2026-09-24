@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -8481,8 +8481,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -8719,6 +8719,7 @@
         "test/permissions-cli.test.ts",
         "test/permissions-request.test.ts",
         "test/pg-live.test.ts",
+        "test/phone.test.ts",
         "test/platform-collection-controls.test.tsx",
         "test/policy.test.ts",
         "test/pos-e2e.test.ts",
@@ -8775,6 +8776,7 @@
         "test/tenants.test.ts",
         "test/testing.test.ts",
         "test/transport.test.ts",
+        "test/ui-record-modal.test.tsx",
         "test/uom.test.ts",
         "test/user-access-workflow.test.ts",
         "test/user-auth-e2e.test.ts",
@@ -9943,6 +9945,7 @@
         "test/crm-e2e.test.ts",
         "test/crm-reporting-domain.test.ts",
         "test/crm-ux.test.ts",
+        "test/customer-issued-access.test.ts",
         "test/design-system.test.tsx",
         "test/field-classification.test.ts",
         "test/flow-all-epics-routes.test.ts",
@@ -9993,6 +9996,7 @@
         "test/partner-e2e.test.ts",
         "test/partner-form-screen.test.tsx",
         "test/pg-live.test.ts",
+        "test/phone.test.ts",
         "test/pos-return-postgres.test.ts",
         "test/query.test.ts",
         "test/rate-limit.test.ts",

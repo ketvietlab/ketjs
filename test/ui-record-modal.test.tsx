@@ -17,6 +17,7 @@ import {
 
 import {
   RECORD_MODAL_LABELS,
+  callRecordFunction,
   delayedFlag,
   openerHref,
   resolveRecordModalLabel,
@@ -497,4 +498,19 @@ test('record modal: action forms opt out of field container sizing in fixed foot
   const actionRule = css.match(/\[data-ui="record-form"\]\[data-layout="actions"\]\s*\{([^}]+)\}/u)?.[1] ?? ''
   assert.match(actionRule, /container-type:\s*normal/u)
   assert.match(actionRule, /flex:\s*0 0 auto/u)
+})
+
+test('record modal: a server failure never shows the server text to the user', async (t) => {
+  const answer = (status: number, body: unknown) => {
+    t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(body), { status }))
+  }
+  answer(500, { code: 'E_INTERNAL', message: '"x.fn" attempted write on x.Model but declares effects []' })
+  const failed = await callRecordFunction('x.fn', {})
+  assert.equal(failed.ok, false)
+  assert.equal(failed.ok ? null : failed.message, null, 'the modal falls back to its own words')
+
+  t.mock.restoreAll()
+  answer(400, { code: 'E_EXPECTED', message: 'Số điện thoại đã có người dùng' })
+  const refused = await callRecordFunction('x.fn', {})
+  assert.equal(refused.ok ? null : refused.message, 'Số điện thoại đã có người dùng')
 })

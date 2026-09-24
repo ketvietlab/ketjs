@@ -3,7 +3,7 @@
 // Written once, never restated.
 
 import { createHash } from 'node:crypto'
-import { KetError } from '../kernel/errors.ts'
+import { isDefectError, KetError } from '../kernel/errors.ts'
 import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
 import { FormValidationError } from './form.ts'
@@ -222,7 +222,8 @@ export async function callFn(
   } catch (cause) {
     const known = cause instanceof KetError
     o.log?.log({
-      level: known ? 'warn' : 'error',
+      // A defect is the deployment breaking its own contract, as loud as a crash.
+      level: known && !isDefectError(cause.code) ? 'warn' : 'error',
       // A caller reaching for something it may not have is a security signal, not
       // a malfunction, and it is counted separately for that reason.
       event: known && cause.code === 'E_FN_NOT_PERMITTED' ? 'fn_denied' : 'fn_error',

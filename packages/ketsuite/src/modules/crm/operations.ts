@@ -17,6 +17,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
+import { phoneKey } from '../../phone.ts'
 import { addDays, cancelActivity, completeActivity, scheduleActivity } from '../activity/index.ts'
 import { ensureThread } from '../mail/index.ts'
 import { CASE_KINDS, CASE_PRIORITIES, MESSAGE_VISIBILITIES } from './types.ts'
@@ -68,7 +69,8 @@ export const normalized = (value: unknown): string =>
     .toLowerCase()
 
 /** Digits only, so `+84 90 123 4567` and `090-123-4567` compare equal. */
-export const dialled = (value: unknown): string => String(value ?? '').replace(/\D/g, '')
+/** The comparable digits of a phone: its E.164 form without the plus. */
+export const dialled = (value: unknown): string => (phoneKey(value) ?? '').replace(/\D/g, '')
 
 const jsonStrings = (value: unknown): string[] => {
   if (typeof value === 'string') {
