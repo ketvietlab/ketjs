@@ -228,6 +228,12 @@ export const models: Record<string, ModelDef> = {
       active: 'bool',
       sessionIdleSeconds: 'int',
       sessionAbsoluteSeconds: 'int',
+      /**
+       * Whether a visitor may open an account on their own. Null reads as yes,
+       * which is what every realm did before the switch existed; a realm whose
+       * accounts staff hand out sets it to false.
+       */
+      selfSignup: 'bool?',
     },
     indexes: { key: { fields: ['key'], unique: true } },
   },
@@ -252,8 +258,16 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       realmId: 'ref:website.CustomerRealm',
       partnerId: 'ref:partner.Partner',
+      /**
+       * Empty for an account staff issued against a phone number alone; its
+       * emailNormalized is then `phone:<E.164>`, which no email sign-in can
+       * produce, so the unique realm/email index still holds.
+       */
       email: 'text',
       emailNormalized: 'text',
+      phone: 'text?',
+      /** E.164; the sign-in key for an account that has no email. */
+      phoneNormalized: 'text?',
       displayName: 'text',
       status: 'text',
       emailVerifiedAt: 'datetime?',
@@ -264,6 +278,7 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: {
       realm_email: { fields: ['realmId', 'emailNormalized'], unique: true },
+      realm_phone: { fields: ['realmId', 'phoneNormalized'], unique: true },
       partner: { fields: ['partnerId'], unique: true },
     },
   },

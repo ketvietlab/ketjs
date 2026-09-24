@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { normalizePhone } from '../../phone.ts'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
 
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60
@@ -11,12 +12,13 @@ const REPLAY_GRACE_MS = 60_000
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
-const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+const invalid = (field: string, message: string) => ({ ok: false as const, errors: [{ field, message }] })
 const accountView = (account: Row) => ({
   id: account.id,
   realmId: account.realmId,
   partnerId: account.partnerId,
   email: account.email,
+  phone: account.phone ?? null,
   displayName: account.displayName,
   status: account.status,
   securityVersion: account.securityVersion,
@@ -117,6 +119,185 @@ const accountByEmail = async (ctx: Ctx, realmId: unknown, email: string): Promis
   return ctx.db.one(from(Account).where(eq(Account.realmId, realmId), eq(Account.emailNormalized, email)))
 }
 
+const accountByPhone = async (ctx: Ctx, realmId: unknown, phone: string): Promise<Row | null> => {
+  const Account = ctx.table('website.CustomerAccount')
+  return ctx.db.one(from(Account).where(eq(Account.realmId, realmId), eq(Account.phoneNormalized, phone)))
+}
+
+/** The unique email key of an account that has only a phone number. No email sign-in can produce it. */
+const phoneEmailKey = (phone: string): string => `phone:${phone}`
+
+/** Unambiguous characters only: an issued password is read aloud or typed from a message. */
+const ISSUED_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const issuedPassword = (): string => {
+  const bytes = randomBytes(24)
+  let out = ''
+  for (const byte of bytes) {
+    if (byte >= 256 - (256 % ISSUED_ALPHABET.length)) continue
+    out += ISSUED_ALPHABET[byte % ISSUED_ALPHABET.length]
+    if (out.length === 12) break
+  }
+  return out.length === 12 ? out : issuedPassword()
+}
+
+/** End every session and bearer grant an account holds, so a new password or a disable takes effect now. */
+const revokeAccountAccess = async (ctx: Ctx, accountId: unknown, reason: string, now: string) => {
+  for (const session of await ctx.db.select('website.CustomerSession', { accountId }))
+    if (!session.revokedAt)
+      await ctx.db.update(
+        'website.CustomerSession',
+        { id: session.id },
+        { revokedAt: now, revokeReason: reason },
+      )
+  for (const grant of await ctx.db.select('website.CustomerTokenGrant', { accountId }))
+    if (!grant.revokedAt)
+      await ctx.db.update(
+        'website.CustomerTokenGrant',
+        { id: grant.id },
+        { revokedAt: now, revokeReason: reason },
+      )
+}
+
+export type IssueCustomerAccessInput = {
+  realmId: string
+  partnerId: string
+  displayName?: string | null
+  phone?: string | null
+  email?: string | null
+  /** Omit to have one generated; it is returned once and never stored in the clear. */
+  password?: string | null
+}
+
+export type IssueCustomerAccessResult =
+  | { ok: true; account: ReturnType<typeof accountView>; password: string | null; created: boolean }
+  | { ok: false; errors: Array<{ field: string; message: string }> }
+
+export const customerAccessEffects = [
+  'read:website.CustomerRealm',
+  'read:website.CustomerAccount',
+  'write:website.CustomerAccount',
+  'read:website.CustomerCredential',
+  'write:website.CustomerCredential',
+  'read:website.CustomerSession',
+  'write:website.CustomerSession',
+  'read:website.CustomerTokenGrant',
+  'write:website.CustomerTokenGrant',
+  'read:partner.Partner',
+] as const
+
+/**
+ * Staff hand a customer an account for an existing partner: sign-in by phone
+ * number (or email), with a password staff set or one generated here. Issuing
+ * again resets the password and signs out every device, which is also how a
+ * forgotten password is recovered in a realm without self-service.
+ */
+export const issueCustomerAccess = async (
+  ctx: Ctx,
+  input: IssueCustomerAccessInput,
+): Promise<IssueCustomerAccessResult> => {
+  const realm = (await ctx.db.select('website.CustomerRealm', { id: input.realmId }))[0]
+  if (realm?.active !== true) return invalid('realm', 'website.customer.error.realmUnavailable')
+  const partner = (await ctx.db.select('partner.Partner', { id: input.partnerId }))[0]
+  if (!partner) return invalid('partnerId', 'website.customer.error.partnerUnavailable')
+  const rawPhone = String(input.phone ?? '').trim()
+  const phone = rawPhone ? normalizePhone(rawPhone) : null
+  if (rawPhone && !phone) return invalid('phone', 'website.customer.error.invalidPhone')
+  const email = normalizeCustomerEmail(input.email)
+  if (email && (!EMAIL.test(email) || email.length > 320))
+    return invalid('email', 'website.customer.error.invalidEmail')
+  if (!phone && !email) return invalid('phone', 'website.customer.error.loginRequired')
+  const displayName = String(input.displayName ?? partner.name ?? '').trim()
+  if (!displayName || displayName.length > 200)
+    return invalid('displayName', 'website.customer.error.invalidName')
+  const given = input.password == null || input.password === '' ? null : input.password
+  if (given !== null && !validPassword(given))
+    return invalid('password', 'website.customer.error.invalidPassword')
+  const password = given ?? issuedPassword()
+  const passwordHash = await hashCustomerPassword(password)
+  const emailKey = email || phoneEmailKey(phone!)
+
+  return ctx.tx(async (tx) => {
+    const Account = tx.table('website.CustomerAccount')
+    const held = await tx.db.one(from(Account).where(eq(Account.partnerId, input.partnerId)))
+    if (held && held.realmId !== input.realmId)
+      return invalid('partnerId', 'website.customer.error.partnerInOtherRealm')
+    const byPhone = phone ? await accountByPhone(tx, input.realmId, phone) : null
+    if (byPhone && byPhone.id !== held?.id) return invalid('phone', 'website.customer.error.phoneInUse')
+    const byEmail = await accountByEmail(tx, input.realmId, emailKey)
+    if (byEmail && byEmail.id !== held?.id) return invalid('email', 'website.customer.error.emailInUse')
+    const now = new Date().toISOString()
+    const accountId = held
+      ? String(held.id)
+      : `customer-${digest(`${input.realmId}\n${input.partnerId}`).slice(0, 32)}`
+    const fields = {
+      email: email || '',
+      emailNormalized: emailKey,
+      phone: phone ? rawPhone : null,
+      phoneNormalized: phone,
+      displayName,
+      status: 'active',
+      failedLoginCount: 0,
+      lockedUntil: null,
+    }
+    if (held) {
+      await tx.db.update(
+        'website.CustomerAccount',
+        { id: accountId },
+        { ...fields, securityVersion: Number(held.securityVersion) + 1 },
+      )
+      await revokeAccountAccess(tx, accountId, 'access-reissued', now)
+    } else {
+      await tx.db.insert('website.CustomerAccount', {
+        id: accountId,
+        realmId: input.realmId,
+        partnerId: input.partnerId,
+        ...fields,
+        emailVerifiedAt: null,
+        securityVersion: 0,
+        lastLoginAt: null,
+      })
+    }
+    const credential = (await tx.db.select('website.CustomerCredential', { accountId }))[0]
+    if (credential)
+      await tx.db.update(
+        'website.CustomerCredential',
+        { id: credential.id },
+        { passwordHash, changedAt: now },
+      )
+    else
+      await tx.db.insert('website.CustomerCredential', {
+        id: accountId,
+        accountId,
+        passwordHash,
+        changedAt: now,
+      })
+    const account = (await tx.db.select('website.CustomerAccount', { id: accountId }))[0]!
+    return {
+      ok: true as const,
+      account: accountView(account),
+      password: given === null ? password : null,
+      created: !held,
+    }
+  })
+}
+
+/** Stop a customer signing in, and sign out every device they hold. */
+export const disableCustomerAccess = async (ctx: Ctx, partnerId: string) => {
+  const Account = ctx.table('website.CustomerAccount')
+  const account = await ctx.db.one(from(Account).where(eq(Account.partnerId, partnerId)))
+  if (!account) return invalid('partnerId', 'website.customer.error.accountUnavailable')
+  const now = new Date().toISOString()
+  await ctx.tx(async (tx) => {
+    await tx.db.update(
+      'website.CustomerAccount',
+      { id: account.id },
+      { status: 'disabled', securityVersion: Number(account.securityVersion) + 1 },
+    )
+    await revokeAccountAccess(tx, account.id, 'access-disabled', now)
+  })
+  return { ok: true as const, account: accountView({ ...account, status: 'disabled' }) }
+}
+
 const sessionOutput = {
   id: 'id',
   realmId: 'id',
@@ -200,6 +381,7 @@ export const customerFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const realm = (await ctx.db.select('website.CustomerRealm', { id: args.realmId }))[0]
       if (realm?.active !== true) return invalid('realm', 'website.customer.error.realmUnavailable')
+      if (realm.selfSignup === false) return invalid('realm', 'website.customer.error.signupClosed')
       const displayName = String(args.displayName ?? '').trim()
       const email = normalizeCustomerEmail(args.email)
       if (!displayName || displayName.length > 200)
@@ -267,7 +449,7 @@ export const customerFunctions: Record<string, FnSpec> = {
   authenticateCustomer: defineFn({
     anonymous: true,
     exposure: 'internal',
-    input: { realmId: 'id', email: 'text', password: 'text', rateKey: 'text?' },
+    input: { realmId: 'id', email: 'text?', phone: 'text?', password: 'text', rateKey: 'text?' },
     output: { ok: 'bool', account: 'json?', errors: 'json?' },
     effects: [
       'read:website.CustomerRealm',
@@ -280,15 +462,32 @@ export const customerFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const realm = (await ctx.db.select('website.CustomerRealm', { id: args.realmId }))[0]
       if (realm?.active !== true) return invalid('email', 'website.customer.error.invalidCredentials')
-      const email = normalizeCustomerEmail(args.email)
+      // One sign-in, two keys: a phone number when one is given, the email otherwise.
+      const phone = args.phone ? (normalizePhone(args.phone) ?? String(args.phone).trim()) : null
+      const email = phone ? '' : normalizeCustomerEmail(args.email)
+      const field = phone ? 'phone' : 'email'
+      if (!phone && !email) return invalid('email', 'website.customer.error.invalidCredentials')
       const now = new Date()
       const rateKey = String(args.rateKey ?? 'anonymous').slice(0, 256)
       if (
         !(await claimRateSlot(ctx, String(args.realmId), 'login', rateKey, 10, 15 * 60 * 1000, now)) ||
-        !(await claimRateSlot(ctx, String(args.realmId), 'login-email', email, 10, 15 * 60 * 1000, now))
+        !(await claimRateSlot(
+          ctx,
+          String(args.realmId),
+          `login-${field}`,
+          phone ?? email,
+          10,
+          15 * 60 * 1000,
+          now,
+        ))
       )
-        return invalid('email', 'website.customer.error.rateLimit')
-      const account = await accountByEmail(ctx, args.realmId, email)
+        return invalid(field, 'website.customer.error.rateLimit')
+      // An email that is really a phone-only key is not a way in.
+      const account = phone
+        ? await accountByPhone(ctx, args.realmId, phone)
+        : email.startsWith('phone:')
+          ? null
+          : await accountByEmail(ctx, args.realmId, email)
       const credential = account
         ? (await ctx.db.select('website.CustomerCredential', { accountId: account.id }))[0]
         : null
@@ -309,7 +508,7 @@ export const customerFunctions: Record<string, FnSpec> = {
             },
           )
         }
-        return invalid('email', 'website.customer.error.invalidCredentials')
+        return invalid(field, 'website.customer.error.invalidCredentials')
       }
       await ctx.db.update(
         'website.CustomerAccount',
@@ -768,24 +967,40 @@ export const customerFunctions: Record<string, FnSpec> = {
           { passwordHash, changedAt: now },
         )
         await tx.db.update('website.CustomerAccount', { id: account.id }, { securityVersion })
-        const sessions = await tx.db.select('website.CustomerSession', { accountId: account.id })
-        for (const session of sessions)
-          if (!session.revokedAt)
-            await tx.db.update(
-              'website.CustomerSession',
-              { id: session.id },
-              { revokedAt: now, revokeReason: 'password-change' },
-            )
-        const grants = await tx.db.select('website.CustomerTokenGrant', { accountId: account.id })
-        for (const grant of grants)
-          if (!grant.revokedAt)
-            await tx.db.update(
-              'website.CustomerTokenGrant',
-              { id: grant.id },
-              { revokedAt: now, revokeReason: 'password-change' },
-            )
+        await revokeAccountAccess(tx, account.id, 'password-change', now)
       })
       return { ok: true, account: accountView({ ...account, securityVersion }) }
     },
+  }),
+
+  /** Staff: hand a customer an account for an existing partner. See {@link issueCustomerAccess}. */
+  issueCustomerAccess: defineFn({
+    input: {
+      realmId: 'id',
+      partnerId: 'id',
+      displayName: 'text?',
+      phone: 'text?',
+      email: 'text?',
+      password: 'text?',
+    },
+    output: { ok: 'bool', account: 'json?', password: 'text?', created: 'bool?', errors: 'json?' },
+    effects: [...customerAccessEffects],
+    handler: (ctx: Ctx, args) =>
+      issueCustomerAccess(ctx, {
+        realmId: String(args.realmId),
+        partnerId: String(args.partnerId),
+        displayName: args.displayName as string | null,
+        phone: args.phone as string | null,
+        email: args.email as string | null,
+        password: args.password as string | null,
+      }),
+  }),
+
+  /** Staff: stop a customer signing in and sign out every device. */
+  disableCustomerAccess: defineFn({
+    input: { partnerId: 'id' },
+    output: { ok: 'bool', account: 'json?', errors: 'json?' },
+    effects: [...customerAccessEffects],
+    handler: (ctx: Ctx, args) => disableCustomerAccess(ctx, String(args.partnerId)),
   }),
 }
