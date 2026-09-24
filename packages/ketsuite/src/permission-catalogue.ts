@@ -296,6 +296,7 @@ const sources = {
       'assignmentRule.modalContext': ['read', 'view'],
       'assignmentRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'bootstrap.defaults': ['configure', 'configure', 'crm.configuration-audit'],
+      'case.normalizePhoneDigits': ['configure', 'configure', 'crm.configuration-audit'],
       'calendar.list': ['read', 'view'],
       'case.addMessage': ['operate', 'agent-operate'],
       'case.logInteraction': ['operate', 'agent-operate'],
@@ -936,6 +937,7 @@ const sources = {
     functions: {
       archivePartner: ['configure', 'configure', 'partner.configuration-audit'],
       archivePartners: ['configure', 'configure', 'partner.configuration-audit'],
+      normalizePartnerPhones: ['configure', 'configure', 'partner.configuration-audit'],
       countPartners: ['read', 'view'],
       getPartner: ['read', 'view'],
       getTerms: ['read', 'view'],

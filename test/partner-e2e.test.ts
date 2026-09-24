@@ -236,7 +236,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   const leadCreate = renderCaseModal(leadPayload)
   assert.match(leadCreate, /Khách hàng không tự trở thành lead/)
   assert.match(leadCreate, /name="email"[^>]*value="hello@minhan\.example"/)
-  assert.match(leadCreate, /name="phone"[^>]*value="0909000123"/)
+  assert.match(leadCreate, /name="phone"[^>]*value="\+84909000123"/)
   assert.equal(leadPayload.data.partnerIntent, true)
   assert.match(leadCreate, /name="utmSource"[\s\S]*?value="marketplace"[^>]*selected/)
   assert.match(leadCreate, /name="description"[^>]*required/)
