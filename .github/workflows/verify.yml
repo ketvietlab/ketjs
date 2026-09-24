@@ -1,12 +1,13 @@
 name: verify
 
 on:
-  # Stacked feature PRs target the preceding feature branch. Run the same
-  # verification there instead of leaving every PR above the stack root
-  # without CI.
+  # The release pull request into master is the only gate. Feature pull
+  # requests into develop carry no CI: whoever changes a part runs that part's
+  # tests locally (AGENT.md). Only `permission coverage` still answers on
+  # develop, from permission-coverage.yml.
   pull_request:
-  push:
-    branches: [develop, master]
+    branches: [master]
+  workflow_dispatch:
 
 concurrency:
   group: verify-${{ github.ref }}

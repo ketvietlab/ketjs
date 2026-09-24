@@ -378,7 +378,7 @@ kiểm tra stdin secret hygiene, exit code và tenant selection. Engine/session
 regressions nằm trong `engine-primitives.test.ts` và `session.test.ts`.
 
 Theo `AGENT.md`, local chỉ chạy test đúng phạm vi thay đổi. Full suite chạy trên CI
-khi PR target `develop`.
+khi PR release target `master`.
 
 ## Benchmark PostgreSQL
 
