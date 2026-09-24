@@ -76,7 +76,9 @@ No publish command is part of either local script.
 
 1. Create `release/<version>` from the current `develop` head. Do not release an arbitrary feature branch.
 2. Update the coordinated version when needed, then open the release pull request into `master` and let the
-   required checks pass.
+   required checks pass. This is the only pull request that runs the full verification (quality contracts
+   and every Postgres test group); feature pull requests into `develop` are verified locally by their
+   authors, so a failure here is fixed on `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
 4. Create and publish GitHub release `v0.1.27` at that exact `master` commit.
