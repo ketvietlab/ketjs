@@ -68,7 +68,7 @@ export {
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
 export type { Placement, LayoutError, IdentifiedPlacement, PlacementChange } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
-export { KetError, Diagnostics } from './kernel/errors.ts'
+export { KetError, Diagnostics, isDefectError } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'

@@ -44,6 +44,7 @@ export type ChannelAccount = {
   realmId: string
   partnerId: string
   email: string
+  phone?: string | null
   displayName: string
   securityVersion: number
 }

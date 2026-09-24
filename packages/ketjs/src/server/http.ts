@@ -17,7 +17,7 @@ import { createStreams, memoryStreamStore, streamsOf } from './stream.ts'
 import type { Streams } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
-import { KetError } from '../kernel/errors.ts'
+import { isDefectError, KetError } from '../kernel/errors.ts'
 import { FormValidationError } from './form.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { AdapterPool } from '../data/pool.ts'
@@ -39,7 +39,11 @@ type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promis
  * person whose request was fine and whose permissions were not. A monitor cannot
  * tell a missing grant from a malformed body, and neither can a client.
  */
+/** What a client is told about a failure it did not cause. */
+const INTERNAL_ERROR = { code: 'E_INTERNAL', message: 'internal error' } as const
+
 export const statusForError = (code: string): number => {
+  if (isDefectError(code)) return 500
   if (code === 'E_FN_NOT_PERMITTED') return 403
   if (code === 'E_NOT_FOUND' || code === 'E_UNKNOWN_FUNCTION') return 404
   if (code === 'E_PAYLOAD_TOO_LARGE') return 413
@@ -1098,7 +1102,8 @@ export async function createKetServer(o: ServeOpts) {
       // Anything that is not a named contract failure escaped a `try` nobody wrote,
       // and so did a failure that arrived after the headers went out. Both used to
       // be discarded here: the client got a message and the server kept nothing.
-      if (!(e instanceof KetError) || res.headersSent) {
+      const defect = !(e instanceof KetError) || isDefectError(e.code)
+      if (defect || res.headersSent) {
         requestLog?.log({
           level: 'error',
           event: 'unhandled',
@@ -1114,8 +1119,8 @@ export async function createKetServer(o: ServeOpts) {
         return
       }
       if (e instanceof FormValidationError) return json(res, 422, e.toJSON())
-      const status = e instanceof KetError ? statusForError(e.code) : 500
-      const code = e instanceof KetError ? e.code : 'E_INTERNAL'
+      const status = defect ? 500 : statusForError((e as KetError).code)
+      const code = defect ? INTERNAL_ERROR.code : (e as KetError).code
       if (o.renderErrorPage && wantsHtml(req)) {
         // A page that fails to render an error is worse than the error, so the
         // fallback is the JSON that was always there.
@@ -1125,8 +1130,8 @@ export async function createKetServer(o: ServeOpts) {
           return res.end(page)
         }
       }
-      if (e instanceof KetError) return json(res, status, e.toJSON())
-      return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
+      if (defect) return json(res, 500, INTERNAL_ERROR)
+      return json(res, status, (e as KetError).toJSON())
     } finally {
       requestLog?.log({
         // A stylesheet is not an application event. One page load is dozens of

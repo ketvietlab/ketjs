@@ -88,7 +88,9 @@ export const callRecordFunction = async <Value = unknown>(
     return {
       ok: false,
       issues: issuesOf(payload.error ?? payload),
-      message: payload.error?.message ?? payload.message ?? null,
+      // A server failure is not the user's to read: its text is for the log, and
+      // the modal falls back to its own words.
+      message: response.status >= 500 ? null : (payload.error?.message ?? payload.message ?? null),
       status: response.status,
     }
   const value = payload.value as { ok?: boolean } | undefined

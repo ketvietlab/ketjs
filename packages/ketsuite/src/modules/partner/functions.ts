@@ -1,6 +1,7 @@
-import { asc, defineFn, deleteFrom, desc, eq, from, like, inArray, or } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, desc, eq, from, gt, like, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { sharedCache } from '../../cache.ts'
+import { phoneKey, phoneSearchFragment } from '../../phone.ts'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
 import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
 
@@ -46,16 +47,8 @@ const normalizedEmail = (value: unknown): string | null => {
     .toLowerCase()
   return email || null
 }
-const normalizedPhone = (value: unknown): string | null => {
-  const raw = String(value ?? '')
-    .normalize('NFKC')
-    .trim()
-  if (!raw) return null
-  const international = raw.startsWith('+') || raw.startsWith('00')
-  const digits = raw.replace(/\D/g, '')
-  if (!digits) return null
-  return international ? `+${digits.replace(/^00/, '')}` : digits
-}
+/** Stored in E.164 so `0708…`, `84708…` and `+84 708…` are one customer. */
+const normalizedPhone = (value: unknown): string | null => phoneKey(value)
 const canonicalAddress = (args: AddressArgs) => ({
   street1: String(args.street1 ?? args.street ?? '').trim(),
   street2: args.street2 ? String(args.street2).trim() : null,
@@ -265,7 +258,7 @@ export const functions: Record<string, FnSpec> = {
       else if (groupField === 'kind' && groupValue) q = q.where(eq(P.kind, String(groupValue)))
       if (a.search) {
         const search = String(a.search).normalize('NFKC').trim()
-        const phone = normalizedPhone(search)
+        const phone = phoneSearchFragment(search)
         q = q.where(
           or(
             like(P.name, `%${search}%`),
@@ -487,6 +480,36 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Rewrite phones saved before they were stored in E.164, one page at a time.
+   * Safe to rerun: a phone already in its stored form is left alone.
+   */
+  normalizePartnerPhones: defineFn({
+    input: { after: 'text?', limit: 'int?' },
+    output: { scanned: 'int', changed: 'int', next: 'text?' },
+    effects: ['read:partner.Partner', 'write:partner.Partner'],
+    idempotent: true,
+    handler: async (ctx: Ctx, a) => {
+      const P = ctx.table('partner.Partner')
+      const limit = Math.max(1, Math.min(5_000, Number(a.limit ?? 1_000)))
+      let query = from(P).select(P.id, P.phone).orderBy(asc(P.id)).limit(limit)
+      if (a.after) query = query.where(gt(P.id, String(a.after)))
+      const rows = await ctx.db.all(query)
+      let changed = 0
+      for (const row of rows) {
+        if (row.phone == null) continue
+        const phone = normalizedPhone(row.phone)
+        if (phone === row.phone) continue
+        await ctx.db.update('partner.Partner', { id: row.id }, { phone })
+        changed++
+      }
+      return {
+        scanned: rows.length,
+        changed,
+        next: rows.length === limit ? String(rows.at(-1)!.id) : null,
+      }
+    },
+  }),
   archivePartner: defineFn({
     input: { id: 'id', active: 'bool' },
     output: { id: 'id', active: 'bool' },
