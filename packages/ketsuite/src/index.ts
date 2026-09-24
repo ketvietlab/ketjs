@@ -11,6 +11,13 @@ export {
 } from './permission-catalogue.ts'
 export { ketsuiteRoleTemplates } from './role-templates.ts'
 export { DEFAULT_PHONE_REGION, normalizePhone, phoneKey, phoneSearchFragment } from './phone.ts'
+export {
+  customerAccessEffects,
+  disableCustomerAccess,
+  issueCustomerAccess,
+  type IssueCustomerAccessInput,
+  type IssueCustomerAccessResult,
+} from './modules/website/customer.ts'
 
 // website vertical
 export { default as channelApi } from './modules/channel_api/index.ts'

@@ -9944,6 +9944,7 @@
         "test/crm-e2e.test.ts",
         "test/crm-reporting-domain.test.ts",
         "test/crm-ux.test.ts",
+        "test/customer-issued-access.test.ts",
         "test/design-system.test.tsx",
         "test/field-classification.test.ts",
         "test/flow-all-epics-routes.test.ts",
