@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketjs-view-tools",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Static-site development and build tools for Ket view.",
   "type": "module",
   "license": "MIT",
@@ -38,7 +38,7 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.26",
+    "@ketvietlab/ketjs-view": "0.1.27",
     "esbuild": "0.28.2"
   },
   "publishConfig": {
