@@ -329,6 +329,15 @@ export type ServeSpec = {
   /** Verify and resolve identity asserted by a trusted gateway for this request. */
   resolveIdentity?: (ctx: RequestIdentityResolveContext) => Promise<RequestIdentity | null>
   /**
+   * The scope a request with no identity gets, read from this request's tenant.
+   *
+   * `sessions.anonymous` is one scope for the whole deployment, which is right for a
+   * single datastore and wrong for a fleet: each tenant database names its own
+   * company, so a public page on one tenant's host has to read as that tenant's
+   * company. Return null to fall back to `sessions.anonymous`.
+   */
+  resolveAnonymousScope?: (ctx: RequestIdentityResolveContext) => Promise<Scope | null>
+  /**
    * Where a viewer signs out when `resolveIdentity` asserted their identity. `POST /logout` only
    * ends a KetJS cookie session, so a gateway login needs the gateway's own sign-out, which also
    * ends the upstream login. Absent, the backend shows the viewer without a sign-out control.
@@ -668,6 +677,13 @@ export async function bootDeployment(
     }
     const record = await sessionRecordOf(url, req)
     if (!record) {
+      const resolveAnonymous = serve.resolveAnonymousScope
+      const tenantScope = resolveAnonymous
+        ? await tenants.ofRequest(url, req, (tenant) =>
+            resolveAnonymous({ adapter: tenant.adapter, manifest: tenant.live, url, req }),
+          )
+        : null
+      if (tenantScope) return scopeForSession(null, { anonymous: tenantScope }) ?? { company: null }
       const s = await sessionsOf(url, req)
       return s?.scopeOf(null) ?? { company: null }
     }
