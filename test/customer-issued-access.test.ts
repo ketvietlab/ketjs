@@ -116,6 +116,32 @@ test('issuing again resets the password and signs out every device', async (t) =
   assert.equal(blocked.ok, false, 'a disabled account cannot sign in')
 })
 
+test('staff may set a password as short as six characters, and no shorter', async (t) => {
+  const { adapter, realmId } = await boot(t)
+  const tooShort = await call(adapter, 'website.issueCustomerAccess', {
+    realmId,
+    partnerId: 'cuc',
+    phone: '0708580468',
+    password: '12345',
+  })
+  assert.deepEqual(tooShort.errors, [
+    { field: 'password', message: 'website.customer.error.invalidPassword' },
+  ])
+  const issued = await call(adapter, 'website.issueCustomerAccess', {
+    realmId,
+    partnerId: 'cuc',
+    phone: '0708580468',
+    password: '123456',
+  })
+  assert.equal(issued.ok, true, JSON.stringify(issued.errors))
+  const signedIn = await call(adapter, 'website.authenticateCustomer', {
+    realmId,
+    phone: '0708580468',
+    password: '123456',
+  })
+  assert.equal(signedIn.ok, true, 'the six-character password signs in')
+})
+
 test('a number that belongs to another customer, or no number at all, is refused', async (t) => {
   const { adapter, realmId } = await boot(t)
   await call(adapter, 'partner.savePartner', { id: 'other', kind: 'person', name: 'Khách khác' })

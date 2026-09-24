@@ -38,8 +38,11 @@ export const normalizeCustomerEmail = (value: unknown): string =>
     .trim()
     .toLowerCase()
 
+// Six characters: staff hand the password to the customer by phone or at the
+// counter, and the customer types it on their own phone. The account reaches
+// only that customer's own records, and sign-in is rate limited.
 const validPassword = (value: unknown): value is string => {
-  if (typeof value !== 'string' || value.length < 10 || value.length > 128) return false
+  if (typeof value !== 'string' || value.length < 6 || value.length > 128) return false
   return Buffer.byteLength(value, 'utf8') <= 512
 }
 
