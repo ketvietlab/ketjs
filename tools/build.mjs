@@ -118,10 +118,12 @@ const sourceFingerprint = () => {
 
 const artifactsExist = () =>
   existsSync(join(BUILD, 'ket.workspace.js')) &&
-  packageNames.every(
-    (name) =>
-      existsSync(join(BUILD, 'packages', name, 'src', 'index.js')) &&
-      existsSync(join(PACKAGES, name, 'dist', 'index.js')),
+  packageNames.every((name) =>
+    ['index.js', 'index.mjs'].some(
+      (entry) =>
+        existsSync(join(BUILD, 'packages', name, 'src', entry)) &&
+        existsSync(join(PACKAGES, name, 'dist', entry)),
+    ),
   )
 
 /**
