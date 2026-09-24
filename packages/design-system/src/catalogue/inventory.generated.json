@@ -8481,8 +8481,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -8775,6 +8775,7 @@
         "test/tenants.test.ts",
         "test/testing.test.ts",
         "test/transport.test.ts",
+        "test/ui-record-modal.test.tsx",
         "test/uom.test.ts",
         "test/user-access-workflow.test.ts",
         "test/user-auth-e2e.test.ts",
