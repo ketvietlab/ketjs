@@ -1590,6 +1590,8 @@ const sources = {
       rollbackPublication: ['configure', 'configure', 'website.configuration-audit'],
       publishPage: ['configure', 'configure', 'website.configuration-audit'],
       removeSiteMember: ['security', 'security', 'website.security-audit'],
+      issueCustomerAccess: ['security', 'security', 'website.security-audit'],
+      disableCustomerAccess: ['security', 'security', 'website.security-audit'],
       restoreRevision: ['operate', 'operate'],
       unpublishEntry: ['configure', 'configure', 'website.configuration-audit'],
       revokePreviewTokens: ['sensitive', 'sensitive', 'website.sensitive-data'],
