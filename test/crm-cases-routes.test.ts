@@ -163,7 +163,7 @@ test('crm cases routes: Partner intent prefills contact context and returns fiel
   const createHtml = renderCaseModal(payload)
   assert.equal(payload.data.partnerIntent, true)
   assert.match(createHtml, /name="email"[^>]*value="minh@example\.test"/)
-  assert.match(createHtml, /name="phone"[^>]*value="0909000123"/)
+  assert.match(createHtml, /name="phone"[^>]*value="\+84909000123"/)
   assert.match(createHtml, /name="contactName"[^>]*value="Nguyễn Minh"/)
   assert.match(createHtml, /name="description"[^>]*required/)
 
