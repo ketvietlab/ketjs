@@ -1,0 +1,51 @@
+name: permission coverage
+
+# The one check develop still requires. Feature pull requests into develop have
+# no other CI; the full verification runs on the release pull request into
+# master (verify.yml).
+
+on:
+  pull_request:
+    branches: [develop]
+
+concurrency:
+  group: permission-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: plan permission coverage
+    runs-on: ubuntu-latest
+    outputs:
+      permissions: ${{ steps.plan.outputs.permissions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+      - id: plan
+        name: decide whether a declaration can have moved
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node tools/ci-test-groups.mjs plan "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  permission-coverage:
+    name: permission coverage
+    # Only a declaration can move the answer. The planner fails safe: an
+    # unrecognised path, or a diff it could not compute, still runs it.
+    needs: [plan]
+    if: needs.plan.outputs.permissions == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - name: every production function has an exact bundle or exemption
+        run: npm run test:permission-coverage
