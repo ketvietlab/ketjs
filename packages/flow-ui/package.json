@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/flow-ui",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Compact KetJS View components for work-management screens: shell, lists, boards, dialogs, fields and live documents.",
   "type": "module",
   "license": "MIT",
@@ -55,10 +55,10 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/design-system": "0.1.26",
-    "@ketvietlab/ketjs": "0.1.26",
-    "@ketvietlab/ketjs-view": "0.1.26",
-    "@ketvietlab/ketsuite": "0.1.26"
+    "@ketvietlab/design-system": "0.1.27",
+    "@ketvietlab/ketjs": "0.1.27",
+    "@ketvietlab/ketjs-view": "0.1.27",
+    "@ketvietlab/ketsuite": "0.1.27"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
