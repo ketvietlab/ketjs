@@ -37,6 +37,20 @@ const workspaces = [
   // filter menu, with no stray files — about half the package is source maps.
   // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
   { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 5_200_000 },
+  // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
+  {
+    name: '@ketvietlab/flow-ui',
+    dir: 'packages/flow-ui',
+    maxPackedBytes: 160_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.mjs',
+      'dist/index.d.mts',
+      'dist/styles.css',
+    ],
+  },
 ]
 
 /** @param {string} message @returns {never} */
@@ -163,7 +177,13 @@ const pack = (destination, version) => {
     if (result.size > workspace.maxPackedBytes)
       fail(`${workspace.name} grew to ${result.size} packed bytes (limit ${workspace.maxPackedBytes})`)
     const paths = new Set(result.files.map((file) => file.path))
-    const requiredPaths = ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts']
+    const requiredPaths = workspace.requiredPaths ?? [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.js',
+      'dist/index.d.ts',
+    ]
     if (workspace.name === '@ketvietlab/design-system') {
       requiredPaths.push('dist/styles.css', 'dist/foundations/tokens.css')
     }
@@ -210,7 +230,7 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents')])`,
     ],
     { cwd: consumer },
   )
