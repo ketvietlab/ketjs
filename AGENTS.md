@@ -9,6 +9,7 @@ These rules apply to every change in this repository. The public design-system c
 - Use design tokens. Do not introduce hard-coded colour, spacing, radius, shadow, typography, or z-index values in product modules.
 - Keep server views render-pure. Browser state, focus, history, network calls, and DOM access belong in a client runtime or island; server and shared views must not use browser globals.
 - Extend an existing public component compatibly when possible. When adding a new hook, update the hook contract, catalogue/inventory, documentation, and tests in the same change.
+- `packages/flow-ui` (`@ketvietlab/flow-ui`) is a documented exception: compact work-management components authored in `.mjs` with JSDoc types, scoped under `[data-flow-ui]` with `data-flow` hooks and `--flow-*` aliases of `--kv-*` tokens. Its own `AGENTS.md` governs it. It currently re-implements roughly 40 primitives (buttons, inputs, selects, dialogs, tags, lists, tables) that design-system also provides; when changing one, move the shared contract into `packages/design-system` rather than widening the copy. It depends on ketsuite only for `@ketvietlab/ketsuite/livedoc`; that editor should become its own package so flow-ui stops pulling in ketsuite server dependencies.
 
 ## Collection lists
 

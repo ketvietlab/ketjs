@@ -30,6 +30,20 @@ import type { BlockType, Delta, MarkName } from './live-doc-blocks.ts'
 import { parseMarkdown } from './live-doc-markdown.ts'
 import type { MarkdownBlock } from './live-doc-markdown.ts'
 
+/** What an embedded (`local`) document hands its owner to persist. */
+export type LiveDocValue = {
+  /** The whole Yjs state, base64 — enough to reopen the document exactly. */
+  snapshot: string
+  blocks: Array<{
+    id?: string
+    type: string
+    checked?: boolean
+    align?: string
+    rows?: string[][]
+    delta: Delta
+  }>
+}
+
 export type LiveDocProps = {
   /** The record this document belongs to. */
   docId: string
@@ -37,12 +51,28 @@ export type LiveDocProps = {
    * The collection its endpoints hang off — `/admin/flow/issues`, matching the
    * base the owner passed `documentRoutes`. Handed in rather than built here so
    * one editor serves an issue, a project description and a page alike.
+   * Not used when `local` is set.
    */
-  base: string
+  base?: string
+  /**
+   * Embedding contract: no document routes, no presence. The document starts
+   * from `snapshot` (or `blocks`) and every change goes to `onChange`; the
+   * owner persists it through its own checked API. Local documents also offer
+   * tables.
+   */
+  local?: boolean
+  snapshot?: string
+  blocks?: LiveDocValue['blocks']
+  /** Renders the document without letting anyone change it. */
+  readOnly?: boolean
+  onChange?: (value: LiveDocValue) => void
   lang?: string
 }
 
-type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: BlockType; checked: boolean }
+/** Stored block kinds: the editable vocabulary plus structure the type control never offers. */
+type StoredType = BlockType | 'table' | 'divider'
+
+type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: StoredType; checked: boolean }
 type Point = { index: number; offset: number }
 type Span = { start: Point; end: Point }
 type Viewer = { id: string; name: string; index: number; seenAt: number }
@@ -291,9 +321,9 @@ export function createLiveDocView(props: LiveDocProps) {
 
   // ---- document model -----------------------------------------------------
 
-  const typeOf = (element: Y.XmlElement): BlockType => {
-    const value = element.getAttribute('type') as BlockType | undefined
-    return value && BLOCK_TYPES.includes(value) ? value : 'p'
+  const typeOf = (element: Y.XmlElement): StoredType => {
+    const value = element.getAttribute('type') as StoredType | undefined
+    return value && (value === 'table' || value === 'divider' || BLOCK_TYPES.includes(value)) ? value : 'p'
   }
 
   /**
@@ -316,9 +346,10 @@ export function createLiveDocView(props: LiveDocProps) {
     })
 
   /** Inserts a new empty block and answers its text run. Call inside a transaction. */
-  function insertBlock(index: number, type: BlockType, checked = false): Y.XmlText {
+  function insertBlock(index: number, type: StoredType, checked = false): Y.XmlText {
     const element = new Y.XmlElement('block')
     element.setAttribute('type', type)
+    element.setAttribute('id', crypto.randomUUID())
     if (checked) element.setAttribute('checked', 'true')
     fragment.insert(index, [element])
     const text = new Y.XmlText()
@@ -330,12 +361,30 @@ export function createLiveDocView(props: LiveDocProps) {
     if (fragment.length === 0) doc.transact(() => void insertBlock(0, 'p'))
   }
 
-  const modelOf = () =>
+  const attributeOf = (block: Block, name: string): string | undefined =>
+    block.node instanceof Y.XmlElement ? (block.node.getAttribute(name) as string | undefined) : undefined
+
+  const rowsOf = (block: Block): string[][] => JSON.parse(attributeOf(block, 'rows') || '[]') as string[][]
+
+  const modelOf = (): LiveDocValue['blocks'] =>
     blocksOf().map((block) => ({
       type: block.type,
       checked: block.checked,
       delta: block.text.toDelta() as Delta,
+      id: attributeOf(block, 'id'),
+      align: attributeOf(block, 'align'),
+      rows: block.type === 'table' ? rowsOf(block) : undefined,
     }))
+
+  const currentValue = (): LiveDocValue => ({
+    snapshot: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+    blocks: modelOf(),
+  })
+
+  /** Table cells edit on their own; block and mark commands do not reach into them. */
+  const inCell = (): boolean =>
+    typeof document !== 'undefined' &&
+    !!(document.activeElement as HTMLElement | null)?.closest('[data-live-cell]')
 
   // ---- DOM <-> model positions --------------------------------------------
 
@@ -498,6 +547,10 @@ export function createLiveDocView(props: LiveDocProps) {
     if (!container) return
     const span = keep === undefined ? selectionSpan() : keep
     container.innerHTML = documentHtml(modelOf(), props.lang, others())
+    if (props.readOnly) {
+      for (const el of Array.from(container.querySelectorAll('[contenteditable]')))
+        el.setAttribute('contenteditable', 'false')
+    }
     if (span) restoreSelection(span)
     syncToolbar()
     renderPresence()
@@ -516,7 +569,7 @@ export function createLiveDocView(props: LiveDocProps) {
     const span = selectionSpan()
     const block = span ? blocksOf()[span.start.index] : undefined
     const select = shell.querySelector('[data-flow-editor-block]') as HTMLSelectElement | null
-    if (select && block) select.value = LIST_TYPES.includes(block.type) ? 'p' : block.type
+    if (select && block) select.value = LIST_TYPES.includes(block.type as BlockType) ? 'p' : block.type
     for (const button of Array.from(shell.querySelectorAll('[data-flow-editor-mark]')) as HTMLElement[]) {
       const name = button.getAttribute('data-flow-editor-mark') ?? ''
       const active = LIST_TYPES.includes(name as BlockType)
@@ -557,6 +610,7 @@ export function createLiveDocView(props: LiveDocProps) {
    * itself could sit in the room under somebody else's name.
    */
   async function announce(index: number, gone = false) {
+    if (props.local) return
     announcedAt = Date.now()
     announcedIndex = gone ? -1 : index
     const answer = await fetch(`${base}/presence`, {
@@ -634,6 +688,7 @@ export function createLiveDocView(props: LiveDocProps) {
   }
 
   function applyBlockType(type: BlockType) {
+    if (inCell()) return
     const span = selectionSpan()
     if (!span) return
     const blocks = blocksOf()
@@ -654,12 +709,12 @@ export function createLiveDocView(props: LiveDocProps) {
     const length = plainLength(delta)
     // Enter on an empty list item leaves the list rather than extending it —
     // otherwise there is no way out of one except deleting it.
-    if (LIST_TYPES.includes(block.type) && length === 0) {
+    if (LIST_TYPES.includes(block.type as BlockType) && length === 0) {
       structural(caretAt({ index: at.index, offset: 0 }), () => setBlockType(at.index, 'p'))
       return
     }
     const tail = sliceDelta(delta, at.offset)
-    const nextType = CONTINUES.has(block.type) ? block.type : 'p'
+    const nextType = CONTINUES.has(block.type as BlockType) ? block.type : 'p'
     structural(caretAt({ index: at.index + 1, offset: 0 }), () => {
       if (at.offset < length) block.text.delete(at.offset, length - at.offset)
       const text = insertBlock(at.index + 1, nextType)
@@ -668,6 +723,8 @@ export function createLiveDocView(props: LiveDocProps) {
   }
 
   function mergeBackward(index: number) {
+    const around = blocksOf()
+    if (around[index]?.type === 'table' || around[index - 1]?.type === 'table') return
     if (index <= 0) return
     const blocks = blocksOf()
     const previous = blocks[index - 1]
@@ -768,6 +825,7 @@ export function createLiveDocView(props: LiveDocProps) {
   }
 
   function toggleMark(name: MarkName) {
+    if (inCell()) return
     const span = selectionSpan()
     if (!span || isCollapsed(span)) return
     const on = spanHasMark(span, name)
@@ -1076,6 +1134,10 @@ export function createLiveDocView(props: LiveDocProps) {
       const name = button.getAttribute('data-flow-editor-mark') ?? ''
       button.addEventListener('mousedown', (event) => event.preventDefault())
       button.addEventListener('click', () => {
+        if (name === 'table') {
+          insertTable()
+          return
+        }
         if (LIST_TYPES.includes(name as BlockType)) applyBlockType(name as BlockType)
         else if (name === 'link') openLinkDialog()
         else toggleMark(name as MarkName)
@@ -1083,6 +1145,7 @@ export function createLiveDocView(props: LiveDocProps) {
     }
     const select = root.querySelector('[data-flow-editor-block]') as HTMLSelectElement | null
     select?.addEventListener('change', () => {
+      if (inCell()) return
       const value = select.value as BlockType
       const span = selectionSpan()
       if (!span) return
@@ -1090,6 +1153,97 @@ export function createLiveDocView(props: LiveDocProps) {
         for (let index = span.end.index; index >= span.start.index; index--) setBlockType(index, value)
       })
     })
+  }
+
+  /** A 2 × 2 table after the caret's block, with a paragraph after it to keep typing in. */
+  function insertTable() {
+    const at = (selectionSpan()?.end.index ?? fragment.length - 1) + 1
+    structural(caretAt({ index: at + 1, offset: 0 }), () => {
+      insertBlock(at, 'table')
+      ;(fragment.get(at) as Y.XmlElement).setAttribute(
+        'rows',
+        JSON.stringify([
+          ['', ''],
+          ['', ''],
+        ]),
+      )
+      insertBlock(at + 1, 'p')
+    })
+  }
+
+  /** Seeds a local document from what its owner stored. */
+  function loadLocal() {
+    if (props.snapshot) {
+      Y.applyUpdate(doc, base64ToBytes(props.snapshot), REMOTE)
+      return
+    }
+    doc.transact(() => {
+      for (const block of props.blocks ?? []) {
+        const text = insertBlock(fragment.length, typeOfValue(block.type), block.checked)
+        const node = fragment.get(fragment.length - 1) as Y.XmlElement
+        if (block.id) node.setAttribute('id', block.id)
+        if (block.align) node.setAttribute('align', block.align)
+        if (block.rows) node.setAttribute('rows', JSON.stringify(block.rows))
+        if (block.delta?.length) text.applyDelta(block.delta)
+      }
+      ensureBlocks()
+    }, REMOTE)
+  }
+
+  const typeOfValue = (type: string): StoredType =>
+    type === 'table' || type === 'divider' || BLOCK_TYPES.includes(type as BlockType)
+      ? (type as StoredType)
+      : 'p'
+
+  /**
+   * Tables keep their row/cell structure. Cell edits stay out of the editor's
+   * flat paragraph position model, so they cannot destroy adjacent blocks.
+   */
+  function wireCells(el: HTMLElement) {
+    for (const type of ['beforeinput', 'paste', 'compositionstart', 'compositionend', 'input']) {
+      el.addEventListener(
+        type,
+        (event) => {
+          const cell = (event.target as HTMLElement | null)?.closest?.(
+            '[data-live-cell]',
+          ) as HTMLElement | null
+          if (!cell) return
+          event.stopImmediatePropagation()
+          if (props.readOnly) {
+            event.preventDefault()
+            return
+          }
+          if (type === 'paste') {
+            event.preventDefault()
+            const selection = document.getSelection()
+            if (selection?.rangeCount) {
+              const range = selection.getRangeAt(0)
+              range.deleteContents()
+              const text = document.createTextNode(
+                (event as ClipboardEvent).clipboardData?.getData('text/plain') ?? '',
+              )
+              range.insertNode(text)
+              range.setStartAfter(text)
+              range.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(range)
+            }
+          }
+          if (type === 'input' || type === 'compositionend' || type === 'paste') {
+            const holder = cell.closest('[data-index]') as HTMLElement | null
+            const block = blocksOf()[Number(holder?.dataset.index)]
+            if (!block || !(block.node instanceof Y.XmlElement)) return
+            const node = block.node
+            const rows = rowsOf(block)
+            const row = rows[Number(cell.dataset.row)]
+            if (!row) return
+            row[Number(cell.dataset.col)] = cell.innerText
+            doc.transact(() => node.setAttribute('rows', JSON.stringify(rows)), LOCAL_TYPING)
+          }
+        },
+        true,
+      )
+    }
   }
 
   const linkDialog = () => shell?.querySelector('[data-flow-editor-link-dialog]') as HTMLDialogElement | null
@@ -1128,6 +1282,15 @@ export function createLiveDocView(props: LiveDocProps) {
   async function mountEditor(el: HTMLElement) {
     container = el
     shell = (el.closest('[data-ui="flow-editor"]') as HTMLElement | null) ?? el.parentElement
+    if (props.local) loadLocal()
+    wireCells(el)
+    if (props.readOnly) {
+      el.setAttribute('contenteditable', 'false')
+      el.setAttribute('aria-readonly', 'true')
+      shell?.querySelector('[role="toolbar"]')?.setAttribute('hidden', '')
+      render(null)
+      return
+    }
     el.addEventListener('compositionstart', () => {
       composing = true
       composedAt = selectionSpan()?.start ?? null
@@ -1183,7 +1346,10 @@ export function createLiveDocView(props: LiveDocProps) {
       // formatting-loss bug: applying a full-state update on top of the
       // server's own incrementally-built state doesn't round-trip marks the
       // same way normal incremental merges do.
-      if (origin !== REMOTE) void pushLocalUpdate(update)
+      if (origin !== REMOTE) {
+        if (props.local) props.onChange?.(currentValue())
+        else void pushLocalUpdate(update)
+      }
       if (origin !== LOCAL_TYPING) {
         const keep = pending
         pending = null
@@ -1194,6 +1360,10 @@ export function createLiveDocView(props: LiveDocProps) {
       }
     })
 
+    if (props.local) {
+      render(null)
+      return
+    }
     const response = await fetch(`${base}/content`)
     const { snapshot, topic, viewerId } = (await response.json()) as {
       snapshot: string
@@ -1227,9 +1397,11 @@ export function createLiveDocView(props: LiveDocProps) {
   }
 
   return {
-    view: () => liveDocShell({ containerId, lang: props.lang }) as TemplateResult,
+    view: () => liveDocShell({ containerId, lang: props.lang, tables: props.local }) as TemplateResult,
+    getValue: currentValue,
     dispose() {
       source?.close()
+      doc.destroy()
       if (heartbeat) clearInterval(heartbeat)
       if (typeof document !== 'undefined') document.removeEventListener('selectionchange', onSelectionChange)
     },
