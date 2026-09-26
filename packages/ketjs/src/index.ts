@@ -108,11 +108,15 @@ export {
   text,
   bytes,
   streamed,
+  websocket,
   raw,
   document,
   withHeaders,
 } from './server/respond.ts'
 export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
+export type { WebSocketMessage, WebSocketPeer, WebSocketSession } from './server/websocket.ts'
+export { notificationHub, NOTIFY_PAYLOAD_BYTES } from './server/notify.ts'
+export type { NotificationHub } from './server/notify.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
 export type { RuntimeConfig, OpenStore, PublicStorageConfig } from './server/config.ts'
 export {
