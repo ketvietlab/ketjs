@@ -1484,7 +1484,8 @@ test(
       assert.equal(updates.filter((result) => (result.value as Row).ok === true).length, 1)
       assert.equal(updates.filter((result) => (result.value as Row).ok === false).length, 1)
       const order = (await call('pos.getOrder', { id: 'race-order' })).value as Row
-      assert.equal(order.revision, '2')
+      // An int field reads back as a number on Postgres too, the same as on SQLite.
+      assert.equal(order.revision, 2)
       const tendered = await Promise.all([
         call('pos.addPayment', {
           id: 'race-tender',
