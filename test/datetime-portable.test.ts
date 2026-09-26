@@ -15,11 +15,14 @@ import { adminUrl, live } from './postgres-live.ts'
 const clock = defineModule({
   name: 'clock',
   models: {
-    Entry: { scope: 'shared', fields: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal' } },
+    Entry: {
+      scope: 'shared',
+      fields: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal', count: 'int' },
+    },
   },
   functions: {
     put: {
-      input: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal' },
+      input: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal', count: 'int' },
       output: { ok: 'bool' },
       effects: ['write:clock.Entry'],
       handler: async (ctx, args) => {
@@ -29,7 +32,7 @@ const clock = defineModule({
     },
     read: {
       input: { id: 'id' },
-      output: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal' },
+      output: { id: 'id', at: 'datetime', on: 'date', amount: 'decimal', count: 'int' },
       effects: ['read:clock.Entry'],
       handler: async (ctx, args) => (await ctx.db.select('clock.Entry', { id: args.id }))[0],
     },
@@ -40,7 +43,7 @@ const manifest = compose([clock], { headless: true })
 registerFunctions([clock])
 
 // An offset that is not UTC, so "did the write normalise" has a visible answer.
-const WRITTEN = { at: '2026-08-22T17:00:00+07:00', on: '2026-08-22', amount: '12.50' }
+const WRITTEN = { at: '2026-08-22T17:00:00+07:00', on: '2026-08-22', amount: '12.50', count: 3 }
 const EXPECTED = { at: '2026-08-22T10:00:00.000Z', on: '2026-08-22', amount: '12.50' }
 
 const roundTrip = async (adapter: Adapter): Promise<Row> => {
@@ -85,6 +88,9 @@ test('datetime: both datastores answer with the same bytes', live, async () => {
       assert.equal(fromPostgres[column], EXPECTED[column], `${column} is not the stored text`)
       assert.equal(typeof fromPostgres[column], 'string', `${column} did not arrive as text`)
     }
+    // An int is a BIGINT column, which the driver would hand back as the string "3".
+    assert.equal(fromPostgres.count, fromSqlite.count, 'int differs between datastores')
+    assert.equal(fromPostgres.count, 3)
   } finally {
     await sqlite.close().catch(() => {})
     await postgres.close().catch(() => {})
