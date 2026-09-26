@@ -23,6 +23,7 @@ import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import { nextSequenceNumber } from './sequence.ts'
 import { streamsOf } from './stream.ts'
+import { checkNotification, notificationHub } from './notify.ts'
 import type { Writer } from './stream.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
@@ -60,8 +61,16 @@ export function createContext(o: {
    * to, and inventing one would be worse than dropping them.
    */
   log?: Logger
+  /** The adapter a transaction was opened on; listeners hang off the root, never a transaction. */
+  root?: Adapter
+  /**
+   * In-process notifications held until the transaction commits. PostgreSQL does
+   * this for NOTIFY itself; without a database bus it is this list's job.
+   */
+  notices?: Array<[channel: string, payload: string]>
 }): Ctx {
   const { adapter, manifest, fnKey } = o
+  const root = o.root ?? adapter
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
   const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
@@ -760,11 +769,30 @@ export function createContext(o: {
     // will hand back the session that issued BEGIN.
     tx: async <T>(body: (inner: Ctx) => Promise<T>): Promise<T> => {
       const transactionWrites: WriteRecord[] = []
+      const notices: Array<[string, string]> = []
       const value = await adapter.tx((txAdapter) =>
-        body(createContext({ ...o, adapter: txAdapter, writes: transactionWrites })),
+        body(createContext({ ...o, adapter: txAdapter, root, writes: transactionWrites, notices })),
       )
       writes.push(...transactionWrites)
+      for (const [channel, payload] of notices) {
+        if (o.notices) o.notices.push([channel, payload])
+        else notificationHub(root).deliverLocally(channel, payload)
+      }
       return value
+    },
+    notify: async (channel: string, payload: string): Promise<void> => {
+      checkNotification(channel, payload)
+      if (dryRun) return
+      const hub = notificationHub(root)
+      if (!hub.shared) {
+        if (o.notices) o.notices.push([channel, payload])
+        else hub.deliverLocally(channel, payload)
+        return
+      }
+      await (adapter.notifications ?? (root.notifications as NonNullable<Adapter['notifications']>)).publish(
+        channel,
+        payload,
+      )
     },
     streams: {
       // A dry run says what would happen; it does not tell anyone it happened.
