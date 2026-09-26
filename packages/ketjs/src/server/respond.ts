@@ -16,6 +16,7 @@
 import { renderToString, html, when, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { IncomingMessage } from 'node:http'
+import type { WebSocketSession } from './websocket.ts'
 
 /** Markup that has been through the escaper. The only thing that may become HTML. */
 export type Html = TemplateResult
@@ -31,6 +32,8 @@ export type RouteResult = {
   body: ResponseBody
   /** Extra response headers. A cookie is the reason this exists. */
   headers?: Record<string, string>
+  /** Set only by websocket(): the HTTP layer upgrades instead of answering. */
+  readonly webSocket?: WebSocketSession
   readonly [RESPONSE]: true
 }
 
@@ -108,6 +111,22 @@ export function bytes(body: Uint8Array, o: { type: string; status?: number }): R
 /** A backpressure-aware binary response; the HTTP layer consumes it chunk by chunk. */
 export function streamed(body: AsyncIterable<Uint8Array>, o: { type: string; status?: number }): RouteResult {
   return made(body, octets(o.type), o.status)
+}
+
+/**
+ * Upgrade this request to a WebSocket.
+ *
+ * Returned from a route like any other answer, so whatever ran before the route —
+ * the module's sign-in check, the rate limit, the handler's own authentication —
+ * has already said yes by the time the socket opens. A plain request to the same
+ * route is answered 426, which is what it is: the right place, the wrong protocol.
+ */
+export function websocket(session: WebSocketSession): RouteResult {
+  return {
+    ...made('this route speaks websocket', 'text/plain', 426),
+    headers: { upgrade: 'websocket', 'sec-websocket-version': '13' },
+    webSocket: session,
+  } as RouteResult
 }
 
 /**

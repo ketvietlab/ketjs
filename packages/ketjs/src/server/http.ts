@@ -29,6 +29,9 @@ import { claimRateSlot } from './ratelimit.ts'
 import type { RatePolicy } from './ratelimit.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
+import { acceptWebSocket, isWebSocketUpgrade, rejectUpgrade } from './websocket.ts'
+import type { WebSocketPeer } from './websocket.ts'
+import type { Duplex } from 'node:stream'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
@@ -839,7 +842,10 @@ export async function createKetServer(o: ServeOpts) {
     }
   }
 
-  const server = createServer(async (req, res) => {
+  // Only a WebSocket handshake leaves the HTTP path. Any other Upgrade header —
+  // h2c from a curious client — is still an ordinary request, as it was before
+  // a listener for 'upgrade' existed.
+  const server = createServer({ shouldUpgradeCallback: isWebSocketUpgrade }, async (req, res) => {
     const started = Date.now()
     // The route pattern, never the pathname: a raw path carries record ids and a
     // query string, which is how customer data reaches a log aggregator. An
@@ -1145,6 +1151,112 @@ export async function createKetServer(o: ServeOpts) {
     }
   })
 
+  /**
+   * A WebSocket asks the same route the same question a request would.
+   *
+   * The route runs with the upgrade request — its sign-in check, the rate limit
+   * and its own authentication see exactly what a fetch would show them — and
+   * only an answer made by websocket() opens a socket. Anything else is written
+   * back as the HTTP answer it is, and the connection closed.
+   */
+  const peers = new Set<WebSocketPeer>()
+  server.on('upgrade', async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const started = Date.now()
+    let route = '(unmatched)'
+    let requestLog = o.log
+    let status = 101
+    socket.on('error', () => {})
+    try {
+      const url = requestUrl(req)
+      requestLog = o.log?.child({ tenant: tenantForLog(url, req) })
+      const policy = o.rateLimit?.(url, req)
+      if (policy) {
+        const verdict = await withDb(url, req, (adapter) => claimRateSlot(adapter, policy))
+        if (!verdict.ok) {
+          route = `rate:${policy.action}`
+          status = 429
+          return rejectUpgrade(
+            socket,
+            429,
+            {
+              'content-type': 'application/json; charset=utf-8',
+              'retry-after': String(Math.max(1, Math.ceil(verdict.retryAfterMs / 1_000))),
+            },
+            JSON.stringify({ code: 'E_RATE_LIMITED', message: `too many "${policy.action}" requests` }),
+          )
+        }
+      }
+      const matched = matchRoute(url.pathname)
+      if (!matched) {
+        status = 404
+        return rejectUpgrade(
+          socket,
+          404,
+          { 'content-type': 'application/json; charset=utf-8' },
+          JSON.stringify({ code: 'E_NOT_FOUND', message: `no route for ${url.pathname}` }),
+        )
+      }
+      route = matched.path
+      const result = await matched.value(url, req, matched.params)
+      if (!result.webSocket) {
+        status = result.status ?? 200
+        const body = typeof result.body === 'string' || result.body instanceof Uint8Array ? result.body : ''
+        return rejectUpgrade(
+          socket,
+          status,
+          { 'content-type': contentType(result.type ?? 'text/html'), ...result.headers },
+          body,
+        )
+      }
+      const socketRoute = route
+      const log = requestLog
+      const peer = acceptWebSocket(req, socket, head, result.webSocket, {
+        closed: (code, durationMs) => {
+          peers.delete(peer as WebSocketPeer)
+          log?.log({
+            level: 'info',
+            event: 'websocket_closed',
+            durationMs,
+            fields: { route: socketRoute, code },
+          })
+        },
+        failed: (error) =>
+          log?.log({
+            level: 'error',
+            event: 'unhandled',
+            error,
+            fields: { route: socketRoute, websocket: true },
+          }),
+      })
+      if (!peer) status = 400
+      else if (!socket.destroyed) peers.add(peer)
+    } catch (e) {
+      const defect = !(e instanceof KetError) || isDefectError(e.code)
+      if (defect)
+        requestLog?.log({
+          level: 'error',
+          event: 'unhandled',
+          durationMs: Date.now() - started,
+          error: e,
+          fields: { method: req.method ?? '', route, websocket: true },
+        })
+      status = defect ? 500 : statusForError((e as KetError).code)
+      rejectUpgrade(
+        socket,
+        status,
+        { 'content-type': 'application/json; charset=utf-8' },
+        JSON.stringify(defect ? INTERNAL_ERROR : (e as KetError).toJSON()),
+      )
+    } finally {
+      requestLog?.log({
+        level: 'info',
+        event: 'http_request',
+        durationMs: Date.now() - started,
+        fields: { method: req.method ?? '', route, status, websocket: true },
+      })
+    }
+  })
+
   return {
     server,
     streams: await streamsFor(o.adapter ?? null),
@@ -1154,7 +1266,11 @@ export async function createKetServer(o: ServeOpts) {
       )
     },
     close(): Promise<void> {
-      return new Promise((r) => server.close(() => r()))
+      // An open socket keeps server.close() waiting, so each is asked to leave:
+      // 1001, "going away", which a client reads as reconnect-elsewhere.
+      const closed = new Promise<void>((r) => server.close(() => r()))
+      for (const peer of peers) peer.close(1001, 'server shutting down')
+      return closed
     },
   }
 }

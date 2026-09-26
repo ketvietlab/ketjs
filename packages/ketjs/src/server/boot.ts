@@ -46,6 +46,7 @@ import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 import { randomBytes } from 'node:crypto'
+import { notificationHub } from './notify.ts'
 import type { Streams, StreamStore } from './stream.ts'
 
 export type { Html, RouteResult } from './respond.ts'
@@ -80,6 +81,21 @@ export type ServeContext = {
   clientCompatibility: ClientCompatibilityPolicy | null
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
+  /**
+   * Listen for `ctx.notify` on a channel — what a websocket route waits on.
+   *
+   * One database listener per channel per process, however many connections
+   * share it. `onReady` runs when listening starts and after every reconnect,
+   * because notifications sent during the gap were lost and whatever they would
+   * have said needs re-reading. Refused for a deployment with a database per
+   * tenant: a connection outliving its tenant's pooled database is not something
+   * the pool can promise yet.
+   */
+  subscribe: (
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+  ) => Promise<() => Promise<void>>
   config: RuntimeConfig
   /**
    * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
@@ -838,6 +854,14 @@ export async function bootDeployment(
       return allow === null || allow.includes(name)
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
+    subscribe: async (channel, onMessage, onReady) => {
+      if (!adapter)
+        throw new KetError({
+          code: 'E_NOT_SUPPORTED',
+          message: 'subscribe needs a single datastore; this deployment has one per tenant',
+        })
+      return notificationHub(adapter).subscribe(channel, onMessage, onReady)
+    },
     callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
