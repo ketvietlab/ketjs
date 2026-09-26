@@ -260,6 +260,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'json')
       .map(([n]) => n)
 
+  const intsOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'int')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     const stamps = datetimesOf(model)
@@ -293,7 +298,15 @@ export function createContext(o: {
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const bools = booleansOf(model)
     const json = dialect === 'sqlite' ? jsonOf(model) : []
+    // An int is a BIGINT column on Postgres, which the driver hands back as the string
+    // "3" so it cannot lose digits; SQLite hands the same field back as 3. A client
+    // that decodes an integer broke on Postgres alone. Only a value a number holds
+    // exactly is converted: a larger one stays text rather than being rounded.
+    const ints = dialect === 'postgres' ? intsOf(model) : []
     for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
+    for (const row of rows)
+      for (const c of ints)
+        if (typeof row[c] === 'string' && Number.isSafeInteger(Number(row[c]))) row[c] = Number(row[c])
     for (const row of rows)
       for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)
     return rows
