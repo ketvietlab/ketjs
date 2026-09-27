@@ -170,33 +170,37 @@ export const productsScreen = (
   table: JSXChild = null,
   total = rows.length,
   extensionActions?: JSXChild,
+  overlay?: JSXChild,
 ): TemplateResult =>
   shell(
     _,
     _('product_backend.screen.title'),
-    <ListPage
-      variant="operational"
-      frame={frame}
-      context={
-        <PageContext
-          label={_('product_backend.screen.title')}
-          items={[{ label: _('product_backend.menu.app') }, { label: _('product_backend.screen.title') }]}
-          viewer={frame.viewer}
-        />
-      }
-      title={_('product_backend.screen.title')}
-      description={_('product_backend.screen.description')}
-      actions={collectionActions(_, frame, extensionActions)}
-      controls={collectionControls(_, _('product_backend.screen.title'), frame)}
-      body={
-        view === 'list'
-          ? table
-          : rows.length === 0
-            ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-            : kanban(_, rows, recordHref)
-      }
-      footer={_('product_backend.screen.results', { count: total })}
-    />,
+    <>
+      <ListPage
+        variant="operational"
+        frame={frame}
+        context={
+          <PageContext
+            label={_('product_backend.screen.title')}
+            items={[{ label: _('product_backend.menu.app') }, { label: _('product_backend.screen.title') }]}
+            viewer={frame.viewer}
+          />
+        }
+        title={_('product_backend.screen.title')}
+        description={_('product_backend.screen.description')}
+        actions={collectionActions(_, frame, extensionActions)}
+        controls={collectionControls(_, _('product_backend.screen.title'), frame)}
+        body={
+          view === 'list'
+            ? table
+            : rows.length === 0
+              ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+              : kanban(_, rows, recordHref)
+        }
+        footer={_('product_backend.screen.results', { count: total })}
+      />
+      {overlay}
+    </>,
     { ...frame, chrome: null, topbar: false },
   )
 
