@@ -1,0 +1,75 @@
+{
+  "name": "@ketvietlab/flow-ui",
+  "version": "0.1.27",
+  "description": "Compact KetJS View components for work-management screens: shell, lists, boards, dialogs, fields and live documents.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/flow-ui"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "keywords": [
+    "components",
+    "ketjs",
+    "flow",
+    "work-management"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../..",
+    "demo": "node tools/build-i18n.mjs && node demo/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./runtime": {
+      "types": "./dist/runtime.d.mts",
+      "default": "./dist/runtime.mjs"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.mts",
+      "default": "./dist/workspace.mjs"
+    },
+    "./documents": {
+      "types": "./dist/documents.d.mts",
+      "default": "./dist/documents.mjs"
+    },
+    "./i18n": {
+      "types": "./dist/i18n.d.mts",
+      "default": "./dist/i18n.mjs"
+    },
+    "./messages": {
+      "types": "./dist/messages.d.mts",
+      "default": "./dist/messages.mjs"
+    }
+  },
+  "dependencies": {
+    "@ketvietlab/design-system": "0.1.27",
+    "@ketvietlab/ketjs": "0.1.27",
+    "@ketvietlab/ketjs-view": "0.1.27",
+    "@ketvietlab/ketsuite": "0.1.27"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist",
+    "LUCIDE-LICENSE"
+  ]
+}
