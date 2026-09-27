@@ -3,6 +3,13 @@ import { pageIdentity, pageIdentityContent, type PageIdentityProps } from '../pa
 
 export const HOOKS = [
   'app-shell',
+  'app-shell-topbar',
+  'app-topbar',
+  'app-topbar-brand',
+  'app-topbar-context',
+  'global-search',
+  'global-search-input',
+  'global-search-submit',
   'app-sidebar',
   'app-main',
   'app-right-rail',
@@ -26,6 +33,7 @@ export const HOOKS = [
 ] as const
 
 export const AppShell = (props: {
+  topbar?: JSXChild
   sidebar: JSXChild
   main: JSXChild
   rightRail?: JSXChild
@@ -34,8 +42,10 @@ export const AppShell = (props: {
   <div
     data-ui="app-shell"
     data-has-right-rail={String(props.rightRail !== undefined)}
+    data-has-topbar={props.topbar !== undefined ? 'true' : null}
     data-mode={props.mode ?? 'viewport'}
   >
+    {props.topbar !== undefined && <div data-ui="app-shell-topbar">{props.topbar}</div>}
     <aside data-ui="app-sidebar">{props.sidebar}</aside>
     {props.mode === 'embedded' ? (
       <div data-ui="app-main">{props.main}</div>
@@ -44,6 +54,67 @@ export const AppShell = (props: {
     )}
     {props.rightRail !== undefined && <aside data-ui="app-right-rail">{props.rightRail}</aside>}
   </div>
+)
+
+/** Application identity and a native global search, independent from page headings. */
+export const AppTopbar = (props: {
+  brand: { label: string; href: string; image?: string }
+  navigation?: JSXChild
+  context?: JSXChild
+  search: {
+    action: string
+    label: string
+    placeholder: string
+    submitLabel: string
+    query?: string
+    locale?: string
+  }
+}): TemplateResult => (
+  <header data-ui="app-topbar">
+    {props.navigation}
+    <a data-ui="app-topbar-brand" href={props.brand.href} aria-label={props.brand.label}>
+      {props.brand.image ? <img src={props.brand.image} alt={props.brand.label} /> : props.brand.label}
+    </a>
+    <form
+      data-ui="global-search"
+      role="search"
+      aria-label={props.search.label}
+      action={props.search.action}
+      method="get"
+    >
+      {props.search.locale ? <input type="hidden" name="lang" value={props.search.locale} /> : null}
+      <input
+        data-ui="global-search-input"
+        type="search"
+        name="q"
+        value={props.search.query ?? ''}
+        placeholder={props.search.placeholder}
+        aria-label={props.search.label}
+        autocomplete="off"
+        maxlength={200}
+      />
+      <button
+        data-ui="global-search-submit"
+        type="submit"
+        aria-label={props.search.submitLabel}
+        title={props.search.submitLabel}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 4.5 4.5" />
+        </svg>
+      </button>
+    </form>
+    {props.context != null && <div data-ui="app-topbar-context">{props.context}</div>}
+  </header>
 )
 
 export type PageHeaderProps = Omit<PageIdentityProps, 'context'>

@@ -47,6 +47,7 @@
     gap: var(--admin-gap-sm);
   }
   [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tools"] {
+    align-items: flex-start;
     flex-wrap: wrap;
   }
 
@@ -490,7 +491,8 @@
     font-weight: 700;
   }
 
-  [data-ui="custom-filter"] {
+  /* Legacy route filter forms only; SearchFilter owns its island editor contract. */
+  [data-ui="custom-filter"]:where(:not([data-ui="search-filter"] *)) {
     display: grid;
     gap: 0.375rem;
     margin: 0.375rem 0 0;
@@ -499,9 +501,9 @@
     border-block-start: 1px solid var(--admin-line);
   }
 
-  [data-ui="custom-filter"] select,
-  [data-ui="custom-filter"] input,
-  [data-ui="custom-filter"] button {
+  [data-ui="custom-filter"]:where(:not([data-ui="search-filter"] *)) select,
+  [data-ui="custom-filter"]:where(:not([data-ui="search-filter"] *)) input,
+  [data-ui="custom-filter"]:where(:not([data-ui="search-filter"] *)) button {
     min-block-size: 2rem;
     border: 1px solid var(--admin-control-border);
     border-radius: var(--admin-radius-sm);
@@ -510,7 +512,7 @@
     font: inherit;
   }
 
-  [data-ui="custom-filter"] button {
+  [data-ui="custom-filter"]:where(:not([data-ui="search-filter"] *)) button {
     background: var(--admin-accent);
     color: var(--admin-accent-ink);
     cursor: pointer;

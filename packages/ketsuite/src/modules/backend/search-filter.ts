@@ -2,7 +2,10 @@ import { parseListState, validateListState } from '@ketvietlab/ketjs'
 import type { ListSearchShape, ListState, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import type { Frame } from '../../ui/index.ts'
+import { searchFilterRuleLabel } from '@ketvietlab/design-system'
 import type {
+  CustomFilterField,
+  SearchFilterOperator,
   SearchFacet,
   SearchFilterConfig,
   SearchFilterCustomRule,
@@ -64,12 +67,37 @@ export const searchFilterLabels = (
   favoriteName: _('backend.search.favoriteName'),
   favoriteDefault: _('backend.search.favoriteDefault'),
   favoriteSaveAction: _('backend.search.favoriteSaveAction'),
+  favoriteCancel: _('backend.search.favoriteCancel'),
+  favoriteError: _('backend.search.favoriteError'),
   favoriteRemove: _('backend.search.favoriteRemove'),
   favoriteSetDefault: _('backend.search.favoriteSetDefault'),
   noFavorites: _('backend.search.noFavorites'),
   clear: _('backend.search.clear'),
   applyError: _('backend.search.applyError'),
   retry: _('backend.search.retry'),
+  clearFilters: _('backend.search.clearFilters'),
+  close: _('backend.search.close'),
+  valueFrom: _('backend.search.valueFrom'),
+  valueTo: _('backend.search.valueTo'),
+  operatorLabels: Object.fromEntries(
+    [
+      'contains',
+      'notContains',
+      'equals',
+      'notEquals',
+      'startsWith',
+      'gt',
+      'gte',
+      'lt',
+      'lte',
+      'between',
+      'anyOf',
+      'isTrue',
+      'isFalse',
+      'isSet',
+      'isNotSet',
+    ].map((operator) => [operator, _(`backend.search.operator.${operator}`)]),
+  ),
   ...overrides,
 })
 
@@ -88,6 +116,8 @@ export type ListSearchFilterOptions = {
   /** The module's word for a preset, when it differs from the field's. */
   presetLabel?: (key: string, fallback: string) => string
   labels?: Partial<SearchFilterLabels>
+  fieldChoices?: Record<string, NonNullable<CustomFilterField['choices']>>
+  favoriteHref?: string
   /** Carried into every call the bar makes, and so how `listKey` travels. */
   applyInput?: Record<string, string | undefined>
   functions: {
@@ -110,6 +140,12 @@ export const listSearchFilterConfig = (
   options: ListSearchFilterOptions,
 ): SearchFilterConfig => {
   const { spec, state, favorites } = options
+  const labels = searchFilterLabels(_, options.labels ?? {})
+  const choicesFor = (key: string): CustomFilterField['choices'] =>
+    options.fieldChoices?.[key] ??
+    spec.filterable
+      ?.find((field) => field.key === key)
+      ?.choices?.map((value) => ({ value, label: _.resolves(value) ? _(value) : value }))
   const fieldLabel = (key: string, fallback: string): string =>
     options.fieldLabel?.(key, fallback) ?? (_.resolves(fallback) ? _(fallback) : fallback)
   const presetLabel = (key: string): string => {
@@ -121,9 +157,13 @@ export const listSearchFilterConfig = (
       field,
       spec.filterable?.find((candidate) => candidate.key === field)?.label ?? field,
     )
-    const suffix =
-      value == null || value === '' ? '' : `: ${Array.isArray(value) ? value.join(', ') : String(value)}`
-    return `${label} ${operator}${suffix}`
+    return searchFilterRuleLabel({
+      fieldLabel: label,
+      operator: operator as SearchFilterOperator,
+      value,
+      choices: choicesFor(field),
+      operatorLabels: labels.operatorLabels,
+    })
   }
   const customFilters: SearchFilterCustomRule[] = state.filters.flatMap((filter, index) =>
     filter.kind === 'rule'
@@ -154,7 +194,7 @@ export const listSearchFilterConfig = (
     ...state.groupBy.map((group) => ({
       id: `${group.key}${group.interval ? `:${group.interval}` : ''}`,
       type: 'groupBy' as const,
-      label: `${groupLabel(group.key)}${group.interval ? ` / ${group.interval}` : ''}`,
+      label: `${groupLabel(group.key)}${group.interval ? ` / ${_(`backend.search.interval.${group.interval}`)}` : ''}`,
     })),
     ...(state.favoriteId
       ? [
@@ -168,6 +208,7 @@ export const listSearchFilterConfig = (
   ]
   return {
     name: options.name,
+    favoriteHref: options.favoriteHref,
     size: 'compact',
     ...(spec.limits?.maxGroups ? { maxGroupBy: spec.limits.maxGroups } : {}),
     facets,
@@ -200,7 +241,7 @@ export const listSearchFilterConfig = (
             active: false,
             options: field.intervals.map((interval) => ({
               id: `${field.key}:${interval}`,
-              label: `${label} / ${interval}`,
+              label: `${label} / ${_(`backend.search.interval.${interval}`)}`,
               active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
             })),
           }
@@ -220,9 +261,10 @@ export const listSearchFilterConfig = (
       value: field.key,
       label: fieldLabel(field.key, field.label),
       type: field.type,
+      choices: choicesFor(field.key),
     })),
     customFilters,
-    labels: searchFilterLabels(_, options.labels ?? {}),
+    labels,
     manager: {
       applyFunction: options.functions.apply,
       bodyId: options.bodyId,

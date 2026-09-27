@@ -83,7 +83,7 @@ export const pageIdentityContent = (
 
 export const pageIdentity = (kind: PageIdentityKind, props: PageIdentityProps): TemplateResult => (
   <>
-    {props.context !== undefined && (
+    {props.context != null && (
       <div data-ui={`${kind}-context`} data-kv-page-identity="context">
         {props.context}
       </div>

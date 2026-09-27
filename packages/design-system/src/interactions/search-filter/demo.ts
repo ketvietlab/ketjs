@@ -1,11 +1,8 @@
 import type { SearchFilterConfig } from './index.tsx'
 
-// Shared between the design-system's own catalogue specimen and the KetAtlas
-// materializer, so both static demos show exactly the same interaction: a search
-// bar with a mix of predefined and ad-hoc facets already applied, and one caret
-// toggle a reader can open to see the Filters/Group By/Favorites columns. There is
-// no `manager`, so toggling anything stays local — neither demo has a backend
-// behind it to call.
+// Shared by the live catalogue and KetAtlas. The default layout separates search,
+// section triggers and applied chips; mobile opens the same sections in a sheet.
+// Without a manager, selections remain local to the specimen.
 export const searchFilterDemoConfig: SearchFilterConfig = {
   name: 'orders',
   facets: [
