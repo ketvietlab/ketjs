@@ -207,7 +207,9 @@ export const searchFilterHref = (
   if (!favoriteId) {
     const href = new URL(encodeListState(stateFromPayload(ctx, binding, payload), target), target)
     // An explicit clear must not immediately reapply the viewer's default search.
-    href.searchParams.set('favorite', '')
+    href.searchParams.delete('favorite')
+    // An explicit empty query is expanded state, so a bare clear cannot reload a default favorite.
+    if (!href.searchParams.has('q')) href.searchParams.set('q', '')
     return `${href.pathname}${href.search}`
   }
   return savedState(ctx, binding, favoriteId).then((state) =>

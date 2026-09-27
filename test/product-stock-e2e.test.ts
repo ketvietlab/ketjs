@@ -131,6 +131,7 @@ test('product catalogue: uses SearchFilter and preserves a four-field group pipe
       customFilters: [],
     })
   ).value.href
+  assert.equal(new URL(cleared, 'http://ket.local').searchParams.has('favorite'), false)
   const clearedPage = await e2e.client.get(cleared, { headers: { accept: 'text/html' } })
   assert.doesNotMatch(await clearedPage.text(), /data-ui="kt-group-row"/)
 
@@ -320,6 +321,19 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
     tracking: 'none',
   })
   assert.equal(createdConfig.value.ok, true)
+
+  const favoriteFragment = await e2e.client.get('/admin/product/templates?lang=vi&modal=favorite', {
+    headers: { 'x-ket-navigation': 'fragment-v1' },
+  })
+  const fragmentHtml = await favoriteFragment.text()
+  assert.match(
+    fragmentHtml,
+    /<template data-ket-slot="backend.content">[\s\S]*?product-favorite-create-form[\s\S]*?<\/template>/,
+  )
+  const closedFragment = await e2e.client.get('/admin/product/templates?lang=vi', {
+    headers: { 'x-ket-navigation': 'fragment-v1' },
+  })
+  assert.doesNotMatch(await closedFragment.text(), /product-favorite-create-form/)
 
   const favoritePage = await e2e.client.get(
     '/admin/product/templates/favorites/new?returnTo=%2Fadmin%2Fproduct%2Ftemplates%3Fq%3DAO&lang=vi',

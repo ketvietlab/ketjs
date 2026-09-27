@@ -473,3 +473,11 @@
     min-inline-size: 0;
   }
 }
+
+@layer ket.app {
+  @media (max-width: 48rem) {
+    [data-ui="sidebar-foot"] {
+      --admin-control-height: var(--kv-touch-target);
+    }
+  }
+}

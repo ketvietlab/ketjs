@@ -370,3 +370,53 @@
     }
   }
 }
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="navigation-toggle"] {
+    display: none;
+  }
+  :where([data-kv-design-system])
+    [data-ui="navigation-header"]:not(:has([data-ui="navigation-identity"], [data-ui="navigation-context"])) {
+    display: none;
+  }
+  :where([data-kv-design-system])
+    [data-ui="app-navigation"][data-external-trigger="true"]
+    > [data-ui="navigation-trigger"] {
+    display: none;
+  }
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="navigation-toggle"] {
+      display: grid;
+      place-items: center;
+      width: var(--kv-touch-target);
+      height: var(--kv-touch-target);
+      flex: 0 0 var(--kv-touch-target);
+      padding: 0;
+      border: 0;
+      border-radius: var(--kv-radius-sm);
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    :where([data-kv-design-system])
+      [data-ui="navigation-header"]:not(
+        :has([data-ui="navigation-identity"], [data-ui="navigation-context"])
+      ) {
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+}
+
+@layer ket.app {
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system])
+      [data-ui="app-navigation"]
+      :is([data-ui="navigation-close"], [data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {
+      min-height: var(--kv-touch-target);
+    }
+    :where([data-kv-design-system]) [data-ui="navigation-close"] {
+      min-inline-size: var(--kv-touch-target);
+    }
+  }
+}

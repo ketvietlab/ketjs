@@ -113,12 +113,10 @@ export const frameOf = async (
   const lang = ctx.localeOf(url, req)
   return {
     navigation,
+    globalSearchQuery: url.pathname === '/admin/search' ? (url.searchParams.get('q') ?? '') : '',
     collectionUrl: url.pathname + url.search,
     viewer: await viewerOf(ctx, url, req),
     menu: await ctx.menu(menuUrl, req),
-    // The sidebar's search is in the URL like every other list's, so a filtered
-    // menu is a link and the back button walks out of it.
-    menuFilter: url.searchParams.get('menu')?.trim() || null,
     rootList: ctx.navigation?.rootList,
     extras: {
       runtime: navigation ? undefined : await ctx.joint(url, req, 'backend:runtime'),

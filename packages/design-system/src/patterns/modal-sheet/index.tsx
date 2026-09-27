@@ -54,6 +54,8 @@ export const ModalSheet = (props: {
    * no navigation layer ever treats closing it as a page change.
    */
   mode?: 'overlay' | 'embedded' | 'client'
+  /** A native dialog ancestor can own the accessible dialog role and name. */
+  dialogSemantics?: 'self' | 'parent'
   unsavedPrompt?: string | null
 }): TemplateResult => {
   const client = props.mode === 'client'
@@ -68,7 +70,7 @@ export const ModalSheet = (props: {
       data-unsaved-prompt={props.unsavedPrompt ?? null}
     >
       {client ? (
-        <button data-ui="modal-backdrop" type="button" aria-label={props.closeLabel} tabindex="-1">
+        <button data-ui="modal-backdrop" type="button" aria-hidden="true" tabIndex={-1}>
           <span>{props.closeLabel}</span>
         </button>
       ) : (
@@ -82,10 +84,13 @@ export const ModalSheet = (props: {
         data-size={props.size ?? 'default'}
         data-height={props.height === 'fixed' ? 'fixed' : null}
         style={props.height === 'fixed' && props.fixedHeight ? `height: ${props.fixedHeight} !important` : ''}
-        role="dialog"
-        aria-modal={embedded ? 'false' : 'true'}
-        aria-labelledby={`${props.id}-title`}
-        aria-describedby={props.description ? `${props.id}-description` : null}
+        {...(props.dialogSemantics === 'parent'
+          ? {}
+          : { role: 'dialog', 'aria-modal': embedded ? 'false' : 'true' })}
+        aria-labelledby={props.dialogSemantics === 'parent' ? null : `${props.id}-title`}
+        aria-describedby={
+          props.dialogSemantics !== 'parent' && props.description ? `${props.id}-description` : null
+        }
         tabindex={embedded ? null : '-1'}
       >
         <header data-ui="modal-head">

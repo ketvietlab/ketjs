@@ -246,4 +246,75 @@ Public operational `ListPage.actionsPlacement="header"` places `actions` in the 
 
 `ReorderList` owns ordered editable row layout, drag handles, add/remove and accessible move controls. It emits the ordered stable ids as JSON through its hidden native field and a bubbling `change` event; its controlled parent supplies updated row content. The record-modal runtime captures textual drafts before consuming this field into view state. `RecordModalForm.body` composes the editor inside the single submission form; `dirty` keeps structural and retained edits subject to the existing close guard.
 
-`SearchFilterConfig.capabilities` can disable `groupBy`, `favorites`, or `customFilters` for a consumer that does not support those operations; omitted flags preserve the complete existing interaction. The component owns `search-filter-columns[data-columns]` and fits the panel to its supported sections. Product attributes reuse this compact SearchFilter island via `frame.chrome.searchContent`, with URL-backed display-type and variant-policy facets; there is no legacy search-menu fallback.
+`SearchFilterConfig.capabilities` can disable `groupBy`, `favorites`, or `customFilters` for a consumer
+that does not support those operations. Omitted flags enable sections that have usable content: grouping
+requires options; favorites require existing entries, a save function, or `favoriteHref`. Explicit
+`false` always hides the section. The component owns `search-filter-columns[data-columns]` and fits the
+panel to its supported sections. Product attributes reuse this compact SearchFilter island via
+`frame.chrome.searchContent`, with URL-backed display-type and variant-policy facets; there is no legacy
+search-menu fallback.
+
+SearchFilter uses separate Filters, Group by, and Favorites triggers by default for every consumer.
+`search-filter-toggle` remains the single filters trigger; nested options keep `disclosure-summary` and
+`menu-item`. Applied `search-filter-facet` chips live in a separate row, including ordered groups. Their
+existing `data-type` distinguishes `filter`, `field`, `favorite`, and `groupBy`; count tests should
+select the kinds they mean. `search-filter-section-toggle[data-section]` opens a desktop section;
+`search-filter-columns[data-panel]` selects that section. Triggers and panels have names matching their
+section. Below 641px, only the filters trigger is visible and opens a native modal dialog
+(`search-filter-sheet`) containing the shared client `ModalSheet` with `dialogSemantics="parent"` so the
+native ancestor owns the single accessible dialog role. Opening focuses the visible close button; the
+client backdrop is hidden from the accessibility tree and tab order. Native modal focus containment,
+backdrop/close buttons and focus return are owned by the island. Escape closes the nearest open nested
+disclosure and focuses its summary, then closes an open favorite form and focuses its toggle, before
+a subsequent Escape closes the panel or sheet. Closing the menu resets the inline favorite form.
+`search-filter-empty` owns the sentence-case saved-search empty message; `search-filter-icon` and
+`search-filter-clear` also belong to this component. Consumers must not override their descendants.
+
+Clear filters preserves the keyword and grouping, removing filter rules/presets and the active favorite.
+The shared apply handler removes the `favorite` query parameter; an explicit empty `q` prevents a
+cleared list from automatically reloading its default favorite. Other navigation parameters remain
+screen-owned. `SearchFilterLabels.operatorLabels`, `clearFilters`, `close`, `favoriteCancel`,
+`favoriteError`, `valueFrom`, and `valueTo` are optional translated labels with English defaults.
+KétSuite supplies Vietnamese and English; downstream consumers that construct labels directly must
+translate the new labels during their release-pin update. `CustomFilterField.choices` supplies
+value/label pairs for selection and reference editors. KétSuite maps declared spec choices and can
+supply permission-checked `fieldChoices`; product uses its existing category/unit API results.
+Number/date/datetime use typed controls, ranges have two inputs, and valueless operators have none.
+
+`favoriteHref` links to an existing screen-owned form; product keeps that route modal inside
+`backend.content` so fragment navigation can open and close it. Without it, the local save form is
+created below `favorite-save-toggle` only after the reader requests it. This trigger is not a menu
+selection and keeps the desktop panel open. Opening focuses the name; cancellation and successful saving
+return focus to the trigger while the component remains mounted. API errors in favorite operations use
+`favoriteError`, independently of filter-application errors, and never expose raw server diagnostics.
+
+Migration: no module opt-in is required; existing capability flags, hooks and apply payloads are
+retained. Rollback the SearchFilter change as a unit (component, labels, shared URL handler, inventory
+and tests) if a downstream consumer fails its interaction checks. The product-only density/header branch
+is independent.
+
+
+### Application topbar and compact lists
+
+KétSuite uses compact density by default: 40px desktop rows, sentence-case column headings, and
+smaller operational list headers. Mobile selection targets remain at least 44px. Tables retain all
+columns and scroll horizontally; the scroll region is keyboard focusable. Classifications use plain
+`Text`, with `tone="muted"` for secondary values; reserve `Badge` for lifecycle states and exceptions.
+`MediaLabel` renders a 24px thumbnail only when present or explicitly reserved. Product lists reserve
+image space across a page only when at least one visible record has an image.
+
+`AppShell.topbar` accepts `AppTopbar`, a 48px indigo application bar with a native GET search form,
+brand link, and context slot. `NavigationToggle` can control `AppNavigation` with `externalTrigger`;
+the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K focuses
+search when no dialog is open. KétSuite moves organisation context into the topbar, removes duplicate
+sidebar branding/search, and updates the `backend.global-topbar` fragment alongside the existing
+slots. Only Product list suppresses breadcrumbs; every other page keeps its existing trail.
+
+`/admin/search` requires a session and searches permitted menus, products and partners. Optional record
+providers call the same permission-checked, company-scoped functions as their lists, with eight results
+per provider and native detail links. Empty queries never enumerate records. Search terms are bounded
+to 200 characters. Search is server rendered and works without JavaScript.
+
+`searchFilterRuleLabel` is shared by server and island labels. Group intervals are localized, including
+Day/Week/Month/Quarter/Year. KetTable errors use the consumer's localized `loadError`, never raw server
+exception messages. The sidebar search hooks are retired; consumers should use AppTopbar search.

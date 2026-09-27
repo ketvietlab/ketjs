@@ -664,3 +664,22 @@
     }
   }
 }
+
+@layer ket.app {
+  [data-ui="page-context-viewer"][data-placement="topbar"] {
+    --admin-ink: var(--kv-app-topbar-text);
+    --admin-ink-secondary: var(--kv-app-topbar-text);
+    --admin-ink-muted: var(--kv-app-topbar-muted);
+    min-block-size: var(--kv-touch-target);
+    max-inline-size: 24rem;
+  }
+  @media (max-width: 48rem) {
+    [data-ui="page-context-viewer"][data-placement="topbar"] {
+      min-inline-size: var(--kv-touch-target);
+      justify-content: center;
+    }
+    [data-ui="page-context-viewer"][data-placement="topbar"] [data-ui="page-context-copy"] {
+      display: none;
+    }
+  }
+}

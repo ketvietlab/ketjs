@@ -181,7 +181,12 @@ const installTableSelection = (signal: AbortSignal, navigation: BrowserNavigatio
 }
 
 const openDropdowns = (): HTMLDetailsElement[] => [
-  ...document.querySelectorAll<HTMLDetailsElement>(`${dismissibleDropdown}[open]`),
+  ...document.querySelectorAll<HTMLDetailsElement>(
+    dismissibleDropdown
+      .split(', ')
+      .map((selector) => `${selector}[open]`)
+      .join(', '),
+  ),
 ]
 
 const installDropdownDismiss = (signal: AbortSignal): void => {
@@ -199,7 +204,7 @@ const installDropdownDismiss = (signal: AbortSignal): void => {
   document.addEventListener(
     'keydown',
     (event) => {
-      if (event.key !== 'Escape') return
+      if (event.defaultPrevented || event.key !== 'Escape') return
       const dropdowns = openDropdowns()
       if (!dropdowns.length) return
       const focused = document.activeElement?.closest<HTMLDetailsElement>(dismissibleDropdown)

@@ -149,6 +149,30 @@ test('record modal: going back over a client-owned entry does not refetch the pa
   assert.match(runtime, /'ket:popstate'[\s\S]*?event\.preventDefault\(\)/u)
 })
 
+test('record modal: cross-collection navigation opens its target without resetting an open draft', () => {
+  const listener =
+    /'ket:navigation-complete',\s*\(\) => \{([\s\S]*?)\n          \},\s*\{ signal: lifetime \}/u.exec(runtime)
+  assert.ok(listener, 'the persistent island follows completed fragment navigation')
+  const run = new Function('readRecordModalTarget', 'location', 'definition', 'open', 'show', listener[1]!)
+  const calls: unknown[][] = []
+  const show = (...args: unknown[]) => calls.push(args)
+  const target = { kind: 'product.template', id: 'one', tab: 'variants' }
+  const invoke = (kind: string, current: unknown, record: typeof target | null = target) =>
+    run(
+      () => record,
+      { href: '/destination' },
+      { kind },
+      () => current,
+      show,
+    )
+  invoke('product.template', null)
+  assert.deepEqual(calls, [['one', 'variants', 'none']])
+  invoke('product.template', { id: 'one', tab: 'general' })
+  invoke('partner.record', null)
+  invoke('product.template', null, null)
+  assert.equal(calls.length, 1, 'refreshes and unrelated navigation leave the current draft alone')
+})
+
 test("record modal: opening a record saves the list page's scroll position before pushing, so closing restores it", () => {
   // Mirrors `saveScroll` in packages/ketjs/src/server/http.ts: without this, going back
   // out of the modal restores no scroll (the entry never carried one) and the page jumps
