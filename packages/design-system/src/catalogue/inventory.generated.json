@@ -13,9 +13,9 @@
     "compatibilityExports": 257,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 138,
+    "publicGaps": 137,
     "runtimeGaps": 5,
-    "typeGaps": 133,
+    "typeGaps": 132,
     "cssFiles": 77,
     "cssLines": 15074
   },
@@ -4054,8 +4054,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/search-filter-apply.test.tsx"],
       "gapTask": "DS-045"
     },
     {
@@ -5263,6 +5263,7 @@
       "testFiles": [
         "test/design-system.test.tsx",
         "test/product-attribute-search-ui.test.tsx",
+        "test/search-filter-apply.test.tsx",
         "test/search-filter-grouping.test.tsx"
       ],
       "gapTask": "DS-045"
@@ -9835,6 +9836,7 @@
         "test/purchase-order-lists-screen.test.tsx",
         "test/purchase-overview-screen.test.tsx",
         "test/purchase-vendor-pricelists-screen.test.tsx",
+        "test/search-filter-apply.test.tsx",
         "test/ui-record-modal.test.tsx",
         "test/website-arguments-no-screen-passed.test.tsx",
         "test/website-form-editor.test.tsx",
