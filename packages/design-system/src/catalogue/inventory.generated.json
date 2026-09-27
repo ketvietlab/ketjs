@@ -8796,6 +8796,7 @@
         "test/website-form-route.test.ts",
         "test/website-preview-renderer.test.ts",
         "test/website-search-index.test.ts",
+        "test/websocket.test.ts",
         "test/workspace.test.ts"
       ],
       "gapTask": "DS-010"
