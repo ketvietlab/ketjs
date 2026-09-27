@@ -3,7 +3,7 @@
 import { resolve } from 'node:path'
 import { scaffoldView } from './index.ts'
 
-const VERSION = '0.1.27'
+const VERSION = '0.1.28'
 const HELP = `Create Ket view ${VERSION}
 
 Usage:
