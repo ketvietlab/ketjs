@@ -1,5 +1,5 @@
 import { each, signal } from '@ketvietlab/ketjs-view'
-import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { IslandController, IslandElement, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'search-filter',
@@ -102,11 +102,21 @@ const operatorLabels: Record<SearchFilterOperator, string> = {
 const isValuelessOperator = (operator: SearchFilterOperator): boolean =>
   operator === 'isTrue' || operator === 'isFalse' || operator === 'isSet' || operator === 'isNotSet'
 
-/** The operator a free-text "Search <field> for: …" suggestion applies for that field's type. */
-const defaultSearchOperator = (type: SearchFilterFieldType): SearchFilterOperator =>
-  type === 'number' || type === 'date' || type === 'datetime' ? 'equals' : 'contains'
-
 export type CustomFilterField = { value: string; label: string; type: SearchFilterFieldType }
+
+/**
+ * The rule a free-text "Search <field> for: …" suggestion stands for, or null
+ * when the text cannot be one. Every suggestion must be a filter the server
+ * accepts, so a field whose values free text cannot name — a choice, a record,
+ * a date — is left to the custom-filter editor instead of being offered here.
+ */
+const suggestedRule = (field: CustomFilterField, text: string): CustomFilterRule | null => {
+  if (field.type === 'text') return { field: field.value, operator: 'contains', value: text }
+  // Whole numbers only: `1.000` is a thousand to a Vietnamese reader and one to `Number`.
+  if (field.type === 'number' && /^-?\d+$/.test(text))
+    return { field: field.value, operator: 'equals', value: text }
+  return null
+}
 
 /** A removable chip in the search field. `type` only drives its colour token. */
 export type SearchFacet = { id: string; type: 'field' | 'filter' | 'groupBy' | 'favorite'; label: string }
@@ -205,20 +215,44 @@ export type SearchFilterConfig = {
 type SearchFilterIslandProps = IslandProps & { id: string; config: SearchFilterConfig }
 type ApiPayload = { ok?: boolean; value?: unknown; message?: unknown; errors?: Array<{ message?: unknown }> }
 type CustomFilterRule = { field: string; operator: SearchFilterOperator; value: string }
+type Draft = { facets: SearchFacet[]; rules: Record<string, CustomFilterRule> }
+type RetryDraft = Draft & { consumed: string }
 
 const string = (value: unknown): string => (value == null ? '' : String(value))
 
+/**
+ * A function call that failed. `retryable` when it never reached a verdict — the
+ * network dropped or the server faulted — so the same request may yet succeed;
+ * a refusal (4xx) would only be refused again.
+ */
+class ApiError extends Error {
+  readonly retryable: boolean
+  constructor(message: string, retryable: boolean) {
+    super(message)
+    this.retryable = retryable
+  }
+}
+
 const callApi = async (name: string, input: unknown): Promise<unknown> => {
-  const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  })
-  const payload = (await response.json()) as ApiPayload
+  let response: Response
+  try {
+    response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  } catch (caught) {
+    throw new ApiError(caught instanceof Error ? caught.message : 'network error', true)
+  }
+  // A proxy in front of a faulting server answers with HTML, not the JSON envelope.
+  const payload = (await response.json().catch(() => ({}))) as ApiPayload
   if (!response.ok || payload.ok === false) {
     const domainError = payload.errors?.[0]
-    throw new Error(string(domainError?.message ?? payload.message ?? `HTTP ${response.status}`))
+    throw new ApiError(
+      string(domainError?.message ?? payload.message ?? `HTTP ${response.status}`),
+      response.status >= 500,
+    )
   }
   return payload.value
 }
@@ -241,9 +275,8 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const columnCount = 1 + Number(capabilities.groupBy !== false) + Number(capabilities.favorites !== false)
   const manager = config.manager
   const groupByOptions = flatten(config.groupBy)
-  // A free-text query against a boolean field has no natural meaning, so it is
-  // offered as a toggleable filter item, never as a "Search <field> for: …" row.
-  const searchableFields = config.customFilterFields.filter((field) => field.type !== 'boolean')
+  const fieldSuggestions = (text: string): CustomFilterField[] =>
+    config.customFilterFields.filter((field) => suggestedRule(field, text))
 
   const facets = signal<SearchFacet[]>(config.facets)
   const favorites = signal<SearchFavorite[]>(config.favorites)
@@ -265,6 +298,21 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const saveFavoriteDefault = signal(false)
   const pending = signal(false)
   const error = signal('')
+  // What the rendered list actually shows. Chips change before the request goes
+  // out, so a request that fails must put them back here rather than leave a
+  // filter on screen that never applied.
+  let settled: Draft = { facets: facets(), rules: customFilterRules() }
+  const retryDraft = signal<RetryDraft | null>(null)
+  let mountedRoot: IslandElement | null = null
+
+  // `value={query()}` only writes the attribute, which a field the reader has
+  // typed into no longer displays — the live property is what they see.
+  const setQuery = (value: string): void => {
+    query.set(value)
+    if (!mountedRoot) return
+    for (const input of mountedRoot.querySelectorAll('[data-ui="search-filter-input"]'))
+      if (input instanceof HTMLInputElement && input.value !== value) input.value = value
+  }
 
   const isActive = (kind: SearchFacet['type'], id: string): boolean =>
     facets().some((facet) => facet.type === kind && facet.id === id)
@@ -292,16 +340,23 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   })
 
   let applyVersion = 0
-  const apply = async (): Promise<void> => {
+  /**
+   * Sends the current facets. `consumed` is text the triggering action moved
+   * out of the search field into a chip; a failed request hands it back.
+   */
+  const apply = async (consumed = ''): Promise<void> => {
     if (!manager?.applyFunction) return
     const version = ++applyVersion
+    const attempted: Draft = { facets: facets(), rules: customFilterRules() }
     pending.set(true)
     error.set('')
+    retryDraft.set(null)
     try {
       const value = (await callApi(manager.applyFunction, applyPayload())) as
         | { html?: unknown; href?: unknown }
         | undefined
       if (version !== applyVersion) return
+      settled = attempted
       const body = document.getElementById(manager.bodyId)
       if (body && typeof value?.html === 'string') body.innerHTML = value.html
       // A bare `pushState` only edits the address bar — nothing reads the URL back
@@ -317,10 +372,25 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       if (typeof value?.href === 'string') history.pushState(null, '', value.href)
     } catch (caught) {
       if (version !== applyVersion) return
-      error.set(caught instanceof Error ? caught.message : labels.applyError)
+      facets.set(settled.facets)
+      customFilterRules.set(settled.rules)
+      if (consumed && !query()) setQuery(consumed)
+      if (caught instanceof ApiError && caught.retryable) retryDraft.set({ ...attempted, consumed })
+      // The server's message is an English diagnostic, not copy for the reader.
+      error.set(labels.applyError)
     } finally {
       if (version === applyVersion) pending.set(false)
     }
+  }
+
+  /** Sends the failed request again, chips and all, as the reader last asked for it. */
+  const retry = (): void => {
+    const draft = retryDraft()
+    if (!draft) return
+    facets.set(draft.facets)
+    customFilterRules.set(draft.rules)
+    if (draft.consumed && query() === draft.consumed) setQuery('')
+    void apply(draft.consumed)
   }
 
   const clearFavorite = (): void => {
@@ -391,22 +461,22 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       ...facets().filter((facet) => facet.type !== 'field'),
       { id: `query:${crypto.randomUUID()}`, type: 'field', label: value },
     ])
-    query.set('')
+    setQuery('')
     suggestionsOpen.set(false)
-    void apply()
+    void apply(value)
   }
 
   const selectFieldSuggestion = (field: CustomFilterField): void => {
     const value = query().trim()
-    if (!value) return
-    const operator = defaultSearchOperator(field.type)
+    const rule = value ? suggestedRule(field, value) : null
+    if (!rule) return
     clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
-    customFilterRules.set({ ...customFilterRules(), [id]: { field: field.value, operator, value } })
+    customFilterRules.set({ ...customFilterRules(), [id]: rule })
     facets.set([...facets(), { id, type: 'filter', label: `${field.label}: "${value}"` }])
-    query.set('')
+    setQuery('')
     suggestionsOpen.set(false)
-    void apply()
+    void apply(value)
   }
 
   const handleSearchKeydown = (event: Event): void => {
@@ -730,16 +800,6 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         data-size={config.size ?? 'default'}
         data-busy={pending() ? 'true' : null}
       >
-        {error() ? (
-          <aside data-ui="notice" data-tone="danger" role="alert">
-            <div data-ui="notice-copy">
-              <p data-ui="notice-message">{error()}</p>
-            </div>
-            <button data-ui="action" data-variant="secondary" type="button" onClick={apply}>
-              {labels.retry}
-            </button>
-          </aside>
-        ) : null}
         <div data-ui="search-filter-bar">
           <div data-ui="search-filter-field">
             {facets().some((facet) => facet.type !== 'groupBy') ? (
@@ -770,7 +830,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
                   {labels.searchGenericLabel}: <b>"{query().trim()}"</b>
                 </button>
                 {each(
-                  searchableFields,
+                  fieldSuggestions(query().trim()),
                   (field) => field.value,
                   (field) => (
                     <button
@@ -981,9 +1041,25 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
             </div>
           </details>
         </div>
+        {/* Below the bar, so the control the reader just used does not move under the pointer. */}
+        {error() ? (
+          <aside data-ui="notice" data-pattern="notice" data-tone="danger" role="alert">
+            <div data-ui="notice-copy">
+              <p data-ui="notice-message">{error()}</p>
+            </div>
+            {retryDraft() ? (
+              <div data-ui="notice-actions">
+                <button data-ui="action" data-variant="secondary" type="button" onClick={retry}>
+                  {labels.retry}
+                </button>
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
     ),
     mount: ({ root, lifetime }) => {
+      mountedRoot = root
       // Autocomplete is an island-owned popup rather than a native <details>
       // disclosure, so the shared details-menu dismissor cannot see it. Keep
       // the boundary local to the component: an outside click abandons the
@@ -1002,6 +1078,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     dispose: () => {
       applyVersion++
       pending.set(false)
+      mountedRoot = null
     },
   }
 }
