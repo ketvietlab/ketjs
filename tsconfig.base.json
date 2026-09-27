@@ -30,7 +30,8 @@
       "@ketvietlab/ketsuite": ["./packages/ketsuite/src/index.ts"],
       "@ketvietlab/ketsuite/deployment": ["./packages/ketsuite/src/deployment.ts"],
       "@ketvietlab/ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
-      "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"]
+      "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"],
+      "@ketvietlab/ketsuite/livedoc": ["./packages/ketsuite/src/ui/client/live-doc-view.tsx"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "@ketvietlab/ketjs-view"

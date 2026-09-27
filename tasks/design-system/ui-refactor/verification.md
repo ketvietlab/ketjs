@@ -1,6 +1,6 @@
 # UI refactor review evidence
 
-Date: 2026-09-27. Target: `develop`. This is review evidence, not a release or production rollout.
+Date: 2026-09-27. Target: `integration`. This is review evidence, not a release or production rollout.
 
 ## Completed scope
 
@@ -39,7 +39,7 @@ future domain work, not a condition for this UI refactor.
 
 - `npm run verify`: full format/lint, inventory/governance/release contracts, terminology, build,
   dependency/UI/staff/API audits, TypeScript, complete Node suite and type assertions.
-- `npm --prefix docs run check:snippets`: 348 snippets in 70 files.
+- `npm --prefix docs run check:snippets`: 353 snippets in 71 files on the integration tree.
 - KetViet integration: 37 modules build, 52 customer-care HTTP/contract tests and 5 follow-up filter
   tests pass against this tree. The dependent PR records an exact reachable framework commit.
 - Real Chromium through KetPlus, Vietnamese, reduced motion: 1440x900, 1024x900 and 390x844 in both
@@ -72,8 +72,9 @@ Full-suite conditional skips and lint warnings are recorded in the PR rather tha
   removed. HTTP and browser checks retain the complete permitted sidebar with a non-matching query.
 - F5/F6: correct the group-chip hook documentation, keep the saved-search empty message sentence-case
   and inset the inline form. KetViet owns the CRM assertion and spelling changes.
-- Follow-up validation: full `npm run verify` passes (2,503 tests, 38 conditional skips, 0 failures),
-  all 11 type assertions and 348 documentation snippets pass. Non-failing lint warnings remain.
+- Integration validation: after merging `origin/integration` at `0955dbfb` with `--no-commit`,
+  `npm ci` and full `npm run verify` pass (2,516 tests passed, 38 conditional skips, 0 failures),
+  all 11 type assertions and 353 documentation snippets pass. Non-failing lint warnings remain.
 
 ## Logo correction
 
@@ -95,7 +96,13 @@ A forced asset rebuild and byte comparison verified both emitted logo files.
 
 ## Deployment boundary
 
-KetViet is a dependent review branch with a committed exact-SHA `KETJS.override`. Its normal gate must
-keep blocking merge until this framework change is reviewed, merged and released, then the override
-is replaced by a released `KETJS.lock` pin. No merge, framework release or production deployment is
-part of this handoff. Original Product prototype and preview worktrees are preserved.
+Both feature PRs target remote `integration`. Test the KetJS tree after merging the current
+`origin/integration`, then use a merge commit to retain provenance. After review and merge, verify
+that the remote integration tree equals the tested tree. KetViet then pins the newest remote KetJS
+integration tip, verifies that it contains the previous integration pin, rebuilds its bundles and
+runs its affected tests. A feature-branch override is only a documented temporary review exception
+while the framework PR is pending; it must not replace or rewind the integration pin.
+
+An override is allowed on KetViet integration. Only promotion to `develop` requires a released
+`KETJS.lock` pin and removal of the override. Do not regenerate release contracts under an override.
+Original Product prototype and preview worktrees are preserved.
