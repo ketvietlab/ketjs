@@ -74,7 +74,6 @@ export type SidebarOptions = {
   rootList?: 'auto' | 'always' | 'never'
   viewer?: Viewer | null
   indicators?: Indicator[]
-  menuFilter?: string | null
   navItems?: JSXChild
   footItems?: JSXChild
 }

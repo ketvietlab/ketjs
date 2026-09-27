@@ -9,7 +9,7 @@ Date: 2026-09-27. Target: `develop`. This is review evidence, not a release or p
   facet row, and a mobile sheet. Inline favorite forms open explicitly and keep focus in the menu.
 - Shared rule labels and localized date grouping intervals; unsupported empty editors are hidden.
   Existing `search-filter-toggle`, `disclosure-summary`, `menu-item`, `search-filter-facet` and input
-  hooks remain. Group chips are distinguished by `data-facet-kind="group"`.
+  hooks remain. Group chips are distinguished by `data-type="groupBy"`.
 - Shared compact collection styling, sentence-case headings, plain product classifications, muted
   negative values and 24px media labels. Imageless pages do not reserve an empty image column;
   mixed pages align names. Mobile tables retain every column in a labeled scrolling region.
@@ -59,6 +59,21 @@ KetPlus for browser control. The browser rehearsals above are separate evidence,
 63 automated tests passing. CI/independent review should run the complete customer-care suite.
 The fixture batch confirmation reaches its queued state; worker execution is covered by HTTP tests.
 Full-suite conditional skips and lint warnings are recorded in the PR rather than hidden.
+
+## Independent review follow-up
+
+- F2: Escape dismisses an inline favorite form before its containing desktop menu or mobile sheet.
+  Closing or switching the panel resets the form. Node tests cover native dismissal, outside clicks,
+  panel switching and two-step Escape with focus restoration. KetPlus confirms desktop light and
+  mobile dark behavior, including reopening without a stale form.
+- F3: Partner supplies its translated table-region label. HTTP tests cover vi/en; the Vietnamese
+  accessible name is also verified in Chromium.
+- F4: the retired `menu` query no longer narrows sidebar navigation; unused `menuFilter` plumbing is
+  removed. HTTP and browser checks retain the complete permitted sidebar with a non-matching query.
+- F5/F6: correct the group-chip hook documentation, keep the saved-search empty message sentence-case
+  and inset the inline form. KetViet owns the CRM assertion and spelling changes.
+- Follow-up validation: full `npm run verify` passes (2,503 tests, 38 conditional skips, 0 failures),
+  all 11 type assertions and 348 documentation snippets pass. Non-failing lint warnings remain.
 
 ## Screenshots
 

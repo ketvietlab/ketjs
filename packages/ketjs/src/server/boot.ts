@@ -798,9 +798,6 @@ export async function bootDeployment(
     menu: async (url, req) => {
       const allow = await allowFor(url, req)
       const _ = translate(localeOf(url, req))
-      // The sidebar's search is in the URL like every other list's, so a filtered
-      // menu is a link and the back button walks out of it.
-      const q = url.searchParams.get('menu')?.trim() || undefined
       // Someone who may call an inspection capability is looking, not working, and
       // `for` describes work. Narrowing their sidebar would hide the very thing
       // they were let in to see.
@@ -811,13 +808,9 @@ export async function bootDeployment(
           translate: (k) => _(k),
           locale: _.locale,
           active: url.pathname,
-          q,
           groups: spec.navigation?.groups,
           demote: spec.navigation?.demote,
-          // Searching is how someone reaches a surface that is not their daily
-          // work, so the search results are the permitted tree, not the narrowed
-          // one. Hiding what a person typed the name of would be a bug.
-          intent: !inspecting && !q,
+          intent: !inspecting,
         }),
       )
     },
