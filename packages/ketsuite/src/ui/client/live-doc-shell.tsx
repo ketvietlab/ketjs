@@ -14,8 +14,21 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Delta } from './live-doc-blocks.ts'
 
-/** One block as the serializer needs it: what kind, and the text it holds. */
-export type LiveDocBlock = { type: string; checked?: boolean; delta: Delta }
+/**
+ * One block as the serializer needs it: what kind, and the text it holds.
+ *
+ * `id` gives the block a stable anchor (`#doc-<id>`), `align` is a text
+ * alignment, and a `table` block keeps its cells in `rows` rather than in the
+ * text — cell edits must not enter the editor's flat paragraph model.
+ */
+export type LiveDocBlock = {
+  type: string
+  checked?: boolean
+  delta: Delta
+  id?: string
+  align?: string
+  rows?: string[][]
+}
 
 /** Somebody else in the document, and which block their caret is in. */
 export type LiveDocViewer = { id: string; name: string; index: number }
@@ -24,6 +37,7 @@ type Labels = (typeof LABELS)['vi']
 
 const LABELS = {
   vi: {
+    table: 'Bảng',
     toolbar: 'Định dạng',
     editor: 'Mô tả công việc',
     blockType: 'Kiểu khối',
@@ -49,6 +63,7 @@ const LABELS = {
     alsoHere: 'Đang xem:',
   },
   en: {
+    table: 'Table',
     toolbar: 'Formatting',
     editor: 'Issue description',
     blockType: 'Block type',
@@ -72,6 +87,32 @@ const LABELS = {
     linkRemove: 'Remove link',
     linkCancel: 'Cancel',
     alsoHere: 'Also here:',
+  },
+  ja: {
+    table: '表',
+    toolbar: '書式',
+    editor: '本文',
+    blockType: 'ブロック形式',
+    p: '段落',
+    h1: '見出し1',
+    h2: '見出し2',
+    h3: '見出し3',
+    quote: '引用',
+    code: 'コードブロック',
+    bullet: '箇条書き',
+    ordered: '番号付きリスト',
+    check: 'チェックリスト',
+    bold: '太字',
+    italic: '斜体',
+    strike: '取り消し線',
+    inlineCode: 'コード',
+    link: 'リンク',
+    linkTitle: 'リンクを追加',
+    linkUrl: 'URL',
+    linkApply: '適用',
+    linkRemove: '削除',
+    linkCancel: 'キャンセル',
+    alsoHere: '閲覧中:',
   },
 }
 
@@ -216,7 +257,21 @@ export function presenceHtml(people: LiveDocViewer[] | undefined, lang?: string 
 const checkMark = (block: LiveDocBlock, labels: Labels): string =>
   `<span data-ui="flow-editor-check" contenteditable="false" role="checkbox" aria-checked="${block.checked ? 'true' : 'false'}" aria-label="${escapeAttr(labels.check)}" tabindex="-1"></span>`
 
+const ALIGNMENTS = new Set(['left', 'center', 'right'])
+
+/** A table's cells are plain text, each editable on its own. */
+const tableHtml = (block: LiveDocBlock, index: number): string =>
+  `<div data-block="table" data-index="${index}" contenteditable="false"><table><tbody>${(block.rows ?? [])
+    .map(
+      (row, r) =>
+        `<tr>${row.map((cell, c) => `<td data-live-cell data-row="${r}" data-col="${c}" contenteditable="plaintext-only">${withBreaks(cell) || '<br>'}</td>`).join('')}</tr>`,
+    )
+    .join('')}</tbody></table></div>`
+
 const blockHtml = (block: LiveDocBlock, index: number, labels: Labels, people: LiveDocViewer[]): string => {
+  if (block.type === 'divider')
+    return `<hr data-block="divider" data-index="${index}" contenteditable="false">`
+  if (block.type === 'table') return tableHtml(block, index)
   const type = BLOCK_TAG[block.type] ? block.type : 'p'
   const tag = BLOCK_TAG[type]
   const checked = type === 'check' ? ` data-checked="${block.checked ? 'true' : 'false'}"` : ''
@@ -231,7 +286,9 @@ const blockHtml = (block: LiveDocBlock, index: number, labels: Labels, people: L
       : type === 'check'
         ? `${checkMark(block, labels)}<span data-ui="flow-editor-line">${blockBody(block)}</span>`
         : blockBody(block)
-  return `<${tag} data-block="${type}" data-index="${index}"${checked}>${body}${viewerMarks(people)}</${tag}>`
+  const id = block.id ? ` id="doc-${escapeAttr(block.id)}"` : ''
+  const align = block.align && ALIGNMENTS.has(block.align) ? ` style="text-align:${block.align}"` : ''
+  return `<${tag} data-block="${type}" data-index="${index}"${id}${align}${checked}>${body}${viewerMarks(people)}</${tag}>`
 }
 
 /**
@@ -291,7 +348,11 @@ export function documentHtml(
  * mount on: `IslandController` has no "mounted" hook, so the binding looks the
  * node up by id once the view has rendered.
  */
-export function liveDocShell(o: { containerId: string; lang?: string | null }): TemplateResult {
+export function liveDocShell(o: {
+  containerId: string
+  lang?: string | null
+  tables?: boolean
+}): TemplateResult {
   const labels = labelsOf(o.lang)
   const mark = (key: string, glyph: string, label: string) => (
     <button
@@ -336,6 +397,7 @@ export function liveDocShell(o: { containerId: string; lang?: string | null }): 
         {mark('strike', 'S', labels.strike)}
         {mark('code', '</>', labels.inlineCode)}
         {mark('link', '\u{1F517}', labels.link)}
+        {o.tables ? mark('table', '\u25A6', labels.table) : null}
       </div>
       <div data-ui="flow-editor-presence" data-flow-editor-presence role="status" aria-live="polite" />
       {/* biome-ignore lint/a11y/useFocusableInteractive: `contenteditable` makes this natively focusable and tab-reachable, which the rule does not model; the explicit tabindex is there so it reads that way too. */}
