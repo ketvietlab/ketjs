@@ -106,6 +106,7 @@ Route factories receive live runtime services:
 | `document(...)`, `styles(request)` | Safe document shell and composed module styles. |
 | `joint(...)`, `jointShows(...)` | Installed extension-point output. |
 | `menu(url, request)` | Navigation filtered by install state and function permissions. |
+| `subscribe(channel, onMessage, onReady?)` | Listen for `ctx.notify(channel, …)`. One database listener per channel per process; single-datastore deployments only. |
 
 Do not cache `live()` or a tenant-specific service globally. Which modules, sessions, and storage
 apply can change per request.
@@ -128,6 +129,7 @@ Routes return branded `RouteResult` values. Create them with public helpers:
 | `text(value)` | String | `text/plain` |
 | `bytes(value, { type })` | `Uint8Array` | Required non-markup type |
 | `streamed(iterable, { type })` | `AsyncIterable<Uint8Array>` | Required non-markup type |
+| `websocket(session)` | Upgrades the request (RFC 6455) | `426` for a plain request |
 | `raw(value, { type })` | Trusted prebuilt string | `text/html` |
 | `withHeaders(result, headers)` | Existing result plus headers | Preserves the original type/status |
 
@@ -268,6 +270,48 @@ return streamed(stored.body, {
 ```
 
 The HTTP layer consumes the async iterable chunk by chunk instead of buffering the object.
+
+## WebSockets
+
+A route opts in by returning `websocket(...)`. The route runs exactly as it does for a
+request — the module sign-in check, `rateLimit` and the route's own authentication all see
+the upgrade request — and only a `websocket()` answer opens a socket. Any other answer is
+written back as that HTTP response and the connection closes.
+
+```ts
+// File: src/modules/order/routes.ts
+'/v1/orders/live': (ctx) => async (url, request) => {
+  const viewer = await authenticate(ctx, url, request)
+  if (!viewer) return text('sign in first', { status: 401 })
+  let stop = async () => {}
+  return websocket({
+    protocols: ['orders.v1'],
+    async open(peer) {
+      stop = await ctx.subscribe('order_changed', (orderId) => {
+        if (visibleTo(viewer, orderId)) peer.send(JSON.stringify({ orderId }))
+      })
+    },
+    close: () => void stop(),
+  })
+}
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `protocols` | none | Subprotocols, preferred first. A client offering none of them gets `400` before the upgrade. |
+| `maxMessageBytes` | 64 KiB | Largest reassembled message; larger closes with `1009`. |
+| `maxBufferedBytes` | 1 MiB | Outgoing bytes queued for a peer that stopped reading; beyond it the socket is dropped (`1013`). |
+| `pingIntervalMs` | 25 000 | Server ping cadence. A peer silent for a whole interval is dropped. `0` disables. |
+
+Text and binary messages, fragmentation and the closing handshake are handled; no extension
+(including `permessage-deflate`) is negotiated. `close()` on the server sends `1001` to every
+open socket.
+
+Send hints, not data. Publish with `ctx.notify(channel, payload)` from a function: inside `tx`
+it is delivered on commit and dropped on rollback. PostgreSQL carries it to every process
+(`NOTIFY`, payload at most 7999 bytes); SQLite delivers to listeners in the same process only.
+Delivery is best effort, so a client should re-read on connect and keep a slower poll as a
+backstop. `onReady` runs after every listener reconnect for exactly that reason.
 
 ## Function transport
 
