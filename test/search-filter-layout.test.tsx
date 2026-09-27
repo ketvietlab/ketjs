@@ -438,3 +438,13 @@ test('SearchFilter mobile sheet focuses the visible close control and dismisses 
     },
   )
 })
+
+test('SearchFilter hides the custom editor when no fields are available', () => {
+  const output = renderToString(
+    createSearchFilterView({
+      id: 'no-editor',
+      config: { ...searchFilterDemoConfig, customFilterFields: [] },
+    }).view(),
+  )
+  assert.doesNotMatch(output, /data-ui="custom-filter-field"/)
+})

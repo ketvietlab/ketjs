@@ -1,4 +1,32 @@
 @layer ket.app {
+  :where([data-kv-design-system]) [data-ui="text"][data-tone="muted"] {
+    color: var(--kv-text-secondary);
+  }
+  :where([data-kv-design-system]) [data-ui="media-label"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+    min-width: 0;
+    max-width: 100%;
+    vertical-align: middle;
+  }
+  :where([data-kv-design-system]) [data-ui="media-label-image"] {
+    display: inline-flex;
+    width: var(--kv-space-6);
+    height: var(--kv-space-6);
+    flex: 0 0 var(--kv-space-6);
+  }
+  :where([data-kv-design-system]) [data-ui="media-label-image"] img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--kv-radius-sm);
+  }
+  :where([data-kv-design-system]) [data-ui="media-label-copy"] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"] {
     display: inline-flex;
     min-height: 1.4rem;

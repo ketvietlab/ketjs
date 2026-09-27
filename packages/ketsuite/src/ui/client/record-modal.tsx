@@ -1451,6 +1451,19 @@ export const createRecordModal =
           { signal: lifetime },
         )
 
+        // Cross-collection links (for example global search results) use the
+        // shell navigation first. This persistent island is not remounted when
+        // those slots change, so open the destination record after URL commit.
+        // A refresh of an already open record must not reset its draft or tab.
+        document.addEventListener(
+          'ket:navigation-complete',
+          () => {
+            const target = readRecordModalTarget(location.href)
+            if (target?.kind === definition.kind && !open()) show(target.id, target.tab ?? null, 'none')
+          },
+          { signal: lifetime },
+        )
+
         const initial = readRecordModalTarget(location.href)
         if (initial?.kind === definition.kind) show(initial.id, initial.tab ?? null, 'none')
 

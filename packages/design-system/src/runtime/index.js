@@ -92,6 +92,10 @@ export const attachDesignSystemInteractions = (root = document) => {
     if (!(trigger instanceof HTMLElement) || !(drawer instanceof HTMLElement)) return
     const mobile = navigationMedia.matches
     trigger.dataset.open = String(mobile && navigation.open)
+    for (const toggle of root.querySelectorAll('[data-ui="navigation-toggle"]')) {
+      if (toggle.getAttribute('aria-controls') === drawer.id)
+        toggle.setAttribute('aria-expanded', String(mobile && navigation.open))
+    }
     if (!mobile) {
       drawer.removeAttribute('role')
       drawer.removeAttribute('aria-modal')
@@ -114,15 +118,15 @@ export const attachDesignSystemInteractions = (root = document) => {
       const targets = shell
         ? [
             ...shell.querySelectorAll(
-              ':scope > [data-ui="app-main"], :scope > [data-ui="main"], :scope > [data-ui="app-right-rail"]',
+              ':scope > [data-ui="app-main"], :scope > [data-ui="main"], :scope > [data-ui="app-right-rail"], :scope > [data-ui="app-shell-topbar"]',
             ),
           ]
             .filter((element) => element instanceof HTMLElement)
             .map((element) => ({ element, inert: element.inert }))
         : []
+      state.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : trigger
       for (const { element } of targets) element.inert = true
       state.targets = targets
-      state.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : trigger
       navigationStates.set(navigation, state)
       queueMicrotask(() => {
         if (!navigation.open || !navigationMedia.matches) return
@@ -212,6 +216,19 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   /** @param {KeyboardEvent} event */
   const onKeydown = (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !event.altKey) {
+      const search = root.querySelector('[data-ui="global-search-input"]')
+      if (
+        search instanceof HTMLInputElement &&
+        !search.closest('[inert]') &&
+        !root.querySelector('dialog[open], [data-ui="modal-layer"][data-route-modal="true"]')
+      ) {
+        search.focus()
+        search.select()
+        event.preventDefault()
+        return
+      }
+    }
     const openNavigation = navigations.find((navigation) => navigationMedia.matches && navigation.open)
     if (openNavigation instanceof HTMLDetailsElement) {
       const drawer = openNavigation.querySelector('[data-ui="navigation-drawer"]')
@@ -459,6 +476,21 @@ export const attachDesignSystemInteractions = (root = document) => {
   const onDocumentClick = (event) => {
     const target = event.target
     if (!(target instanceof Node)) return
+    const toggle = target instanceof Element ? target.closest('[data-ui="navigation-toggle"]') : null
+    if (toggle instanceof HTMLElement && navigationMedia.matches) {
+      const navigation = navigations.find(
+        (entry) =>
+          entry.querySelector('[data-ui="navigation-drawer"]')?.id === toggle.getAttribute('aria-controls'),
+      )
+      if (navigation) {
+        if (navigation.open) closeNavigation(navigation)
+        else {
+          navigation.open = true
+          syncNavigation(navigation)
+        }
+      }
+      return
+    }
     for (const menu of root.querySelectorAll('[data-ui="menu"][open]')) {
       if (!(menu instanceof HTMLDetailsElement)) continue
       const item = target instanceof Element ? target.closest('[data-ui="menu-item"]') : null

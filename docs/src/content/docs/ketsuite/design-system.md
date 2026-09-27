@@ -291,3 +291,29 @@ Migration: no module opt-in is required; existing capability flags, hooks and ap
 retained. Rollback the SearchFilter change as a unit (component, labels, shared URL handler, inventory
 and tests) if a downstream consumer fails its interaction checks. The product-only density/header branch
 is independent.
+
+
+### Application topbar and compact lists
+
+KétSuite uses compact density by default: 40px desktop rows, sentence-case column headings, and
+smaller operational list headers. Mobile selection targets remain at least 44px. Tables retain all
+columns and scroll horizontally; the scroll region is keyboard focusable. Classifications use plain
+`Text`, with `tone="muted"` for secondary values; reserve `Badge` for lifecycle states and exceptions.
+`MediaLabel` renders a 24px thumbnail only when present or explicitly reserved. Product lists reserve
+image space across a page only when at least one visible record has an image.
+
+`AppShell.topbar` accepts `AppTopbar`, a 48px indigo application bar with a native GET search form,
+brand link, and context slot. `NavigationToggle` can control `AppNavigation` with `externalTrigger`;
+the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K focuses
+search when no dialog is open. KétSuite moves organisation context into the topbar, removes duplicate
+sidebar branding/search, and updates the `backend.global-topbar` fragment alongside the existing
+slots. Only Product list suppresses breadcrumbs; every other page keeps its existing trail.
+
+`/admin/search` requires a session and searches permitted menus, products and partners. Optional record
+providers call the same permission-checked, company-scoped functions as their lists, with eight results
+per provider and native detail links. Empty queries never enumerate records. Search terms are bounded
+to 200 characters. Search is server rendered and works without JavaScript.
+
+`searchFilterRuleLabel` is shared by server and island labels. Group intervals are localized, including
+Day/Week/Month/Quarter/Year. KetTable errors use the consumer's localized `loadError`, never raw server
+exception messages. The sidebar search hooks are retired; consumers should use AppTopbar search.

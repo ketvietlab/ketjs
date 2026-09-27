@@ -233,6 +233,30 @@ export type SearchFilterConfig = {
   manager?: SearchFilterManager
 }
 
+/** Shared by SSR and interactive chips; values remain data and choices supply display labels. */
+export const searchFilterRuleLabel = (options: {
+  fieldLabel: string
+  operator: SearchFilterOperator
+  value?: unknown
+  choices?: CustomFilterField['choices']
+  operatorLabels?: SearchFilterLabels['operatorLabels']
+}): string => {
+  const operator = options.operatorLabels?.[options.operator] ?? operatorLabels[options.operator]
+  const prefix = `${options.fieldLabel} ${operator}`
+  if (isValuelessOperator(options.operator) || options.value == null || options.value === '') return prefix
+  const values = Array.isArray(options.value)
+    ? options.value
+    : options.operator === 'anyOf' || options.operator === 'between'
+      ? String(options.value)
+          .split(',')
+          .map((part) => part.trim())
+      : [options.value]
+  const value = values
+    .map((part) => options.choices?.find((choice) => choice.value === String(part))?.label ?? String(part))
+    .join(', ')
+  return `${prefix}: ${value}`
+}
+
 type SearchFilterIslandProps = IslandProps & { id: string; config: SearchFilterConfig }
 type ApiPayload = { ok?: boolean; value?: unknown; message?: unknown; errors?: Array<{ message?: unknown }> }
 type CustomFilterRule = { field: string; operator: SearchFilterOperator; value: string }
@@ -557,13 +581,13 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       : operator === 'between'
         ? `${customFilterValue().trim()},${customFilterEnd().trim()}`
         : customFilterValue().trim()
-    const displayValue = value
-      .split(',')
-      .map((part) => field.choices?.find((choice) => choice.value === part)?.label ?? part)
-      .join(', ')
-    const label = isValuelessOperator(operator)
-      ? `${field.label} ${operatorLabel(operator)}`
-      : `${field.label} ${operatorLabel(operator)}${displayValue ? ` "${displayValue}"` : ''}`
+    const label = searchFilterRuleLabel({
+      fieldLabel: field.label,
+      operator,
+      value,
+      choices: field.choices,
+      operatorLabels: labels.operatorLabels,
+    })
     clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
     customFilterRules.set({ ...customFilterRules(), [id]: { field: field.value, operator, value } })
@@ -601,7 +625,20 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
     customFilterRules.set({ ...customFilterRules(), [id]: rule })
-    facets.set([...facets(), { id, type: 'filter', label: `${field.label}: "${value}"` }])
+    facets.set([
+      ...facets(),
+      {
+        id,
+        type: 'filter',
+        label: searchFilterRuleLabel({
+          fieldLabel: field.label,
+          operator: rule.operator,
+          value: rule.value,
+          choices: field.choices,
+          operatorLabels: labels.operatorLabels,
+        }),
+      },
+    ])
     setQuery('')
     suggestionsOpen.set(false)
     void apply(value)
@@ -1057,7 +1094,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
           (option) => option.id,
           (option, index) => filterMenuItem(option, index === 0 ? null : config.filters[index - 1]),
         )}
-        {capabilities.customFilters !== false && (
+        {capabilities.customFilters !== false && config.customFilterFields.length > 0 && (
           <>
             <hr data-ui="menu-separator" />
             <div data-ui="custom-filter">

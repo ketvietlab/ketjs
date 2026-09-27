@@ -67,7 +67,7 @@ test('experience collection frames put Create and collection actions beside the 
     assert.equal((html.match(/href="\/new\?lang=vi"/g) ?? []).length, 1)
     assert.equal((html.match(/data-ui="list-page-controls"/g) ?? []).length, 1)
     // The shared search owns one inline form and its mobile dialog counterpart.
-    assert.equal((html.match(/name="q"/g) ?? []).length, 2)
+    assert.equal((html.slice(html.indexOf('data-ui="list-page"')).match(/name="q"/g) ?? []).length, 2)
   }
 })
 
@@ -105,7 +105,7 @@ test('Website content keeps the site GET form and the localized row destination'
   assert.match(html, /method="get"/)
   assert.match(html, /name="site"/)
   // The query and the publication state belong to the search-filter bar now.
-  assert.doesNotMatch(html, /name="q"|name="status"/u)
+  assert.doesNotMatch(html.slice(html.indexOf('data-ui="list-page"')), /name="q"|name="status"/u)
   assert.match(html, /href="\/admin\/website\/pages\/page1\?lang=vi"/)
   const embedded = renderToString(
     entryTermsSection(

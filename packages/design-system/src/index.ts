@@ -6,7 +6,16 @@ export type {
   IconButtonProps,
   LinkButtonProps,
 } from './primitives/actions/index.tsx'
-export { Avatar, Badge, Code, CountBadge, Tag, initials } from './primitives/status/index.tsx'
+export {
+  Avatar,
+  Badge,
+  Code,
+  CountBadge,
+  Tag,
+  Text,
+  MediaLabel,
+  initials,
+} from './primitives/status/index.tsx'
 export type { Tone } from './primitives/status/index.tsx'
 export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.tsx'
 export type { NoticeTone } from './primitives/feedback/index.tsx'
@@ -66,7 +75,11 @@ export type {
   LightboxItem,
   LightboxLabels,
 } from './interactions/lightbox/index.tsx'
-export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
+export {
+  createSearchFilterView,
+  searchFilter,
+  searchFilterRuleLabel,
+} from './interactions/search-filter/index.tsx'
 export type {
   CustomFilterField,
   SearchFacet,
@@ -191,7 +204,7 @@ export type {
   KanbanCardProps,
   KanbanGridProps,
 } from './layouts/layout/index.tsx'
-export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export { AppShell, AppTopbar, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
 export type { PageHeaderProps, PageProps } from './layouts/shell/index.tsx'
 export {
   AppNavigation,
@@ -200,6 +213,7 @@ export {
   NavigationHeader,
   NavigationItem,
   NavigationTrigger,
+  NavigationToggle,
 } from './layouts/app-navigation/index.tsx'
 export type {
   AppNavigationProps,

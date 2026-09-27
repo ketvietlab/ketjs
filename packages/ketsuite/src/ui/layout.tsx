@@ -6,6 +6,8 @@ import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } fro
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import {
   AppShell,
+  AppTopbar,
+  NavigationToggle,
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
@@ -13,7 +15,7 @@ import { sidebarMain, sidebarNavigationContent } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { pageContextFromFrame } from './navigation.tsx'
+import { pageContextFromFrame, viewerContext } from './navigation.tsx'
 import { ListPage } from './list-page.tsx'
 import { collectionActions, collectionControls } from './collection.tsx'
 
@@ -36,6 +38,7 @@ export type Extras = {
 }
 
 export type Frame = {
+  globalSearchQuery?: string
   /** Server request URL for native collection controls; never browser state. */
   collectionUrl?: string
   viewer?: Viewer | null
@@ -89,6 +92,26 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
 const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
   frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
 
+const globalTopbar = (_: Translator, frame: Frame): TemplateResult => (
+  <AppTopbar
+    brand={{
+      label: _('backend.brand'),
+      href: `/admin?lang=${encodeURIComponent(_.locale)}`,
+      image: '/_ket/asset/backend/brand/logo-dark.png',
+    }}
+    navigation={<NavigationToggle controls="backend-navigation-drawer" label={_('backend.nav.open')} />}
+    search={{
+      action: '/admin/search',
+      label: _('backend.globalSearch.label'),
+      placeholder: _('backend.globalSearch.placeholder'),
+      submitLabel: _('backend.globalSearch.submit'),
+      query: frame.globalSearchQuery,
+      locale: _.locale,
+    }}
+    context={frame.viewer ? viewerContext(frame.viewer, 'topbar') : undefined}
+  />
+)
+
 export const shell = (
   _: Translator,
   title: string,
@@ -112,18 +135,20 @@ export const shell = (
           {sidebarNavigationContent(_, sidebarOptions)}
         </template>
         <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
+        <template data-ket-slot="backend.global-topbar">{globalTopbar(_, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
   // The design-system application shell. The theme scope sits above it, as the
   // shell's own styles expect, in the grouped presentation the product mocks use:
   // one page gutter token (`--kv-page-padding-x`) for context, header, toolbar and
-  // body. The island runtime stays outside the swapped slots, and the three slots
+  // body. The island runtime stays outside the swapped slots, and the four slots
   // keep the names fragment navigation reconciles.
   return (
-    <div data-kv-design-system data-presentation="grouped">
+    <div data-kv-design-system data-presentation="grouped" data-density="compact">
       {AppShell({
         mode: 'viewport',
+        topbar: <div data-ket-slot="backend.global-topbar">{globalTopbar(_, frame)}</div>,
         sidebar: sidebarMain(_, sidebarOptions),
         main: (
           <>
