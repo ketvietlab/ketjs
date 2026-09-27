@@ -534,7 +534,17 @@ export type BrowserBehaviorDefinition = {
 }
 
 export type BrowserNavigation = {
-  navigate(target: string | URL, options?: { replace?: boolean }): Promise<void>
+  navigate(
+    target: string | URL,
+    options?: {
+      replace?: boolean
+      /** Keep focus and scroll when refreshing the current working surface. */
+      preserveContext?: boolean
+      /** Let the caller show an error without discarding the current page. */
+      fallback?: 'reload' | 'error'
+      signal?: AbortSignal
+    },
+  ): Promise<void>
   apply(response: Response, options?: { signal?: AbortSignal }): Promise<void>
   replace(target: string | URL): void
   reload(target?: string | URL): void

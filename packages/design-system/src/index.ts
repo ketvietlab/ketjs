@@ -86,6 +86,7 @@ export type {
   SearchFavorite,
   SearchFilterCustomRule,
   SearchFilterConfig,
+  SearchFilterNavigateDetail,
   SearchFilterFieldType,
   SearchFilterLabels,
   SearchFilterManager,

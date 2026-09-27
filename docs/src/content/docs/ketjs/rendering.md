@@ -416,6 +416,18 @@ A document opts into enhanced navigation by exposing named elements such as
 fragments. The manager moves matching old island nodes into the new fragment before inserting it, so
 preserved islands never rehydrate or recreate their reactive graph.
 
+Working surfaces can set `data-ket-preserve-context` on a container. Same-path GET links and forms
+inside it retain window and nested scroll positions and restore focus when the corresponding control
+still exists. Modified clicks, downloads, external links and `data-ket-reload` keep native behaviour.
+Back/Forward retrieves the URL's server state and restores the saved scroll positions.
+
+Browser behaviors can request the same treatment with
+`navigation.navigate(href, { preserveContext: true })`. Pass `fallback: 'error'` to receive a rejected
+promise instead of a document reload on failure, and an optional `signal` to cancel stale requests.
+Network failures and HTTP 5xx errors carry `retryable: true`; HTTP refusals carry `retryable: false`.
+Aborted requests reject with `AbortError` in this mode. History is committed after the fragment has
+been applied. A server/browser build mismatch still reloads to obtain compatible assets.
+
 Put long-lived islands outside slots that do not need them. For example, a global inbox indicator may
 live in a stable sidebar footer while the server replaces sidebar navigation, topbar, and content.
 Because `navigablePage()` receives lazy slot callbacks, a fragment request never calls the document or
