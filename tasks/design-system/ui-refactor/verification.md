@@ -75,6 +75,14 @@ Full-suite conditional skips and lint warnings are recorded in the PR rather tha
 - Follow-up validation: full `npm run verify` passes (2,503 tests, 38 conditional skips, 0 failures),
   all 11 type assertions and 348 documentation snippets pass. Non-failing lint warnings remain.
 
+## Logo correction
+
+The backend uses the two exact user-supplied KétSuite PNGs (accented Két, blue Suite, no tagline),
+replacing the older lockup from `ketsuite-work`. The dark variant is used on the indigo topbar in both
+themes; login retains its light/dark asset selection. The six Product captures below were refreshed
+with the corrected assets. Earlier retry captures record that interaction before the logo correction.
+A forced asset rebuild and byte comparison verified both emitted logo files.
+
 ## Screenshots
 
 | Viewport | Light | Dark |
