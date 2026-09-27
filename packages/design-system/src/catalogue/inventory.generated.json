@@ -7,7 +7,7 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 272,
+    "publicExports": 273,
     "runtimeExports": 137,
     "registeredComponents": 132,
     "compatibilityExports": 257,
@@ -4192,6 +4192,24 @@
       "specimenFiles": [],
       "tests": "gap",
       "testFiles": [],
+      "gapTask": "DS-045"
+    },
+    {
+      "scope": "public",
+      "name": "SearchFilterNavigateDetail",
+      "imported": "SearchFilterNavigateDetail",
+      "kind": "type",
+      "source": "./interactions/search-filter/index.tsx",
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/search-filter-apply.test.tsx"],
       "gapTask": "DS-045"
     },
     {
@@ -8704,6 +8722,7 @@
         "test/channel-api.test.ts",
         "test/ci-test-groups.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/collection-navigation.test.ts",
         "test/company-branch-e2e.test.ts",
         "test/company-branch-form-screen.test.tsx",
         "test/company-branch.test.ts",
@@ -10662,6 +10681,7 @@
         "test/relation-select-e2e.test.ts",
         "test/respond.test.ts",
         "test/sale-order-detail-screen.test.tsx",
+        "test/search-filter-apply.test.tsx",
         "test/stock-lot-detail-screen.test.tsx",
         "test/stock-transfer-detail-screen.test.tsx",
         "test/theme.test.ts",

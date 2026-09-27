@@ -1232,7 +1232,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       footer="End of results"
     />,
   )
-  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list">/)
+  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list"[^>]*>/)
+  assert.match(listPage, /<section[^>]*data-ket-preserve-context=""/)
   assert.match(listPage, /data-ui="list-page-eyebrow"[^>]*>[\s\S]*?Catalogue/)
   assert.match(listPage, /data-ui="list-page-title"[^>]*>[\s\S]*?Products/)
   assert.match(listPage, /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"/)
@@ -2032,7 +2033,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 272)
+  assert.equal(designSystemInventory.summary.publicExports, 273)
   assert.equal(designSystemInventory.summary.runtimeExports, 137)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)

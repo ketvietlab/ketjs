@@ -101,6 +101,26 @@ KetTable supports two delivery modes through the same public `createKetTableView
 Both modes share row selection and external bulk forms. The primary `kt-row-link` has
 `data-primary="true"`; its hit area spans the row while checkboxes and cell controls remain separate.
 An empty grouped result uses the same empty-state contract as a flat result.
+
+All `ListPage` consumers preserve navigation context for same-path GET controls. SearchFilter's
+`{ href }` apply result uses the backend shell's shared fragment navigation: filtering, grouping,
+clearing and selecting favorites no longer reload the document. The shell updates the results,
+toolbar and URL together, then focuses the search input (desktop) or filter trigger (mobile).
+Back/Forward re-renders the corresponding server state. This covers native/static `KetTable`
+adapters and island-backed tables without duplicating domain queries in the browser.
+
+This is an SSR-first hybrid, not JSON-only CSR: URL-driven responses still contain server-rendered
+fragments; islands hydrate/reconcile those fragments and own their client interactions. The first
+document remains complete SSR. Permissions, localized cells and custom server cell callbacks retain
+their server contracts. RPC-driven tables retain their existing client loading mode.
+
+For a custom shell, listen for `ket:search-filter-navigate` on `document`. Its exported
+`SearchFilterNavigateDetail` contains the filter `id`, `href`, cancellation `signal` and
+`respondWith(promise)` callback. Supply the navigation promise synchronously. A failed navigation
+rolls back chips to the displayed list; retryable failures retain the exact attempted draft. Without
+a handler the component retains native navigation, and the legacy `{ html, href }` response remains
+supported. A new filter attempt aborts its preceding navigation request.
+
 `locale` controls formatted cells. Currency cells and `FormattedMoney` accept decimal strings without
 coercing them through a floating-point number, preserving database precision.
 

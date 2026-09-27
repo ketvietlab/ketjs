@@ -4,6 +4,7 @@ import { countingHost, mount } from '@ketvietlab/ketjs-view'
 import type { HostNode, IslandElement } from '@ketvietlab/ketjs-view'
 import { createSearchFilterView } from '../packages/design-system/src/interactions/search-filter/index.tsx'
 import type { SearchFilterConfig } from '../packages/design-system/src/interactions/search-filter/index.tsx'
+import type { SearchFilterNavigateDetail } from '../packages/design-system/src/interactions/search-filter/index.tsx'
 import { searchFilterDemoConfig } from '../packages/design-system/src/interactions/search-filter/demo.ts'
 
 // The bar reads its input through `instanceof HTMLInputElement`, which Node lacks.
@@ -63,6 +64,7 @@ const renderBar = () => {
   const input = byUi(container, 'search-filter-input')[0]!
   return {
     host,
+    controller,
     container,
     input,
     live,
@@ -181,6 +183,140 @@ test('search filter: a request that got no verdict is sent again exactly as atte
       assert.equal(bodies.length, 3)
       assert.deepEqual(bodies[2], bodies[0], 'so is a server fault')
       assert.deepEqual(assigned, ['/orders?q=%C3%A1o'])
+      assert.equal(bar.notice(), undefined)
+    },
+  )
+})
+
+test('search filter: a failed fragment rolls back to the last displayed list and retries the same draft', async () => {
+  const requests: unknown[] = []
+  const navigations: SearchFilterNavigateDetail[] = []
+  let failure: number | null = null
+  await withGlobals(
+    {
+      fetch: (_url: unknown, init?: RequestInit) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Promise.resolve(Response.json({ ok: true, value: { href: '/orders?q=shirt' } }))
+      },
+      document: {
+        addEventListener() {},
+        getElementById: () => null,
+        dispatchEvent: (event: CustomEvent<SearchFilterNavigateDetail>) => {
+          assert.equal(event.type, 'ket:search-filter-navigate')
+          navigations.push(event.detail)
+          event.detail.respondWith(
+            failure === null
+              ? Promise.resolve()
+              : Promise.reject(
+                  Object.assign(new Error('private server diagnostic'), { retryable: failure >= 500 }),
+                ),
+          )
+        },
+      },
+      window: { location: { assign: () => assert.fail('the shell must not reload the document') } },
+    },
+    async () => {
+      const bar = renderBar()
+      bar.type('shirt')
+      bar.click('search-filter-suggestion', 'Search for')
+      await settle()
+      const displayed = bar.chips()
+      failure = 503
+      bar.type('coat')
+      bar.click('search-filter-suggestion', 'Search for')
+      await settle()
+      assert.deepEqual(bar.chips(), displayed, 'RPC success alone must not settle the draft')
+      assert.equal(bar.live.value, 'coat')
+      assert.match(textOf(bar.notice()!), /Could not apply|Unable to apply/)
+      assert.doesNotMatch(textOf(bar.notice()!), /private server diagnostic/)
+      failure = null
+      bar.click('action', config.labels.retry)
+      await settle()
+      assert.deepEqual(requests[2], requests[1])
+      assert.notDeepEqual(bar.chips(), displayed)
+      assert.equal(bar.notice(), undefined)
+      assert.equal(navigations.length, 3)
+      assert.equal(navigations[0]!.id, 'orders-filter')
+
+      failure = 403
+      bar.type('denied')
+      bar.click('search-filter-suggestion', 'Search for')
+      await settle()
+      assert.equal(
+        byUi(bar.container, 'action').some((node) => textOf(node) === config.labels.retry),
+        false,
+      )
+    },
+  )
+})
+
+test('search filter: a newer draft cancels navigation and disposal ignores late RPC responses', async () => {
+  const navigations: SearchFilterNavigateDetail[] = []
+  let finishRpc: ((response: Response) => void) | undefined
+  await withGlobals(
+    {
+      fetch: () =>
+        new Promise<Response>((resolve) => {
+          finishRpc = resolve
+        }),
+      document: {
+        addEventListener() {},
+        getElementById: () => null,
+        dispatchEvent: (event: CustomEvent<SearchFilterNavigateDetail>) => {
+          navigations.push(event.detail)
+          event.detail.respondWith(
+            new Promise<void>((_resolve, reject) => {
+              event.detail.signal.addEventListener('abort', () =>
+                reject(new DOMException('Aborted', 'AbortError')),
+              )
+            }),
+          )
+        },
+      },
+    },
+    async () => {
+      const bar = renderBar()
+      bar.type('old')
+      bar.click('search-filter-suggestion', 'Search for')
+      finishRpc!(Response.json({ ok: true, value: { href: '/orders?q=old' } }))
+      await settle()
+      assert.equal(navigations.length, 1)
+      bar.type('new')
+      bar.click('search-filter-suggestion', 'Search for')
+      assert.equal(navigations[0]!.signal.aborted, true)
+      bar.controller.dispose?.()
+      finishRpc!(Response.json({ ok: true, value: { href: '/orders?q=new' } }))
+      await settle()
+      assert.equal(navigations.length, 1, 'a departed screen cannot navigate on its late response')
+      assert.equal(bar.notice(), undefined)
+    },
+  )
+})
+
+test('search filter: a native navigation supersedes an unfinished apply RPC', async () => {
+  const events = new EventTarget()
+  let finish!: (response: Response) => void
+  await withGlobals(
+    {
+      fetch: () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+        }),
+      document: {
+        addEventListener: events.addEventListener.bind(events),
+        dispatchEvent: () => assert.fail('a stale RPC must not replace the requested page'),
+        getElementById: () => null,
+      },
+    },
+    async () => {
+      const bar = renderBar()
+      const before = bar.chips()
+      bar.type('old')
+      bar.click('search-filter-suggestion', 'Search for')
+      events.dispatchEvent(new Event('ket:navigation-start'))
+      finish(Response.json({ ok: true, value: { href: '/orders?q=old' } }))
+      await settle()
+      assert.deepEqual(bar.chips(), before)
       assert.equal(bar.notice(), undefined)
     },
   )
