@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 132,
     "cssFiles": 77,
-    "cssLines": 15379
+    "cssLines": 15387
   },
   "rows": [
     {
@@ -9005,6 +9005,7 @@
         "test/account-customer-invoices-screens.test.tsx",
         "test/account-taxes-screens.test.tsx",
         "test/account-vendor-bills-screens.test.tsx",
+        "test/backend-global-search.test.ts",
         "test/backend-ui.test.ts",
         "test/collection-ket-table.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
@@ -10686,6 +10687,7 @@
       "testFiles": [
         "test/accounting-e2e.test.ts",
         "test/authui.test.ts",
+        "test/backend-global-search.test.ts",
         "test/backend-ui.test.ts",
         "test/backend-viewer-identity.test.ts",
         "test/collaboration-backend-e2e.test.ts",
@@ -11348,7 +11350,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 572,
+      "lines": 580,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -11372,6 +11374,7 @@
         "search-filter-column",
         "search-filter-column-title",
         "search-filter-columns",
+        "search-filter-empty",
         "search-filter-facet",
         "search-filter-facet-remove",
         "search-filter-facets",

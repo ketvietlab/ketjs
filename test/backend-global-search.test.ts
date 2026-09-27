@@ -43,6 +43,22 @@ test('global search requires authentication, keeps native URLs and enforces reco
   const response = await app.client.get('/admin/search?q=Needle&lang=vi')
   assert.equal(response.status, 200)
   const html = await response.text()
+  const sidebar = (page: string) => page.match(/<aside data-ui="app-sidebar">[\s\S]*?<\/aside>/u)?.[0]
+  const legacyMenu = await (
+    await app.client.get('/admin/search?q=Needle&lang=vi&menu=nonexistent-menu')
+  ).text()
+  assert.ok(sidebar(html))
+  assert.equal(sidebar(legacyMenu), sidebar(html), 'retired menu query cannot silently narrow navigation')
+  for (const [locale, label] of [
+    ['vi', 'Kết quả — cuộn ngang để xem thêm cột'],
+    ['en', 'Results — scroll horizontally for more columns'],
+  ]) {
+    const partners = await (await app.client.get(`/admin/partner/partners?lang=${locale}`)).text()
+    assert.ok(
+      partners.includes(`tabindex="0" role="region" aria-label="${label}"`),
+      partners.match(/role="region"[^>]+/)?.[0] ?? 'Missing table region',
+    )
+  }
   assert.match(html, /Needle &lt;product&gt;/)
   assert.match(html, /record=product.template%3Aneedle-product&amp;lang=vi/)
   assert.match(html, /data-ui="global-search-input"[^>]*value="Needle"/)

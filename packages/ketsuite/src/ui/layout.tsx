@@ -43,7 +43,6 @@ export type Frame = {
   collectionUrl?: string
   viewer?: Viewer | null
   indicators?: Indicator[]
-  menuFilter?: string | null
   /** How the shell offers the root sections; the deployment decides. */
   rootList?: 'auto' | 'always' | 'never'
   extras?: Extras
@@ -123,7 +122,6 @@ export const shell = (
     menu,
     viewer,
     indicators,
-    menuFilter: frame.menuFilter,
     rootList: frame.rootList,
     navItems: extras['nav.items'],
     footItems: extras['sidebar.foot'],

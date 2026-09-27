@@ -769,8 +769,8 @@ const everything = [
     asOfLabel: 'Cập nhật',
     note: 'Asia/Ho_Chi_Minh',
   }),
-  // A sidebar whose search matched nothing: the label goes, a note takes its place.
-  pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // A viewer with no menu entries still gets a readable empty sidebar.
+  pagesScreen(_, [page()], { menu: [] }),
   // How far along a record is. A value, because the empty case draws nothing at
   // all — which is the point of it, and would show none of the parts.
   progressBar({ value: 62, label: 'Tiến độ' }),

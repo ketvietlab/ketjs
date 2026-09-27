@@ -265,9 +265,10 @@ section. Below 641px, only the filters trigger is visible and opens a native mod
 native ancestor owns the single accessible dialog role. Opening focuses the visible close button; the
 client backdrop is hidden from the accessibility tree and tab order. Native modal focus containment,
 backdrop/close buttons and focus return are owned by the island. Escape closes the nearest open nested
-disclosure and focuses its summary before a subsequent Escape closes the panel or sheet. New
-`search-filter-icon` and `search-filter-clear` hooks belong to this component; consumers must not
-override their descendants.
+disclosure and focuses its summary, then closes an open favorite form and focuses its toggle, before
+a subsequent Escape closes the panel or sheet. Closing the menu resets the inline favorite form.
+`search-filter-empty` owns the sentence-case saved-search empty message; `search-filter-icon` and
+`search-filter-clear` also belong to this component. Consumers must not override their descendants.
 
 Clear filters preserves the keyword and grouping, removing filter rules/presets and the active favorite.
 The shared apply handler removes the `favorite` query parameter; an explicit empty `q` prevents a

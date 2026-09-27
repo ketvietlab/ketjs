@@ -20,6 +20,7 @@ export const HOOKS = [
   'search-filter-columns',
   'search-filter-column',
   'search-filter-column-title',
+  'search-filter-empty',
   'search-filter-grouping',
   'search-filter-grouping-head',
   'search-filter-grouping-list',
@@ -362,7 +363,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   }
   const closeFavoriteForm = (): void => {
     savingFavorite.set(false)
-    queueMicrotask(() => focusControl('[data-ui="favorite-save-toggle"]'))
+    queueMicrotask(() => {
+      if (menuOpen() || sheetOpen()) focusControl('[data-ui="favorite-save-toggle"]')
+      else menuOpener?.focus()
+    })
+  }
+  const closeMenu = (): void => {
+    savingFavorite.set(false)
+    menuOpen.set(false)
   }
   const dismissDisclosure = (event: KeyboardEvent): boolean => {
     const disclosure =
@@ -382,11 +390,13 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       : null
   }
   const closeSheet = (): void => {
+    closeMenu()
     dialogElement()?.close()
     sheetOpen.set(false)
     sheetOpener?.focus()
   }
   const openPanel = (kind: 'filter' | 'groupBy' | 'favorite'): void => {
+    if (panel() !== kind) savingFavorite.set(false)
     panel.set(kind)
     menuOpen.set(true)
     suggestionsOpen.set(false)
@@ -394,6 +404,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const togglePanel = (event: Event): void => {
     menuOpener = event.currentTarget as HTMLElement
     const switching = menuOpen() && panel() !== 'filter'
+    if (switching) savingFavorite.set(false)
     panel.set('filter')
     suggestionsOpen.set(false)
     if (!window.matchMedia('(max-width: 640px)').matches) {
@@ -402,7 +413,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     }
     event.preventDefault()
     sheetOpener = event.currentTarget as HTMLElement
-    menuOpen.set(false)
+    closeMenu()
     sheetOpen.set(true)
     queueMicrotask(() => {
       const dialog = dialogElement()
@@ -463,6 +474,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
    * out of the search field into a chip; a failed request hands it back.
    */
   const apply = async (consumed = ''): Promise<void> => {
+    closeMenu()
     if (!manager?.applyFunction) return
     const version = ++applyVersion
     const attempted: Draft = { facets: facets(), rules: customFilterRules() }
@@ -1072,7 +1084,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       onClick={(event) => {
         event.stopPropagation()
         menuOpener = event.currentTarget as HTMLElement
-        if (menuOpen() && panel() === kind) menuOpen.set(false)
+        if (menuOpen() && panel() === kind) closeMenu()
         else openPanel(kind)
       }}
     >
@@ -1283,7 +1295,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
           {favorites().length ? (
             <ul data-ui="favorite-list">{each(favorites(), (favorite) => favorite.id, favoriteRow)}</ul>
           ) : (
-            <p data-ui="menu-label">{labels.noFavorites}</p>
+            <p data-ui="search-filter-empty">{labels.noFavorites}</p>
           )}
         </div>
       )}
@@ -1319,7 +1331,11 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
           if (dismissDisclosure(event)) return
           event.preventDefault()
           event.stopPropagation()
-          menuOpen.set(false)
+          if (savingFavorite()) {
+            closeFavoriteForm()
+            return
+          }
+          closeMenu()
           queueMicrotask(() => menuOpener?.focus())
         }}
       >
@@ -1368,7 +1384,9 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
             data-active={countOf('filter') ? 'true' : null}
             open={menuOpen() === true ? true : undefined}
             onToggle={(event: Event) => {
-              if (event.currentTarget instanceof HTMLDetailsElement) menuOpen.set(event.currentTarget.open)
+              if (!(event.currentTarget instanceof HTMLDetailsElement)) return
+              if (event.currentTarget.open) menuOpen.set(true)
+              else closeMenu()
             }}
           >
             <summary
@@ -1425,6 +1443,10 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
               if (dismissDisclosure(event)) return
               event.preventDefault()
               event.stopPropagation()
+              if (savingFavorite()) {
+                closeFavoriteForm()
+                return
+              }
               closeSheet()
             }
           }}
@@ -1469,10 +1491,11 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       document.addEventListener(
         'click',
         (event) => {
-          if (!suggestionsOpen()) return
+          if (!suggestionsOpen() && !menuOpen()) return
           const target = event.target
           if (target instanceof Node && (root as unknown as Node).contains(target)) return
           suggestionsOpen.set(false)
+          closeMenu()
         },
         { signal: lifetime },
       )

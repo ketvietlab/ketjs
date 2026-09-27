@@ -505,6 +505,7 @@
     gap: var(--kv-space-2);
     margin: var(--kv-space-2) 0;
     padding-block-end: var(--kv-space-2);
+    padding-inline: var(--kv-space-3);
     border-block-end: 1px solid var(--kv-border-default);
   }
   :where([data-kv-design-system]) [data-ui="favorite-save-row"] {
@@ -537,6 +538,13 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-empty"] {
+    margin: 0;
+    padding: var(--kv-space-2) var(--kv-space-3);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    text-transform: none;
   }
   :where([data-kv-design-system]) [data-ui="favorite-item"] {
     display: grid;

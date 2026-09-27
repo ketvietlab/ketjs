@@ -42,6 +42,154 @@ const withGlobals = async (globals: Record<string, unknown>, run: () => Promise<
   }
 }
 
+test('SearchFilter Escape closes the favorite form before its desktop menu or mobile sheet', async () => {
+  let active: Control | null = null
+  class Control {
+    focus() {
+      active = this
+    }
+    closest() {
+      return null
+    }
+  }
+  class Details extends Control {
+    open = false
+  }
+  class Dialog extends Control {
+    open = false
+    showModal() {
+      this.open = true
+    }
+    close() {
+      this.open = false
+    }
+  }
+  await withGlobals(
+    {
+      Element: Control,
+      HTMLElement: Control,
+      HTMLDetailsElement: Details,
+      HTMLDialogElement: Dialog,
+      window: { matchMedia: () => ({ matches: true }) },
+      document: { addEventListener() {} },
+    },
+    async () => {
+      for (const mobile of [false, true]) {
+        const dialog = new Dialog(),
+          input = new Control(),
+          favoriteToggle = new Control(),
+          trigger = new Control()
+        const bar = setup({
+          ...searchFilterDemoConfig,
+          manager: { bodyId: 'body', applyFunction: 'apply', saveFavoriteFunction: 'save' },
+        })
+        bar.controller.mount?.({
+          root: {
+            querySelectorAll: (selector: string) =>
+              selector.includes('favorite-save-toggle')
+                ? [favoriteToggle]
+                : selector.includes('input')
+                  ? [input]
+                  : [dialog],
+          } as unknown as IslandElement,
+          lifetime: new AbortController().signal,
+        })
+        if (mobile)
+          bar.host.fire(bar.ui('search-filter-toggle')[0]!, 'click', {
+            currentTarget: trigger,
+            preventDefault() {},
+          })
+        else
+          bar.host.fire(
+            bar.ui('search-filter-section-toggle').find((n) => n.attrs?.['data-section'] === 'favorite')!,
+            'click',
+            { currentTarget: trigger, stopPropagation() {} },
+          )
+        await settle()
+        bar.click('favorite-save-toggle')
+        await settle()
+        assert.equal(active, input)
+        let prevented = 0,
+          stopped = 0
+        const pressEscape = () =>
+          bar.host.fire(bar.ui(mobile ? 'search-filter-sheet' : 'search-filter')[0]!, 'keydown', {
+            key: 'Escape',
+            target: input,
+            preventDefault() {
+              prevented++
+            },
+            stopPropagation() {
+              stopped++
+            },
+          })
+        pressEscape()
+        await settle()
+        assert.equal(bar.ui('favorite-save').length, 0)
+        assert.equal(active, favoriteToggle)
+        assert.equal(mobile ? dialog.open : bar.ui('menu')[0]?.attrs?.open === 'true', true)
+        pressEscape()
+        await settle()
+        assert.equal(mobile ? dialog.open : bar.ui('menu')[0]?.attrs?.open === 'true', false)
+        assert.equal(active, trigger)
+        assert.equal(prevented, 2)
+        assert.equal(stopped, 2)
+      }
+    },
+  )
+})
+
+test('SearchFilter resets a favorite form when native dismissal, outside click or panel switching closes it', async () => {
+  class Details {
+    open = false
+  }
+  class NodeStub {}
+  let outside: ((event: { target: unknown }) => void) | undefined
+  await withGlobals(
+    {
+      HTMLDetailsElement: Details,
+      Node: NodeStub,
+      document: {
+        addEventListener: (_name: string, handler: typeof outside) => {
+          outside = handler
+        },
+      },
+    },
+    async () => {
+      const bar = setup({
+        ...searchFilterDemoConfig,
+        manager: { bodyId: 'body', applyFunction: 'apply', saveFavoriteFunction: 'save' },
+      })
+      bar.controller.mount?.({
+        root: { contains: () => false, querySelectorAll: () => [] } as unknown as IslandElement,
+        lifetime: new AbortController().signal,
+      })
+      const open = () => {
+        bar.host.fire(
+          bar.ui('search-filter-section-toggle').find((n) => n.attrs?.['data-section'] === 'favorite')!,
+          'click',
+          { stopPropagation() {} },
+        )
+        bar.click('favorite-save-toggle')
+        assert.equal(bar.ui('favorite-save').length, 1)
+      }
+      open()
+      bar.host.fire(bar.ui('menu')[0]!, 'toggle', { currentTarget: new Details() })
+      assert.equal(bar.ui('favorite-save').length, 0)
+      open()
+      outside?.({ target: new NodeStub() })
+      assert.equal(bar.ui('favorite-save').length, 0)
+      open()
+      bar.host.fire(
+        bar.ui('search-filter-section-toggle').find((n) => n.attrs?.['data-section'] === 'groupBy')!,
+        'click',
+        { stopPropagation() {} },
+      )
+      assert.equal(bar.ui('favorite-save').length, 0)
+      await settle()
+    },
+  )
+})
+
 test('SearchFilter default separates search, three triggers, and all applied chips', () => {
   const bar = setup(searchFilterDemoConfig)
   assert.equal(bar.ui('search-filter-toggle').length, 1)
