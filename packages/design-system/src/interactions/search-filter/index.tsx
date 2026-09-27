@@ -1,9 +1,14 @@
+import { ModalSheet } from '../../patterns/modal-sheet/index.tsx'
 import { each, signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, IslandElement, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'search-filter',
   'search-filter-bar',
+  'search-filter-section-toggle',
+  'search-filter-sheet',
+  'search-filter-clear',
+  'search-filter-icon',
   'search-filter-field',
   'search-filter-input',
   'search-filter-facets',
@@ -34,6 +39,7 @@ export const HOOKS = [
   'favorite-item-default',
   'favorite-item-remove',
   'favorite-save',
+  'favorite-save-toggle',
   'favorite-save-row',
 ] as const
 
@@ -102,7 +108,13 @@ const operatorLabels: Record<SearchFilterOperator, string> = {
 const isValuelessOperator = (operator: SearchFilterOperator): boolean =>
   operator === 'isTrue' || operator === 'isFalse' || operator === 'isSet' || operator === 'isNotSet'
 
-export type CustomFilterField = { value: string; label: string; type: SearchFilterFieldType }
+export type CustomFilterField = {
+  value: string
+  label: string
+  type: SearchFilterFieldType
+  /** Screen-owned choices, including permission-checked reference lookups. */
+  choices?: readonly { value: string; label: string }[]
+}
 
 /**
  * The rule a free-text "Search <field> for: …" suggestion stands for, or null
@@ -160,7 +172,7 @@ export type SearchFilterManager = {
 export type SearchFilterLabels = {
   searchLabel: string
   searchPlaceholder: string
-  /** Accessible name/title for the single caret trigger that opens the Filters/Group By/Favorites panel. */
+  /** Accessible name for the combined mobile Filters/Group By/Favorites sheet. */
   toggleLabel: string
   filters: string
   groupBy: string
@@ -184,12 +196,19 @@ export type SearchFilterLabels = {
   favoriteName: string
   favoriteDefault: string
   favoriteSaveAction: string
+  favoriteCancel?: string
+  favoriteError?: string
   favoriteRemove: string
   favoriteSetDefault: string
   noFavorites: string
   clear: string
   applyError: string
   retry: string
+  clearFilters?: string
+  close?: string
+  valueFrom?: string
+  valueTo?: string
+  operatorLabels?: Partial<Record<SearchFilterOperator, string>>
 }
 
 export type SearchFilterConfig = {
@@ -199,6 +218,8 @@ export type SearchFilterConfig = {
   /** Keeps the standard interaction while reducing the search bar's visual density. */
   size?: SearchFilterSize
   query?: string
+  /** Native link to a screen-owned favorite form, when one exists. */
+  favoriteHref?: string
   facets: SearchFacet[]
   filters: SearchFilterOption[]
   groupBy: SearchGroupByOption[]
@@ -264,6 +285,12 @@ const flatten = <Option extends { id: string; label: string; options?: Option[] 
 export function createSearchFilterView(props: SearchFilterIslandProps): IslandController {
   const { config } = props
   const labels = {
+    clearFilters: 'Clear filters',
+    close: 'Close',
+    favoriteCancel: 'Cancel',
+    favoriteError: 'Could not save changes to saved searches',
+    valueFrom: 'From',
+    valueTo: 'To',
     groupByApplied: config.labels.groupBy,
     groupByAdd: config.labels.customGroupByPlaceholder,
     groupByClear: config.labels.clear,
@@ -271,15 +298,20 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     groupByMoveLater: 'Move later',
     ...config.labels,
   }
+  const operatorLabel = (operator: SearchFilterOperator): string =>
+    labels.operatorLabels?.[operator] ?? operatorLabels[operator]
   const capabilities = config.capabilities ?? {}
-  const columnCount = 1 + Number(capabilities.groupBy !== false) + Number(capabilities.favorites !== false)
   const manager = config.manager
+  const hasGrouping = capabilities.groupBy !== false && config.groupBy.length > 0
   const groupByOptions = flatten(config.groupBy)
   const fieldSuggestions = (text: string): CustomFilterField[] =>
     config.customFilterFields.filter((field) => suggestedRule(field, text))
 
   const facets = signal<SearchFacet[]>(config.facets)
   const favorites = signal<SearchFavorite[]>(config.favorites)
+  const hasFavorites = (): boolean =>
+    capabilities.favorites !== false &&
+    Boolean(favorites().length || manager?.saveFavoriteFunction || config.favoriteHref)
   const customFilterRules = signal<Record<string, CustomFilterRule>>(
     Object.fromEntries(
       (config.customFilters ?? []).map((rule) => [
@@ -294,6 +326,68 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   const customFilterOperator = signal('')
   const customFilterValue = signal('')
   const menuOpen = signal(false)
+  const panel = signal<'filter' | 'groupBy' | 'favorite'>('filter')
+  const sheetOpen = signal(false)
+  const savingFavorite = signal(false)
+  const customFilterEnd = signal('')
+  let sheetOpener: HTMLElement | null = null
+  let menuOpener: HTMLElement | null = null
+  const focusControl = (selector: string): void => {
+    const control = [...(mountedRoot?.querySelectorAll(selector) ?? [])][0]
+    if (typeof HTMLElement !== 'undefined' && control instanceof HTMLElement) control.focus()
+  }
+  const closeFavoriteForm = (): void => {
+    savingFavorite.set(false)
+    queueMicrotask(() => focusControl('[data-ui="favorite-save-toggle"]'))
+  }
+  const dismissDisclosure = (event: KeyboardEvent): boolean => {
+    const disclosure =
+      event.target instanceof Element ? event.target.closest('details[data-ui="disclosure"][open]') : null
+    if (!(disclosure instanceof HTMLDetailsElement)) return false
+    disclosure.open = false
+    const summary = disclosure.querySelector('summary')
+    if (summary instanceof HTMLElement) summary.focus()
+    event.preventDefault()
+    event.stopPropagation()
+    return true
+  }
+  const dialogElement = (): HTMLDialogElement | null => {
+    const candidate = [...(mountedRoot?.querySelectorAll('[data-ui="search-filter-sheet"]') ?? [])][0]
+    return typeof HTMLDialogElement !== 'undefined' && candidate instanceof HTMLDialogElement
+      ? candidate
+      : null
+  }
+  const closeSheet = (): void => {
+    dialogElement()?.close()
+    sheetOpen.set(false)
+    sheetOpener?.focus()
+  }
+  const openPanel = (kind: 'filter' | 'groupBy' | 'favorite'): void => {
+    panel.set(kind)
+    menuOpen.set(true)
+    suggestionsOpen.set(false)
+  }
+  const togglePanel = (event: Event): void => {
+    menuOpener = event.currentTarget as HTMLElement
+    const switching = menuOpen() && panel() !== 'filter'
+    panel.set('filter')
+    suggestionsOpen.set(false)
+    if (!window.matchMedia('(max-width: 640px)').matches) {
+      if (switching) event.preventDefault()
+      return
+    }
+    event.preventDefault()
+    sheetOpener = event.currentTarget as HTMLElement
+    menuOpen.set(false)
+    sheetOpen.set(true)
+    queueMicrotask(() => {
+      const dialog = dialogElement()
+      if (dialog && !dialog.open) {
+        dialog.showModal()
+        focusControl('[data-ui="search-filter-sheet"] [data-ui="modal-close"]')
+      }
+    })
+  }
   const saveFavoriteName = signal('')
   const saveFavoriteDefault = signal(false)
   const pending = signal(false)
@@ -429,14 +523,47 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     void apply()
   }
 
+  const clearFilters = (): void => {
+    facets.set(facets().filter((facet) => facet.type === 'field' || facet.type === 'groupBy'))
+    customFilterRules.set({})
+    void apply()
+  }
+  const selectedField = (): CustomFilterField | undefined =>
+    config.customFilterFields.find((entry) => entry.value === customFilterField())
+  const canAddRule = (): boolean => {
+    const field = selectedField()
+    const operator = customFilterOperator() as SearchFilterOperator
+    if (!field || !operatorsFor(field.value).includes(operator)) return false
+    if (isValuelessOperator(operator)) return true
+    if (!customFilterValue().trim()) return false
+    if (operator === 'between' && !customFilterEnd().trim()) return false
+    const values =
+      operator === 'between'
+        ? [customFilterValue(), customFilterEnd()]
+        : operator === 'anyOf'
+          ? customFilterValue().split(',')
+          : [customFilterValue()]
+    if (field.type === 'number' && values.some((value) => !Number.isFinite(Number(value)))) return false
+    if (field.choices && values.some((value) => !field.choices!.some((choice) => choice.value === value)))
+      return false
+    return true
+  }
   const addCustomFilter = (): void => {
     const field = config.customFilterFields.find((entry) => entry.value === customFilterField())
     const operator = customFilterOperator() as SearchFilterOperator
-    if (!field || !operator) return
-    const value = customFilterValue().trim()
+    if (!field || !canAddRule()) return
+    const value = isValuelessOperator(operator)
+      ? ''
+      : operator === 'between'
+        ? `${customFilterValue().trim()},${customFilterEnd().trim()}`
+        : customFilterValue().trim()
+    const displayValue = value
+      .split(',')
+      .map((part) => field.choices?.find((choice) => choice.value === part)?.label ?? part)
+      .join(', ')
     const label = isValuelessOperator(operator)
-      ? `${field.label} ${operatorLabels[operator]}`
-      : `${field.label} ${operatorLabels[operator]}${value ? ` "${value}"` : ''}`
+      ? `${field.label} ${operatorLabel(operator)}`
+      : `${field.label} ${operatorLabel(operator)}${displayValue ? ` "${displayValue}"` : ''}`
     clearFavorite()
     const id = `custom-filter:${crypto.randomUUID()}`
     customFilterRules.set({ ...customFilterRules(), [id]: { field: field.value, operator, value } })
@@ -444,6 +571,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     customFilterField.set('')
     customFilterOperator.set('')
     customFilterValue.set('')
+    customFilterEnd.set('')
     void apply()
   }
 
@@ -522,6 +650,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     if (!name || !manager?.saveFavoriteFunction) return
     pending.set(true)
     error.set('')
+    retryDraft.set(null)
     try {
       const value = (await callApi(manager.saveFavoriteFunction, {
         name,
@@ -542,8 +671,9 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
       applyFavorite(favorite)
       saveFavoriteName.set('')
       saveFavoriteDefault.set(false)
-    } catch (caught) {
-      error.set(caught instanceof Error ? caught.message : labels.applyError)
+      closeFavoriteForm()
+    } catch {
+      error.set(labels.favoriteError)
     } finally {
       pending.set(false)
     }
@@ -553,13 +683,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     if (!manager?.deleteFavoriteFunction) return
     pending.set(true)
     error.set('')
+    retryDraft.set(null)
     try {
       await callApi(manager.deleteFavoriteFunction, { ...(manager.applyInput ?? {}), id: favorite.id })
       favorites.set(favorites().filter((entry) => entry.id !== favorite.id))
       if (activeFavoriteId() === favorite.id)
         removeFacet({ id: favorite.id, type: 'favorite', label: favorite.label })
-    } catch (caught) {
-      error.set(caught instanceof Error ? caught.message : labels.applyError)
+    } catch {
+      error.set(labels.favoriteError)
     } finally {
       pending.set(false)
     }
@@ -569,11 +700,12 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     if (!manager?.setDefaultFavoriteFunction) return
     pending.set(true)
     error.set('')
+    retryDraft.set(null)
     try {
       await callApi(manager.setDefaultFavoriteFunction, { ...(manager.applyInput ?? {}), id: favorite.id })
       favorites.set(favorites().map((entry) => ({ ...entry, isDefault: entry.id === favorite.id })))
-    } catch (caught) {
-      error.set(caught instanceof Error ? caught.message : labels.applyError)
+    } catch {
+      error.set(labels.favoriteError)
     } finally {
       pending.set(false)
     }
@@ -581,7 +713,14 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
 
   const facetChip = (facet: SearchFacet): TemplateResult => (
     <li data-ui="search-filter-facet" data-type={facet.type}>
-      <span>{facet.label}</span>
+      <span>
+        {facet.type === 'field'
+          ? `${labels.searchGenericLabel}: `
+          : facet.type === 'groupBy'
+            ? `${labels.groupBy}: `
+            : ''}
+        {facet.label}
+      </span>
       <button
         data-ui="search-filter-facet-remove"
         type="button"
@@ -790,6 +929,345 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     )
   }
 
+  const valueEditor = (): TemplateResult | null => {
+    const field = selectedField()
+    const operator = customFilterOperator() as SearchFilterOperator
+    if (!field || !operator || isValuelessOperator(operator)) return null
+    if (field.choices)
+      return (
+        <select
+          aria-label={labels.customFilterValue}
+          multiple={operator === 'anyOf'}
+          onChange={(event) => {
+            if (event.currentTarget instanceof HTMLSelectElement)
+              customFilterValue.set(
+                Array.from(event.currentTarget.selectedOptions)
+                  .map((option) => option.value)
+                  .filter(Boolean)
+                  .join(','),
+              )
+          }}
+        >
+          <option value="" disabled selected={!customFilterValue()}>
+            {labels.customFilterValue}
+          </option>
+          {each(
+            field.choices,
+            (choice) => choice.value,
+            (choice) => (
+              <option value={choice.value} selected={customFilterValue().split(',').includes(choice.value)}>
+                {choice.label}
+              </option>
+            ),
+          )}
+        </select>
+      )
+    const type =
+      field.type === 'number'
+        ? 'number'
+        : field.type === 'date'
+          ? 'date'
+          : field.type === 'datetime'
+            ? 'datetime-local'
+            : 'text'
+    return (
+      <>
+        <input
+          type={type}
+          step={field.type === 'number' ? 'any' : undefined}
+          autocomplete="off"
+          aria-label={operator === 'between' ? labels.valueFrom : labels.customFilterValue}
+          placeholder={labels.customFilterValue}
+          value={customFilterValue()}
+          onInput={(event) => {
+            if (event.currentTarget instanceof HTMLInputElement)
+              customFilterValue.set(event.currentTarget.value)
+          }}
+        />
+        {operator === 'between' ? (
+          <input
+            type={type}
+            step={field.type === 'number' ? 'any' : undefined}
+            aria-label={labels.valueTo}
+            value={customFilterEnd()}
+            onInput={(event) => {
+              if (event.currentTarget instanceof HTMLInputElement)
+                customFilterEnd.set(event.currentTarget.value)
+            }}
+          />
+        ) : null}
+      </>
+    )
+  }
+  const icon = (kind: 'filter' | 'groupBy' | 'favorite' | 'search'): TemplateResult => (
+    <svg
+      data-ui="search-filter-icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path
+        d={
+          kind === 'filter'
+            ? 'M4 5h16M7 12h10M10 19h4'
+            : kind === 'groupBy'
+              ? 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'
+              : kind === 'favorite'
+                ? 'M6 3h12v18l-6-4-6 4z'
+                : 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0'
+        }
+      />
+    </svg>
+  )
+  const sectionTrigger = (kind: 'groupBy' | 'favorite', label: string): TemplateResult => (
+    <button
+      data-ui="search-filter-section-toggle"
+      data-section={kind}
+      type="button"
+      aria-expanded={String(menuOpen() && panel() === kind)}
+      aria-controls={`${props.id}-panel`}
+      onClick={(event) => {
+        event.stopPropagation()
+        menuOpener = event.currentTarget as HTMLElement
+        if (menuOpen() && panel() === kind) menuOpen.set(false)
+        else openPanel(kind)
+      }}
+    >
+      {icon(kind)}
+      <span>{label}</span>
+      {countOf(kind) ? <span data-ui="menu-trigger-count">{String(countOf(kind))}</span> : null}
+    </button>
+  )
+  const panelContent = (): TemplateResult => (
+    <div
+      data-ui="search-filter-columns"
+      data-columns={1 + Number(hasGrouping) + Number(hasFavorites())}
+      data-panel={sheetOpen() ? 'all' : panel()}
+    >
+      <div data-ui="search-filter-column" data-facet-type="filter">
+        {columnTitle(labels.filters, countOf('filter'))}
+        {each(
+          config.filters,
+          (option) => option.id,
+          (option, index) => filterMenuItem(option, index === 0 ? null : config.filters[index - 1]),
+        )}
+        {capabilities.customFilters !== false && (
+          <>
+            <hr data-ui="menu-separator" />
+            <div data-ui="custom-filter">
+              <div data-ui="custom-filter-row">
+                <select
+                  aria-label={labels.customFilterField}
+                  onChange={(event) => {
+                    if (event.currentTarget instanceof HTMLSelectElement) {
+                      customFilterField.set(event.currentTarget.value)
+                      customFilterOperator.set('')
+                      customFilterValue.set('')
+                      customFilterEnd.set('')
+                    }
+                  }}
+                >
+                  <option value="" disabled selected={!customFilterField()}>
+                    {labels.customFilterField}
+                  </option>
+                  {each(
+                    config.customFilterFields,
+                    (field) => field.value,
+                    (field) => (
+                      <option value={field.value} selected={field.value === customFilterField()}>
+                        {field.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <select
+                  aria-label={labels.customFilterOperator}
+                  disabled={!customFilterField()}
+                  onChange={(event) => {
+                    if (event.currentTarget instanceof HTMLSelectElement) {
+                      customFilterOperator.set(event.currentTarget.value)
+                      customFilterValue.set('')
+                      customFilterEnd.set('')
+                    }
+                  }}
+                >
+                  <option value="" disabled selected={!customFilterOperator()}>
+                    {labels.customFilterOperator}
+                  </option>
+                  {each(
+                    operatorsFor(customFilterField()),
+                    (operator) => operator,
+                    (operator) => (
+                      <option value={operator} selected={operator === customFilterOperator()}>
+                        {operatorLabel(operator)}
+                      </option>
+                    ),
+                  )}
+                </select>
+                {valueEditor()}
+              </div>
+              <button
+                data-ui="custom-filter-add"
+                type="button"
+                disabled={!canAddRule()}
+                onClick={addCustomFilter}
+              >
+                {labels.customFilterAdd}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {hasGrouping && (
+        <div data-ui="search-filter-column" data-facet-type="groupBy">
+          {columnTitle(labels.groupBy, countOf('groupBy'))}
+          {groupByPipeline()}
+          {config.groupBy.length ? (
+            <p data-ui="search-filter-grouping-add-label">{labels.groupByAdd}</p>
+          ) : null}
+          {each(
+            config.groupBy,
+            (option) => option.id,
+            (option, index) => groupByMenuItem(option, index === 0 ? null : config.groupBy[index - 1]),
+          )}
+          {groupByOptions.length ? <hr data-ui="menu-separator" /> : null}
+          {groupByOptions.length ? (
+            <select
+              data-ui="custom-group-by"
+              disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
+              aria-label={labels.customGroupByPlaceholder}
+              onChange={(event) => {
+                if (!(event.currentTarget instanceof HTMLSelectElement)) return
+                const select = event.currentTarget
+                const option = groupByOptions.find((entry) => entry.id === select.value)
+                select.value = ''
+                if (option && !isActive('groupBy', option.id)) toggleGroupBy(option)
+              }}
+            >
+              <option value="" disabled selected>
+                {labels.customGroupByPlaceholder}
+              </option>
+              {each(
+                groupByOptions,
+                (option) => option.id,
+                (option) => (
+                  <option value={option.id}>{option.label}</option>
+                ),
+              )}
+            </select>
+          ) : null}
+        </div>
+      )}
+      {hasFavorites() && (
+        <div data-ui="search-filter-column" data-facet-type="favorite">
+          {columnTitle(labels.favorites, activeFavoriteId() ? 1 : 0)}
+          {config.favoriteHref ? (
+            <a data-ui="menu-item" href={config.favoriteHref}>
+              {labels.saveSearch}
+            </a>
+          ) : manager?.saveFavoriteFunction ? (
+            <button
+              data-ui="favorite-save-toggle"
+              type="button"
+              aria-expanded={String(savingFavorite())}
+              aria-controls={`${props.id}-favorite-form`}
+              onClick={() => {
+                if (savingFavorite()) closeFavoriteForm()
+                else {
+                  savingFavorite.set(true)
+                  queueMicrotask(() => focusControl('[data-ui="favorite-save"] input[type="text"]'))
+                }
+              }}
+            >
+              {labels.saveSearch}
+            </button>
+          ) : null}
+          {manager?.saveFavoriteFunction && savingFavorite() && !config.favoriteHref ? (
+            <form
+              id={`${props.id}-favorite-form`}
+              data-ui="favorite-save"
+              aria-label={labels.saveSearch}
+              onSubmit={saveFavorite}
+            >
+              <div data-ui="favorite-save-row">
+                <input
+                  type="text"
+                  autocomplete="off"
+                  placeholder={labels.favoriteName}
+                  aria-label={labels.favoriteName}
+                  value={saveFavoriteName()}
+                  onInput={(event) => {
+                    if (event.currentTarget instanceof HTMLInputElement)
+                      saveFavoriteName.set(event.currentTarget.value)
+                  }}
+                />
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={saveFavoriteDefault()}
+                    onChange={(event) => {
+                      if (event.currentTarget instanceof HTMLInputElement)
+                        saveFavoriteDefault.set(event.currentTarget.checked)
+                    }}
+                  />
+                  {labels.favoriteDefault}
+                </label>
+              </div>
+              <button
+                data-ui="action"
+                data-variant="primary"
+                data-size="compact"
+                type="submit"
+                disabled={!saveFavoriteName().trim()}
+              >
+                {labels.favoriteSaveAction}
+              </button>
+              <button
+                data-ui="action"
+                data-variant="secondary"
+                type="button"
+                onClick={(event) => {
+                  // Removing the form also detaches this target before the shared
+                  // outside-click dismissor runs. Keep cancellation inside the panel.
+                  event.stopPropagation()
+                  closeFavoriteForm()
+                }}
+              >
+                {labels.favoriteCancel}
+              </button>
+            </form>
+          ) : null}
+          {favorites().length ? (
+            <ul data-ui="favorite-list">{each(favorites(), (favorite) => favorite.id, favoriteRow)}</ul>
+          ) : (
+            <p data-ui="menu-label">{labels.noFavorites}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  const notice = (): TemplateResult | null =>
+    error() ? (
+      <aside data-ui="notice" data-pattern="notice" data-tone="danger" role="alert">
+        <div data-ui="notice-copy">
+          <p data-ui="notice-message">{error()}</p>
+        </div>
+        {retryDraft() ? (
+          <div data-ui="notice-actions">
+            <button data-ui="action" data-variant="secondary" type="button" onClick={retry}>
+              {labels.retry}
+            </button>
+          </div>
+        ) : null}
+      </aside>
+    ) : null
   return {
     view: () => (
       <div
@@ -799,18 +1277,18 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         data-name={config.name}
         data-size={config.size ?? 'default'}
         data-busy={pending() ? 'true' : null}
+        onKeydown={(event: KeyboardEvent) => {
+          if (event.key !== 'Escape' || sheetOpen() || !menuOpen()) return
+          if (dismissDisclosure(event)) return
+          event.preventDefault()
+          event.stopPropagation()
+          menuOpen.set(false)
+          queueMicrotask(() => menuOpener?.focus())
+        }}
       >
         <div data-ui="search-filter-bar">
           <div data-ui="search-filter-field">
-            {facets().some((facet) => facet.type !== 'groupBy') ? (
-              <ul data-ui="search-filter-facets">
-                {each(
-                  facets().filter((facet) => facet.type !== 'groupBy'),
-                  (facet) => facet.id,
-                  facetChip,
-                )}
-              </ul>
-            ) : null}
+            {icon('search')}
             <input
               data-ui="search-filter-input"
               type="search"
@@ -850,7 +1328,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
             data-ui="menu"
             data-variant="search-filter"
             data-align="end"
-            data-active={facets().length ? 'true' : null}
+            data-active={countOf('filter') ? 'true' : null}
             open={menuOpen() === true ? true : undefined}
             onToggle={(event: Event) => {
               if (event.currentTarget instanceof HTMLDetailsElement) menuOpen.set(event.currentTarget.open)
@@ -858,204 +1336,91 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
           >
             <summary
               data-ui="search-filter-toggle"
-              aria-label={labels.toggleLabel}
-              title={labels.toggleLabel}
+              role="button"
+              aria-expanded={String(sheetOpen() || (menuOpen() && panel() === 'filter'))}
+              aria-label={labels.filters}
+              title={labels.filters}
+              onClick={togglePanel}
+              aria-controls={`${props.id}-panel`}
             >
-              <span aria-hidden="true">▾</span>
-              {facets().length ? <span data-ui="menu-trigger-count">{String(facets().length)}</span> : null}
+              {icon('filter')}
+              <span>{labels.filters}</span>
+              {countOf('filter') ? (
+                <span data-ui="menu-trigger-count">{String(countOf('filter'))}</span>
+              ) : null}
             </summary>
-            <div data-ui="menu-panel" role="group" aria-label={labels.toggleLabel}>
-              <div data-ui="search-filter-columns" data-columns={columnCount}>
-                <div data-ui="search-filter-column" data-facet-type="filter">
-                  {columnTitle(labels.filters, countOf('filter'))}
-                  {each(
-                    config.filters,
-                    (option) => option.id,
-                    (option, index) => filterMenuItem(option, index === 0 ? null : config.filters[index - 1]),
-                  )}
-                  {capabilities.customFilters !== false && (
-                    <>
-                      <hr data-ui="menu-separator" />
-                      <div data-ui="custom-filter">
-                        <div data-ui="custom-filter-row">
-                          <select
-                            aria-label={labels.customFilterField}
-                            onChange={(event) => {
-                              if (event.currentTarget instanceof HTMLSelectElement) {
-                                customFilterField.set(event.currentTarget.value)
-                                customFilterOperator.set('')
-                              }
-                            }}
-                          >
-                            <option value="" disabled selected={!customFilterField()}>
-                              {labels.customFilterField}
-                            </option>
-                            {each(
-                              config.customFilterFields,
-                              (field) => field.value,
-                              (field) => (
-                                <option value={field.value} selected={field.value === customFilterField()}>
-                                  {field.label}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                          <select
-                            aria-label={labels.customFilterOperator}
-                            disabled={!customFilterField()}
-                            onChange={(event) => {
-                              if (event.currentTarget instanceof HTMLSelectElement)
-                                customFilterOperator.set(event.currentTarget.value)
-                            }}
-                          >
-                            <option value="" disabled selected={!customFilterOperator()}>
-                              {labels.customFilterOperator}
-                            </option>
-                            {each(
-                              operatorsFor(customFilterField()),
-                              (operator) => operator,
-                              (operator) => (
-                                <option value={operator} selected={operator === customFilterOperator()}>
-                                  {operatorLabels[operator]}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                          {!isValuelessOperator(customFilterOperator() as SearchFilterOperator) && (
-                            <input
-                              type="text"
-                              autocomplete="off"
-                              aria-label={labels.customFilterValue}
-                              placeholder={labels.customFilterValue}
-                              value={customFilterValue()}
-                              onInput={(event) => {
-                                if (event.currentTarget instanceof HTMLInputElement)
-                                  customFilterValue.set(event.currentTarget.value)
-                              }}
-                            />
-                          )}
-                        </div>
-                        <button
-                          data-ui="custom-filter-add"
-                          type="button"
-                          disabled={!customFilterField() || !customFilterOperator()}
-                          onClick={addCustomFilter}
-                        >
-                          {labels.customFilterAdd}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-                {capabilities.groupBy !== false && (
-                  <div data-ui="search-filter-column" data-facet-type="groupBy">
-                    {columnTitle(labels.groupBy, countOf('groupBy'))}
-                    {groupByPipeline()}
-                    {config.groupBy.length ? (
-                      <p data-ui="search-filter-grouping-add-label">{labels.groupByAdd}</p>
-                    ) : null}
-                    {each(
-                      config.groupBy,
-                      (option) => option.id,
-                      (option, index) =>
-                        groupByMenuItem(option, index === 0 ? null : config.groupBy[index - 1]),
-                    )}
-                    {groupByOptions.length ? <hr data-ui="menu-separator" /> : null}
-                    {groupByOptions.length ? (
-                      <select
-                        data-ui="custom-group-by"
-                        disabled={groupByFacets().length >= (config.maxGroupBy ?? Infinity)}
-                        aria-label={labels.customGroupByPlaceholder}
-                        onChange={(event) => {
-                          if (!(event.currentTarget instanceof HTMLSelectElement)) return
-                          const select = event.currentTarget
-                          const option = groupByOptions.find((entry) => entry.id === select.value)
-                          select.value = ''
-                          if (option && !isActive('groupBy', option.id)) toggleGroupBy(option)
-                        }}
-                      >
-                        <option value="" disabled selected>
-                          {labels.customGroupByPlaceholder}
-                        </option>
-                        {each(
-                          groupByOptions,
-                          (option) => option.id,
-                          (option) => (
-                            <option value={option.id}>{option.label}</option>
-                          ),
-                        )}
-                      </select>
-                    ) : null}
-                  </div>
-                )}
-                {capabilities.favorites !== false && (
-                  <div data-ui="search-filter-column" data-facet-type="favorite">
-                    {columnTitle(labels.favorites, activeFavoriteId() ? 1 : 0)}
-                    {manager?.saveFavoriteFunction ? (
-                      <form data-ui="favorite-save" aria-label={labels.saveSearch} onSubmit={saveFavorite}>
-                        <div data-ui="favorite-save-row">
-                          <input
-                            type="text"
-                            autocomplete="off"
-                            placeholder={labels.favoriteName}
-                            aria-label={labels.favoriteName}
-                            value={saveFavoriteName()}
-                            onInput={(event) => {
-                              if (event.currentTarget instanceof HTMLInputElement)
-                                saveFavoriteName.set(event.currentTarget.value)
-                            }}
-                          />
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={saveFavoriteDefault()}
-                              onChange={(event) => {
-                                if (event.currentTarget instanceof HTMLInputElement)
-                                  saveFavoriteDefault.set(event.currentTarget.checked)
-                              }}
-                            />
-                            {labels.favoriteDefault}
-                          </label>
-                        </div>
-                        <button
-                          data-ui="action"
-                          data-variant="primary"
-                          data-size="compact"
-                          type="submit"
-                          disabled={!saveFavoriteName().trim()}
-                        >
-                          {labels.favoriteSaveAction}
-                        </button>
-                      </form>
-                    ) : null}
-                    {favorites().length ? (
-                      <ul data-ui="favorite-list">
-                        {each(favorites(), (favorite) => favorite.id, favoriteRow)}
-                      </ul>
-                    ) : (
-                      <p data-ui="menu-label">{labels.noFavorites}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+            <div
+              id={`${props.id}-panel`}
+              data-ui="menu-panel"
+              role="group"
+              aria-label={
+                panel() === 'filter'
+                  ? labels.filters
+                  : panel() === 'groupBy'
+                    ? labels.groupBy
+                    : labels.favorites
+              }
+            >
+              {!sheetOpen() ? panelContent() : null}
             </div>
           </details>
+          {hasGrouping ? sectionTrigger('groupBy', labels.groupBy) : null}
+          {hasFavorites() ? sectionTrigger('favorite', labels.favorites) : null}
         </div>
-        {/* Below the bar, so the control the reader just used does not move under the pointer. */}
-        {error() ? (
-          <aside data-ui="notice" data-pattern="notice" data-tone="danger" role="alert">
-            <div data-ui="notice-copy">
-              <p data-ui="notice-message">{error()}</p>
-            </div>
-            {retryDraft() ? (
-              <div data-ui="notice-actions">
-                <button data-ui="action" data-variant="secondary" type="button" onClick={retry}>
-                  {labels.retry}
+        {facets().length ? (
+          <ul data-ui="search-filter-facets">
+            {each(facets(), (facet) => facet.id, facetChip)}
+            {facets().some((facet) => facet.type === 'filter' || facet.type === 'favorite') ? (
+              <li>
+                <button data-ui="search-filter-clear" type="button" onClick={clearFilters}>
+                  {labels.clearFilters}
                 </button>
-              </div>
+              </li>
             ) : null}
-          </aside>
+          </ul>
         ) : null}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Delegates native button clicks; onKeydown and onCancel handle Escape in the KetJS runtime. */}
+        <dialog
+          data-ui="search-filter-sheet"
+          aria-label={labels.toggleLabel}
+          onKeydown={(event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+              if (dismissDisclosure(event)) return
+              event.preventDefault()
+              event.stopPropagation()
+              closeSheet()
+            }
+          }}
+          onCancel={(event: Event) => {
+            event.preventDefault()
+            closeSheet()
+          }}
+          onClick={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"]')
+            )
+              closeSheet()
+          }}
+        >
+          {sheetOpen() ? (
+            <ModalSheet
+              id={`${props.id}-sheet`}
+              mode="client"
+              dialogSemantics="parent"
+              title={labels.toggleLabel}
+              closeLabel={labels.close}
+              body={
+                <>
+                  {notice()}
+                  {panelContent()}
+                </>
+              }
+            />
+          ) : null}
+        </dialog>
+        {/* Below the bar, so the control the reader just used does not move under the pointer. */}
+        {!sheetOpen() ? notice() : null}
       </div>
     ),
     mount: ({ root, lifetime }) => {
@@ -1078,6 +1443,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     dispose: () => {
       applyVersion++
       pending.set(false)
+      dialogElement()?.close()
       mountedRoot = null
     },
   }

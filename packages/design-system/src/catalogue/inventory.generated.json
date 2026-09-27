@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 132,
     "cssFiles": 77,
-    "cssLines": 15074
+    "cssLines": 15140
   },
   "rows": [
     {
@@ -1330,7 +1330,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/search-filter-layout.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -1434,7 +1434,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/search-filter-layout.test.tsx"],
       "gapTask": "DS-019"
     },
     {
@@ -2786,6 +2786,7 @@
       "testFiles": [
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
+        "test/search-filter-layout.test.tsx",
         "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-015"
@@ -4055,7 +4056,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/search-filter-apply.test.tsx"],
+      "testFiles": ["test/search-filter-apply.test.tsx", "test/search-filter-layout.test.tsx"],
       "gapTask": "DS-045"
     },
     {
@@ -4246,7 +4247,8 @@
         "test/design-system.test.tsx",
         "test/flow-all-epics-screen.test.tsx",
         "test/flow-all-pages-screen.test.tsx",
-        "test/flow-issue-detail-screen.test.tsx"
+        "test/flow-issue-detail-screen.test.tsx",
+        "test/search-filter-layout.test.tsx"
       ],
       "gapTask": "DS-020"
     },
@@ -5264,7 +5266,8 @@
         "test/design-system.test.tsx",
         "test/product-attribute-search-ui.test.tsx",
         "test/search-filter-apply.test.tsx",
-        "test/search-filter-grouping.test.tsx"
+        "test/search-filter-grouping.test.tsx",
+        "test/search-filter-layout.test.tsx"
       ],
       "gapTask": "DS-045"
     },
@@ -6563,7 +6566,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 39,
+      "consumers": 38,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6581,13 +6584,14 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 39,
+      "consumers": 38,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
+        "test/search-filter-layout.test.tsx",
         "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-015"
@@ -8440,6 +8444,7 @@
         "test/product-modal-view.test.tsx",
         "test/product-stock.test.ts",
         "test/search-filter-grouping.test.tsx",
+        "test/search-filter-layout.test.tsx",
         "test/ssr.test.ts",
         "test/table.test.ts",
         "test/ui-record-modal.test.tsx",
@@ -8950,6 +8955,7 @@
         "test/sale-overview-screen.test.tsx",
         "test/sale-quotations-list-screen.test.tsx",
         "test/scope.test.ts",
+        "test/search-filter-layout.test.tsx",
         "test/session.test.ts",
         "test/stock-inventory-screen.test.tsx",
         "test/stock-locations-list-screen.test.tsx",
@@ -9729,7 +9735,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 39,
+      "consumers": 38,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9747,7 +9753,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 39,
+      "consumers": 38,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9769,7 +9775,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 39,
+      "consumers": 38,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9837,6 +9843,7 @@
         "test/purchase-overview-screen.test.tsx",
         "test/purchase-vendor-pricelists-screen.test.tsx",
         "test/search-filter-apply.test.tsx",
+        "test/search-filter-layout.test.tsx",
         "test/ui-record-modal.test.tsx",
         "test/website-arguments-no-screen-passed.test.tsx",
         "test/website-form-editor.test.tsx",
@@ -10509,6 +10516,7 @@
         "test/platform-collection-pagination.test.tsx",
         "test/product-detail-extension-screen.test.tsx",
         "test/product-list-screen.test.tsx",
+        "test/search-filter-layout.test.tsx",
         "test/surface.test.ts",
         "test/theme.test.ts",
         "test/ui-record-modal.test.tsx",
@@ -10763,6 +10771,7 @@
         "test/ketsuite-permission-catalogue.test.ts",
         "test/platform-collection-pagination.test.tsx",
         "test/postgres.test.ts",
+        "test/search-filter-layout.test.tsx",
         "test/ssr.test.ts",
         "test/view.test.ts",
         "test/website-cms.test.ts",
@@ -11233,7 +11242,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 508,
+      "lines": 572,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -11245,6 +11254,7 @@
         "favorite-list",
         "favorite-save",
         "favorite-save-row",
+        "favorite-save-toggle",
         "menu",
         "menu-item",
         "menu-item-copy",
@@ -11252,6 +11262,7 @@
         "notice",
         "search-filter",
         "search-filter-bar",
+        "search-filter-clear",
         "search-filter-column",
         "search-filter-column-title",
         "search-filter-columns",
@@ -11269,7 +11280,10 @@
         "search-filter-grouping-label",
         "search-filter-grouping-list",
         "search-filter-grouping-order",
+        "search-filter-icon",
         "search-filter-input",
+        "search-filter-section-toggle",
+        "search-filter-sheet",
         "search-filter-suggestion",
         "search-filter-suggestions",
         "search-filter-toggle"
@@ -12200,7 +12214,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1496,
+      "lines": 1498,
       "hooks": [
         "app-main",
         "app-shell",
@@ -12295,6 +12309,7 @@
         "row",
         "row-link",
         "row-select",
+        "search-filter",
         "search-menu",
         "search-menu-badge",
         "search-menu-content",
