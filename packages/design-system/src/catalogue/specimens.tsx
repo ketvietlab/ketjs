@@ -1,7 +1,7 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { ReorderList } from '../interactions/reorder-list/index.tsx'
 import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
-import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
+import { Avatar, Badge, Code, CountBadge, Tag, Text, MediaLabel } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
 import { Breadcrumbs, NavList, TabbedView, Tabs } from '../primitives/navigation.tsx'
@@ -19,8 +19,8 @@ import {
   Stack,
   Surface,
 } from '../layouts/index.tsx'
-import { AppShell, Page } from '../layouts/shell.tsx'
-import { AppNavigation } from '../layouts/app-navigation.tsx'
+import { AppShell, AppTopbar, Page } from '../layouts/shell.tsx'
+import { NavigationToggle, AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
@@ -185,6 +185,20 @@ const DemoShell = (props: {
 }): TemplateResult => (
   <AppShell
     mode="embedded"
+    topbar={
+      <AppTopbar
+        brand={{ label: 'KétSuite', href: '#app-shell' }}
+        navigation={
+          <NavigationToggle controls={`demo-navigation-${props.active}-drawer`} label="Open navigation" />
+        }
+        search={{
+          action: '#app-shell',
+          label: 'Global search',
+          placeholder: 'Search…',
+          submitLabel: 'Search',
+        }}
+      />
+    }
     sidebar={<DemoSidebar active={props.active} />}
     main={props.main}
     rightRail={
@@ -351,6 +365,7 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Inline
             items={[
               <Badge label="Neutral" />,
+              <Text tone="muted">No stock tracking</Text>,
               <Badge label="Synchronized" tone="info" />,
               <Badge label="Ready" tone="positive" />,
               <Badge label="Needs review" tone="warning" />,
@@ -369,6 +384,7 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Inline
             items={[
               <Avatar name="Nguyễn Minh Châu" size="small" />,
+              <MediaLabel label="Product without an image" />,
               <Avatar name="Nguyễn Minh Châu" />,
               <Avatar name="Nguyễn Minh Châu" size="large" />,
               <Code value="tenant-vn-hn-0042" context="tenant" />,

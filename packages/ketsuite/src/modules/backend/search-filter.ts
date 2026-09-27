@@ -2,6 +2,7 @@ import { parseListState, validateListState } from '@ketvietlab/ketjs'
 import type { ListSearchShape, ListState, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import type { Frame } from '../../ui/index.ts'
+import { searchFilterRuleLabel } from '@ketvietlab/design-system'
 import type {
   CustomFilterField,
   SearchFilterOperator,
@@ -156,13 +157,13 @@ export const listSearchFilterConfig = (
       field,
       spec.filterable?.find((candidate) => candidate.key === field)?.label ?? field,
     )
-    const valueLabel = (part: unknown): string =>
-      choicesFor(field)?.find((choice) => choice.value === String(part))?.label ?? String(part)
-    const suffix =
-      value == null || value === ''
-        ? ''
-        : `: ${Array.isArray(value) ? value.map(valueLabel).join(', ') : valueLabel(value)}`
-    return `${label} ${labels.operatorLabels?.[operator as SearchFilterOperator] ?? operator}${suffix}`
+    return searchFilterRuleLabel({
+      fieldLabel: label,
+      operator: operator as SearchFilterOperator,
+      value,
+      choices: choicesFor(field),
+      operatorLabels: labels.operatorLabels,
+    })
   }
   const customFilters: SearchFilterCustomRule[] = state.filters.flatMap((filter, index) =>
     filter.kind === 'rule'
@@ -193,7 +194,7 @@ export const listSearchFilterConfig = (
     ...state.groupBy.map((group) => ({
       id: `${group.key}${group.interval ? `:${group.interval}` : ''}`,
       type: 'groupBy' as const,
-      label: `${groupLabel(group.key)}${group.interval ? ` / ${group.interval}` : ''}`,
+      label: `${groupLabel(group.key)}${group.interval ? ` / ${_(`backend.search.interval.${group.interval}`)}` : ''}`,
     })),
     ...(state.favoriteId
       ? [
@@ -240,7 +241,7 @@ export const listSearchFilterConfig = (
             active: false,
             options: field.intervals.map((interval) => ({
               id: `${field.key}:${interval}`,
-              label: `${label} / ${interval}`,
+              label: `${label} / ${_(`backend.search.interval.${interval}`)}`,
               active: state.groupBy.some((group) => group.key === field.key && group.interval === interval),
             })),
           }

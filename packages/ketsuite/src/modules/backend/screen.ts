@@ -113,6 +113,7 @@ export const frameOf = async (
   const lang = ctx.localeOf(url, req)
   return {
     navigation,
+    globalSearchQuery: url.pathname === '/admin/search' ? (url.searchParams.get('q') ?? '') : '',
     collectionUrl: url.pathname + url.search,
     viewer: await viewerOf(ctx, url, req),
     menu: await ctx.menu(menuUrl, req),

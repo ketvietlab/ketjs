@@ -594,6 +594,7 @@ export const routes: Record<string, RouteEntry> = {
                   labels: {
                     selectAll: _('backend.table.selectAll'),
                     selectRow: _('backend.table.selectRow'),
+                    region: _('backend.table.results'),
                     sortedAscending: _('product_backend.table.sortAscending'),
                     sortedDescending: _('product_backend.table.sortDescending'),
                     previousPage: _('backend.chrome.previous'),

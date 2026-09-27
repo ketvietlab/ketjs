@@ -1,21 +1,32 @@
-import { createKetTableView } from '@ketvietlab/design-system'
+import { createKetTableView, MediaLabel, Text } from '@ketvietlab/design-system'
+import type { KetTableGroup, KetTableConfig } from '@ketvietlab/design-system'
 import type { IslandController, IslandProps } from '@ketvietlab/ketjs-view'
-import { inline, thumbnail } from '../primitives.tsx'
-import { icon } from '../icons.ts'
 
 // A thin, shared registration point — not a reimplementation like
 // `relation-select-view.tsx` — so a screen that ever needs a `custom` cell
 // kind has one place to add it, registered identically for the server-side
 // `view:` in `backend/islands.ts` and this same file's client bundle entry
-// in `tools/build-backend-client.mjs`. The thumbnail renderer uses the existing
-// backend compatibility primitive until that media contract moves to the DS.
+// in `tools/build-backend-client.mjs`. Media and text use public DS primitives.
 export const ketTable = (props: IslandProps): IslandController =>
   createKetTableView(props as never, {
     'thumbnail-label': (value, row, options) => {
       const image = row[String(options?.imageField ?? 'image')] as { src?: string } | null
-      return inline([
-        image?.src ? thumbnail({ src: image.src, alt: '' }) : thumbnail({ fallback: icon('package') }),
-        String(value ?? ''),
-      ])
+      const config = props.config as KetTableConfig
+      const collect = (groups: KetTableGroup[]): Record<string, unknown>[] =>
+        groups.flatMap((group) => [...(group.rows ?? []), ...collect(group.children ?? [])])
+      const rows = [...(config.rows ?? []), ...collect(config.groups ?? [])]
+      const reserveImage = rows.some((entry) =>
+        Boolean((entry[String(options?.imageField ?? 'image')] as { src?: string } | null)?.src),
+      )
+      return <MediaLabel label={String(value ?? '')} src={image?.src} reserveImage={reserveImage} />
+    },
+    // A classification in words. `status` draws a badge, which is for states
+    // and exceptions; a value most rows share would repeat the same pill down
+    // the column and stop the colour meaning anything.
+    label: (value, _row, options) => {
+      const labels = (options?.labels ?? {}) as Record<string, string>
+      const key = String(value ?? '')
+      const muted = Array.isArray(options?.mutedValues) && options.mutedValues.includes(key)
+      return <Text tone={muted ? 'muted' : 'default'}>{labels[key] ?? key}</Text>
     },
   })
