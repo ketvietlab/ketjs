@@ -532,7 +532,8 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
   try {
     const bulkAccess = await run<{ functions: unknown[] }>('user.effectiveAccess', { userId: 'operator' })
     assert.equal(bulkAccess.functions.length, bulkActions.length)
-    assert.ok(queryCount <= 10, `effective resolver executed ${queryCount} queries`)
+    // One tenant-local query adds independently owned policy assignments; still constant per resolver.
+    assert.ok(queryCount <= 11, `effective resolver executed ${queryCount} queries`)
   } finally {
     countedAdapter.all = originalAll
   }

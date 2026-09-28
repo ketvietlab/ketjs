@@ -416,3 +416,13 @@ Baseline dùng `KET_BENCH_KETSUITE_MODULE` trỏ tới bản build sạch của
 `origin/develop`, nên hai phía dùng cùng benchmark, Node.js, engine, PostgreSQL và
 máy chạy. Benchmark phải chạy lại ngay trước commit; tăng quá 15% p95 hoặc giảm quá
 10% throughput phải được tối ưu hoặc giải trình trong PR.
+
+### Automatic access policies
+
+`user.AccessPolicy` matches trusted `user.DirectoryFact` values for a directory group, department or job title and grants healthy managed roles at a tenant, company or branch scope. The directory adapter calls the internal `user.replaceDirectoryFacts` as `system:user-directory`; browsers cannot submit directory facts. The policy editor offers existing directory values and retains an existing condition when its directory value disappears.
+
+`user.PolicyAssignment` owns each policy's edges separately from manual `user.Assignment` rows. Pausing, changing or removing a match removes only the affected policy's grants. Memberships are never created by a policy. Matches without a valid workplace appear as blocked. Effective permission resolution unions policy and manual grants and still checks active user, company, branch, membership and managed-role health.
+
+Preview performs no writes. Save/pause use an actor-bound idempotency record and authorization-revision compare-and-set in the same transaction as assignments and security audit. The UI includes the preview digest so a changed rule or changed preview result is refused. Interactive changes to the actor's own authority and security-role changes by non-superusers are refused on the server. Optional audit reasons are never required.
+
+Directory replacement reconciles synchronously. The scheduled `user.reconcileAccessPolicies` job reconciles changes to memberships and role health every minute, with a revision change only when edges differ. Revocation takes effect at permission resolution even before a stale edge is removed. Workers must run for new matching memberships to acquire grants without another directory update. Inactive or unhealthy roles stop granting; policies do not silently repair or upgrade them.

@@ -123,7 +123,7 @@ const companyNames = async (ctx: Ctx): Promise<Map<string, string>> => {
   )
 }
 
-const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[] }> => {
+export const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[] }> => {
   const names = await companyNames(ctx)
   const companies = (await ctx.db.select('company.Company', { active: true }))
     .map(
@@ -162,12 +162,26 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
   const branches = new Map(
     (await ctx.db.select('company.Branch')).map((row) => [String(row.id), String(row.name ?? row.id)]),
   )
-  return (await ctx.db.select('user.Assignment', { userId })).map((assignment): Row => {
+  const policies = new Map(
+    (await ctx.db.select('user.AccessPolicy')).map((row) => [String(row.id), String(row.name)]),
+  )
+  const assignments = [
+    ...(await ctx.db.select('user.Assignment', { userId })),
+    ...(await ctx.db.select('user.PolicyAssignment', { userId })),
+  ]
+  return assignments.map((assignment): Row => {
     const companyId = assignment.companyId ? String(assignment.companyId) : ''
     const branchId = assignment.branchId ? String(assignment.branchId) : ''
     return {
       id: String(assignment.id),
       roleId: String(assignment.roleId),
+      source: assignment.policyId
+        ? {
+            kind: 'policy',
+            policyId: String(assignment.policyId),
+            policyName: policies.get(String(assignment.policyId)) ?? String(assignment.policyId),
+          }
+        : { kind: 'manual' },
       roleName: roles.get(String(assignment.roleId)) ?? String(assignment.roleId),
       scopeKind: String(assignment.scopeKind ?? 'tenant'),
       companyId: companyId || null,
@@ -277,6 +291,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       'read:user.User',
       'read:user.Role',
       'read:user.Assignment',
+      'read:user.PolicyAssignment',
+      'read:user.AccessPolicy',
       'read:company.Company',
       'read:company.Branch',
       // A company is named by its party record.
