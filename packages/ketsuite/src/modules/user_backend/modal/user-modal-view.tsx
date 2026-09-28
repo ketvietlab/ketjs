@@ -434,6 +434,96 @@ const workplaceFields = (c: Context): FieldProps[] => {
   ]
 }
 
+type WorkplacePreview = {
+  ok: boolean
+  /** Assignments held at a place being removed: they go with it. */
+  removed?: AnyRow[]
+}
+
+/**
+ * What leaving a workplace takes with it.
+ *
+ * A role held at a company or branch the person no longer works at is authority
+ * nobody can see a use for; saving the new workplaces removes it too. The preview
+ * names those roles first, so the removal is read before it is made.
+ */
+const workplacePreview = (c: Context): JSXChild => {
+  const preview = c.outcome<WorkplacePreview>('previewWorkplaces')
+  if (!preview) return ''
+  if (!preview.ok) return Notice({ tone: 'warning', title: t(c, 'preview.unavailable'), message: '' })
+  const removed = preview.removed ?? []
+  return removed.length
+    ? Stack({
+        gap: 'compact',
+        items: [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'workplace.removesTitle').replace('{count}', String(removed.length)),
+            message: t(c, 'workplace.removesHint'),
+          }),
+          DataTable<AnyRow>({
+            rows: removed,
+            id: (row) => String(row.id),
+            columns: [
+              {
+                key: 'role',
+                label: t(c, 'field.assignment'),
+                priority: 'primary',
+                cell: (row) => String(row.roleName),
+              },
+              { key: 'scope', label: t(c, 'field.scope'), cell: (row) => scopeName(c, row) },
+            ],
+          }),
+        ],
+      })
+    : Notice({ tone: 'info', title: t(c, 'workplace.keepsAll'), message: '' })
+}
+
+/** Where this person works. Where removals can be previewed, they are read before saving. */
+const workplaceForm = (c: Context): JSXChild => {
+  const previewing = c.data.permissions.previewWorkplaces === true
+  return Stack({
+    gap: 'default',
+    items: [
+      RecordModalForm({
+        kind: c.kind,
+        fields: workplaceFields(c),
+        command: previewing ? null : 'setWorkplaces',
+        actions: previewing
+          ? [
+              Button({
+                label: t(c, 'action.previewWorkplaces'),
+                variant: 'secondary',
+                type: 'submit',
+                name: RECORD_COMMAND_FIELD,
+                value: 'previewWorkplaces',
+              }),
+              ...(c.outcome<WorkplacePreview>('previewWorkplaces')
+                ? [
+                    Button({
+                      label: t(c, 'action.saveWorkplaces'),
+                      variant: 'primary',
+                      type: 'submit',
+                      name: RECORD_COMMAND_FIELD,
+                      value: 'setWorkplaces',
+                    }),
+                  ]
+                : []),
+            ]
+          : [
+              Button({
+                label: t(c, 'action.saveWorkplaces'),
+                variant: 'primary',
+                type: 'submit',
+              }),
+            ],
+      }),
+      workplacePreview(c),
+    ],
+  })
+}
+
+/** The person, named once at the top of every tab, with the state that decides access. */
 const header = (c: Context): JSXChild =>
   c.creating
     ? ''
@@ -804,29 +894,72 @@ const previewPanel = (c: Context, command: string): JSXChild => {
               message: '',
             }),
           ]
-        : entry.bundles.length
+        : entry.bundles.length || entry.surfaces?.length
           ? [
-              DataTable<PreviewBundle>({
-                rows: entry.bundles,
-                id: (row) => `${entry.companyId}:${entry.branchId ?? ''}:${row.key}`,
-                columns: [
-                  {
-                    key: 'bundle',
-                    label: t(c, 'preview.bundle'),
-                    priority: 'primary',
-                    cell: (row) => row.labels[c.data.lang] ?? row.key,
-                  },
-                  {
-                    key: 'before',
-                    label: t(c, 'preview.before'),
-                    cell: (row) => coverage(c, row.before, row.total),
-                  },
-                  {
-                    key: 'after',
-                    label: t(c, 'preview.after'),
-                    cell: (row) => coverage(c, row.after, row.total),
-                  },
-                ],
+              Section({
+                title: t(c, 'preview.gains'),
+                body: Stack({
+                  items: entry.bundles
+                    .filter((row) => row.after > row.before)
+                    .map((row) => row.labels[c.data.lang] ?? row.key)
+                    .concat(
+                      entry.bundles.some((row) => row.after > row.before) ? [] : [t(c, 'value.unchanged')],
+                    ),
+                }),
+              }),
+              Section({
+                title: t(c, 'preview.loses'),
+                body: Stack({
+                  items: entry.bundles
+                    .filter((row) => row.after < row.before)
+                    .map((row) => row.labels[c.data.lang] ?? row.key)
+                    .concat(
+                      entry.bundles.some((row) => row.after < row.before) ? [] : [t(c, 'value.unchanged')],
+                    ),
+                }),
+              }),
+              Disclosure({
+                summary: t(c, 'preview.details'),
+                body: Stack({
+                  items: [
+                    // Screens first: "can open the quotation form but not pick a tax" is
+                    // the consequence a reader acts on; the bundles below say why.
+                    ...(entry.surfaces?.length
+                      ? [
+                          Section({
+                            title: t(c, 'surface.previewTitle'),
+                            body: SurfaceChangeTable(
+                              (key, params) => c.t(key, params),
+                              entry.surfaces,
+                              `${entry.companyId}:${entry.branchId ?? ''}`,
+                            ),
+                          }),
+                        ]
+                      : []),
+                    DataTable<PreviewBundle>({
+                      rows: entry.bundles,
+                      id: (row) => `${entry.companyId}:${entry.branchId ?? ''}:${row.key}`,
+                      columns: [
+                        {
+                          key: 'bundle',
+                          label: t(c, 'preview.bundle'),
+                          priority: 'primary',
+                          cell: (row) => row.labels[c.data.lang] ?? row.key,
+                        },
+                        {
+                          key: 'before',
+                          label: t(c, 'preview.before'),
+                          cell: (row) => coverage(c, row.before, row.total),
+                        },
+                        {
+                          key: 'after',
+                          label: t(c, 'preview.after'),
+                          cell: (row) => coverage(c, row.after, row.total),
+                        },
+                      ],
+                    }),
+                  ],
+                }),
               }),
             ]
           : [
@@ -1248,18 +1381,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
               ? [
                   Section({
                     title: t(c, 'users.workplaceTitle'),
-                    body: RecordModalForm({
-                      kind: c.kind,
-                      fields: workplaceFields(c),
-                      command: 'setWorkplaces',
-                      actions: [
-                        Button({
-                          label: t(c, 'action.saveWorkplaces'),
-                          variant: 'primary',
-                          type: 'submit',
-                        }),
-                      ],
-                    }),
+                    body: workplaceForm(c),
                   }),
                 ]
               : []),
@@ -1291,6 +1413,15 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
       },
+    },
+    previewWorkplaces: {
+      fn: 'user.previewWorkplaces',
+      input: (form, c) => ({
+        userId: c.id,
+        companyIds: selectedIds(form, c.data.companies, companyFieldName),
+        branchIds: selectedIds(form, c.data.branches, branchFieldName),
+      }),
+      preview: true,
     },
     setWorkplaces: {
       fn: 'user.setWorkplaces',

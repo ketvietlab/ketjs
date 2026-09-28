@@ -439,3 +439,7 @@ The managed-role record shows two navigation items: allowed actions and people. 
 ### User record navigation
 
 A user's record has Overview, Access, Sign-in and Log navigation. The Access panel groups assignments by workplace and distinguishes direct assignments from automatic rules. “Check access” opens a nested diagnostic dialog rather than another primary tab. The shared record runtime owns its inert parent, close flow, scroll and return focus. The actor's own authority and non-editable policy assignments do not expose direct grant/removal controls.
+
+### Reviewing an access change
+
+Assignment and removal previews lead with the named work that becomes available or is taken away. Technical bundle counts and per-screen coverage are inside an optional disclosure. Workplace edits preview assignments that will be removed before saving. The runtime invalidates a preview when its form changes; saves still use the server's authorization-revision check, preserving inputs on refusal.
