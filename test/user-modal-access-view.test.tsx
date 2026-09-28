@@ -375,3 +375,28 @@ test('the sign-in tab links provider identities only when the viewer may list th
   )
   assert.doesNotMatch(denied, /\/admin\/oauth\/identities/)
 })
+
+test('user identity is rendered once in modal chrome; body header contains only actions', () => {
+  const context = contextOf(dataOf())
+  assert.equal(userModalDefinition.title(context), 'Minh Trang')
+  assert.equal(userModalDefinition.description?.(context), 'minhtrang')
+  assert.match(render(userModalDefinition.status?.(context)), /data-ui="badge"/u)
+  const header = render(userModalDefinition.header?.(context))
+  assert.doesNotMatch(header, /Minh Trang|minhtrang|data-ui="record-summary"/u)
+  assert.match(header, /data-record-dialog="edit"/u)
+})
+
+test('user tabs and nested dialogs never ask for a change reason', () => {
+  const context = contextOf(dataOf())
+  for (const tab of userModalDefinition.tabs ?? []) {
+    assert.doesNotMatch(
+      render(tab.view(context)),
+      /name="(?:reason|workplaceReason|breakGlassReason)"|field.reason/u,
+      tab.id,
+    )
+  }
+  for (const name of ['assign', 'role', 'edit']) {
+    const html = render(dialogView(name)(contextOf(dataOf(), { dialog: { name, params: { id: 'a1' } } })))
+    assert.doesNotMatch(html, /name="(?:reason|workplaceReason|breakGlassReason)"|field.reason/u, name)
+  }
+})
