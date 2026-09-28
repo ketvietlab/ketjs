@@ -5,16 +5,45 @@ import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const probe = defineModule({
   name: 'permission_probe',
-  functions: { read: { output: { ok: 'bool' }, handler: () => ({ ok: true }) } },
+  functions: {
+    read: { output: { ok: 'bool' }, handler: () => ({ ok: true }) },
+    write: { output: { ok: 'bool' }, handler: () => ({ ok: true }) },
+    grant: { output: { ok: 'bool' }, handler: () => ({ ok: true }) },
+  },
+  // A screen that opens on a read and is somebody's work only with the write.
+  menus: {
+    'permission_probe.screen': {
+      label: 'menu.screen',
+      path: '/probe',
+      needs: 'permission_probe.read',
+      for: ['permission_probe.write'],
+    },
+  },
+  messages: { vi: { 'menu.screen': 'Màn hình thử' }, en: { 'menu.screen': 'Probe screen' } },
   permissions: {
     posture: 'permission-bearing',
     owner: 'permission_probe',
-    bundles: { 'permission_probe.view': { labels: { en: 'View', vi: 'Xem' } } },
+    bundles: {
+      'permission_probe.view': { labels: { en: 'View', vi: 'Xem' } },
+      'permission_probe.work': { labels: { en: 'Work', vi: 'Làm việc' } },
+      'permission_probe.admin': { labels: { en: 'Admin', vi: 'Quản trị' } },
+    },
     functions: {
       'permission_probe.read': {
         risk: 'read',
         bundles: ['permission_probe.view'],
         owner: 'permission_probe',
+      },
+      'permission_probe.write': {
+        risk: 'operate',
+        bundles: ['permission_probe.work'],
+        owner: 'permission_probe',
+      },
+      'permission_probe.grant': {
+        risk: 'security',
+        bundles: ['permission_probe.admin'],
+        owner: 'permission_probe',
+        policy: 'permission_probe.grant is given only by a superuser',
       },
     },
     exemptions: {},
@@ -36,6 +65,16 @@ const deployment = defineDeployment({
         version: 1,
         labels: { en: 'Second', vi: 'Thứ hai' },
         bundles: ['permission_probe.view'],
+      },
+      'test.worker': {
+        version: 1,
+        labels: { en: 'Worker', vi: 'Người làm' },
+        bundles: ['permission_probe.view', 'permission_probe.work'],
+      },
+      'test.guardian': {
+        version: 1,
+        labels: { en: 'Guardian', vi: 'Người gác' },
+        bundles: ['permission_probe.admin'],
       },
     },
   },
@@ -61,7 +100,17 @@ type Context = {
     }
     companies: Array<{ id: string; name: string }>
     branches: Array<{ id: string; name: string; companyId: string }>
-    roles: Array<{ id: string; name: string }>
+    roles: Array<{ id: string; name: string; tier: string }>
+    actor: { self: boolean; superuser: boolean }
+    lastDenial?: { fn: string; count: number } | null
+    surfaces?: Array<{
+      key: string
+      label: string
+      status: string
+      missing: Array<{ key: string; tier: string }>
+      via: string[]
+      fixes: string[]
+    }>
     assignments: Array<{ id: string; roleId: string; scopeKey: string; company: string | null }>
     audit: Array<{ event: string; reason: string | null; roleIds: string[]; outcome: string }>
     roleCoverage: Record<string, Array<{ key: string; covered: number; total: number }>>
@@ -138,6 +187,8 @@ test('the create context offers the workplaces and managed roles the viewer may 
     passwordReady: false,
     defaultCompanyId: null,
     defaultBranchId: null,
+    superuserExpiresAt: null,
+    superuserReason: null,
   })
   assert.deepEqual(
     context.companies.map((company) => company.id),
@@ -347,4 +398,72 @@ test('an existing person is read as the record the modal opens', async (t) => {
   // The modal's text travels with its data, so the view never shows a message key.
   assert.equal(result.messages['user_backend.users.create'], 'Tạo người dùng')
   assert.equal(await run<Context>('user.userModalContext', { id: 'ghost' }), null)
+})
+
+test('the context says who reads, which roles guard authority, and what each screen lets the person do', async (t) => {
+  const run = await boot(t)
+  let revision = (await run<{ revision: number }>('user.authorizationState', {})).revision
+  revision = (
+    await run<{ revision: number }>('user.applyRoleTemplate', {
+      roleId: 'guardian',
+      templateKey: 'test.guardian',
+      expectedRoleRevision: 0,
+      expectedAuthorizationRevision: revision,
+      idempotencyKey: 'apply-guardian',
+      reason: 'probe',
+    })
+  ).revision
+  const hired = await run<{ ok: boolean }>('user.provisionUser', {
+    id: 'probe-person',
+    name: 'Probe',
+    login: 'probe',
+    roleIds: ['reader'],
+    scopeKind: 'company',
+    companyId: 'company-a',
+    reason: 'probe',
+    expectedAuthorizationRevision: revision,
+    idempotencyKey: 'surfaces',
+  })
+  assert.equal(hired.ok, true)
+
+  const context = (await run<Context>('user.userModalContext', { id: 'probe-person' }))!.data
+  assert.deepEqual(context.actor, { self: false, superuser: true })
+  // A template holding a security-risk function is marked, so a form can say who may give it.
+  const tiers = Object.fromEntries(context.roles.map((role) => [role.id, role.tier]))
+  assert.equal(tiers.guardian, 'security')
+  assert.equal(tiers.reader, 'standard')
+
+  // A deliberately read-only role is usable: optional writes are not missing dependencies.
+  const screen = context.surfaces?.find((row) => row.key === 'permission_probe.screen')
+  assert.ok(screen, 'a screen the person can open is listed')
+  assert.equal(screen.label, 'Màn hình thử')
+  assert.equal(screen.status, 'full')
+  assert.deepEqual(screen.missing, [])
+  assert.equal(screen.via.length, 1)
+  assert.deepEqual(screen.fixes, [])
+
+  // Reading your own record is marked, so the access controls can refuse it up front.
+  assert.equal((await run<Context>('user.userModalContext', { id: 'root' }))?.data.actor.self, true)
+  // Nothing that does not open is listed.
+  const staff = (await run<Context>('user.userModalContext', { id: 'staff' }))!.data
+  assert.equal(
+    staff.surfaces?.some((row) => row.key === 'permission_probe.screen'),
+    false,
+  )
+})
+
+test('denial telemetry is server-owned, bounded and hidden without audit permission', async (t) => {
+  const run = await boot(t)
+  assert.deepEqual(
+    await run('user.recordAccessDenial', { userId: 'staff', fnKey: 'permission_probe.write' }),
+    { ok: false },
+  )
+  for (let i = 0; i < 2; i++)
+    assert.deepEqual(
+      await run('user.recordAccessDenial', { userId: 'staff', fnKey: 'permission_probe.write' }, 'staff'),
+      { ok: true },
+    )
+  const context = await run<Context>('user.userModalContext', { id: 'staff' })
+  assert.equal(context?.data.lastDenial?.fn, 'permission_probe.write')
+  assert.equal(context?.data.lastDenial?.count, 2)
 })

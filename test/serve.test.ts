@@ -257,3 +257,44 @@ test('ket new: refuses to overwrite rather than eat work', () => {
 test('ket new: rejects a name that is not a module name', () => {
   assert.throws(() => scaffold('My Shop', '/tmp/x'), /invalid deployment name/)
 })
+
+test('function refusal telemetry covers HTTP and route calls without exposing inputs or masking refusal', async (t) => {
+  const events: Array<Record<string, unknown>> = []
+  const probe = defineModule({ name: 'denial_probe', functions: { read: { handler: () => ({ ok: true }) } } })
+  const app = defineDeployment({
+    name: 'denial_telemetry',
+    modules: [probe],
+    headless: true,
+    serve: {
+      resolveIdentity: async () => ({ userId: 'staff', company: 'acme', companies: ['acme'] }),
+      permissions: async () => [],
+      onFunctionDenied: async (_ctx, event) => {
+        events.push(event)
+        throw new Error('telemetry unavailable')
+      },
+      routes: (ctx) => ({
+        '/probe': async (url, req) => json(await ctx.call('denial_probe.read', {}, url, req)),
+      }),
+    },
+  })
+  const booted = await bootDeployment(app, { env: memory, port: 0 })
+  t.after(() => booted.close())
+  const base = `http://127.0.0.1:${booted.port}`
+  for (const path of ['/_ket/fn/denial_probe.read', '/probe']) {
+    const response = await fetch(
+      base + path,
+      path.startsWith('/_ket/')
+        ? {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          }
+        : {},
+    )
+    assert.equal(response.status, 403)
+  }
+  assert.equal(events.length, 2)
+  assert.equal(events[0].actor, 'staff')
+  assert.equal(events[0].fn, 'denial_probe.read')
+  assert.deepEqual(Object.keys(events[0]).sort(), ['actor', 'fn', 'scope'])
+})

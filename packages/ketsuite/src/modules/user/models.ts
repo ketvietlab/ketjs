@@ -140,6 +140,19 @@ export const models: Record<string, ModelDef> = {
     indexes: { user_role_scope: { fields: ['userId', 'roleId', 'scopeKey'], unique: true } },
   },
 
+  /** Bounded, server-observed support telemetry: only the most recent refusal per user. */
+  AccessDenial: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      fnKey: 'text',
+      occurredAt: 'datetime',
+      count: 'int',
+      companyId: 'text?',
+      branchId: 'text?',
+    },
+  },
+
   /** Monotonic tenant authorization revision used for CAS and future cache invalidation. */
   AuthorizationRevision: {
     scope: 'shared',

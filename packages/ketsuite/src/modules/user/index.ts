@@ -3,9 +3,19 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { models } from './models.ts'
 import { relations } from './relations.ts'
-import { functions } from './functions.ts'
+import { functions as accountFunctions } from './functions.ts'
+import { accessDenialFunctions } from './access-denial.ts'
+import type { FnSpec } from '@ketvietlab/ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
+
+const functions: Record<string, FnSpec> = {}
+for (const group of [accountFunctions, accessDenialFunctions]) {
+  for (const [key, spec] of Object.entries(group)) {
+    if (Object.hasOwn(functions, key)) throw new Error(`Duplicate user function: ${key}`)
+    functions[key] = spec
+  }
+}
 
 export default defineModule({
   name: 'user',

@@ -1458,6 +1458,7 @@ const sources = {
       consumeAuthToken: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       contextOptions: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       issueAuthToken: ['internal-route', 'user.trusted-route-worker-or-service'],
+      recordAccessDenial: ['internal-route', 'user.trusted-route-worker-or-service'],
       prepareContext: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       provisionAdmin: ['bootstrap-only', 'operator-provisioning-boundary'],
       // Run by `ketsuite serve` as `system:role-templates` before any request, and
