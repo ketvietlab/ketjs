@@ -431,3 +431,7 @@ Directory replacement reconciles synchronously. The scheduled `user.reconcileAcc
 ### Administration language
 
 The user interface describes work, workplaces and the source of an assigned role in both Vietnamese and English. Managed-role versions, function keys and grant-source internals are not primary navigation. Added/removed access is the primary preview; counts and technical coverage remain an optional disclosure. Account delivery copy distinguishes an email request from delivery and activation, and distinguishes an external temporary password from a local verification code. System audit records remain intact when optional reason inputs are removed.
+
+### Reading a standard role
+
+The managed-role record shows two navigation items: allowed actions and people. Its title and health appear once in the modal header. It presents named business actions rather than template versions, grant provenance or a separate screen-diagnostics tab. A stale role gives a support-oriented notice. The diagnostic model remains available to trusted tooling; the product-facing managed catalogue is read-only.
