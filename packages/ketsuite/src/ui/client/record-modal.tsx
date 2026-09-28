@@ -333,7 +333,7 @@ export const RECORD_MODAL_LABELS: Readonly<Record<string, string>> = Object.free
 /**
  * The text for a key: the loaded context's messages, then the messages of the
  * last record this modal opened, then the module's labels, then the defaults.
- * Only an unknown key falls through to itself.
+ * Unknown refusal codes use a friendly fallback; other unknown keys fall through to themselves.
  */
 export const resolveRecordModalLabel = (
   key: string,
@@ -347,7 +347,7 @@ export const resolveRecordModalLabel = (
   sources.previous?.[key] ??
   sources.labels?.[key] ??
   RECORD_MODAL_LABELS[key] ??
-  key
+  (/^E_[A-Z_]+$/u.test(key) ? resolveRecordModalLabel('recordModal.saveFailed', sources) : key)
 
 /** Field a form (or its submitter) uses to name the command it runs. */
 export const RECORD_COMMAND_FIELD = '__command'

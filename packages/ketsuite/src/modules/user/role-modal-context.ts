@@ -1,3 +1,4 @@
+import { userModalMessages } from './modal-messages.ts'
 // The record-modal context for a role (KetSuite record-modal contract).
 //
 // The roles collection opens a role — and its create action — in a client-side
@@ -21,19 +22,6 @@ import {
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
-
-const MESSAGE_PREFIXES = ['user_backend.', 'user.']
-
-const messagesFor = (ctx: Ctx, lang: Lang): Record<string, string> => {
-  const catalog = ctx.manifest.messages?.[lang] ?? {}
-  const out: Record<string, string> = {}
-  for (const [key, message] of Object.entries(catalog)) {
-    if (!MESSAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue
-    out[key] =
-      typeof message === 'string' ? message : String(message.other ?? Object.values(message)[0] ?? key)
-  }
-  return out
-}
 
 const readEffects = AUTHORIZATION_EFFECTS.filter((effect) => !effect.startsWith('write:'))
 
@@ -216,7 +204,7 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
           permissions,
           lang,
         },
-        messages: messagesFor(ctx, lang),
+        messages: userModalMessages(ctx, lang),
       }
     },
   }),

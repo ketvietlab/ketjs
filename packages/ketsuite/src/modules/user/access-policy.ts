@@ -1,3 +1,4 @@
+import { userModalMessages } from './modal-messages.ts'
 import { defineFn, deleteFrom, eq, from, permissionDigest } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
@@ -30,12 +31,6 @@ export const ACCESS_POLICY_EFFECTS = [
   'write:user.PolicyAssignment',
 ]
 const reads = ACCESS_POLICY_EFFECTS.filter((effect) => !effect.startsWith('write:'))
-const messages = (ctx: Ctx, locale: string) =>
-  Object.fromEntries(
-    Object.entries(ctx.manifest.messages?.[locale] ?? {}).filter(
-      ([key]) => key.startsWith('user_backend.') || key.startsWith('user.'),
-    ),
-  )
 
 async function authority(ctx: Ctx, fn: string) {
   if (!ctx.actor) fail('actor', 'E_ACTOR_REQUIRED')
@@ -471,7 +466,7 @@ export const accessPolicyFunctions: Record<string, FnSpec> = {
             pause: can('user.setAccessPolicyActive'),
           },
         },
-        messages: messages(ctx, lang),
+        messages: userModalMessages(ctx, lang),
       }
     },
   }),

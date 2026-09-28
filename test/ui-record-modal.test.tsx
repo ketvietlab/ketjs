@@ -568,3 +568,18 @@ test('record modal: command routes reject external destinations and preserve ref
   assert.equal(result.ok, false)
   if (!result.ok) assert.equal(result.issues[0].field, 'email')
 })
+
+test('record modal: unknown refusal codes use a translated fallback without hiding known field guidance', () => {
+  const labels = { 'recordModal.saveFailed': 'Không thể lưu thay đổi.' }
+  assert.equal(
+    resolveRecordModalLabel('E_PROVIDER_UNAVAILABLE', { labels }),
+    labels['recordModal.saveFailed'],
+  )
+  assert.equal(
+    resolveRecordModalLabel('E_ROLE_NOT_ASSIGNABLE', {
+      labels,
+      messages: { E_ROLE_NOT_ASSIGNABLE: 'Chọn lại vai trò.' },
+    }),
+    'Chọn lại vai trò.',
+  )
+})
