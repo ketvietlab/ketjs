@@ -1464,8 +1464,10 @@ const sources = {
       consumeAuthToken: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       contextOptions: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       issueAuthToken: ['internal-route', 'user.trusted-route-worker-or-service'],
-      replaceDirectoryFacts: ['internal-route', 'user.trusted-route-worker-or-service'],
-      recordAccessDenial: ['internal-route', 'user.trusted-route-worker-or-service'],
+      // Only a tenant-bound directory adapter, with the system actor checked in the handler.
+      replaceDirectoryFacts: ['internal-route', 'user.trusted-directory-adapter'],
+      // Best-effort server denial callback; the handler binds target to actor and stores no input.
+      recordAccessDenial: ['internal-route', 'user.server-denial-telemetry'],
       prepareContext: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       provisionAdmin: ['bootstrap-only', 'operator-provisioning-boundary'],
       // Run by `ketsuite serve` as `system:role-templates` before any request, and
