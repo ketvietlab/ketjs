@@ -139,7 +139,10 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.match(navigationHtml, /data-ket-slot="backend\.sidebar-main"/)
   assert.match(navigationHtml, /data-ket-slot="backend\.topbar"/)
   assert.match(navigationHtml, /data-ket-slot="backend\.content"/)
-  assert.doesNotMatch(navigationHtml, /<!doctype|data-ui="sidebar-foot"|mail\.inbox-indicator/)
+  assert.doesNotMatch(navigationHtml, /<!doctype/)
+  assert.match(navigationHtml, /data-ket-slot="backend\.global-topbar"/)
+  assert.match(navigationHtml, /data-ui="sidebar-foot" data-placement="header"/)
+  assert.match(navigationHtml, /mail\.inbox-indicator/)
 
   const bootstrap = await e2e.client.get('/_ket/islands.js')
   // The island's bundle URL carries the file's digest, stamped at boot — see

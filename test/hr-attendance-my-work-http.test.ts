@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -91,7 +92,10 @@ test('Attendance My Work HTTP: specialized clock and leave modal preserve permis
   const initialResponse = await e2e.client.get('/my/work?lang=en')
   assert.equal(initialResponse.status, 200)
   const initial = await initialResponse.text()
-  assert.doesNotMatch(initial, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(initial),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(initial, /My work/)
   assert.match(initial, /NV001 · Nguyễn Minh Anh/)
   assert.match(initial, /Asia\/Ho_Chi_Minh/)

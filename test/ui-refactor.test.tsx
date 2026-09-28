@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
@@ -10,7 +11,7 @@ import {
   searchFilterRuleLabel,
 } from '@ketvietlab/design-system'
 
-test('topbar exposes a native GET search, accessible brand and mobile drawer trigger', () => {
+test('topbar exposes a compact dialog launcher and a native GET fallback', () => {
   const output = renderToString(
     <AppShell
       sidebar="Menu"
@@ -38,6 +39,31 @@ test('topbar exposes a native GET search, accessible brand and mobile drawer tri
   assert.match(output, /name="q" value="&lt;script&gt;"/)
   assert.match(output, /aria-controls="drawer"/)
   assert.match(output, /alt="KétSuite"/)
+  const header = output.match(/<header data-ui="app-topbar">([\s\S]*?)<\/header>/)?.[1] ?? ''
+  assert.match(
+    header,
+    /data-ui="global-search-trigger"[^>]*href="\/admin\/search\?lang=vi&amp;q=%3Cscript%3E"/,
+  )
+  assert.match(header, /aria-haspopup="dialog" aria-controls="app-global-search" aria-expanded="false"/)
+  assert.doesNotMatch(header, /<input|<form/)
+  assert.match(
+    output,
+    /<dialog data-ui="global-search-dialog" id="app-global-search" aria-labelledby="app-global-search-sheet-title">/,
+  )
+  assert.match(output, /<noscript>[\s\S]*?<form data-ui="global-search"/)
+  assert.doesNotMatch(output, /data-route-modal="true"/)
+  const liveHtml = output.replace(/<template[^>]*>[\s\S]*?<\/template>/g, '')
+  assert.doesNotMatch(liveHtml, /data-ui="modal-layer"/)
+  assert.match(liveHtml, /data-ui="global-search-input"/)
+})
+
+test('record assertions exclude only closed shell search markup, preserving record modal failures', () => {
+  const record = '<section data-ui="modal-layer" data-client-modal="true"></section>'
+  const search =
+    '<dialog data-ui="global-search-dialog"><template><section data-ui="modal-layer"></section></template></dialog>'
+  assert.equal(withoutGlobalSearchDialog(search + record), record)
+  const openSearch = search.replace('global-search-dialog"', 'global-search-dialog" open')
+  assert.equal(withoutGlobalSearchDialog(openSearch), openSearch)
 })
 
 test('media labels preserve alignment only when requested and hide decorative images from speech', () => {

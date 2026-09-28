@@ -5,6 +5,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import {
   AppNavigation,
+  AppBrand,
   IconButton,
   NavigationGroup,
   type NavigationGroupData,
@@ -203,9 +204,17 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
       id={NAVIGATION_ID}
       label={_('backend.nav.sections')}
       externalTrigger
+      identity={
+        <AppBrand
+          label={_('backend.brand')}
+          href={`/admin?lang=${encodeURIComponent(_.locale)}`}
+          image="/_ket/asset/backend/brand/logo-light.png"
+          darkImage="/_ket/asset/backend/brand/logo-dark.png"
+          imageFit="cover"
+        />
+      }
       groups={model.groups}
       supplementary={model.supplementary}
-      footer={sidebarFoot(_, options)}
       menuLabel={_('backend.nav.open')}
       closeLabel={_('backend.nav.close')}
       navigationSlot="backend.sidebar-main"
@@ -213,10 +222,14 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
   )
 }
 
-export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateResult => {
+export const sidebarFoot = (
+  _: Translator,
+  options: SidebarOptions,
+  placement: 'sidebar' | 'header' = 'sidebar',
+): TemplateResult => {
   const { viewer = null, indicators = [], footItems } = options
   return (
-    <div data-ui="sidebar-foot">
+    <div data-ui="sidebar-foot" data-placement={placement}>
       <div data-ui="sidebar-tools">
         {(indicators.length > 0 || !!footItems) && (
           <div data-ui="indicators">

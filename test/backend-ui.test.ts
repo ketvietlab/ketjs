@@ -1270,7 +1270,7 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
     [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
     ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'],
   )
-  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?persistent foot/)
 })
 
 test('backend shell: the document uses the design-system application shell', () => {
@@ -1287,7 +1287,7 @@ test('backend shell: the document uses the design-system application shell', () 
   )
   assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
   assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
-  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
+  assert.match(html, /<main data-ui="app-main">[\s\S]*?<span data-ui="runtime-probe">/)
   for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'])
     assert.equal(
       (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
@@ -1295,6 +1295,16 @@ test('backend shell: the document uses the design-system application shell', () 
       slot,
     )
   assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  assert.doesNotMatch(html, /data-ui="app-topbar"|data-ui="app-shell-topbar"/)
+  assert.match(html, /data-has-location="true"/)
+  const sidebar = html.match(/<aside data-ui="app-sidebar">[\s\S]*?<\/aside>/)?.[0] ?? ''
+  assert.match(sidebar, /data-ui="navigation-header"[\s\S]*?data-ui="app-brand"[\s\S]*?alt="KetSuite"/)
+  assert.match(
+    html,
+    /data-ui="app-main"[\s\S]*?data-ui="app-location-bar"[\s\S]*?data-ui="app-location-context"[\s\S]*?data-ui="global-search-trigger"[\s\S]*?data-ui="sidebar-foot"/,
+  )
+  assert.doesNotMatch(sidebar, /data-ui="sidebar-foot"|name="theme"|data-ui="viewer"/)
+  assert.equal((html.match(/name="theme"/g) ?? []).length, 1)
   const runtimeAt = html.indexOf('runtime-probe')
   const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
   assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')
