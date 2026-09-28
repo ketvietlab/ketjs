@@ -443,3 +443,7 @@ A user's record has Overview, Access, Sign-in and Log navigation. The Access pan
 ### Reviewing an access change
 
 Assignment and removal previews lead with the named work that becomes available or is taken away. Technical bundle counts and per-screen coverage are inside an optional disclosure. Workplace edits preview assignments that will be removed before saving. The runtime invalidates a preview when its form changes; saves still use the server's authorization-revision check, preserving inputs on refusal.
+
+### Emergency access
+
+Emergency access is inside the Access panel's advanced disclosure. Only a fully authorized administrator may grant or revoke it, never for their own account. Granting requires an expiry and confirmation; the server owns these guards and writes the audit. The overview can show an active expiry without exposing emergency controls to a read-only viewer.
