@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -107,7 +108,7 @@ test('crm configuration: rows and the create action open record modals, never a 
   )
   assert.doesNotMatch(rendered, /\/admin\/crm\/configuration\/teams\//)
   assert.doesNotMatch(rendered, /edit=|create=1/)
-  assert.doesNotMatch(rendered, /data-ui="modal-layer"|data-route-modal/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(rendered), /data-ui="modal-layer"|data-route-modal/)
   assert.match(rendered, />Tên</, 'the name column says "Tên", not "Tiêu đề"')
   assert.doesNotMatch(rendered, /Tiêu đề/)
 

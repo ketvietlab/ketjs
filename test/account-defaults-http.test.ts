@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -43,7 +44,10 @@ test('account defaults HTTP keeps relations, locale, CSRF, rejected values and s
   assert.match(html, /Chưa nhóm nào có tài khoản riêng/)
   assert.equal((html.match(/data-island="backend\.relation-select"/g) ?? []).length, 6)
   assert.match(html, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="record-workspace"|data-ui="modal-layer"|mail\.chatter/,
+  )
   const initialDefaults = (await app.client.call<Row>('account.getDefaults', {})).value
 
   const unsupported = await app.client.request(`${path}?lang=vi`, { method: 'PUT' })

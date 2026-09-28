@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -78,7 +79,7 @@ test('sprint route keeps collection context, stable rejected create state and ex
   assert.equal(saved.headers.get('location'), '/admin/flow/projects/platform/sprints?lang=en')
   const collection = await (await app.client.get(saved.headers.get('location')!)).text()
   assert.match(collection, /Sprint One/)
-  assert.doesNotMatch(collection, /data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(collection), /data-ui="modal-layer"/)
 
   assert.equal((await app.client.post(path, new URLSearchParams({ action: 'unknown' }), post)).status, 400)
   assert.equal((await app.client.request(path, { method: 'PUT' })).status, 405)

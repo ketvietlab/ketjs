@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -40,7 +41,10 @@ test('project settings keeps specialized collections and opens short editors in 
   const closed = renderToString(settingsScreen(translate, {}, 'Platform', options))
   assert.match(closed, /Project brief/)
   assert.match(closed, /data-ui="table"/)
-  assert.doesNotMatch(closed, /data-ui="modal-layer"|data-ui="list-page"|data-ui="form-page"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(closed),
+    /data-ui="modal-layer"|data-ui="list-page"|data-ui="form-page"/,
+  )
 
   const open = renderToString(
     settingsScreen(translate, {}, 'Platform', {

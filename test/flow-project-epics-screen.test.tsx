@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -62,7 +63,7 @@ test('flow project epics: specialized cards preserve project identity, backlog p
 
   assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.match(html, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="board-page-title"[^>]*>Internal platform/)
   assert.match(textContent, /data-ui="board-page-eyebrow"[^>]*>Epics/)
   assert.match(html, /data-ui="kanban"/)
@@ -123,5 +124,5 @@ test('flow project epics: archive refusal is visible without turning creation in
   assert.match(html, /data-ui="notice" data-tone="danger"/)
   assert.match(html, /That epic is not in this project/)
   assert.match(html, /data-ui="kanban"/)
-  assert.doesNotMatch(html, /data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="modal-layer"/)
 })

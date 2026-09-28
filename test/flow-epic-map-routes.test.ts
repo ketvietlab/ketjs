@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -141,7 +142,10 @@ test('flow epic dependency map: exact lookup, complete graph, locale, compatibil
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="board-page"[^>]*data-pattern="workspace"/)
   assert.match(html, /data-ui="board-page-context"[\s\S]*data-ui="breadcrumbs"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(html, /data-island="flow.map"/)
   assert.match(textContent, /data-ui="board-page-title"[^>]*>Epic 081/)
   assert.match(textContent, /Internal platform/)

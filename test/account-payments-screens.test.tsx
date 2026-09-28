@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -81,7 +82,10 @@ test('payments ListPage keeps filters, summaries and journal-entry destinations'
   assert.match(html, /data-row-href="\/admin\/accounting\/entries\/payment-http%3Amove\?lang=vi"/)
   assert.match(html, /Khách hàng HTTP · Khách hàng/)
   assert.match(html, /href="\/admin\/accounting\/payments\/new\?lang=vi&amp;returnTo=/)
-  assert.doesNotMatch(html, /payment-register-form|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /payment-register-form|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 })
 
 test('payment FormPage preserves all fields, rejected relation bundles and stable identity', () => {
@@ -147,5 +151,8 @@ test('payment FormPage preserves all fields, rejected relation bundles and stabl
   assert.match(html, /data-value="supplier-retry"/)
   assert.match(html, /data-value="missing-account"/)
   assert.match(html, /href="\/admin\/accounting\/payments\?lang=vi&amp;state=paid"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 })
