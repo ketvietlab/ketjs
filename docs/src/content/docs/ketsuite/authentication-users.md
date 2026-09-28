@@ -20,6 +20,15 @@ Source chính:
 - `packages/ketjs/src/server/boot.ts` — live identity/permission resolution;
 - `packages/ketsuite/src/ui/auth.tsx` — màn hình nhận invitation/reset trung lập.
 
+## Administrative change reasons
+
+User, role, workplace and emergency-access mutations accept an omitted `reason`.
+Their forms do not ask the operator to write an explanation. The server still records
+actor, target, scope, source, outcome and before/after digests automatically. Existing
+API clients may send a reason as optional historical metadata; the absence of that
+text must not bypass permission, expiry, revision or idempotency checks. This policy
+does not apply to business reasons in other domains such as cancelling an invoice.
+
 ## Phạm vi
 
 Cụm này cung cấp:

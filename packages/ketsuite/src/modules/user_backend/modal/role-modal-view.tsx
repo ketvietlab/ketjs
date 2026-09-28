@@ -195,7 +195,6 @@ const infoTab = (c: Context): JSXChild =>
                         },
                         true,
                       ),
-                      field(c, { name: 'reason', label: t(c, 'field.reason'), required: true }, true),
                     ],
                     command: 'clone',
                     actions: [
@@ -244,7 +243,7 @@ const sourcesTab = (c: Context): JSXChild =>
       })
     : Notice({ tone: 'info', title: t(c, 'roles.noSources'), message: '' })
 
-const TONE_MARK: Record<string, string> = { admin: ' ⚙', sensitive: ' ⚠' }
+const TONE_MARK: Record<string, string> = { admin: ' ⚙', sensitive: ' !' }
 
 /**
  * Everything a custom role may hold, on one form saved once. Business groups are
@@ -352,7 +351,6 @@ const permissionsTab = (c: Context): JSXChild => {
                 ],
               }),
             ),
-            field(c, { name: 'reason', label: t(c, 'field.reason'), type: 'textarea', span: 'full' }),
           ],
           command: 'setBundles',
           actions: [Button({ label: t(c, 'action.savePermissions'), variant: 'primary', type: 'submit' })],
@@ -455,7 +453,6 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
         id: uuid(),
         sourceRoleId: c.id,
         name: text(form, 'cloneName'),
-        reason: text(form, 'reason'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -474,7 +471,6 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
         bundleKeys: c.data.bundles
           .filter((bundle) => ['1', 'on', 'true'].includes(String(form.get(bundleFieldName(bundle)) ?? '')))
           .map((bundle) => String(bundle.key)),
-        reason: text(form, 'reason') || t(c, 'roles.permissionsTitle'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),

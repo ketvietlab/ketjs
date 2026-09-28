@@ -150,8 +150,7 @@ const selectedRoles = (form: FormData, roles: AnyRow[]): string[] =>
  * The form that hires someone.
  *
  * It asks for the whole decision at once — who they are, where they work, what
- * they do and why — because that is the request being made, and because the
- * reason is what the audit of their new authority will carry.
+ * they do. The server records who made the change without requiring a typed reason.
  */
 const createFields = (c: Context): FieldProps[] => {
   const scopeKind = c.state('scopeKind', 'branch')
@@ -228,13 +227,6 @@ const createFields = (c: Context): FieldProps[] => {
           }),
         ]
       : []),
-    field(c, {
-      name: 'reason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
-    }),
   ]
 }
 
@@ -380,13 +372,6 @@ const workplaceFields = (c: Context): FieldProps[] => {
         value: String(branch.id),
         label: String(branch.name),
       })),
-    }),
-    field(c, {
-      name: 'workplaceReason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
     }),
   ]
 }
@@ -602,13 +587,6 @@ const assignFields = (c: Context): FieldProps[] => {
         checked: c.draft(roleFieldName(String(role.id)), '') === '1',
       })),
     }),
-    field(c, {
-      name: 'reason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
-    }),
   ]
 }
 
@@ -816,16 +794,7 @@ const roleDialog = (c: Context): JSXChild => {
               items: [
                 RecordModalForm({
                   kind: c.kind,
-                  fields: [
-                    field(c, {
-                      name: 'reason',
-                      label: t(c, 'field.reason'),
-                      type: 'textarea',
-                      required: true,
-                      span: 'full',
-                      disabled: false,
-                    }),
-                  ],
+                  fields: [],
                   actions: [
                     Button({
                       label: t(c, 'action.previewRemoval'),
@@ -939,16 +908,7 @@ const loginTab = (c: Context): JSXChild => {
               description: t(c, 'login.resetHint'),
               body: RecordModalForm({
                 kind: c.kind,
-                fields: [
-                  field(c, {
-                    name: 'reason',
-                    label: t(c, 'field.reason'),
-                    type: 'textarea',
-                    required: true,
-                    span: 'full',
-                    disabled: false,
-                  }),
-                ],
+                fields: [],
                 command: 'resetPassword',
                 actions: [
                   Button({
@@ -993,11 +953,6 @@ const auditTab = (c: Context): JSXChild =>
             key: 'roles',
             label: t(c, 'field.assignment'),
             cell: (row) => (row.roleIds as string[]).map((id) => roleNameOf(c, id)).join(' · ') || '—',
-          },
-          {
-            key: 'reason',
-            label: t(c, 'field.reason'),
-            cell: (row) => String(row.reason ?? '—'),
           },
           {
             key: 'outcome',
@@ -1143,7 +1098,6 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         scopeKind: text(form, 'scopeKind') || 'branch',
         companyId: text(form, 'companyId') || null,
         branchId: text(form, 'branchId') || null,
-        reason: text(form, 'reason'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1163,7 +1117,6 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         branchIds: selectedIds(form, c.data.branches, branchFieldName),
         defaultCompanyId: text(form, 'defaultCompanyId'),
         defaultBranchId: text(form, 'defaultBranchId'),
-        reason: text(form, 'workplaceReason'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1186,7 +1139,6 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       fn: 'user.assignRoles',
       input: (form, c) => ({
         ...assignSelection(form, c),
-        reason: text(form, 'reason'),
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1217,7 +1169,6 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
           assignmentId: String(assignment.id ?? ''),
           roleId: String(assignment.roleId ?? ''),
           scopeKey: String(assignment.scopeKey ?? 'tenant'),
-          reason: text(form, 'reason'),
           expectedAuthorizationRevision: c.data.revision,
           idempotencyKey: uuid(),
         }
