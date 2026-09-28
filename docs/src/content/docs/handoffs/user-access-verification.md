@@ -9,6 +9,7 @@ This review covers the shared user record, managed roles, automatic access rules
 Build first with `npm run build`. Run the following focused lanes on the same tree:
 
 ```sh
+# Run from: /path/to/ketjs
 KET_TEST_PG=postgres://USER@127.0.0.1:PORT/postgres node --test \
   .build/test/user-access-policy.test.js \
   .build/test/user-permission-postgres.test.js \
@@ -27,6 +28,7 @@ Directory import is an internal integration contract (`user.replaceDirectoryFact
 ## Shared UI checks (USR-N17)
 
 ```sh
+# Run from: /path/to/ketjs
 node --test \
   .build/test/ui-record-modal.test.js \
   .build/test/user-access-surfaces-view.test.js \
