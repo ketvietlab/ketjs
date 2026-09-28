@@ -554,4 +554,18 @@ test('external sign-in offers both delivery choices without treating acknowledge
   assert.match(revealed, /login\.temporaryShownOnce/)
   assert.doesNotMatch(revealed, /login\.oneTimeTitle/)
   assert.doesNotMatch(revealed, /action\.claimPassword/)
+  // While a new password is prepared the actions wait on the account, not on a permission.
+  const preparing = render(
+    viewOf(userModalDefinition, 'login').view(
+      user(
+        userData({
+          credentialDelivery: 'both',
+          permissions: { ...userData().permissions, sendLink: false, resetPassword: false },
+          externalCredential: { ...data.externalCredential!, state: 'pending', emailState: null },
+        }),
+      ),
+    ),
+  )
+  assert.match(preparing, /login\.externalState\.pending/)
+  assert.doesNotMatch(preparing, /login\.readOnlyHint/)
 })
