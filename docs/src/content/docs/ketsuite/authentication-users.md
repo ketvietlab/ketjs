@@ -455,3 +455,7 @@ The Sign-in panel distinguishes invitations for a person who has not activated t
 ### Choosing an automatic rule
 
 The automatic-role collection uses the shared list/search composition and a URL-owned record modal. Rule conditions choose from directory-provided group, department and job-title options. Switching condition type clears an incompatible draft value; an existing saved value remains visible even when it has disappeared from the latest directory snapshot. An empty directory explains what is missing rather than asking an administrator to invent an identifier. Changes are previewed before the save action appears.
+
+### Managed catalogue boundary
+
+`/admin/roles` lists managed roles and has no create or clone action. Its modal reads `user.managedRoleModalContext`, which refuses custom records and strips authoring permissions on the server. The older role-context and migration APIs remain available as explicit compatibility boundaries; they do not create a parallel product workflow. Assignment still validates managed-role health and security/self-edit restrictions independently of disabled UI controls. User-list create actions are also omitted when the actor cannot create an account.

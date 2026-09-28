@@ -325,7 +325,7 @@ const sourcesTab = (c: Context): JSXChild =>
       })
     : Notice({ tone: 'info', title: t(c, 'roles.noSources'), message: '' })
 
-const TONE_MARK: Record<string, string> = { admin: ' ⚙', sensitive: ' !' }
+const TONE_MARK: Record<string, string> = { admin: ' ⚙', sensitive: ' ⚠' }
 
 /**
  * Everything a custom role may hold, on one form saved once. Business groups are
@@ -477,7 +477,7 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
   kind: 'user.role',
   size: 'large',
   context: {
-    fn: 'user.roleModalContext',
+    fn: 'user.managedRoleModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'action.createRole') : c.data.record.name),

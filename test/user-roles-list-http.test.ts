@@ -4,9 +4,8 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
-// The roles screen is off: assignment accepts only managed roles, so a custom role
-// made there could never be given to anyone. Nothing may reach it by URL or menu.
-test('the roles screen is not served and not offered in the menu', async (t: TestContext) => {
+// Product navigation exposes the managed catalogue without custom-role creation.
+test('the roles screen serves managed roles without authoring controls', async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
@@ -25,11 +24,12 @@ test('the roles screen is not served and not offered in the menu', async (t: Tes
   await app.client.login({ login: 'admin', password: 'correct horse' })
 
   const roles = await (await app.client.get('/admin/roles?lang=en')).text()
-  assert.doesNotMatch(roles, /data-ui="list-page"/)
+  assert.match(roles, /data-ui="list-page"/)
+  assert.doesNotMatch(roles, /href="\/admin\/roles\/new/)
   const users = await (await app.client.get('/admin/users?lang=en')).text()
   assert.match(users, /data-ui="list-page"/)
-  assert.doesNotMatch(users, /href="\/admin\/roles/)
-  // No role modal host is placed, so a hand-typed `record=user.role:…` opens nothing.
-  assert.doesNotMatch(users, /data-record-kind="user\.role"/)
+  assert.match(users, /href="\/admin\/roles/)
+  // The shared host is present, but its context rejects legacy/custom records.
+  assert.match(users, /data-record-kind="user\.role"/)
   assert.match(users, /data-record-kind="user\.user"/)
 })

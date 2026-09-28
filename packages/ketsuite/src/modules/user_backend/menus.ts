@@ -17,4 +17,11 @@ export const menus: Record<string, MenuDef> = {
     requires: ['user.listRoles', 'company.listCompanies'],
     sequence: 27,
   },
+  'admin.roles': {
+    parent: 'admin.config',
+    label: 'menu.roles',
+    path: '/admin/roles',
+    needs: 'user.listRoles',
+    sequence: 26,
+  },
 }

@@ -275,3 +275,24 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
     },
   }),
 }
+
+/** Product-facing read: legacy/custom administration remains a separate compatibility API. */
+roleModalContextFunctions.managedRoleModalContext = defineFn({
+  ...roleModalContextFunctions.roleModalContext,
+  input: { id: 'id', locale: 'text?' },
+  handler: async (ctx, args) => {
+    const role = (await ctx.db.select('user.Role', { id: args.id }))[0]
+    if (!role || role.mode !== 'managed') return null
+    const result = (await roleModalContextFunctions.roleModalContext.handler(ctx, args)) as {
+      data: { permissions: Record<string, boolean> }
+    } | null
+    if (!result) return null
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        permissions: { ...result.data.permissions, create: false, save: false, clone: false, grant: false },
+      },
+    }
+  },
+})
