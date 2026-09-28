@@ -1455,13 +1455,17 @@ const loginTab = (c: Context): JSXChild => {
               ...(delivery !== 'oneTime' && c.data.permissions.sendLink ? emailReset(c) : []),
               ...(delivery !== 'email' && c.data.permissions.resetPassword ? oneTimeReset(c) : []),
             ]
-          : [
-              Notice({
-                tone: 'info',
-                title: t(c, 'users.readOnlyTitle'),
-                message: t(c, 'login.readOnlyHint'),
-              }),
-            ]),
+          : // An account still being prepared waits on its state, which the section above
+            // already names; calling that "read only" blames a permission the reader has.
+            c.data.externalCredential && c.data.externalCredential.state !== 'ready'
+            ? []
+            : [
+                Notice({
+                  tone: 'info',
+                  title: t(c, 'users.readOnlyTitle'),
+                  message: t(c, 'login.readOnlyHint'),
+                }),
+              ]),
     ],
   })
 }
