@@ -1060,6 +1060,7 @@ test('routes: the segment after /admin names the section, so a path says where i
     'companies',
     'users',
     'roles',
+    'access-policies',
     'permission-presets',
   ])
   const manifest = compose(ketsuite.modules, { headless: true })
