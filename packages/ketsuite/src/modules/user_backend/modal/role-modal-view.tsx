@@ -11,21 +11,14 @@
 //
 // Bundled by tools/build-backend-client.mjs into user_backend/client/.
 
-import {
-  Badge,
-  Button,
-  DataTable,
-  DescriptionList,
-  Notice,
-  RecordSummary,
-  Section,
-  Stack,
-} from '@ketvietlab/design-system'
+import { Badge, Button, DataTable, DescriptionList, Notice, Section, Stack } from '@ketvietlab/design-system'
 import type { FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { CHECK_ALL, createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import { RecordModalForm } from '../../../ui/client/record-modal-form.tsx'
+import { SurfaceAccessView } from './access-surfaces.tsx'
+import type { SurfaceAccess } from './access-surfaces.tsx'
 
 // biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by user.roleModalContext
 type AnyRow = Record<string, any>
@@ -41,8 +34,27 @@ export type RoleRecord = {
   healthy: boolean
 }
 
+/**
+ * One bundle a role template carries, and how it got there.
+ *
+ * `included` is a lookup bundle another bundle pulled in so its screens can fill
+ * their dropdowns; it is listed so nobody wonders why a sales role reads taxes.
+ */
+export type TemplateBundle = {
+  key: string
+  label: string
+  risk: 'read' | 'operate' | 'approve' | 'configure' | 'sensitive' | 'security'
+  via: 'direct' | 'included'
+  includedBy: string | null
+}
+
 export type RoleModalData = {
   record: RoleRecord
+  /** `security` when the template hands out authority over authority. */
+  tier?: 'security' | 'standard'
+  templateBundles?: TemplateBundle[]
+  /** What the template opens, screen by screen. */
+  surfaces?: SurfaceAccess[]
   sources: AnyRow[]
   bundles: AnyRow[]
   groups: Array<{ id: string; label: string }>
@@ -122,17 +134,12 @@ const createView = (c: Context): JSXChild =>
 
 /** The role, named once above every tab, with where it came from and how it is doing. */
 const header = (c: Context): JSXChild =>
-  c.creating
+  c.creating || c.data.record.healthy
     ? ''
-    : RecordSummary({
-        title: c.data.record.name,
-        subtitle: managed(c)
-          ? t(c, 'roles.managedWithVersion').replace('{version}', String(c.data.record.templateVersion ?? 0))
-          : t(c, 'roles.custom'),
-        status: {
-          label: c.data.record.healthy ? t(c, 'roles.healthy') : t(c, 'roles.stale'),
-          tone: c.data.record.healthy ? 'positive' : 'warning',
-        },
+    : Notice({
+        tone: 'warning',
+        title: t(c, 'roles.stale'),
+        message: t(c, 'roles.unavailableHint'),
       })
 
 /**
@@ -217,6 +224,81 @@ const infoTab = (c: Context): JSXChild =>
             : [],
         }),
       })
+
+const RISK_TONE: Record<string, 'neutral' | 'info' | 'warning' | 'danger'> = {
+  read: 'neutral',
+  operate: 'info',
+  approve: 'info',
+  configure: 'warning',
+  sensitive: 'warning',
+  security: 'danger',
+}
+
+/**
+ * What the template is made of, in business words.
+ *
+ * Each bundle says how much it lets a holder do, and a bundle the template did not
+ * name — a lookup pulled in so a screen can fill its dropdowns — says which bundle
+ * brought it.
+ */
+const bundlesTab = (c: Context): JSXChild => {
+  const rows =
+    c.data.templateBundles ??
+    c.data.sources.map((row) => ({
+      key: String(row.fnKey),
+      label: String(row.work),
+      risk: 'read' as const,
+      via: 'direct' as const,
+      includedBy: null,
+    }))
+  return Stack({
+    gap: 'default',
+    items: [
+      ...(c.data.tier === 'security'
+        ? [
+            Notice({
+              tone: 'warning',
+              title: t(c, 'roles.securityTierTitle'),
+              message: t(c, 'roles.securityTierHint'),
+            }),
+          ]
+        : []),
+      rows.length
+        ? DataTable<TemplateBundle>({
+            rows,
+            id: (row) => row.key,
+            columns: [
+              {
+                key: 'bundle',
+                label: t(c, 'preview.bundle'),
+                priority: 'primary',
+                cell: (row) => row.label,
+              },
+              ...(c.data.templateBundles
+                ? [
+                    {
+                      key: 'risk',
+                      label: t(c, 'roles.riskColumn'),
+                      cell: (row: TemplateBundle) =>
+                        Badge({ label: t(c, `risk.${row.risk}`), tone: RISK_TONE[row.risk] ?? 'neutral' }),
+                    },
+                  ]
+                : []),
+            ],
+          })
+        : Notice({ tone: 'info', title: t(c, 'roles.noSources'), message: '' }),
+    ],
+  })
+}
+
+/** The screens a holder of this role can open, and the ones it opens without their work. */
+const screensTab = (c: Context): JSXChild =>
+  SurfaceAccessView({
+    t: (key, params) => c.t(key, params),
+    surfaces: c.data.surfaces ?? [],
+    showVia: false,
+    empty: { title: t(c, 'surface.emptyTitle'), message: t(c, 'roles.screensEmptyHint') },
+  })
 
 /** Where a managed role's authority came from, one row per grant. */
 const sourcesTab = (c: Context): JSXChild =>
@@ -400,14 +482,39 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
   },
   title: (c) => (c.creating ? t(c, 'action.createRole') : c.data.record.name),
   description: (c) => (c.creating ? t(c, 'roles.createSubtitle') : c.data.record.description || null),
+  status: (c) =>
+    c.creating
+      ? undefined
+      : Badge({
+          label: t(c, c.data.record.healthy ? 'roles.healthy' : 'roles.stale'),
+          tone: c.data.record.healthy ? 'positive' : 'warning',
+        }),
   header,
   body: (c) => (c.creating ? createView(c) : ''),
   tabs: [
-    { id: 'info', label: (c) => t(c, 'tab.roleInfo'), visible: (c) => !c.creating, view: infoTab },
+    {
+      id: 'info',
+      label: (c) => t(c, 'tab.roleInfo'),
+      visible: (c) => !c.creating && !managed(c),
+      view: infoTab,
+    },
+    {
+      id: 'bundles',
+      label: (c) => t(c, 'tab.roleBundles'),
+      visible: (c) => !c.creating && managed(c),
+      view: bundlesTab,
+    },
+    {
+      id: 'screens',
+      label: (c) => t(c, 'tab.screens'),
+      visible: () => false,
+      view: screensTab,
+    },
     {
       id: 'sources',
       label: (c) => t(c, 'tab.roleSources'),
-      visible: (c) => !c.creating && managed(c),
+      // The bundle view replaces the per-grant one where the context carries it.
+      visible: () => false,
       view: sourcesTab,
     },
     {
@@ -453,6 +560,7 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
         id: uuid(),
         sourceRoleId: c.id,
         name: text(form, 'cloneName'),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -471,6 +579,7 @@ export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
         bundleKeys: c.data.bundles
           .filter((bundle) => ['1', 'on', 'true'].includes(String(form.get(bundleFieldName(bundle)) ?? '')))
           .map((bundle) => String(bundle.key)),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),

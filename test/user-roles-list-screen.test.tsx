@@ -36,8 +36,8 @@ test('roles list uses ListPage with row navigation and collection actions', () =
   assert.match(html, /href="\/admin\/roles\/new\?lang=en"/)
   // The legacy preset path is gone: a role is built from a template, not a preset.
   assert.doesNotMatch(html, /permission-presets/)
-  assert.match(html, /v2/)
+  assert.doesNotMatch(html, />v2</)
   assert.match(html, />4</)
-  assert.match(html, /user_backend\.health\.stale-managed-role/)
+  assert.match(html, /user_backend\.roles\.stale/)
   assert.doesNotMatch(html, /data-ui="form-page"/)
 })
