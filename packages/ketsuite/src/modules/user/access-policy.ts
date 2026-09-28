@@ -378,10 +378,13 @@ export const accessPolicyFunctions: Record<string, FnSpec> = {
     handler: async (ctx) => {
       await authority(ctx, 'user.listAccessPolicies')
       const policies = await ctx.db.select('user.AccessPolicy')
+      const places = await workplaces(ctx)
       const assignments = await ctx.db.select('user.PolicyAssignment')
       const facts = await ctx.db.select('user.DirectoryFact')
       return policies.map((policy) => ({
         ...policy,
+        companyLabel: places.companies.find((row) => row.id === policy.companyId)?.name ?? null,
+        branchLabel: places.branches.find((row) => row.id === policy.branchId)?.name ?? null,
         matchLabel:
           facts.find((fact) => fact.kind === policy.matchKind && fact.value === policy.matchValue)?.label ??
           policy.matchValue,
