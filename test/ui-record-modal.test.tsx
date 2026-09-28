@@ -18,6 +18,7 @@ import {
 import {
   RECORD_MODAL_LABELS,
   callRecordFunction,
+  callRecordRoute,
   delayedFlag,
   openerHref,
   resolveRecordModalLabel,
@@ -546,4 +547,24 @@ test('record modal: a server failure never shows the server text to the user', a
   answer(400, { code: 'E_EXPECTED', message: 'Số điện thoại đã có người dùng' })
   const refused = await callRecordFunction('x.fn', {})
   assert.equal(refused.ok ? null : refused.message, 'Số điện thoại đã có người dùng')
+})
+
+test('record modal: command routes reject external destinations and preserve refusal fields', async (t) => {
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async (path: unknown, init: RequestInit) => {
+    calls++
+    assert.equal(path, '/admin/identity/command')
+    assert.equal(init.credentials, 'same-origin')
+    assert.equal((init.headers as Record<string, string>)['idempotency-key'], 'intent')
+    return Response.json({
+      ok: true,
+      value: { ok: false, errors: [{ field: 'email', code: 'unavailable' }] },
+    })
+  })
+  for (const path of ['https://evil.test/x', '//evil.test/x', '/\\evil.test/x'])
+    await assert.rejects(callRecordRoute(path, {}), /same-origin/)
+  assert.equal(calls, 0)
+  const result = await callRecordRoute('/admin/identity/command', {}, { idempotencyKey: 'intent' })
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.equal(result.issues[0].field, 'email')
 })

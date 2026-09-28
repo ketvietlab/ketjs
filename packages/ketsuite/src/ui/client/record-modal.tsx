@@ -63,12 +63,15 @@ const issuesOf = (source: unknown): RecordIssue[] => {
  * permission refusal (`ok: false` on the envelope) come back in one shape, so a
  * view never has to know which layer said no.
  */
-export const callRecordFunction = async <Value = unknown>(
-  name: string,
+export const callRecordRoute = async <Value = unknown>(
+  route: string,
   input: Record<string, unknown>,
   options: { signal?: AbortSignal; idempotencyKey?: string } = {},
 ): Promise<RecordCallResult<Value>> => {
-  const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
+  const target = new URL(route, 'https://record.invalid')
+  if (target.origin !== 'https://record.invalid' || !route.startsWith('/') || route.startsWith('//'))
+    throw new Error('Record commands require a same-origin route')
+  const response = await fetch(target.pathname + target.search, {
     method: 'POST',
     credentials: 'same-origin',
     headers: {
@@ -98,6 +101,14 @@ export const callRecordFunction = async <Value = unknown>(
     return { ok: false, issues: issuesOf(value), message: null, status: response.status }
   return { ok: true, value: payload.value as Value }
 }
+
+/** Call a declared function through the same response and refusal contract. */
+export const callRecordFunction = <Value = unknown>(
+  name: string,
+  input: Record<string, unknown>,
+  options: { signal?: AbortSignal; idempotencyKey?: string } = {},
+): Promise<RecordCallResult<Value>> =>
+  callRecordRoute<Value>(`/_ket/fn/${encodeURIComponent(name)}`, input, options)
 
 // ── Definition ────────────────────────────────────────────────────────────────
 
@@ -171,8 +182,7 @@ export type RecordModalCommandStep<Data> = {
   when?: (context: RecordModalContext<Data>) => boolean
 }
 
-export type RecordModalCommand<Data> = {
-  fn: string
+export type RecordModalCommand<Data> = ({ fn: string; route?: never } | { fn?: never; route: string }) & {
   /** Same-origin destination after a successful command; evaluated by the runtime. */
   navigate?: (value: unknown, context: RecordModalContext<Data>) => string
   /** Map server paths to stable native field names using the submitted snapshot. */
@@ -896,7 +906,11 @@ export const createRecordModal =
         }
         const invoke = (fn: string, input: Record<string, unknown>) =>
           callRecordFunction(fn, input, { idempotencyKey: uuid() })
-        let result = await invoke(command.fn, command.input(formData, context, uploads))
+        let result = command.route
+          ? await callRecordRoute(command.route, command.input(formData, context, uploads), {
+              idempotencyKey: uuid(),
+            })
+          : await invoke(command.fn!, command.input(formData, context, uploads))
         // Further calls run only once the first succeeds, and stop at the first
         // one that does not — a later step's success never papers over an
         // earlier failure.
