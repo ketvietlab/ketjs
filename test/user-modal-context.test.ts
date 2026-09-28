@@ -397,6 +397,11 @@ test('an existing person is read as the record the modal opens', async (t) => {
   assert.equal((await run<Context>('user.userModalContext', { id: 'root' }))?.data.record.superuser, true)
   // The modal's text travels with its data, so the view never shows a message key.
   assert.equal(result.messages['user_backend.users.create'], 'Tạo người dùng')
+  // The runtime's own chrome too: without these the Vietnamese modal says "Close" and "Not saved".
+  assert.equal(result.messages['recordModal.close'], 'Đóng')
+  assert.equal(result.messages['recordModal.errorTitle'], 'Chưa lưu được')
+  const english = await run<Context>('user.userModalContext', { id: 'staff', locale: 'en' })
+  assert.equal(english?.messages['recordModal.close'], 'Close')
   assert.equal(await run<Context>('user.userModalContext', { id: 'ghost' }), null)
 })
 

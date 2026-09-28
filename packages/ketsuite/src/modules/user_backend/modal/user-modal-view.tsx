@@ -24,6 +24,7 @@ import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal, RECORD_COMMAND_FIELD } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
+import { USER_RECORD_MODAL_LABELS } from '../../user/modal-labels.ts'
 import {
   RecordDialogTrigger,
   RecordModalForm,
@@ -1531,6 +1532,7 @@ const assignSelection = (form: FormData, c: Context): Record<string, unknown> =>
 
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
+  labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
   context: {
     fn: 'user.userModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),

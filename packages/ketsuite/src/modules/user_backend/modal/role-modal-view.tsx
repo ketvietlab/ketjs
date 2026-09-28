@@ -16,6 +16,7 @@ import type { FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { CHECK_ALL, createRecordModal } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
+import { USER_RECORD_MODAL_LABELS } from '../../user/modal-labels.ts'
 import { RecordModalForm } from '../../../ui/client/record-modal-form.tsx'
 import { SurfaceAccessView } from './access-surfaces.tsx'
 import type { SurfaceAccess } from './access-surfaces.tsx'
@@ -475,6 +476,7 @@ const holdersTab = (c: Context): JSXChild =>
 
 export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
   kind: 'user.role',
+  labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
   size: 'large',
   context: {
     fn: 'user.managedRoleModalContext',
