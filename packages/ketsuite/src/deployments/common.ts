@@ -99,6 +99,19 @@ export const productServe = (openStore: OpenStore = sqliteStore) =>
         return url.pathname.startsWith('/api/staff/v1/') ? 'staff' : 'customer'
       return /(?:^|;\s*)ket_customer_session=/.test(cookies) ? 'customer' : 'anonymous'
     },
+    onFunctionDenied: async (ctx, event, url, req) => {
+      await ctx.callUnchecked(
+        'user.recordAccessDenial',
+        {
+          userId: event.actor,
+          fnKey: event.fn,
+          companyId: event.scope.company ?? null,
+          branchId: event.scope.branch ?? null,
+        },
+        url,
+        req,
+      )
+    },
     permissions: (ctx, userId, url, req) =>
       ctx
         .callUnchecked('user.permitted', { userId }, url, req)

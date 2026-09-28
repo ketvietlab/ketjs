@@ -518,6 +518,14 @@ committed as PR evidence.
 
 ### Client record dialog context and actions
 
+Tabbed record dialogs start at their content height on desktop. The runtime retains the tallest
+rendered tab for that record as a minimum height, capped by the available viewport; switching to
+another record resets the measurement. Only the panel scrolls, keeping the tab navigation visible.
+Late text, image loads, disclosure changes, font readiness and viewport resizing trigger another
+measurement. On compact screens the design system's full-screen dialog contract still applies;
+that mobile viewport height is never retained as the desktop minimum. Explicit `fixedHeight`
+workflow overrides retain their compatibility behaviour. Nested dialogs size independently.
+
 `RecordModalDialog.actions(context)` renders a nested dialog's own fixed footer. Use
 `RecordModalForm` with a stable `id` and footer buttons with the HTML `form` attribute,
 just as for the main record's `actions`. The runtime continues to own validation,
@@ -536,3 +544,10 @@ location, for example a newly created record or a URL-backed collection filter. 
 runtime performs navigation only after the command succeeds; refusals retain the draft.
 
 Action-only record forms (`data-layout="actions"`) opt out of field-container sizing and retain their intrinsic button width inside a fixed footer. This contract belongs to the shared RecordForm stylesheet.
+
+
+### Deployment-owned record commands
+
+A deployment may extend the browser-only `@ketvietlab/ketsuite/user-modal-client` entry to reuse the user record definition while supplying a separate record kind and permission-checked context route. A record command chooses exactly one `fn` or relative `route`; the shared runtime posts JSON with same-origin credentials and an idempotency header, normalizes refusal fields, preserves drafts and owns focus/history. Route commands must return the normal `{ ok, value }` transport envelope. The route must enforce actor permissions, tenant binding, CSRF and input bounds itself. A browser-visible command never makes an internal function public.
+
+The external identity adapter may supply both email and temporary-password choices, provisioning state, verified activation, claim eligibility and persisted email delivery status. A local password hash or an accepted email request is not proof of external activation. Only a successful one-time claim may return the temporary password to the requesting administrator.

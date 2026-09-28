@@ -156,6 +156,12 @@ export type ServeOpts = {
   resolveScope?: (url: URL, req: IncomingMessage) => Scope | Promise<Scope>
   /** Authenticated user id captured into functions and any jobs they enqueue. */
   resolveActor?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /** Runs after the database lease ends; callback failures never replace the refusal. */
+  onFunctionDenied?: (
+    event: { fn: string; actor: string; scope: Scope },
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<void>
   /** Functions this request may call. Null means unrestricted — see boot.ts. */
   resolveAllow?: (url: URL, req: IncomingMessage) => Promise<readonly string[] | null>
   /** Disable PostgreSQL notification while retaining polling correctness. */
@@ -1107,7 +1113,21 @@ export async function createKetServer(o: ServeOpts) {
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
             idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
           }),
-        )
+        ).catch(async (error) => {
+          if (
+            error instanceof KetError &&
+            error.code === 'E_FN_NOT_PERMITTED' &&
+            actor &&
+            o.onFunctionDenied
+          ) {
+            try {
+              await o.onFunctionDenied({ fn: fnKey, actor, scope: scope ?? { company: null } }, url, req)
+            } catch {
+              /* best effort */
+            }
+          }
+          throw error
+        })
         return json(res, 200, result)
       }
 

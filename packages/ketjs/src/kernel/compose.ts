@@ -1006,6 +1006,19 @@ export function compose(
     })
   }
 
+  for (const [id, def] of Object.entries(manifest.menus)) {
+    if (def.needs && !manifest.functions[def.needs]) continue
+    for (const key of def.requires ?? []) {
+      if (!manifest.functions[key])
+        diag.add({
+          code: 'E_MENU_UNKNOWN_FUNCTION',
+          module: def.by,
+          message: `menu "${id}" requires unknown function "${key}"`,
+          hint: 'declare only the reads and lookups required to render this screen',
+        })
+    }
+  }
+
   // --- view models: the only data surface a theme may read -----------------
   for (const m of order) {
     for (const [vname, def] of Object.entries(m.views)) {
