@@ -243,10 +243,9 @@ export type RecordModalDefinition<Data> = {
   kind: string
   size?: 'default' | 'large'
   /**
-   * Caps a tabbed record's fixed height (a CSS length or `min()`/`calc()`
-   * expression) below the viewport-filling default, for a record whose own
-   * content is shorter than that — see `ModalSheet.fixedHeight`. Ignored for a
-   * record with one tab or none, since those never turn on `height: 'fixed'`.
+   * Compatibility override for workflows with an explicitly sized tabbed surface.
+   * By default the runtime holds the tallest rendered tab as a min-height,
+   * capped by the available viewport. Single-tab and nested dialogs size to content.
    */
   fixedHeight?: string
   /**
@@ -657,6 +656,36 @@ export const createRecordModal =
     const recordLayer = (): HTMLElement | null => layers()[0] ?? null
     const topLayer = (): HTMLElement | null => layers().at(-1) ?? null
 
+    // Hold only the height actually seen for this record, never the viewport height.
+    let tallestRecordHeight = 0
+    const fitRecordHeight = (): void => {
+      if (definition.fixedHeight || status() !== 'ready') return
+      const sheet = recordLayer()?.querySelector<HTMLElement>('[data-ui="modal-sheet"][data-height="fixed"]')
+      if (!sheet) return
+      // Match ModalSheet's compact contract: mobile dialogs occupy the screen.
+      // Do not retain that viewport height as a desktop content measurement.
+      if (window.matchMedia('(max-width: 47.9375rem)').matches) {
+        sheet.style.setProperty('height', '100dvh', 'important')
+        sheet.style.removeProperty('min-height')
+        return
+      }
+      const tabs = sheet.querySelector<HTMLElement>('[data-ui="tabbed-view"]')
+      if (!tabs) return
+      const panel = tabs.querySelector<HTMLElement>('[data-ui="tab-panel"]')
+      const scrollTop = panel?.scrollTop ?? 0
+      sheet.style.setProperty('height', 'auto', 'important')
+      sheet.style.setProperty('min-height', '0')
+      tabs.style.setProperty('height', 'auto')
+      tallestRecordHeight = Math.max(tallestRecordHeight, Math.ceil(sheet.getBoundingClientRect().height))
+      tabs.style.removeProperty('height')
+      const cap = getComputedStyle(sheet).maxHeight
+      sheet.style.setProperty(
+        'min-height',
+        cap === 'none' ? `${tallestRecordHeight}px` : `min(${tallestRecordHeight}px, ${cap})`,
+      )
+      if (panel) panel.scrollTop = scrollTop
+    }
+
     const keepDrafts = (current: HTMLElement | null, scope: DraftScope): void => {
       if (!current) return
       const previous = scope === 'dialog' ? dialogDrafts() : recordDrafts()
@@ -743,6 +772,7 @@ export const createRecordModal =
       const sameRecord = current?.id === id
       const nextTab = tab ?? (sameRecord ? current.tab : '')
       if (!sameRecord) {
+        tallestRecordHeight = 0
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
         saved.set(false)
@@ -777,6 +807,7 @@ export const createRecordModal =
     const hide = (how: 'history' | 'replace' | 'none'): void => {
       request?.abort()
       open.set(null)
+      tallestRecordHeight = 0
       dialog.set(null)
       issues.set([])
       saved.set(false)
@@ -1093,13 +1124,11 @@ export const createRecordModal =
               mode: 'client',
               presentation: 'dialog',
               size: definition.size ?? 'default',
-              // Tabs have different heights; a fixed dialog does not jump when the reader switches
-              // tabs, nor when the loading state gives way to the record.
-              // A definition that takes extension tabs may gain one at any time, so it
-              // keeps the fixed height its declared tabs would otherwise earn.
+              // The runtime measures rendered tabs and holds their largest height.
+              // Start at natural height so loading/short records never fill the viewport.
               height:
                 (definition.tabs?.length ?? 0) + (definition.extensionTabs ? 1 : 0) > 1 ? 'fixed' : 'content',
-              fixedHeight: definition.fixedHeight,
+              fixedHeight: definition.fixedHeight ?? 'auto',
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               status: context ? definition.status?.(context) : undefined,
@@ -1412,6 +1441,7 @@ export const createRecordModal =
           node instanceof Element &&
           (node.matches(islandSelector) || node.querySelector(islandSelector) !== null)
         const observer = new MutationObserver((records) => {
+          fitRecordHeight()
           for (const record of records) {
             for (const node of record.removedNodes)
               if (holdsIsland(node))
@@ -1421,8 +1451,17 @@ export const createRecordModal =
                 document.dispatchEvent(new CustomEvent('ket:islands-attach', { detail: { root: node } }))
           }
         })
-        observer.observe(root, { childList: true, subtree: true })
+        observer.observe(root, { childList: true, subtree: true, characterData: true })
         lifetime.addEventListener('abort', () => observer.disconnect())
+        window.addEventListener('resize', fitRecordHeight, { signal: lifetime })
+        // Images and native disclosures change layout without adding text nodes.
+        root.addEventListener('load', fitRecordHeight, { capture: true, signal: lifetime })
+        root.addEventListener('toggle', fitRecordHeight, { capture: true, signal: lifetime })
+        // Web fonts can arrive after the first record measurement.
+        void document.fonts?.ready.then(() => {
+          if (!lifetime.aborted) fitRecordHeight()
+        })
+        fitRecordHeight()
 
         // Another island (or this one) changed records of this kind: drop them so the
         // next opening reads fresh data first.

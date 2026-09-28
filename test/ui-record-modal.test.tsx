@@ -119,7 +119,16 @@ test('record modal: a record with several tabs keeps one height while tabs switc
     call,
     /height:\s*\(definition\.tabs\?\.length \?\? 0\) \+ \(definition\.extensionTabs \? 1 : 0\) > 1 \? 'fixed' : 'content'/u,
   )
-  assert.match(call, /fixedHeight: definition\.fixedHeight/u)
+  assert.match(call, /fixedHeight: definition\.fixedHeight \?\? 'auto'/u)
+  assert.match(
+    runtime,
+    /tallestRecordHeight = Math\.max\(tallestRecordHeight, Math\.ceil\(sheet\.getBoundingClientRect\(\)\.height\)\)/u,
+  )
+  assert.match(runtime, /if \(!sameRecord\) \{\s*tallestRecordHeight = 0/u)
+  assert.match(runtime, /window\.matchMedia\('\(max-width: 47\.9375rem\)'\)/u)
+  assert.match(runtime, /root\.addEventListener\('load', fitRecordHeight/u)
+  assert.match(runtime, /root\.addEventListener\('toggle', fitRecordHeight/u)
+  assert.match(runtime, /document\.fonts\?\.ready\.then/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
