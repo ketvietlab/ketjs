@@ -447,3 +447,7 @@ Assignment and removal previews lead with the named work that becomes available 
 ### Emergency access
 
 Emergency access is inside the Access panel's advanced disclosure. Only a fully authorized administrator may grant or revoke it, never for their own account. Granting requires an expiry and confirmation; the server owns these guards and writes the audit. The overview can show an active expiry without exposing emergency controls to a read-only viewer.
+
+### Sign-in assistance
+
+The Sign-in panel distinguishes invitations for a person who has not activated their account from password recovery. Deployment adapters can offer email, a one-time credential or both. A pending or failed external account shows its preparation status and an explicit status/retry action. Email acknowledgement is shown separately from activation; it never sets `passwordReady`. External adapters must supply verified identity state instead of inferring it from the local password hash. Temporary passwords are only displayed from the one-time claim response and disappear on leaving that layer.

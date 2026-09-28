@@ -1210,8 +1210,155 @@ const roleDialog = (c: Context): JSXChild => {
  * to the administrator. A deployment that cannot send the link yet falls back to
  * the code rather than offering a button that fails.
  */
+const deliveryOf = (c: Context): CredentialDelivery =>
+  c.data.credentialDelivery === 'email' && !c.data.externalCredential && !c.data.permissions.sendLink
+    ? 'oneTime'
+    : (c.data.credentialDelivery ?? 'oneTime')
+const activated = (c: Context): boolean => c.data.externalCredential?.activated ?? c.data.record.passwordReady
+
+/** Send the person a link to set their own password. The administrator never sees it. */
+const emailReset = (c: Context): JSXChild[] => {
+  const sent = c.outcome<{ ok?: boolean; sentTo?: string; expiresAt?: string }>('sendResetLink')
+  return [
+    ...(sent?.ok
+      ? [
+          Notice({
+            tone: 'positive',
+            title: t(c, 'login.linkSentTitle'),
+            message: t(c, 'login.linkSentHint')
+              .replace('{email}', String(sent.sentTo ?? c.data.record.email))
+              .replace('{until}', String(sent.expiresAt ?? '')),
+          }),
+        ]
+      : []),
+    Section({
+      title: t(c, activated(c) ? 'login.linkTitle' : 'login.inviteTitle'),
+      description: c.data.record.email
+        ? t(c, activated(c) ? 'login.linkHint' : 'login.inviteHint').replace('{email}', c.data.record.email)
+        : null,
+      // No address, no link: say what is missing instead of offering a send that
+      // has nowhere to go.
+      body: c.data.record.email
+        ? RecordModalForm({
+            kind: c.kind,
+            fields: [],
+            command: 'sendResetLink',
+            actions: [
+              Button({
+                label: t(
+                  c,
+                  activated(c)
+                    ? 'action.sendResetLink'
+                    : sent?.ok || c.data.record.invitationSentAt
+                      ? 'action.resendInvite'
+                      : 'action.sendInvite',
+                ),
+                variant: 'primary',
+                type: 'submit',
+              }),
+            ],
+          })
+        : Notice({
+            tone: 'warning',
+            title: t(c, 'login.linkNoEmail'),
+            message: t(c, 'login.linkNoEmailHint'),
+          }),
+    }),
+  ]
+}
+
+/** Issue a one-time code and show it, once, to the administrator who asked. */
+const oneTimeReset = (c: Context): JSXChild[] => {
+  const issued =
+    c.outcome<{ ok?: boolean; token?: string; temporaryPassword?: string }>('resetPassword') ??
+    c.outcome<{ token?: string; temporaryPassword?: string }>('claimCredential')
+  return [
+    // Shown once, by the only party that ever holds it in the clear.
+    ...(issued?.token || issued?.temporaryPassword
+      ? [
+          Section({
+            title: t(c, issued?.temporaryPassword ? 'login.temporaryShownOnce' : 'login.oneTimeTitle'),
+            body: Stack({
+              gap: 'compact',
+              items: [
+                Notice({
+                  tone: 'warning',
+                  title: t(c, issued?.temporaryPassword ? 'login.temporaryShownOnce' : 'login.oneTimeTitle'),
+                  message: t(c, 'login.oneTimeHint'),
+                }),
+                DescriptionList({
+                  columns: 1,
+                  items: [
+                    {
+                      id: 'token',
+                      label: t(c, c.data.externalCredential ? 'login.temporaryLabel' : 'login.oneTimeLabel'),
+                      value: issued.token ?? issued.temporaryPassword,
+                    },
+                  ],
+                }),
+              ],
+            }),
+          }),
+        ]
+      : []),
+    issued?.temporaryPassword
+      ? null
+      : Section({
+          title: t(
+            c,
+            c.data.externalCredential
+              ? 'login.temporaryTitle'
+              : activated(c)
+                ? 'login.resetTitle'
+                : 'login.activateTitle',
+          ),
+          description: t(
+            c,
+            c.data.externalCredential
+              ? 'login.temporaryHint'
+              : activated(c)
+                ? 'login.resetHint'
+                : 'login.activateHint',
+          ),
+          body: issued?.temporaryPassword
+            ? null
+            : RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: c.data.externalCredential?.claimable ? 'claimCredential' : 'resetPassword',
+                actions: [
+                  Button({
+                    label: t(
+                      c,
+                      c.data.externalCredential
+                        ? c.data.externalCredential.claimable
+                          ? 'action.claimPassword'
+                          : 'action.temporaryPassword'
+                        : activated(c)
+                          ? 'action.resetPassword'
+                          : 'action.activationCode',
+                    ),
+                    variant: 'primary',
+                    type: 'submit',
+                  }),
+                ],
+              }),
+        }),
+  ]
+}
+
+/**
+ * What it takes to sign in as this person, and the one thing an administrator may
+ * do about it.
+ *
+ * There is no session list and no way to set somebody else's password. A session
+ * belongs to the serve layer rather than to this module, so there is nothing here
+ * to read or revoke; and a reset does the administrator's work — a new credential,
+ * every session ended — while leaving the password itself with its owner.
+ */
 const loginTab = (c: Context): JSXChild => {
-  const issued = c.outcome<{ ok?: boolean; token?: string }>('resetPassword')
+  const delivery = deliveryOf(c)
+  const mayReset = c.data.permissions.sendLink || c.data.permissions.resetPassword
   return Stack({
     gap: 'default',
     items: [
@@ -1226,14 +1373,21 @@ const loginTab = (c: Context): JSXChild => {
       Section({
         title: t(c, 'login.accountTitle'),
         body: DescriptionList({
-          columns: 3,
+          columns: 2,
           items: [
             {
               id: 'credential',
               label: t(c, 'field.credential'),
               value: Badge({
-                label: c.data.record.passwordReady ? t(c, 'login.ready') : t(c, 'login.preparing'),
-                tone: c.data.record.passwordReady ? 'positive' : 'warning',
+                label: t(
+                  c,
+                  activated(c)
+                    ? 'login.ready'
+                    : c.data.record.invitationSentAt || c.outcome<{ ok?: boolean }>('sendResetLink')?.ok
+                      ? 'login.invited'
+                      : 'login.preparing',
+                ),
+                tone: activated(c) ? 'positive' : 'warning',
               }),
             },
             {
@@ -1246,63 +1400,67 @@ const loginTab = (c: Context): JSXChild => {
               label: t(c, 'login.lastSignIn'),
               value: c.data.record.lastLoginAt || t(c, 'login.never'),
             },
+            {
+              id: 'delivery',
+              label: t(c, 'login.delivery'),
+              value: t(c, `login.delivery.${delivery}`),
+            },
           ],
         }),
       }),
-      // Shown once, by the only party that ever holds it in the clear.
-      ...(issued?.token
+      ...(c.data.externalCredential
         ? [
             Section({
-              title: t(c, 'login.oneTimeTitle'),
-              body: Stack({
-                gap: 'compact',
-                items: [
-                  Notice({
-                    tone: 'warning',
-                    title: t(c, 'login.oneTimeTitle'),
-                    message: t(c, 'login.oneTimeHint'),
-                  }),
-                  DescriptionList({
-                    columns: 1,
-                    items: [
-                      {
-                        id: 'token',
-                        label: t(c, 'login.oneTimeLabel'),
-                        value: issued.token,
-                      },
-                    ],
+              title: t(c, `login.externalState.${c.data.externalCredential.state}`),
+              body: RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: c.data.permissions.retryCredential ? 'retryCredential' : 'refreshAccount',
+                actions: [
+                  Button({
+                    type: 'submit',
+                    label: t(
+                      c,
+                      c.data.permissions.retryCredential ? 'action.retryAccount' : 'action.refreshAccount',
+                    ),
                   }),
                 ],
               }),
             }),
           ]
         : []),
-      ...(c.data.permissions.resetPassword
+      ...(c.data.externalCredential?.emailState
         ? [
-            Section({
-              title: t(c, 'login.resetTitle'),
-              description: t(c, 'login.resetHint'),
-              body: RecordModalForm({
-                kind: c.kind,
-                fields: [],
-                command: 'resetPassword',
-                actions: [
-                  Button({
-                    label: t(c, 'action.resetPassword'),
-                    variant: 'primary',
-                    type: 'submit',
-                  }),
-                ],
-              }),
+            Notice({
+              tone: ['failed', 'uncertain'].includes(c.data.externalCredential.emailState)
+                ? 'warning'
+                : 'info',
+              title: t(c, `login.emailState.${c.data.externalCredential.emailState}`),
+              message: t(c, 'login.emailStateHint'),
             }),
           ]
-        : [
+        : []),
+      // Resetting your own password is the profile's job, with the current one.
+      ...(readingSelf(c)
+        ? [
             Notice({
               tone: 'info',
-              title: t(c, 'users.readOnlyTitle'),
-              message: t(c, 'login.readOnlyHint'),
+              title: t(c, 'login.selfTitle'),
+              message: t(c, 'login.selfHint'),
             }),
-          ]),
+          ]
+        : mayReset
+          ? [
+              ...(delivery !== 'oneTime' && c.data.permissions.sendLink ? emailReset(c) : []),
+              ...(delivery !== 'email' && c.data.permissions.resetPassword ? oneTimeReset(c) : []),
+            ]
+          : [
+              Notice({
+                tone: 'info',
+                title: t(c, 'users.readOnlyTitle'),
+                message: t(c, 'login.readOnlyHint'),
+              }),
+            ]),
     ],
   })
 }
@@ -1515,6 +1673,17 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       // The server names its inputs; the form names its fields.
       issueField: (field) => ({ companyIds: 'companies', branchIds: 'branches' })[field] ?? field,
       // Read the person again: every tab shows where they now work.
+      after: 'reload',
+    },
+    sendResetLink: {
+      fn: 'user.sendCredentialLink',
+      input: (form, c) => ({
+        userId: c.id,
+        kind: c.data.record.passwordReady ? 'reset' : 'invitation',
+
+        idempotencyKey: uuid(),
+      }),
+      // Reload invitation status while keeping the delivery outcome visible.
       after: 'reload',
     },
     grantBreakGlass: {
