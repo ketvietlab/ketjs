@@ -15,6 +15,22 @@ const node = process.execPath
 const command = process.argv[2] ?? 'check'
 
 const workspaces = [
+  {
+    name: '@ketvietlab/flow-client',
+    dir: 'packages/flow-client',
+    // Measured import: 305 KB, including the bundled brand assets and three message catalogs.
+    maxPackedBytes: 350_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.mjs',
+      'dist/workspace.mjs',
+      'dist/server-extensions.mjs',
+      'EXTENSIONS.md',
+      'NOTICE',
+    ],
+  },
   { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
   {
     name: '@ketvietlab/ketjs-view-tools',
@@ -35,8 +51,8 @@ const workspaces = [
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
   // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
   // filter menu, with no stray files — about half the package is source maps.
-  // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 5_200_000 },
+  // 0.1.28 packs 5.73 MB (3563 release files); user/CRM/chart/LiveDoc source maps account for the growth.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 6_000_000 },
   // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
   {
     name: '@ketvietlab/flow-ui',
@@ -191,6 +207,11 @@ const pack = (destination, version) => {
       if (!paths.has(required)) {
         fail(`${workspace.name} tarball omitted ${required}`)
       }
+    if (workspace.name === '@ketvietlab/flow-client') {
+      for (const path of paths)
+        if (/(^|\/)(atlas|test|client|node_modules)(\/|$)/.test(path))
+          fail(`core tarball includes development source: ${path}`)
+    }
     const tarball = join(destination, result.filename)
     if (!existsSync(tarball)) fail(`${workspace.name} tarball was not written`)
     tarballs.set(workspace.name, tarball)
@@ -230,7 +251,26 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents'), import('@ketvietlab/flow-client'), import('@ketvietlab/flow-client/server')])`,
+    ],
+    { cwd: consumer },
+  )
+
+  // A tarball consumer has no private checkout or fixture runtime to fall back to.
+  run(
+    node,
+    [
+      '--input-type=module',
+      '--eval',
+      `
+    import assert from 'node:assert/strict';
+    import {createFlowWorkspace,routes} from '@ketvietlab/flow-client';
+    import {renderToStaticString} from '@ketvietlab/ketjs-view';
+    assert.equal(Object.keys(routes).length,76);
+    for(const key of ['performance','workload','goals','github','atlas','gantt','automations','epic-map']) assert.equal(routes[key],undefined);
+    assert.match(renderToStaticString(createFlowWorkspace({screen:'my-work'}).view()),/data-flow/);
+    assert.throws(()=>import.meta.resolve('@repo/flow-pro-client'));
+  `,
     ],
     { cwd: consumer },
   )
