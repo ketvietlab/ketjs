@@ -17,6 +17,7 @@ import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal, RECORD_COMMAND_FIELD } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
+import { USER_RECORD_MODAL_LABELS } from '../../user/modal-labels.ts'
 import { RecordModalForm, recordStateSelectControl } from '../../../ui/client/record-modal-form.tsx'
 import type { AccessPolicyMatchKind } from '../screens/access-policies-list.tsx'
 import { SurfaceAccessView } from './access-surfaces.tsx'
@@ -355,6 +356,7 @@ const ruleInput = (form: FormData, c: Context, id: string | null): Record<string
 export const accessPolicyModalDefinition: RecordModalDefinition<AccessPolicyModalData> = {
   kind: 'user.accessPolicy',
   size: 'large',
+  labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
   context: {
     fn: 'user.accessPolicyModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
