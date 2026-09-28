@@ -426,3 +426,8 @@ máy chạy. Benchmark phải chạy lại ngay trước commit; tăng quá 15% 
 Preview performs no writes. Save/pause use an actor-bound idempotency record and authorization-revision compare-and-set in the same transaction as assignments and security audit. The UI includes the preview digest so a changed rule or changed preview result is refused. Interactive changes to the actor's own authority and security-role changes by non-superusers are refused on the server. Optional audit reasons are never required.
 
 Directory replacement reconciles synchronously. The scheduled `user.reconcileAccessPolicies` job reconciles changes to memberships and role health every minute, with a revision change only when edges differ. Revocation takes effect at permission resolution even before a stale edge is removed. Workers must run for new matching memberships to acquire grants without another directory update. Inactive or unhealthy roles stop granting; policies do not silently repair or upgrade them.
+
+
+### Administration language
+
+The user interface describes work, workplaces and the source of an assigned role in both Vietnamese and English. Managed-role versions, function keys and grant-source internals are not primary navigation. Added/removed access is the primary preview; counts and technical coverage remain an optional disclosure. Account delivery copy distinguishes an email request from delivery and activation, and distinguishes an external temporary password from a local verification code. System audit records remain intact when optional reason inputs are removed.
