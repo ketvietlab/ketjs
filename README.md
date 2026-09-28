@@ -276,6 +276,8 @@ packages/
   ketjs/           kernel, data, server, theme, agent, codegen — depends only on ketjs-view
   ketjs-postgres/  the one package permitted a driver, and the reason it is a package
   ketsuite/        KetSuite — business modules, using only the public entry
+  flow-ui/         compact Flow components and token-based presentation
+  flow-client/     MIT Flow client and extension contracts; public core only
 examples/          umbrella deployments composed from the packages
 tools/  test/  bench/  docs/
 ```
