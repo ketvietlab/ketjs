@@ -1,16 +1,18 @@
 // Assembly only — each concern lives in its own file.
 
 import { defineModule } from '@ketvietlab/ketjs'
+import { policyJobs } from './policy-jobs.ts'
 import { models } from './models.ts'
 import { relations } from './relations.ts'
 import { functions as accountFunctions } from './functions.ts'
 import { accessDenialFunctions } from './access-denial.ts'
+import { accessPolicyFunctions } from './access-policy.ts'
 import type { FnSpec } from '@ketvietlab/ketjs'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
 
 const functions: Record<string, FnSpec> = {}
-for (const group of [accountFunctions, accessDenialFunctions]) {
+for (const group of [accountFunctions, accessPolicyFunctions, accessDenialFunctions]) {
   for (const [key, spec] of Object.entries(group)) {
     if (Object.hasOwn(functions, key)) throw new Error(`Duplicate user function: ${key}`)
     functions[key] = spec
@@ -26,6 +28,7 @@ export default defineModule({
   category: 'Hệ thống',
   // Removing the accounts would remove every way back in.
   models,
+  jobs: policyJobs,
   relations,
   functions,
   messages,

@@ -189,7 +189,7 @@ export const advanceAuthorizationRevision = async (ctx: Ctx): Promise<number> =>
   })
 }
 
-const bumpRevision = async (ctx: Ctx, expected: number): Promise<number | null> => {
+export const bumpRevision = async (ctx: Ctx, expected: number): Promise<number | null> => {
   const R = ctx.table('user.AuthorizationRevision')
   const row = await ctx.db.one(from(R).where(eq(R.id, 'tenant')))
   if (!row) {
@@ -249,7 +249,7 @@ export const recordAuthorizationAudit = async (
   })
 }
 
-const operationReplay = async (
+export const operationReplay = async (
   ctx: Ctx,
   id: string,
   input: unknown,
@@ -270,7 +270,7 @@ const operationReplay = async (
   return 'dryRun' in inserted || inserted.inserted ? { replay: false, digest } : { conflict: true }
 }
 
-const completeOperation = async (ctx: Ctx, id: string, result: unknown) => {
+export const completeOperation = async (ctx: Ctx, id: string, result: unknown) => {
   await ctx.db.update('user.AuthorizationOperation', { id }, { result, completedAt: nowIso() })
 }
 
@@ -377,9 +377,12 @@ export async function resolveEffectivePermissions(
   if (branchId && branches.get(branchId) !== companyId) return empty([{ code: 'invalid-branch-context' }])
 
   const A = ctx.table('user.Assignment')
-  const assignments = (
-    projection.assignments ?? (await ctx.db.all(from(A).where(eq(A.userId, userId))))
-  ).filter((assignment) => roleApplies(assignment, companyId, branchId))
+  const P = ctx.table('user.PolicyAssignment')
+  const policyAssignments = await ctx.db.all(from(P).where(eq(P.userId, userId)))
+  const assignments = [
+    ...(projection.assignments ?? (await ctx.db.all(from(A).where(eq(A.userId, userId))))),
+    ...policyAssignments,
+  ].filter((assignment) => roleApplies(assignment, companyId, branchId))
   if (!assignments.length) return empty()
   const roleIds = [...new Set(assignments.map((assignment) => String(assignment.roleId)))]
   const R = ctx.table('user.Role')
@@ -552,6 +555,7 @@ export const AUTHORIZATION_EFFECTS = [
   'read:user.GrantSource',
   'write:user.GrantSource',
   'read:user.Assignment',
+  'read:user.PolicyAssignment',
   'write:user.Assignment',
   'read:user.Membership',
   'read:user.BranchMembership',
