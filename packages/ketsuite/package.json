@@ -1,7 +1,7 @@
 {
   "name": "@ketvietlab/ketsuite",
   "version": "0.1.28",
-  "description": "KetSuite \u2014 business modules built on Ket, using only the contract a third-party module has.",
+  "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
