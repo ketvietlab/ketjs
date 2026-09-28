@@ -292,3 +292,10 @@ Workspace exports for summary pages. They receive computed numbers only and own 
 - `FlowResourceCard` in a `FlowCardGrid` is a whole-card button. `icon`, `eyebrow` (a short code) and `status` (a `FlowTag`) share its top row; `meta` sits on the bottom edge so cards in one grid row line up.
 
 These components set tone through `data-state`, never `data-tone`: the shared `[data-tone]` rule tints tag-shaped pills and would paint a whole block with no padding.
+
+### Main content and context columns
+
+`FlowQualityColumns` from `/workspace` lays out a main region and an aside (2:1).
+It collapses to one column below a 1000px container. Its historical name is retained
+for compatibility; it contains no paid-feature policy or data. Both core workspace
+overviews and pro reports compose this presentation component.
