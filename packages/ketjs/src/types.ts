@@ -187,6 +187,8 @@ export type MenuDef = {
    * every entry did before this existed.
    */
   for?: readonly string[]
+  /** Required reads/lookups for this surface; optional work actions belong in `for`. */
+  requires?: readonly string[]
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**
