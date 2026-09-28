@@ -580,6 +580,20 @@ const overviewTab = (c: Context): JSXChild => {
           label: t(c, 'field.company'),
           value: company ? String(company) : '—',
         },
+        ...(c.data.record.superuser
+          ? [
+              {
+                id: 'superuser',
+                label: t(c, 'field.superuser'),
+                value: Badge({
+                  label: c.data.record.superuserExpiresAt
+                    ? t(c, 'breakGlass.activeUntil').replace('{until}', c.data.record.superuserExpiresAt)
+                    : t(c, 'breakGlass.standing'),
+                  tone: 'danger',
+                }),
+              },
+            ]
+          : []),
       ],
     }),
   })
@@ -716,6 +730,66 @@ const accessControls = (c: Context): JSXChild[] =>
  * an owner, given only by a superuser, and it shows here for as long
  * as it lasts.
  */
+const breakGlassSection = (c: Context): JSXChild[] => {
+  const record = c.data.record
+  const active = record.superuser === true
+  if (!c.data.permissions.breakGlass || readingSelf(c))
+    return active
+      ? [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'breakGlass.activeTitle'),
+            message: record.superuserExpiresAt
+              ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
+              : t(c, 'breakGlass.standing'),
+          }),
+        ]
+      : []
+  return [
+    Section({
+      title: t(c, 'breakGlass.title'),
+      description: t(c, 'breakGlass.hint'),
+      body: active
+        ? Stack({
+            gap: 'default',
+            items: [
+              Notice({
+                tone: 'warning',
+                title: t(c, 'breakGlass.activeTitle'),
+                message: record.superuserExpiresAt
+                  ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
+                  : t(c, 'breakGlass.standing'),
+              }),
+              RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: 'revokeBreakGlass',
+                actions: [
+                  Button({ label: t(c, 'action.revokeBreakGlass'), variant: 'destructive', type: 'submit' }),
+                ],
+              }),
+            ],
+          })
+        : RecordModalForm({
+            kind: c.kind,
+            fields: [
+              field(c, {
+                name: 'breakGlassUntil',
+                label: t(c, 'field.breakGlassUntil'),
+                type: 'datetime-local',
+                required: true,
+                disabled: false,
+              }),
+            ],
+            command: 'grantBreakGlass',
+            actions: [
+              Button({ label: t(c, 'action.grantBreakGlass'), variant: 'destructive', type: 'submit' }),
+            ],
+          }),
+    }),
+  ]
+}
+
 /** What this person may do, as rows of role and place — the authority they actually hold. */
 const accessTab = (c: Context): JSXChild => {
   const groups = assignmentGroups(c)
@@ -766,6 +840,9 @@ const accessTab = (c: Context): JSXChild => {
               children: Button({ label: t(c, 'action.checkAccess'), variant: 'secondary' }),
             }),
           ]
+        : []),
+      ...(breakGlassSection(c).length
+        ? [Disclosure({ summary: t(c, 'access.advanced'), body: Stack({ items: breakGlassSection(c) }) })]
         : []),
     ],
   })
@@ -1438,6 +1515,37 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       // The server names its inputs; the form names its fields.
       issueField: (field) => ({ companyIds: 'companies', branchIds: 'branches' })[field] ?? field,
       // Read the person again: every tab shows where they now work.
+      after: 'reload',
+    },
+    grantBreakGlass: {
+      fn: 'user.setBreakGlass',
+      input: (form, c) => {
+        const until = text(form, 'breakGlassUntil')
+        const at = until ? new Date(until) : null
+        return {
+          userId: c.id,
+          enabled: true,
+          expiresAt: at && Number.isFinite(at.getTime()) ? at.toISOString() : null,
+
+          expectedAuthorizationRevision: c.data.revision,
+          idempotencyKey: uuid(),
+        }
+      },
+      issueField: (field) => (field === 'expiresAt' ? 'breakGlassUntil' : field),
+      confirm: (c) => t(c, 'breakGlass.confirm'),
+      after: 'reload',
+    },
+    revokeBreakGlass: {
+      fn: 'user.setBreakGlass',
+      input: (form, c) => ({
+        userId: c.id,
+        enabled: false,
+        expiresAt: null,
+
+        expectedAuthorizationRevision: c.data.revision,
+        idempotencyKey: uuid(),
+      }),
+
       after: 'reload',
     },
     resetPassword: {
