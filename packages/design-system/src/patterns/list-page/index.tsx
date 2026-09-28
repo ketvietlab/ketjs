@@ -75,7 +75,12 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
   const footer = props.footer ?? (operational ? props.status : undefined)
 
   return (
-    <section data-ui="list-page" data-variant={props.variant ?? null} data-pattern="list">
+    <section
+      data-ui="list-page"
+      data-variant={props.variant ?? null}
+      data-pattern="list"
+      data-ket-preserve-context=""
+    >
       {pageIdentity('list-page', {
         context: props.context,
         eyebrow: props.eyebrow,

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -70,7 +71,7 @@ test('flow all epics route: ListPage preserves stable cross-project paging, loca
   assert.equal(first.status, 200)
   assert.match(firstHtml, /data-ui="list-page"/)
   assert.doesNotMatch(
-    firstHtml,
+    withoutGlobalSearchDialog(firstHtml),
     /data-ui="record-workspace"|data-ui="form-page"|data-ui="modal-layer"|livedoc\.editor/,
   )
   assert.match(firstText, /data-ui="list-page-title"[^>]*>All epics/)

@@ -128,7 +128,7 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.equal(html.match(/data-ui="topbar"/g), null)
   assert.match(html, /data-ui="list-page" data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="list-page-context"/)
-  assert.match(html, /data-ui="app-topbar"[\s\S]*?Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
   assert.equal(html.match(/data-ui="list-page-description"/g), null)
   // The content pane drops its padding only for a direct operational page child.
   assert.match(html, /data-ket-slot="backend\.content">(?:<!--[^>]*-->)*<section data-ui="list-page"/)
