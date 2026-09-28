@@ -1,3 +1,4 @@
+import { accessPolicyRoutes } from './access-policy-routes.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import { userListSearch } from './search.ts'
 import { randomUUID } from 'node:crypto'
@@ -150,6 +151,7 @@ const userGroupLabel = (_: Translator, key: string, value: unknown): string => {
 }
 
 export const routes: Record<string, RouteEntry> = {
+  ...accessPolicyRoutes,
   '/admin/users':
     (ctx: ServeContext): Route =>
     async (url, req) => {

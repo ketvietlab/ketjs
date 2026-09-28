@@ -451,3 +451,7 @@ Emergency access is inside the Access panel's advanced disclosure. Only a fully 
 ### Sign-in assistance
 
 The Sign-in panel distinguishes invitations for a person who has not activated their account from password recovery. Deployment adapters can offer email, a one-time credential or both. A pending or failed external account shows its preparation status and an explicit status/retry action. Email acknowledgement is shown separately from activation; it never sets `passwordReady`. External adapters must supply verified identity state instead of inferring it from the local password hash. Temporary passwords are only displayed from the one-time claim response and disappear on leaving that layer.
+
+### Choosing an automatic rule
+
+The automatic-role collection uses the shared list/search composition and a URL-owned record modal. Rule conditions choose from directory-provided group, department and job-title options. Switching condition type clears an incompatible draft value; an existing saved value remains visible even when it has disappeared from the latest directory snapshot. An empty directory explains what is missing rather than asking an administrator to invent an identifier. Changes are previewed before the save action appears.
