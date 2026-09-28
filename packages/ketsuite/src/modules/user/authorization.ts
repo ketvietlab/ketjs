@@ -636,7 +636,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       expectedRoleRevision: 'int',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -652,9 +652,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       const templateKey = String(args.templateKey)
       const template = ctx.manifest.permissions.roleTemplates[templateKey]
       if (!template) return invalid([issue('templateKey', 'E_PERMISSION_BUNDLE_UNKNOWN')])
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `role-template:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -896,7 +896,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       branchId: 'id?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -911,9 +911,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const normalized = await normalizeAssignmentScope(ctx, String(args.userId), args)
       if (!normalized.ok) return normalized
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `assignment:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const liveScope = await normalizeAssignmentScope(tx, String(args.userId), args)
         const scope = liveScope.ok ? liveScope.scope : abortAuthorization(liveScope)
@@ -998,7 +998,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       scopeKey: 'text',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -1010,9 +1010,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `unassignment:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -1081,7 +1081,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       name: 'text',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -1093,11 +1093,10 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const name = String(args.name).trim()
       const operationId = `role-clone:${String(args.idempotencyKey).trim()}`
-      if (!reason || !name || operationId.endsWith(':'))
-        return invalid([issue('name', 'user.error.required')])
+      if (!name || operationId.endsWith(':')) return invalid([issue('name', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -1175,7 +1174,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       expiresAt: 'datetime?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -1189,12 +1188,12 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `break-glass:${String(args.idempotencyKey).trim()}`
       const enabled = args.enabled === true
       const expiresAt = args.expiresAt ? new Date(String(args.expiresAt)) : null
       const expiryMs = expiresAt?.getTime() ?? Number.NaN
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       if (enabled && (!expiresAt || !Number.isFinite(expiryMs) || expiryMs <= Date.now()))
         return invalid([issue('expiresAt', 'E_BREAK_GLASS_EXPIRY_REQUIRED')])
       if (!(await liveSuperuser(ctx, ctx.actor)))
@@ -1539,7 +1538,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
   assignRoles: defineFn({
     input: {
       ...selectionInput,
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1549,7 +1548,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
     handler: (ctx, args) =>
       authorizationTransaction(ctx, async (tx) => {
         const op = `role-batch:${String(args.idempotencyKey).trim()}`
-        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -1568,7 +1567,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           userId: selection.userId,
           scopeKey: added.scope.scopeKey,
           source: 'system-roles',
-          reason: String(args.reason).trim(),
+          reason: String(args.reason ?? '').trim(),
           before: null,
           after: added.assignments,
           revision,
@@ -1600,7 +1599,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
       scopeKind: 'text',
       companyId: 'id?',
       branchId: 'id?',
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1616,7 +1615,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
     handler: (ctx, args) =>
       authorizationTransaction(ctx, async (tx) => {
         const op = `provision-user:${String(args.idempotencyKey).trim()}`
-        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -1672,7 +1671,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           userId,
           scopeKey: added.scope.scopeKey,
           source: 'system-roles',
-          reason: String(args.reason).trim(),
+          reason: String(args.reason ?? '').trim(),
           before: null,
           after: added.assignments,
           revision,
@@ -1705,7 +1704,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
       branchIds: 'json',
       defaultCompanyId: 'id',
       defaultBranchId: 'id',
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1722,7 +1721,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
       authorizationTransaction(ctx, async (tx) => {
         const op = `set-workplaces:${String(args.idempotencyKey).trim()}`
         const reason = String(args.reason ?? '').trim()
-        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -1833,7 +1832,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
     input: {
       roleId: 'id',
       bundleKeys: 'json',
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1851,7 +1850,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
       authorizationTransaction(ctx, async (tx) => {
         const op = `set-role-bundles:${String(args.idempotencyKey).trim()}`
         const reason = String(args.reason ?? '').trim()
-        if (!reason || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -2040,7 +2039,7 @@ export type InternalUserInput = {
   companyId: string
   branchId?: string | null
   roleIds: string[]
-  reason: string
+  reason?: string
 }
 /** Caller owns the identity adapter; this primitive owns the atomic local account/access boundary. */
 export async function createInternalUserWithAccess<T extends Record<string, unknown>>(
@@ -2052,7 +2051,7 @@ export async function createInternalUserWithAccess<T extends Record<string, unkn
     const name = input.name.trim(),
       login = input.login.normalize('NFKC').trim().toLowerCase(),
       email = input.email.trim().toLowerCase()
-    if (!name || !login || !input.reason.trim()) required('name', 'user.error.required')
+    if (!name || !login) required('name', 'user.error.required')
     const U = tx.table('user.User')
     if (await tx.db.one(from(U).where(eq(U.login, login)))) required('login', 'user.error.loginUnique')
     if (!(await checkUserEmail(tx, email)).available) required('email', 'E_EMAIL_UNAVAILABLE')
@@ -2091,7 +2090,7 @@ export async function createInternalUserWithAccess<T extends Record<string, unkn
       userId: input.id,
       scopeKey: added.scope.scopeKey,
       source: 'system-roles',
-      reason: input.reason.trim(),
+      reason: (input.reason ?? '').trim(),
       before: null,
       after: added.assignments,
       revision,

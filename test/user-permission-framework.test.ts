@@ -286,7 +286,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     expectedRoleRevision: 0,
     expectedAuthorizationRevision: baseRevision,
     idempotencyKey: 'apply-probe-v1',
-    reason: 'test managed template',
   })
   assert.equal(applied.ok, true)
   assert.equal(applied.revision, baseRevision + 1)
@@ -307,7 +306,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     expectedRoleRevision: 1,
     expectedAuthorizationRevision: baseRevision + 1,
     idempotencyKey: 'repair-probe-v1',
-    reason: 'repair missing managed provenance',
   })
   assert.equal(repaired.ok, true)
   assert.equal(repaired.revision, baseRevision + 2)
@@ -320,7 +318,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     expectedRoleRevision: 2,
     expectedAuthorizationRevision: baseRevision + 2,
     idempotencyKey: 'no-op-probe-v1',
-    reason: 'verify exact template replay',
   })
   assert.equal(noOp.ok, true)
   assert.equal(noOp.revision, baseRevision + 2)
@@ -330,7 +327,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     name: 'Custom probe operator',
     expectedAuthorizationRevision: baseRevision + 2,
     idempotencyKey: 'clone-probe-operator',
-    reason: 'verify explicit customization path',
   })
   assert.equal(cloned.ok, true)
   assert.equal(cloned.revision, baseRevision + 3)
@@ -354,7 +350,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     companyId: 'company-a',
     expectedAuthorizationRevision: 0,
     idempotencyKey: 'assign-company-a',
-    reason: 'test company scope',
   })
   assert.equal(stale.ok, false)
   assert.equal(stale.errors[0]?.code, 'E_AUTHORIZATION_REVISION_CONFLICT')
@@ -371,7 +366,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     companyId: 'company-a',
     expectedAuthorizationRevision: baseRevision + 3,
     idempotencyKey: 'assign-company-a',
-    reason: 'test company scope',
   })
   assert.equal(assigned.ok, true)
   assert.equal(assigned.scopeKey, 'company:company-a')
@@ -389,7 +383,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     companyId: 'company-a',
     expectedAuthorizationRevision: baseRevision + 3,
     idempotencyKey: 'assign-company-a',
-    reason: 'test company scope',
   })
   assert.equal(replayed.replayed, true)
   assert.equal(replayed.revision, baseRevision + 4)
@@ -417,7 +410,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     expectedRoleRevision: 2,
     expectedAuthorizationRevision: baseRevision + 4,
     idempotencyKey: 'reconcile-probe-v1',
-    reason: 'remove a grant without provenance',
   })
   assert.equal(reconciled.ok, true)
   assert.equal(reconciled.revision, baseRevision + 5)
@@ -448,7 +440,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     scopeKey: 'company:company-a',
     expectedAuthorizationRevision: baseRevision + 5,
     idempotencyKey: 'unassign-company-a',
-    reason: 'test revoke next request',
   })
   assert.equal(removed.ok, true)
   assert.equal(removed.revision, baseRevision + 6)
@@ -465,7 +456,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     enabled: true,
     expectedAuthorizationRevision: baseRevision + 6,
     idempotencyKey: 'invalid-break-glass',
-    reason: 'expiry is required',
   })
   assert.equal(invalidBreakGlass.ok, false)
   assert.equal(invalidBreakGlass.errors[0]?.code, 'E_BREAK_GLASS_EXPIRY_REQUIRED')
@@ -476,7 +466,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     expiresAt,
     expectedAuthorizationRevision: baseRevision + 6,
     idempotencyKey: 'activate-break-glass',
-    reason: 'test emergency access',
   })
   assert.equal(activated.ok, true)
   assert.equal(activated.revision, baseRevision + 7)
@@ -505,7 +494,6 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
     enabled: false,
     expectedAuthorizationRevision: baseRevision + 7,
     idempotencyKey: 'revoke-break-glass',
-    reason: 'test emergency access complete',
   })
   assert.equal(revoked.ok, true)
   assert.equal(revoked.revision, baseRevision + 8)
