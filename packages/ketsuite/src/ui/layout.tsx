@@ -11,7 +11,7 @@ import {
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
-import { sidebarMain, sidebarNavigationContent } from './nav.tsx'
+import { sidebarMain, sidebarNavigationContent, sidebarFoot } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
@@ -91,23 +91,30 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
 const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
   frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
 
-const globalTopbar = (_: Translator, frame: Frame): TemplateResult => (
+const locationBar = (_: Translator, frame: Frame): TemplateResult => (
   <AppTopbar
-    brand={{
-      label: _('backend.brand'),
-      href: `/admin?lang=${encodeURIComponent(_.locale)}`,
-      image: '/_ket/asset/backend/brand/logo-dark.png',
-    }}
+    location={frame.viewer ? viewerContext(frame.viewer) : null}
     navigation={<NavigationToggle controls="backend-navigation-drawer" label={_('backend.nav.open')} />}
     search={{
       action: '/admin/search',
       label: _('backend.globalSearch.label'),
+      triggerLabel: _('backend.globalSearch.trigger'),
+      closeLabel: _('backend.globalSearch.close'),
       placeholder: _('backend.globalSearch.placeholder'),
       submitLabel: _('backend.globalSearch.submit'),
       query: frame.globalSearchQuery,
       locale: _.locale,
     }}
-    context={frame.viewer ? viewerContext(frame.viewer, 'topbar') : undefined}
+    tools={sidebarFoot(
+      _,
+      {
+        menu: frame.menu ?? [],
+        viewer: frame.viewer,
+        indicators: frame.indicators,
+        footItems: frame.extras?.['sidebar.foot'],
+      },
+      'header',
+    )}
   />
 )
 
@@ -133,7 +140,7 @@ export const shell = (
           {sidebarNavigationContent(_, sidebarOptions)}
         </template>
         <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
-        <template data-ket-slot="backend.global-topbar">{globalTopbar(_, frame)}</template>
+        <template data-ket-slot="backend.global-topbar">{locationBar(_, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
@@ -146,7 +153,7 @@ export const shell = (
     <div data-kv-design-system data-presentation="grouped" data-density="compact">
       {AppShell({
         mode: 'viewport',
-        topbar: <div data-ket-slot="backend.global-topbar">{globalTopbar(_, frame)}</div>,
+        location: <div data-ket-slot="backend.global-topbar">{locationBar(_, frame)}</div>,
         sidebar: sidebarMain(_, sidebarOptions),
         main: (
           <>

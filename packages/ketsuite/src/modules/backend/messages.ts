@@ -11,6 +11,8 @@ import type { Message } from '@ketvietlab/ketjs'
 export const messages: Record<string, Record<string, Message>> = {
   vi: {
     'globalSearch.label': 'Tìm kiếm toàn hệ thống',
+    'globalSearch.trigger': 'Tìm toàn hệ thống',
+    'globalSearch.close': 'Đóng',
     'globalSearch.placeholder': 'Tìm menu, sản phẩm, đối tác…',
     'globalSearch.submit': 'Tìm kiếm',
     'globalSearch.menus': 'Menu',
@@ -205,6 +207,8 @@ export const messages: Record<string, Record<string, Message>> = {
   },
   en: {
     'globalSearch.label': 'Global search',
+    'globalSearch.trigger': 'Search everywhere',
+    'globalSearch.close': 'Close',
     'globalSearch.placeholder': 'Search menus, products, partners…',
     'globalSearch.submit': 'Search',
     'globalSearch.menus': 'Menus',

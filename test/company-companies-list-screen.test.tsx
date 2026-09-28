@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -71,7 +72,7 @@ test('company list uses public ListPage chrome, hierarchy/archive actions and en
   assert.match(html, /data-row-href="\/admin\/companies\/company%2Fa\?lang=vi"/)
   assert.match(html, /data-col="code"[\s\S]*?KET/)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
 })
 
 test('company list keeps the ListPage shell and focused empty state', () => {

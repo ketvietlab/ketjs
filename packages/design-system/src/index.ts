@@ -60,6 +60,7 @@ export type {
   RelationManager,
   RelationOption,
   RelationSelectConfig,
+  RelationSelectCallbacks,
   RelationSelectLabels,
 } from './interactions/relation-select/index.tsx'
 export {
@@ -205,7 +206,15 @@ export type {
   KanbanCardProps,
   KanbanGridProps,
 } from './layouts/layout/index.tsx'
-export { AppShell, AppTopbar, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export {
+  AppBrand,
+  AppShell,
+  AppTopbar,
+  Page,
+  PageHeader,
+  RecordCanvas,
+  RecordSection,
+} from './layouts/shell/index.tsx'
 export type { PageHeaderProps, PageProps } from './layouts/shell/index.tsx'
 export {
   AppNavigation,

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -72,7 +73,7 @@ test('company create keeps a stable command id, safe return target, locale PRG a
   const createHtml = await create.text()
   assert.equal(create.status, 200)
   assert.match(createHtml, /data-ui="form-page" data-scope="company-form-page"/)
-  assert.doesNotMatch(createHtml, /data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(createHtml), /data-ui="modal-layer"|mail\.chatter/)
   assert.match(createHtml, /href="\/admin\/companies\?q=Legal&amp;archived=1&amp;lang=vi"/)
   const id = hidden(createHtml, 'id')
   assert.match(id, /^[0-9a-f-]{36}$/i)
@@ -164,7 +165,7 @@ test('branch create/detail uses FormPage, stable retry identity and company-scop
   const createHtml = await create.text()
   assert.equal(create.status, 200)
   assert.match(createHtml, /data-ui="form-page" data-scope="branch-form-page"/)
-  assert.doesNotMatch(createHtml, /data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(createHtml), /data-ui="modal-layer"|mail\.chatter/)
   const id = hidden(createHtml, 'id')
   assert.match(id, /^[0-9a-f-]{36}$/i)
 

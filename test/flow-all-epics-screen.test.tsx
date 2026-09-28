@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -70,7 +71,7 @@ test('flow all epics: ListPage preserves project identity, list state and locali
 
   assert.match(html, /data-ui="list-page"/)
   assert.doesNotMatch(
-    html,
+    withoutGlobalSearchDialog(html),
     /data-ui="record-workspace"|data-ui="form-page"|data-ui="modal-layer"|livedoc\.editor/,
   )
   assert.match(textContent, /data-ui="list-page-title"[^>]*>All epics/)

@@ -67,6 +67,11 @@ const entries = [
     source: join(PRODUCT_BACKEND_DIR, 'modal/attribute-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/attribute-modal.mjs'),
   },
+  // Loaded when the template modal opens its Attributes & variants tab.
+  {
+    source: join(UI_CLIENT_DIR, 'variant-editor-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/variant-editor.mjs'),
+  },
 ]
 
 /** @type {import('esbuild').Plugin} */

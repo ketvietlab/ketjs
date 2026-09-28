@@ -13,6 +13,14 @@ These rules apply to every change in this repository. The public design-system c
 
 ## Collection lists
 
+- The KetSuite shell uses `AppBrand` in the sidebar header and `AppShell.location` for the
+  main-column organisation context and tools. It does not show breadcrumbs or a full-width
+  global topbar. Standalone page patterns retain their context contract. Do not recreate shell
+  chrome inside a module. Preserve the `backend.global-topbar` fragment slot despite its name.
+- Global search is a compact dialog launcher, distinct from collection search. Preserve native
+  links/GET fallback, Cmd/Ctrl+K, layered Escape, focus return and query drafts. See
+  `docs/src/content/docs/ketsuite/design-system.md` for the public composition contract.
+
 - Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell, breadcrumbs/context, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
 - Declare the create link in `frame.chrome.create`; the shared list wrapper places it at the right of the title, above filters. Use `headerActions` for an explicit permission-controlled primary action. Do not put a create link into `actions`, the filter region, or module-local positioned markup.
 - `actions` is for secondary collection commands and bulk operations beside the primary action in the header. Do not render a separate action bar below filters. Bulk actions appear only while their own collection has selected rows; hiding them must never hide the primary action. Preserve native links, permissions, query state and external bulk forms when moving controls. On narrow screens, the shared header stacks its action group beneath the title; modules must not override that layout.

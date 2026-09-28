@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -57,7 +58,7 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   )
   assert.equal((html.match(/href="\/admin\/users\/new\?lang=en"/g) ?? []).length, 1)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
 })
 
 test('users list keeps ListPage identity and empty state without decorative pager', () => {

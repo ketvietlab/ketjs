@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -41,5 +42,5 @@ test('company hierarchy remains specialized with encoded rows, lifecycle state a
   assert.match(html, /href="\/admin\/companies\?lang=en"/)
   assert.match(html, /href="\/admin\/companies\/new\?lang=en"/)
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
 })
