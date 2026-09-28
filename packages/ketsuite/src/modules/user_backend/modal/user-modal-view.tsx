@@ -13,10 +13,10 @@ import {
   Badge,
   Button,
   DataTable,
+  Disclosure,
   DescriptionList,
   Notice,
   LinkButton,
-  RecordSummary,
   Section,
   Stack,
 } from '@ketvietlab/design-system'
@@ -29,6 +29,8 @@ import {
   RecordModalForm,
   recordStateSelectControl,
 } from '../../../ui/client/record-modal-form.tsx'
+import { SurfaceAccessView, SurfaceChangeTable } from './access-surfaces.tsx'
+import type { SurfaceAccess, SurfaceChange } from './access-surfaces.tsx'
 
 // biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by user.userModalContext
 type AnyRow = Record<string, any>
@@ -42,10 +44,29 @@ export type UserRecord = {
   active: boolean
   superuser: boolean
   lastLoginAt: string | null
+  invitationSentAt?: string | null
   passwordReady: boolean
   defaultCompanyId: string | null
   defaultBranchId: string | null
+  /** When a break-glass grant ends; null for a standing superuser or none at all. */
+  superuserExpiresAt?: string | null
+  superuserReason?: string | null
 }
+
+/** The last call this person was refused, and the roles that would have allowed it. */
+export type LastDenial = {
+  fn: string
+  /** The area the refused function belongs to, in the reader's language. */
+  label: string
+  /** The screen it was refused on, when the call came from one. */
+  surface: string | null
+  at: string
+  count: number
+  templates: string[]
+}
+
+/** How this tenant hands someone a new credential: a link to their own inbox, or a code shown once here. */
+export type CredentialDelivery = 'email' | 'oneTime' | 'both'
 
 export type UserModalData = {
   record: UserRecord
@@ -60,6 +81,20 @@ export type UserModalData = {
   revision: number
   permissions: Record<string, boolean>
   lang: 'vi' | 'en'
+  /** Who is reading: the guards are about the reader as much as the person read. */
+  actor?: { self: boolean; superuser: boolean }
+  /** What this person can open and work on, screen by screen. */
+  surfaces?: SurfaceAccess[]
+  lastDenial?: LastDenial | null
+  credentialDelivery?: CredentialDelivery
+  /** Verified external identity state supplied by the deployment adapter. */
+  externalCredential?: {
+    state: 'pending' | 'ready' | 'failed' | 'cancelled'
+    activated: boolean
+    operationId: string | null
+    claimable: boolean
+    emailState: 'pending' | 'sending' | 'accepted' | 'uncertain' | 'failed' | null
+  }
 }
 
 type Context = RecordModalContext<UserModalData>
@@ -146,11 +181,39 @@ const roleFieldName = (roleId: string): string => `role_${roleId}`
 const selectedRoles = (form: FormData, roles: AnyRow[]): string[] =>
   roles.map((role) => String(role.id)).filter((id) => checked(form, roleFieldName(id)))
 
+/** Who is reading this record is the person in it. Nobody changes their own authority. */
+const readingSelf = (c: Context): boolean => c.data.actor?.self === true
+
+const actorSuperuser = (c: Context): boolean => c.data.actor?.superuser === true
+
+/** A role that hands out authority over authority. Only a superuser may give it. */
+const securityTier = (role: AnyRow): boolean => String(role.tier ?? '') === 'security'
+
+/**
+ * The roles a form offers, each on its own line.
+ *
+ * A security-tier role is named as one and, for anyone but a superuser, offered
+ * disabled rather than hidden: the reader sees it exists and why it is not theirs
+ * to give, instead of wondering where it went.
+ */
+const roleOptions = (c: Context, isChecked: (roleId: string) => boolean): FieldOption[] =>
+  c.data.roles.map((role) => ({
+    name: roleFieldName(String(role.id)),
+    value: '1',
+    label: securityTier(role) ? `${String(role.name)} · ${t(c, 'role.tier.security')}` : String(role.name),
+    checked: isChecked(String(role.id)),
+    disabled: securityTier(role) && !actorSuperuser(c),
+  }))
+
+/** Why some offered roles cannot be ticked, when that is the case. */
+const roleHelp = (c: Context, fallback?: string): string | undefined =>
+  c.data.roles.some(securityTier) && !actorSuperuser(c) ? t(c, 'access.securityTierHint') : fallback
+
 /**
  * The form that hires someone.
  *
  * It asks for the whole decision at once — who they are, where they work, what
- * they do. The server records who made the change without requiring a typed reason.
+ * they do. The server records the resulting authority change in its audit.
  */
 const createFields = (c: Context): FieldProps[] => {
   const scopeKind = c.state('scopeKind', 'branch')
@@ -214,16 +277,11 @@ const createFields = (c: Context): FieldProps[] => {
             label: t(c, 'field.jobRoles'),
             type: 'checkbox-group',
             span: 'full',
-            help: t(c, 'users.rolesOptionalHint'),
+            help: roleHelp(c, t(c, 'users.rolesOptionalHint')),
             // One role per line: a person can hold several, and a row of boxes hides that.
             optionsOrientation: 'vertical',
-            options: c.data.roles.map((role) => ({
-              name: roleFieldName(String(role.id)),
-              value: '1',
-              label: String(role.name),
-              // What was ticked before a refusal comes back ticked.
-              checked: c.draftChecked(roleFieldName(String(role.id))),
-            })),
+            // What was ticked before a refusal comes back ticked.
+            options: roleOptions(c, (roleId) => c.draftChecked(roleFieldName(roleId))),
           }),
         ]
       : []),
@@ -376,21 +434,12 @@ const workplaceFields = (c: Context): FieldProps[] => {
   ]
 }
 
-/** The person, named once at the top of every tab, with the state that decides access. */
 const header = (c: Context): JSXChild =>
   c.creating
     ? ''
     : Stack({
         gap: 'compact',
         items: [
-          RecordSummary({
-            title: c.data.record.name || c.data.record.login,
-            subtitle: c.data.record.login,
-            status: {
-              label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
-              tone: c.data.record.active ? 'positive' : 'neutral',
-            },
-          }),
           ...(c.data.permissions.save
             ? [
                 RecordDialogTrigger({
@@ -446,6 +495,63 @@ const overviewTab = (c: Context): JSXChild => {
   })
 }
 
+/** The call this person was last refused, said the way they would have met it. */
+const denialNotice = (c: Context): JSXChild[] => {
+  const denial = c.data.lastDenial
+  if (!denial) return []
+  const where = denial.surface
+    ? t(c, 'denial.onSurface').replace('{surface}', denial.surface).replace('{at}', denial.at)
+    : t(c, 'denial.at').replace('{at}', denial.at)
+  const times = denial.count > 1 ? ` ${t(c, 'denial.count').replace('{count}', String(denial.count))}` : ''
+  const fix = denial.templates.length
+    ? t(c, 'denial.fix').replace('{roles}', denial.templates.join(', '))
+    : t(c, 'denial.noFix')
+  return [
+    Notice({
+      tone: 'warning',
+      title: t(c, 'denial.title').replace('{area}', denial.label),
+      message: `${where}${times} ${fix}`,
+    }),
+  ]
+}
+
+/**
+ * What this person can open and actually work on.
+ *
+ * The question a support call asks is never "which bundles": it is "why can't
+ * they pick a tax on the quotation". The last refusal, when there is one, leads,
+ * because it is usually the reason the record was opened.
+ */
+const screensTab = (c: Context): JSXChild =>
+  Stack({
+    gap: 'default',
+    items: [
+      DescriptionList({
+        columns: 1,
+        items: [
+          {
+            id: 'diagnostic-scope',
+            label: t(c, 'surface.scopeLabel'),
+            value:
+              [
+                c.data.companies.find((row) => row.id === c.data.record.defaultCompanyId)?.name,
+                c.data.branches.find((row) => row.id === c.data.record.defaultBranchId)?.name,
+              ]
+                .filter(Boolean)
+                .join(' · ') || t(c, 'surface.noWorkplace'),
+          },
+        ],
+      }),
+      ...denialNotice(c),
+      SurfaceAccessView({
+        t: (key, params) => c.t(key, params),
+        surfaces: c.data.surfaces ?? [],
+        showVia: true,
+        empty: { title: t(c, 'surface.emptyTitle'), message: t(c, 'surface.emptyHint') },
+      }),
+    ],
+  })
+
 /** Where an assignment applies, written the way the person reads it. */
 const scopeName = (c: Context, row: AnyRow): string =>
   row.branch
@@ -470,29 +576,63 @@ const assignmentGroups = (c: Context): Array<{ key: string; title: string; rows:
   return [...groups.values()]
 }
 
+/** Where an assignment came from: someone's decision, or a rule that matched this person. */
+const sourceOf = (row: AnyRow): { kind: 'manual' } | { kind: 'policy'; policyName: string } =>
+  row.source?.kind === 'policy'
+    ? { kind: 'policy', policyName: String(row.source.policyName ?? row.source.policyId ?? '') }
+    : { kind: 'manual' }
+
+const sourceBadge = (c: Context, row: AnyRow): JSXChild => {
+  const source = sourceOf(row)
+  return source.kind === 'policy'
+    ? Badge({ label: t(c, 'access.source.policy').replace('{policy}', source.policyName), tone: 'info' })
+    : Badge({ label: t(c, 'access.source.manual'), tone: 'neutral' })
+}
+
+/** Why the reader is not offered the assign action, or the action itself. */
+const accessControls = (c: Context): JSXChild[] =>
+  readingSelf(c)
+    ? // Nobody widens or narrows their own authority, superuser or not: the change
+      // would be approved by the person it benefits.
+      [
+        Notice({
+          tone: 'info',
+          title: t(c, 'access.selfTitle'),
+          message: t(c, 'access.selfHint'),
+        }),
+      ]
+    : c.data.permissions.assign
+      ? [
+          RecordDialogTrigger({
+            dialog: 'assign',
+            children: Button({
+              label: t(c, 'action.assignRole'),
+              variant: 'primary',
+            }),
+          }),
+        ]
+      : [
+          Notice({
+            tone: 'info',
+            title: t(c, 'users.readOnlyTitle'),
+            message: t(c, 'access.readOnlyHint'),
+          }),
+        ]
+
+/**
+ * Standing in for a superuser for a while, and taking it back.
+ *
+ * Nobody is made a superuser by editing their profile: it is a grant with an end,
+ * an owner, given only by a superuser, and it shows here for as long
+ * as it lasts.
+ */
 /** What this person may do, as rows of role and place — the authority they actually hold. */
 const accessTab = (c: Context): JSXChild => {
   const groups = assignmentGroups(c)
   return Stack({
     gap: 'default',
     items: [
-      ...(c.data.permissions.assign
-        ? [
-            RecordDialogTrigger({
-              dialog: 'assign',
-              children: Button({
-                label: t(c, 'action.assignRole'),
-                variant: 'primary',
-              }),
-            }),
-          ]
-        : [
-            Notice({
-              tone: 'info',
-              title: t(c, 'users.readOnlyTitle'),
-              message: t(c, 'access.readOnlyHint'),
-            }),
-          ]),
+      ...accessControls(c),
       ...(groups.length
         ? groups.map((group) =>
             Section({
@@ -513,6 +653,11 @@ const accessTab = (c: Context): JSXChild => {
                         children: String(row.roleName),
                       }),
                   },
+                  {
+                    key: 'source',
+                    label: t(c, 'access.sourceColumn'),
+                    cell: (row) => sourceBadge(c, row),
+                  },
                 ],
               }),
             }),
@@ -524,6 +669,14 @@ const accessTab = (c: Context): JSXChild => {
               message: t(c, 'access.emptyHint'),
             }),
           ]),
+      ...(Array.isArray(c.data.surfaces)
+        ? [
+            RecordDialogTrigger({
+              dialog: 'diagnostics',
+              children: Button({ label: t(c, 'action.checkAccess'), variant: 'secondary' }),
+            }),
+          ]
+        : []),
     ],
   })
 }
@@ -580,12 +733,8 @@ const assignFields = (c: Context): FieldProps[] => {
       required: true,
       span: 'full',
       optionsOrientation: 'vertical',
-      options: c.data.roles.map((role) => ({
-        name: roleFieldName(String(role.id)),
-        value: '1',
-        label: String(role.name),
-        checked: c.draft(roleFieldName(String(role.id)), '') === '1',
-      })),
+      help: roleHelp(c),
+      options: roleOptions(c, (roleId) => c.draft(roleFieldName(roleId), '') === '1'),
     }),
   ]
 }
@@ -602,6 +751,8 @@ type PreviewContext = {
   branchId: string | null
   superuser: boolean
   bundles: PreviewBundle[]
+  /** The screens whose reach the change moves, when the server measures them. */
+  surfaces?: SurfaceChange[]
   sensitiveChange: boolean
 }
 type Preview = { ok: boolean; contexts?: PreviewContext[] }
@@ -760,6 +911,11 @@ const roleDialog = (c: Context): JSXChild => {
             label: t(c, 'field.scope'),
             value: scopeName(c, assignment),
           },
+          {
+            id: 'source',
+            label: t(c, 'access.sourceColumn'),
+            value: sourceBadge(c, assignment),
+          },
         ],
       }),
       // What the role is for, not only where it applies.
@@ -787,7 +943,18 @@ const roleDialog = (c: Context): JSXChild => {
             }),
           ]
         : []),
-      ...(c.data.permissions.remove
+      // A rule gave it, so a rule takes it back: removing it here would last until
+      // the next sign-in re-applied the policy.
+      ...(sourceOf(assignment).kind === 'policy'
+        ? [
+            Notice({
+              tone: 'info',
+              title: t(c, 'access.policyOwnedTitle'),
+              message: t(c, 'access.policyOwnedHint'),
+            }),
+          ]
+        : []),
+      ...(c.data.permissions.remove && !readingSelf(c) && sourceOf(assignment).kind !== 'policy'
         ? [
             Stack({
               gap: 'default',
@@ -826,13 +993,12 @@ const roleDialog = (c: Context): JSXChild => {
 }
 
 /**
- * What it takes to sign in as this person, and the one thing an administrator may
- * do about it.
+ * How a new credential reaches this person here.
  *
- * There is no session list and no way to set somebody else's password. A session
- * belongs to the serve layer rather than to this module, so there is nothing here
- * to read or revoke; and a reset does the administrator's work — a new credential,
- * every session ended — while leaving the password itself with its owner.
+ * The tenant chooses: a link sent to the person's own inbox, so nobody else ever
+ * holds it, or — where staff share devices or have no mailbox — a code shown once
+ * to the administrator. A deployment that cannot send the link yet falls back to
+ * the code rather than offering a button that fails.
  */
 const loginTab = (c: Context): JSXChild => {
   const issued = c.outcome<{ ok?: boolean; token?: string }>('resetPassword')
@@ -1003,6 +1169,13 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   },
   title: (c) => (c.creating ? t(c, 'users.create') : c.data.record.name || c.data.record.login),
   description: (c) => (c.creating ? t(c, 'users.createSubtitle') : c.data.record.login),
+  status: (c) =>
+    c.creating
+      ? undefined
+      : Badge({
+          label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
+          tone: c.data.record.active ? 'positive' : 'neutral',
+        }),
   header,
   body: (c) => (c.creating ? createView(c) : ''),
   tabs: [
@@ -1017,6 +1190,14 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       label: (c) => `${t(c, 'tab.access')} ${String(c.data.assignments.length)}`,
       visible: (c) => !c.creating,
       view: accessTab,
+    },
+    {
+      id: 'screens',
+      label: (c) => t(c, 'tab.screens'),
+      // Only where the context measured it: a deployment that does not report
+      // screens has nothing true to put in the tab.
+      visible: () => false,
+      view: screensTab,
     },
     {
       id: 'login',
@@ -1034,6 +1215,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     },
   ],
   dialogs: {
+    diagnostics: { title: (c) => t(c, 'action.checkAccess'), view: screensTab, size: 'large' },
     assign: { title: (c) => t(c, 'action.assignRole'), view: assignDialog },
     role: {
       title: (c) => String(openAssignment(c).roleName ?? ''),
@@ -1098,6 +1280,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         scopeKind: text(form, 'scopeKind') || 'branch',
         companyId: text(form, 'companyId') || null,
         branchId: text(form, 'branchId') || null,
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1117,15 +1300,22 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         branchIds: selectedIds(form, c.data.branches, branchFieldName),
         defaultCompanyId: text(form, 'defaultCompanyId'),
         defaultBranchId: text(form, 'defaultBranchId'),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
+      // The server names its inputs; the form names its fields.
+      issueField: (field) => ({ companyIds: 'companies', branchIds: 'branches' })[field] ?? field,
       // Read the person again: every tab shows where they now work.
       after: 'reload',
     },
     resetPassword: {
       fn: 'user.issueAuthToken',
-      input: (_form, c) => ({ userId: c.id, kind: 'reset', realm: 'backend' }),
+      input: (_form, c) => ({
+        userId: c.id,
+        kind: c.data.record.passwordReady ? 'reset' : 'invitation',
+        realm: 'backend',
+      }),
       // Stay: the server hands back a credential it will never say again, and the
       // tab is where the person reading it is.
       after: 'stay',
@@ -1139,6 +1329,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       fn: 'user.assignRoles',
       input: (form, c) => ({
         ...assignSelection(form, c),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1169,6 +1360,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
           assignmentId: String(assignment.id ?? ''),
           roleId: String(assignment.roleId ?? ''),
           scopeKey: String(assignment.scopeKey ?? 'tenant'),
+
           expectedAuthorizationRevision: c.data.revision,
           idempotencyKey: uuid(),
         }

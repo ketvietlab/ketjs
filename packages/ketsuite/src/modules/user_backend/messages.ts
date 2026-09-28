@@ -1,5 +1,7 @@
 export const messages = {
   vi: {
+    'surface.scopeLabel': 'Kiểm tra tại nơi làm việc mặc định',
+    'surface.noWorkplace': 'Chưa chọn nơi làm việc mặc định',
     'error.E_ACTOR_REQUIRED': 'Đăng nhập lại để tiếp tục.',
     'error.E_AUTHORIZATION_FORBIDDEN': 'Bạn không có quyền thực hiện thao tác này.',
     'error.E_ROLE_NOT_ASSIGNABLE': 'Có vai trò không còn khả dụng. Vui lòng chọn lại.',
@@ -406,6 +408,8 @@ export const messages = {
     'action.resumePolicy': 'Bật lại',
   },
   en: {
+    'surface.scopeLabel': 'Checked at the default workplace',
+    'surface.noWorkplace': 'No default workplace selected',
     'error.E_ACTOR_REQUIRED': 'Sign in again to continue.',
     'error.E_AUTHORIZATION_FORBIDDEN': 'You do not have permission to do this.',
     'error.E_ROLE_NOT_ASSIGNABLE': 'A role is no longer available. Choose another role.',

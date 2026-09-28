@@ -435,3 +435,7 @@ The user interface describes work, workplaces and the source of an assigned role
 ### Reading a standard role
 
 The managed-role record shows two navigation items: allowed actions and people. Its title and health appear once in the modal header. It presents named business actions rather than template versions, grant provenance or a separate screen-diagnostics tab. A stale role gives a support-oriented notice. The diagnostic model remains available to trusted tooling; the product-facing managed catalogue is read-only.
+
+### User record navigation
+
+A user's record has Overview, Access, Sign-in and Log navigation. The Access panel groups assignments by workplace and distinguishes direct assignments from automatic rules. “Check access” opens a nested diagnostic dialog rather than another primary tab. The shared record runtime owns its inert parent, close flow, scroll and return focus. The actor's own authority and non-editable policy assignments do not expose direct grant/removal controls.
