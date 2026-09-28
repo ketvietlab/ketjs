@@ -1,3 +1,4 @@
+import { managedRoleRoutes } from './managed-role-routes.ts'
 import { accessPolicyRoutes } from './access-policy-routes.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import { userListSearch } from './search.ts'
@@ -152,6 +153,7 @@ const userGroupLabel = (_: Translator, key: string, value: unknown): string => {
 
 export const routes: Record<string, RouteEntry> = {
   ...accessPolicyRoutes,
+  ...managedRoleRoutes,
   '/admin/users':
     (ctx: ServeContext): Route =>
     async (url, req) => {
@@ -168,6 +170,9 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('company.listCompanies', {}, url, req),
         ctx.call('user.listRoles', {}, url, req),
       ])) as [AnyRow[], AnyRow[]]
+      // The create action is offered to whoever the create modal would answer; a
+      // viewer who may only read people is not shown a button that opens a refusal.
+      const mayCreate = await ctx.allows('user.createUser', url, req)
       const includeArchived = url.searchParams.get('archived') === '1'
       const allRows = (await ctx.call(
         'user.listUsers',
@@ -216,22 +221,18 @@ export const routes: Record<string, RouteEntry> = {
             total: search.groups
               ? search.groups.reduce((sum, group) => sum + group.count, 0)
               : search.rows.length,
-            createHref: deploymentCreatesAccounts
-              ? withUserReturnTo(url, '/admin/users/new', returnTo)
-              : recordModalCreateHref(`${url.pathname}${url.search}`, {
-                  kind: 'user.user',
-                }),
+            createHref: !mayCreate
+              ? null
+              : deploymentCreatesAccounts
+                ? withUserReturnTo(url, '/admin/users/new', returnTo)
+                : recordModalCreateHref(`${url.pathname}${url.search}`, {
+                    kind: 'user.user',
+                  }),
             ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
       })
     },
-
-  // No `/admin/roles`. Assignment only accepts managed roles (`assertAssignableRoles`),
-  // so a custom role made on that screen could never be given to anyone. Roles come
-  // from role templates until custom roles are assignable; the screen, its record
-  // modal (`modal/role-modal-view.tsx`) and `user.roleModalContext` stay in source,
-  // unregistered, for when they are.
 
   '/admin/users/new':
     (ctx: ServeContext): Route =>

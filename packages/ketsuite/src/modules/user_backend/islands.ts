@@ -8,6 +8,7 @@ import { defineRecordModalIsland } from '../../ui/record-modal.tsx'
  * The role modal is read-only for managed roles; custom-role authoring has no product route.
  */
 export const USER_MODAL_ISLANDS = {
+  'user.role-modal': { kind: 'user.role', client: 'role-modal.mjs', export: 'roleModal' },
   'user.access-policy-modal': {
     kind: 'user.accessPolicy',
     client: 'access-policy-modal.mjs',
