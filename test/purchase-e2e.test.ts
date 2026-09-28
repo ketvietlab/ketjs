@@ -171,7 +171,7 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   })
   const purchaseDashboardHtml = await purchaseDashboard.text()
   assert.match(purchaseDashboardHtml, /Tạo yêu cầu báo giá/)
-  assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=vi"/)
+  assert.match(purchaseDashboardHtml, /record=purchase.order%3Anew/)
   assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/orders\?lang=vi"/)
 
   const rfqsPage = await e2e.client.get('/admin/purchase/rfqs?lang=vi', {
@@ -180,7 +180,7 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   const rfqsHtml = await rfqsPage.text()
   assert.match(rfqsHtml, /data-ui="list-page"/)
   assert.doesNotMatch(rfqsHtml, /id="purchase-rfq-create"/)
-  assert.match(rfqsHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=vi&amp;returnTo=/)
+  assert.match(rfqsHtml, /href="\/admin\/purchase\/rfqs\?lang=vi&amp;record=purchase\.order%3Anew"/)
   // The search-filter bar owns the query and the state filters now.
   assert.match(rfqsHtml, /data-island="backend\.search-filter"/)
   assert.doesNotMatch(rfqsHtml, /data-island="mail\.chatter"/)
@@ -249,7 +249,7 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   })
   const englishDashboardHtml = await englishDashboard.text()
   assert.match(englishDashboardHtml, /Create RFQ/)
-  assert.match(englishDashboardHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=en"/)
+  assert.match(englishDashboardHtml, /record=purchase.order%3Anew/)
   const english = await e2e.client.get('/admin/purchase/orders/po-1?lang=en', {
     headers: { accept: 'text/html' },
   })

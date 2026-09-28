@@ -29,7 +29,7 @@ export type TransferListRow = {
 export type TransfersListScreenOptions = {
   rows: TransferListRow[]
   /** Localized `/admin/stock/transfers/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<TransferListRow>>
 }
@@ -115,7 +115,9 @@ export const transfersListScreen = (
       title={_('stock_backend.transfer.list.title')}
       description={_('stock_backend.transfer.list.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : undefined
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('stock_backend.transfer.list.title'), collection.frame)}

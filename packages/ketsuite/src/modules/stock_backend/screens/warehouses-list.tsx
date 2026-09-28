@@ -26,7 +26,7 @@ export type WarehouseListRow = {
 export type WarehousesListScreenOptions = {
   rows: WarehouseListRow[]
   /** Localized `/admin/stock/warehouses/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<WarehouseListRow>>
 }
@@ -92,7 +92,9 @@ export const warehousesListScreen = (
       title={_('stock_backend.warehouse.title')}
       description={_('stock_backend.warehouse.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('stock_backend.warehouse.title'), collection.frame)}

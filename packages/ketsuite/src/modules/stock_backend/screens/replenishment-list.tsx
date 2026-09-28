@@ -28,13 +28,13 @@ export type ReplenishmentListRow = {
   toOrder: string
   replenishmentUom: string
   /** Locale-aware run endpoint supplied by the route. */
-  runAction: string
+  runAction: string | null
 }
 
 export type ReplenishmentListScreenOptions = {
   rows: ReplenishmentListRow[]
   /** Localized `/admin/stock/replenishment/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<ReplenishmentListRow>>
 }
@@ -90,16 +90,19 @@ export const replenishmentListColumns = (_: Translator): Array<Column<Replenishm
   {
     key: 'action',
     label: _('stock_backend.replenishment.col.action'),
-    cell: (row) => (
-      <RecordForm
-        action={row.runAction}
-        submit={_('stock_backend.action.run')}
-        submitVariant="secondary"
-        submitSize="compact"
-        layout="inline"
-        fields={[]}
-      />
-    ),
+    cell: (row) =>
+      row.runAction ? (
+        <RecordForm
+          action={row.runAction}
+          submit={_('stock_backend.action.run')}
+          submitVariant="secondary"
+          submitSize="compact"
+          layout="inline"
+          fields={[]}
+        />
+      ) : (
+        ''
+      ),
   },
 ]
 
@@ -132,7 +135,9 @@ export const replenishmentListScreen = (
       title={_('stock_backend.replenishment.title')}
       description={_('stock_backend.replenishment.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('stock_backend.replenishment.title'), collection.frame)}

@@ -83,3 +83,14 @@ npm-debug.log*
 .vscode/
 *.swp
 .DS_Store
+
+# Commerce record modal bundles, rebuilt from typed sources.
+packages/ketsuite/src/modules/purchase_backend/client/purchase-order-modal.mjs*
+packages/ketsuite/src/modules/sale_backend/client/sale-order-modal.mjs*
+packages/ketsuite/src/modules/stock_backend/client/stock-configuration-modal.mjs*
+packages/ketsuite/src/modules/stock_backend/client/inventory-count-modal.mjs*
+
+packages/ketsuite/src/modules/stock_backend/client/stock-transfer-modal.mjs*
+
+packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs*
+packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs*
