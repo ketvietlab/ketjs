@@ -2,14 +2,13 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   CardGrid,
-  DashboardPage,
+  WorkspacePage,
   dataTable,
   emptyState,
   formatMoney,
   icon,
   linkButton,
   Metric,
-  Pipeline,
   Section,
   shell,
   stack,
@@ -43,7 +42,15 @@ export type SaleCounts = {
 
 export const overviewScreen = (
   _: Translator,
-  o: { frame: Frame; counts: SaleCounts; recent: AnyRow[]; localeQuery?: string },
+  o: {
+    frame: Frame
+    counts: SaleCounts
+    recent: AnyRow[]
+    localeQuery?: string
+    createHref?: string | null
+    rowHref?: (row: AnyRow) => string
+    awaiting?: AnyRow[]
+  },
 ): TemplateResult => {
   // The reader's language travels in the query string, so every link this screen
   // writes has to carry it or the next page silently reverts to the default.
@@ -53,7 +60,6 @@ export const overviewScreen = (
     // point. The full amount is one click away, on the record it belongs to.
     money = (value: unknown) => formatMoney(_, value, o.counts.currency, { compact: true })
   const quotations = at('/admin/sales/quotations'),
-    newQuotation = at('/admin/sales/quotations/new'),
     orders = at('/admin/sales/orders')
   const cards = [
     {
@@ -92,16 +98,20 @@ export const overviewScreen = (
   return shell(
     _,
     _('sale_backend.dashboard.title'),
-    <DashboardPage
+    <WorkspacePage
       variant="operational"
       frame={o.frame}
       title={_('sale_backend.dashboard.title')}
       description={_('sale_backend.dashboard.subtitle')}
-      actions={linkButton({
-        label: _('sale_backend.action.create'),
-        href: newQuotation,
-        variant: 'primary',
-      })}
+      actions={
+        o.createHref
+          ? linkButton({
+              label: _('sale_backend.action.create'),
+              href: o.createHref,
+              variant: 'primary',
+            })
+          : undefined
+      }
       body={stack(
         [
           <CardGrid
@@ -118,19 +128,21 @@ export const overviewScreen = (
             )}
           />,
           <Section
-            title={_('sale_backend.dashboard.flow.title')}
-            description={_('sale_backend.dashboard.flow.hint')}
+            title={_('sale_backend.dashboard.awaiting')}
+            actions={linkButton({
+              label: _('sale_backend.dashboard.recent.all'),
+              href: `${quotations}${quotations.includes('?') ? '&' : '?'}preset=sent`,
+              variant: 'tertiary',
+            })}
             body={
-              <Pipeline
-                label={_('sale_backend.dashboard.flow.title')}
-                steps={cards.map((card) => ({
-                  id: card.id,
-                  label: card.label,
-                  value: card.value,
-                  href: card.href,
-                  tone: card.tone,
-                }))}
-              />
+              o.awaiting?.length
+                ? dataTable(_, {
+                    columns: salesOrderColumns(_, localeQuery),
+                    rows: o.awaiting,
+                    id: (row) => String(row.id),
+                    rowHref: o.rowHref,
+                  })
+                : emptyState(_('sale_backend.dashboard.queueEmpty'), '')
             }
           />,
           <Section
@@ -146,6 +158,7 @@ export const overviewScreen = (
                 dataTable(_, {
                   columns: salesOrderColumns(_, localeQuery),
                   rows: o.recent,
+                  rowHref: o.rowHref,
                   id: (row) => String(row.id),
                 })
               ) : (

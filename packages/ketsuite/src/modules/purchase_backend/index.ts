@@ -1,3 +1,7 @@
+import { vendorPricelistContext } from './modal/pricelist-context.ts'
+import { defineRecordModalIsland, recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import { purchaseOrderContext } from './modal/context.ts'
+import { optionalRead } from '../backend/optional-read.ts'
 import { loadCollectionRows } from '../backend/collection-search.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import { purchaseOrderListSearch, rfqListSearch, vendorPricelistListSearch } from './search.ts'
@@ -143,14 +147,20 @@ const saveSupplierInfo = async (
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, pickingTypes, taxes, journals, accounts] = await Promise.all([
-    ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('product.listTemplates', { withVariants: true }, url, req) as Promise<AnyRow[]>,
-    ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('stock.listPickingTypes', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listTaxes', { typeTaxUse: 'purchase' }, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listJournals', { type: 'purchase' }, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listAccounts', {}, url, req) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'partner.listPartners', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'company.listCompanies', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'product.listTemplates', { withVariants: true }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'stock.listPickingTypes', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'account.listTaxes', { typeTaxUse: 'purchase' }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'account.listJournals', { type: 'purchase' }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'account.listAccounts', {}, url, req, []) as Promise<AnyRow[]>,
   ])
   const own = new Set(companies.map((row) => row.partnerId))
   const purchasable = templates.filter((row) => row.purchaseOk)
@@ -428,6 +438,18 @@ const detailHandler =
   }
 
 const vi = {
+  'dashboard.approvalQueue': 'Đơn mua chờ phê duyệt',
+  'dashboard.queueEmpty': 'Không có đơn mua chờ phê duyệt.',
+  'modal.info': 'Thông tin chung',
+  'modal.lines': 'Sản phẩm',
+  'modal.receipts': 'Nhập hàng',
+  'modal.bills': 'Hoá đơn',
+  'modal.more': 'Thao tác khác',
+  'modal.edit': 'Sửa',
+  'modal.receive': 'Xác nhận đã nhận',
+  'modal.confirmRemove': 'Xoá dòng sản phẩm này?',
+  'modal.confirmReceive': 'Xác nhận đã nhận đủ hàng trong phiếu này?',
+  'modal.confirmCancel': 'Huỷ đơn mua này?',
   'app.title': 'Mua hàng trong quản trị',
   'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   'app.category': 'Hệ thống',
@@ -548,6 +570,18 @@ const vi = {
   'purchaseMethod.receive': 'Theo số lượng nhận',
 }
 const en = {
+  'dashboard.approvalQueue': 'Purchase orders awaiting approval',
+  'dashboard.queueEmpty': 'No purchase orders are awaiting approval.',
+  'modal.info': 'Overview',
+  'modal.lines': 'Products',
+  'modal.receipts': 'Receipts',
+  'modal.bills': 'Bills',
+  'modal.more': 'More actions',
+  'modal.edit': 'Edit',
+  'modal.receive': 'Confirm receipt',
+  'modal.confirmRemove': 'Remove this product line?',
+  'modal.confirmReceive': 'Confirm all goods in this receipt have arrived?',
+  'modal.confirmCancel': 'Cancel this purchase order?',
   'app.title': 'Purchase administration',
   'app.summary': 'RFQs, purchase orders, receipts, and vendor bills.',
   'app.category': 'System',
@@ -673,6 +707,22 @@ export default defineModule({
   version: '0.1.0',
   depends: ['purchase', 'backend', 'partner_backend'],
   functions: searchFilterFunctions,
+  assets: new URL('./client/', import.meta.url),
+  islands: {
+    'purchase.vendor-price-modal': defineRecordModalIsland({
+      kind: 'purchase.vendorPrice',
+      client: 'vendor-pricelist-modal.mjs',
+      export: 'vendorPricelistModal',
+    }),
+    'purchase.order-modal': defineRecordModalIsland({
+      kind: 'purchase.order',
+      client: 'purchase-order-modal.mjs',
+      export: 'purchaseOrderModal',
+    }),
+  },
+  fills: {
+    'backend:runtime': `{% island "purchase.order-modal" %}{% island "purchase.vendor-price-modal" %}`,
+  },
   title: 'Mua hàng trong quản trị',
   summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Hệ thống',
@@ -708,6 +758,8 @@ export default defineModule({
     },
   },
   routes: {
+    '/admin/purchase/vendor-price/{id}/context': vendorPricelistContext,
+    '/admin/purchase/record/{id}/context': purchaseOrderContext,
     '/admin/purchase':
       (ctx): Route =>
       async (url, req) =>
@@ -719,10 +771,26 @@ export default defineModule({
                   ctx.call('purchase.listOrders', {}, url, req) as Promise<AnyRow[]>,
                   common(ctx, url, req),
                 ])
-                return purchaseOverviewScreen(_, orders, shell, localeQuery(url), {
-                  pickingTypes: data.pickingTypes.length,
-                  vendors: data.partners.length,
-                })
+                return purchaseOverviewScreen(
+                  _,
+                  orders.map((row) => ({
+                    ...row,
+                    partnerName:
+                      data.partners.find((partner) => partner.id === row.partnerId)?.name ?? row.partnerId,
+                  })),
+                  shell,
+                  localeQuery(url),
+                  {
+                    createHref: (await ctx.allows('purchase.createOrder', url, req))
+                      ? recordModalCreateHref(new URL(inLocale(url, '/admin/purchase/rfqs'), url), {
+                          kind: 'purchase.order',
+                        })
+                      : null,
+                    rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
+                    pickingTypes: data.pickingTypes.length,
+                    vendors: data.partners.length,
+                  },
+                )
               },
             })
           : text('GET', { status: 405 }),
@@ -769,9 +837,14 @@ export default defineModule({
             return rfqsListScreen(_, {
               frame: search.frame,
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
+              },
               total: searchTotal(search),
-              createHref: createPath,
+              createHref: (await ctx.allows('purchase.createOrder', url, req))
+                ? recordModalCreateHref(url, { kind: 'purchase.order' })
+                : null,
               detailSuffix: localeQuery(url),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
             })
@@ -835,7 +908,10 @@ export default defineModule({
             return purchaseOrdersListScreen(_, {
               frame: search.frame,
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
+              },
               total: searchTotal(search),
               detailSuffix: localeQuery(url),
               originHref: inLocale(url, '/admin/purchase/rfqs'),
@@ -925,13 +1001,19 @@ export default defineModule({
             return vendorPricelistsListScreen(_, {
               frame: search.frame,
               action: listPath,
-              createHref: inLocale(url, '/admin/purchase/vendor-pricelists/new'),
+              createHref: (await ctx.allows('purchase.saveSupplierInfo', url, req))
+                ? recordModalCreateHref(url, { kind: 'purchase.vendorPrice' })
+                : null,
+              canSetMethod: await ctx.allows('purchase.setPurchaseMethod', url, req),
               currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
               methodFields,
               invalid: url.searchParams.get('invalid'),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.vendorPrice', id: row.id }),
+              },
             })
           },
         })

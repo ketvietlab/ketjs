@@ -1,22 +1,21 @@
+import { Stack } from '@ketvietlab/design-system'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   code,
-  dataTable,
+  collectionActions,
+  collectionControls,
+  collectionTable,
   emptyState,
-  RecordScreen,
   icon,
-  linkButton,
+  LinkButton,
+  ListPage,
   Notice,
-  RecordForm,
-  RecordWorkspace,
-  Section,
-  stack,
-  Surface,
+  prepareCollectionTable,
+  shell,
 } from '../../../ui/index.ts'
-import type { Column, FormOption, Frame } from '../../../ui/index.ts'
-
+import type { Column, DataTable, FormOption, Frame } from '../../../ui/index.ts'
 export type InventoryBalanceRow = {
   id: string
   product: string
@@ -27,7 +26,6 @@ export type InventoryBalanceRow = {
   reserved: string
   available: string
 }
-
 export type InventoryScreenOptions = {
   rows: InventoryBalanceRow[]
   products: FormOption[]
@@ -39,8 +37,9 @@ export type InventoryScreenOptions = {
   locationsHref: string
   applied?: boolean
   errors?: string[]
+  createHref?: string | null
+  table?: Partial<DataTable<InventoryBalanceRow>>
 }
-
 const columns = (_: Translator): Array<Column<InventoryBalanceRow>> => [
   {
     key: 'product',
@@ -92,152 +91,65 @@ const columns = (_: Translator): Array<Column<InventoryBalanceRow>> => [
   },
 ]
 
-const adjustmentForm = (_: Translator, options: InventoryScreenOptions): TemplateResult => (
-  <RecordForm
-    id="inventory-adjustment-form"
-    scope="inventory-adjustment"
-    action={options.action}
-    submit={_('stock_backend.action.apply')}
-    submitVariant="primary"
-    errors={options.errors}
-    fields={[
-      {
-        name: 'productId',
-        label: _('stock_backend.field.product'),
-        type: 'select',
-        options: [{ value: '', label: '—' }, ...options.products],
-        required: true,
-      },
-      {
-        name: 'locationId',
-        label: _('stock_backend.field.location'),
-        type: 'select',
-        options: options.locations,
-        required: true,
-      },
-      {
-        name: 'countedQuantity',
-        label: _('stock_backend.field.counted'),
-        type: 'decimal',
-        required: true,
-      },
-      {
-        name: 'productUomId',
-        label: _('stock_backend.field.uom'),
-        type: 'select',
-        options: options.units,
-        required: true,
-      },
-      {
-        name: 'lotId',
-        label: _('stock_backend.field.lot'),
-        type: 'select',
-        options: [{ value: '', label: '—' }, ...options.lots],
-      },
-      {
-        name: 'inventoryLocationId',
-        label: _('stock_backend.field.inventoryLocation'),
-        type: 'select',
-        options: options.inventoryLocations,
-        required: true,
-        help: _('stock_backend.inventory.adjustmentLocation.help'),
-      },
-    ]}
-  />
-)
-
 export const inventoryScreen = (
   _: Translator,
   options: InventoryScreenOptions,
   frame: Frame,
 ): TemplateResult => {
-  const configured =
-    options.products.length > 0 &&
-    options.locations.length > 0 &&
-    options.inventoryLocations.length > 0 &&
-    options.units.length > 0
-  const totalOnHand = options.rows.reduce((sum, row) => sum + Number(row.quantity), 0)
-  const locationCount = new Set(options.rows.map((row) => row.location)).size
-  const balances = options.rows.length ? (
-    dataTable(_, { columns: columns(_), rows: options.rows, id: (row) => row.id })
-  ) : (
-    <Surface
-      padding="compact"
-      body={emptyState(_('stock_backend.inventory.empty'), _('stock_backend.inventory.emptyHint'), {
-        icon: icon('warehouse'),
-      })}
-    />
+  const collection = prepareCollectionTable(
+    _,
+    frame,
+    { columns: columns(_), rows: options.rows, id: (row) => row.id, ...options.table },
+    { paginate: !options.table?.groups },
   )
-
-  return (
-    <RecordScreen
-      translator={_}
-      title={_('stock_backend.inventory')}
-      frame={frame}
+  return shell(
+    _,
+    _('stock_backend.inventory'),
+    <ListPage
+      variant="operational"
+      frame={collection.frame}
+      title={_('stock_backend.inventory.workspace.title')}
+      headerActions={
+        options.createHref ? (
+          <LinkButton
+            href={options.createHref}
+            label={_('stock_backend.adjustment.title')}
+            variant="primary"
+          />
+        ) : null
+      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('stock_backend.inventory'), collection.frame)}
       body={
-        <RecordWorkspace
-          kicker={_('stock_backend.inventory.kicker')}
-          title={_('stock_backend.inventory.workspace.title')}
-          subtitle={_('stock_backend.inventory.workspace.subtitle')}
-          imageFallback={icon('warehouse')}
-          summary={[
-            {
-              id: 'on-hand',
-              label: _('stock_backend.inventory.summary.onHand'),
-              value: String(totalOnHand),
-            },
-            {
-              id: 'balances',
-              label: _('stock_backend.inventory.summary.balances'),
-              value: options.rows.length,
-            },
-            {
-              id: 'locations',
-              label: _('stock_backend.inventory.summary.locations'),
-              value: locationCount,
-            },
+        <Stack
+          items={[
+            ...(options.applied
+              ? [
+                  <Notice
+                    tone="positive"
+                    title={_('stock_backend.inventory.applied.title')}
+                    message={_('stock_backend.inventory.applied.message')}
+                  />,
+                ]
+              : []),
+            ...(options.errors?.length
+              ? [
+                  <Notice
+                    tone="danger"
+                    title={_('stock_backend.invalid')}
+                    message={options.errors.join(' ')}
+                  />,
+                ]
+              : []),
+            options.rows.length || options.table?.groups?.length
+              ? collectionTable(_, collection.table)
+              : emptyState(_('stock_backend.inventory.empty'), _('stock_backend.inventory.emptyHint'), {
+                  icon: icon('warehouse'),
+                }),
           ]}
-          body={stack(
-            [
-              options.applied ? (
-                <Notice
-                  tone="positive"
-                  title={_('stock_backend.inventory.applied.title')}
-                  message={_('stock_backend.inventory.applied.message')}
-                  icon={icon('check-circle')}
-                />
-              ) : null,
-              <Section
-                title={_('stock_backend.adjustment.title')}
-                description={_('stock_backend.adjustment.hint')}
-                body={
-                  configured ? (
-                    <Surface padding="compact" body={adjustmentForm(_, options)} />
-                  ) : (
-                    <Notice
-                      tone="warning"
-                      title={_('stock_backend.inventory.configuration.title')}
-                      message={_('stock_backend.inventory.configuration.message')}
-                      icon={icon('alert-triangle')}
-                      actions={linkButton({
-                        label: _('stock_backend.inventory.configuration.action'),
-                        href: options.locationsHref,
-                        variant: 'secondary',
-                      })}
-                    />
-                  )
-                }
-              />,
-              <Section
-                title={_('stock_backend.inventory.balances.title')}
-                description={_('stock_backend.inventory.balances.hint')}
-                body={balances}
-              />,
-            ],
-            'loose',
-          )}
         />
       }
-    />
+    />,
+    { ...collection.frame, chrome: null, topbar: false },
   )
 }

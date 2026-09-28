@@ -20,7 +20,7 @@ export type InvoicingPolicyRow = Record<string, unknown>
 export type InvoicingPoliciesListScreenOptions = {
   rows: InvoicingPolicyRow[]
   /** Locale-aware `/admin/sales/invoicing-policies/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<InvoicingPolicyRow>>
 }
@@ -83,7 +83,13 @@ export const invoicingPoliciesListScreen = (
       title={_('sale_backend.policies.title')}
       description={_('sale_backend.policy.subtitle')}
       headerActions={
-        <LinkButton label={_('sale_backend.action.savePolicy')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton
+            label={_('sale_backend.action.savePolicy')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
       actions={collectionActions(_, collection.frame)}
       controls={collectionControls(_, _('sale_backend.policies.title'), collection.frame)}

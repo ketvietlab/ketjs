@@ -25,7 +25,7 @@ export type StockRouteListRow = {
 export type StockRoutesListScreenOptions = {
   rows: StockRouteListRow[]
   /** Localized `/admin/stock/routes/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<StockRouteListRow>>
 }
@@ -83,7 +83,9 @@ export const stockRoutesListScreen = (
       title={_('stock_backend.stockRoute.list.title')}
       description={_('stock_backend.stockRoute.list.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('stock_backend.stockRoute.list.title'), collection.frame)}
