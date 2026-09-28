@@ -518,6 +518,14 @@ committed as PR evidence.
 
 ### Client record dialog context and actions
 
+Tabbed record dialogs start at their content height on desktop. The runtime retains the tallest
+rendered tab for that record as a minimum height, capped by the available viewport; switching to
+another record resets the measurement. Only the panel scrolls, keeping the tab navigation visible.
+Late text, image loads, disclosure changes, font readiness and viewport resizing trigger another
+measurement. On compact screens the design system's full-screen dialog contract still applies;
+that mobile viewport height is never retained as the desktop minimum. Explicit `fixedHeight`
+workflow overrides retain their compatibility behaviour. Nested dialogs size independently.
+
 `RecordModalDialog.actions(context)` renders a nested dialog's own fixed footer. Use
 `RecordModalForm` with a stable `id` and footer buttons with the HTML `form` attribute,
 just as for the main record's `actions`. The runtime continues to own validation,
