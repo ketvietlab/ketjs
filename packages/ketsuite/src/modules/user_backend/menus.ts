@@ -6,7 +6,22 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.users',
     path: '/admin/users',
     needs: 'user.listUsers',
+    requires: ['user.listRoles', 'company.listCompanies'],
     sequence: 25,
   },
-  // `admin.roles` is off with its route: see the note in routes.ts.
+  'admin.access-policies': {
+    parent: 'admin.config',
+    label: 'menu.policies',
+    path: '/admin/access-policies',
+    needs: 'user.listAccessPolicies',
+    requires: ['user.listRoles', 'company.listCompanies'],
+    sequence: 27,
+  },
+  'admin.roles': {
+    parent: 'admin.config',
+    label: 'menu.roles',
+    path: '/admin/roles',
+    needs: 'user.listRoles',
+    sequence: 26,
+  },
 }

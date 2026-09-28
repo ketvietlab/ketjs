@@ -13,10 +13,10 @@ import {
   Badge,
   Button,
   DataTable,
+  Disclosure,
   DescriptionList,
   Notice,
   LinkButton,
-  RecordSummary,
   Section,
   Stack,
 } from '@ketvietlab/design-system'
@@ -24,11 +24,14 @@ import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { createRecordModal, RECORD_COMMAND_FIELD } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
+import { USER_RECORD_MODAL_LABELS } from '../../user/modal-labels.ts'
 import {
   RecordDialogTrigger,
   RecordModalForm,
   recordStateSelectControl,
 } from '../../../ui/client/record-modal-form.tsx'
+import { SurfaceAccessView, SurfaceChangeTable } from './access-surfaces.tsx'
+import type { SurfaceAccess, SurfaceChange } from './access-surfaces.tsx'
 
 // biome-ignore lint/suspicious/noExplicitAny: rows are JSON shaped by user.userModalContext
 type AnyRow = Record<string, any>
@@ -42,10 +45,29 @@ export type UserRecord = {
   active: boolean
   superuser: boolean
   lastLoginAt: string | null
+  invitationSentAt?: string | null
   passwordReady: boolean
   defaultCompanyId: string | null
   defaultBranchId: string | null
+  /** When a break-glass grant ends; null for a standing superuser or none at all. */
+  superuserExpiresAt?: string | null
+  superuserReason?: string | null
 }
+
+/** The last call this person was refused, and the roles that would have allowed it. */
+export type LastDenial = {
+  fn: string
+  /** The area the refused function belongs to, in the reader's language. */
+  label: string
+  /** The screen it was refused on, when the call came from one. */
+  surface: string | null
+  at: string
+  count: number
+  templates: string[]
+}
+
+/** How this tenant hands someone a new credential: a link to their own inbox, or a code shown once here. */
+export type CredentialDelivery = 'email' | 'oneTime' | 'both'
 
 export type UserModalData = {
   record: UserRecord
@@ -60,6 +82,20 @@ export type UserModalData = {
   revision: number
   permissions: Record<string, boolean>
   lang: 'vi' | 'en'
+  /** Who is reading: the guards are about the reader as much as the person read. */
+  actor?: { self: boolean; superuser: boolean }
+  /** What this person can open and work on, screen by screen. */
+  surfaces?: SurfaceAccess[]
+  lastDenial?: LastDenial | null
+  credentialDelivery?: CredentialDelivery
+  /** Verified external identity state supplied by the deployment adapter. */
+  externalCredential?: {
+    state: 'pending' | 'ready' | 'failed' | 'cancelled'
+    activated: boolean
+    operationId: string | null
+    claimable: boolean
+    emailState: 'pending' | 'sending' | 'accepted' | 'uncertain' | 'failed' | null
+  }
 }
 
 type Context = RecordModalContext<UserModalData>
@@ -146,12 +182,39 @@ const roleFieldName = (roleId: string): string => `role_${roleId}`
 const selectedRoles = (form: FormData, roles: AnyRow[]): string[] =>
   roles.map((role) => String(role.id)).filter((id) => checked(form, roleFieldName(id)))
 
+/** Who is reading this record is the person in it. Nobody changes their own authority. */
+const readingSelf = (c: Context): boolean => c.data.actor?.self === true
+
+const actorSuperuser = (c: Context): boolean => c.data.actor?.superuser === true
+
+/** A role that hands out authority over authority. Only a superuser may give it. */
+const securityTier = (role: AnyRow): boolean => String(role.tier ?? '') === 'security'
+
+/**
+ * The roles a form offers, each on its own line.
+ *
+ * A security-tier role is named as one and, for anyone but a superuser, offered
+ * disabled rather than hidden: the reader sees it exists and why it is not theirs
+ * to give, instead of wondering where it went.
+ */
+const roleOptions = (c: Context, isChecked: (roleId: string) => boolean): FieldOption[] =>
+  c.data.roles.map((role) => ({
+    name: roleFieldName(String(role.id)),
+    value: '1',
+    label: securityTier(role) ? `${String(role.name)} · ${t(c, 'role.tier.security')}` : String(role.name),
+    checked: isChecked(String(role.id)),
+    disabled: securityTier(role) && !actorSuperuser(c),
+  }))
+
+/** Why some offered roles cannot be ticked, when that is the case. */
+const roleHelp = (c: Context, fallback?: string): string | undefined =>
+  c.data.roles.some(securityTier) && !actorSuperuser(c) ? t(c, 'access.securityTierHint') : fallback
+
 /**
  * The form that hires someone.
  *
  * It asks for the whole decision at once — who they are, where they work, what
- * they do and why — because that is the request being made, and because the
- * reason is what the audit of their new authority will carry.
+ * they do. The server records the resulting authority change in its audit.
  */
 const createFields = (c: Context): FieldProps[] => {
   const scopeKind = c.state('scopeKind', 'branch')
@@ -215,26 +278,14 @@ const createFields = (c: Context): FieldProps[] => {
             label: t(c, 'field.jobRoles'),
             type: 'checkbox-group',
             span: 'full',
-            help: t(c, 'users.rolesOptionalHint'),
+            help: roleHelp(c, t(c, 'users.rolesOptionalHint')),
             // One role per line: a person can hold several, and a row of boxes hides that.
             optionsOrientation: 'vertical',
-            options: c.data.roles.map((role) => ({
-              name: roleFieldName(String(role.id)),
-              value: '1',
-              label: String(role.name),
-              // What was ticked before a refusal comes back ticked.
-              checked: c.draftChecked(roleFieldName(String(role.id))),
-            })),
+            // What was ticked before a refusal comes back ticked.
+            options: roleOptions(c, (roleId) => c.draftChecked(roleFieldName(roleId))),
           }),
         ]
       : []),
-    field(c, {
-      name: 'reason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
-    }),
   ]
 }
 
@@ -381,14 +432,96 @@ const workplaceFields = (c: Context): FieldProps[] => {
         label: String(branch.name),
       })),
     }),
-    field(c, {
-      name: 'workplaceReason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
-    }),
   ]
+}
+
+type WorkplacePreview = {
+  ok: boolean
+  /** Assignments held at a place being removed: they go with it. */
+  removed?: AnyRow[]
+}
+
+/**
+ * What leaving a workplace takes with it.
+ *
+ * A role held at a company or branch the person no longer works at is authority
+ * nobody can see a use for; saving the new workplaces removes it too. The preview
+ * names those roles first, so the removal is read before it is made.
+ */
+const workplacePreview = (c: Context): JSXChild => {
+  const preview = c.outcome<WorkplacePreview>('previewWorkplaces')
+  if (!preview) return ''
+  if (!preview.ok) return Notice({ tone: 'warning', title: t(c, 'preview.unavailable'), message: '' })
+  const removed = preview.removed ?? []
+  return removed.length
+    ? Stack({
+        gap: 'compact',
+        items: [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'workplace.removesTitle').replace('{count}', String(removed.length)),
+            message: t(c, 'workplace.removesHint'),
+          }),
+          DataTable<AnyRow>({
+            rows: removed,
+            id: (row) => String(row.id),
+            columns: [
+              {
+                key: 'role',
+                label: t(c, 'field.assignment'),
+                priority: 'primary',
+                cell: (row) => String(row.roleName),
+              },
+              { key: 'scope', label: t(c, 'field.scope'), cell: (row) => scopeName(c, row) },
+            ],
+          }),
+        ],
+      })
+    : Notice({ tone: 'info', title: t(c, 'workplace.keepsAll'), message: '' })
+}
+
+/** Where this person works. Where removals can be previewed, they are read before saving. */
+const workplaceForm = (c: Context): JSXChild => {
+  const previewing = c.data.permissions.previewWorkplaces === true
+  return Stack({
+    gap: 'default',
+    items: [
+      RecordModalForm({
+        kind: c.kind,
+        fields: workplaceFields(c),
+        command: previewing ? null : 'setWorkplaces',
+        actions: previewing
+          ? [
+              Button({
+                label: t(c, 'action.previewWorkplaces'),
+                variant: 'secondary',
+                type: 'submit',
+                name: RECORD_COMMAND_FIELD,
+                value: 'previewWorkplaces',
+              }),
+              ...(c.outcome<WorkplacePreview>('previewWorkplaces')
+                ? [
+                    Button({
+                      label: t(c, 'action.saveWorkplaces'),
+                      variant: 'primary',
+                      type: 'submit',
+                      name: RECORD_COMMAND_FIELD,
+                      value: 'setWorkplaces',
+                    }),
+                  ]
+                : []),
+            ]
+          : [
+              Button({
+                label: t(c, 'action.saveWorkplaces'),
+                variant: 'primary',
+                type: 'submit',
+              }),
+            ],
+      }),
+      workplacePreview(c),
+    ],
+  })
 }
 
 /** The person, named once at the top of every tab, with the state that decides access. */
@@ -398,14 +531,6 @@ const header = (c: Context): JSXChild =>
     : Stack({
         gap: 'compact',
         items: [
-          RecordSummary({
-            title: c.data.record.name || c.data.record.login,
-            subtitle: c.data.record.login,
-            status: {
-              label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
-              tone: c.data.record.active ? 'positive' : 'neutral',
-            },
-          }),
           ...(c.data.permissions.save
             ? [
                 RecordDialogTrigger({
@@ -456,10 +581,81 @@ const overviewTab = (c: Context): JSXChild => {
           label: t(c, 'field.company'),
           value: company ? String(company) : '—',
         },
+        ...(c.data.record.superuser
+          ? [
+              {
+                id: 'superuser',
+                label: t(c, 'field.superuser'),
+                value: Badge({
+                  label: c.data.record.superuserExpiresAt
+                    ? t(c, 'breakGlass.activeUntil').replace('{until}', c.data.record.superuserExpiresAt)
+                    : t(c, 'breakGlass.standing'),
+                  tone: 'danger',
+                }),
+              },
+            ]
+          : []),
       ],
     }),
   })
 }
+
+/** The call this person was last refused, said the way they would have met it. */
+const denialNotice = (c: Context): JSXChild[] => {
+  const denial = c.data.lastDenial
+  if (!denial) return []
+  const where = denial.surface
+    ? t(c, 'denial.onSurface').replace('{surface}', denial.surface).replace('{at}', denial.at)
+    : t(c, 'denial.at').replace('{at}', denial.at)
+  const times = denial.count > 1 ? ` ${t(c, 'denial.count').replace('{count}', String(denial.count))}` : ''
+  const fix = denial.templates.length
+    ? t(c, 'denial.fix').replace('{roles}', denial.templates.join(', '))
+    : t(c, 'denial.noFix')
+  return [
+    Notice({
+      tone: 'warning',
+      title: t(c, 'denial.title').replace('{area}', denial.label),
+      message: `${where}${times} ${fix}`,
+    }),
+  ]
+}
+
+/**
+ * What this person can open and actually work on.
+ *
+ * The question a support call asks is never "which bundles": it is "why can't
+ * they pick a tax on the quotation". The last refusal, when there is one, leads,
+ * because it is usually the reason the record was opened.
+ */
+const screensTab = (c: Context): JSXChild =>
+  Stack({
+    gap: 'default',
+    items: [
+      DescriptionList({
+        columns: 1,
+        items: [
+          {
+            id: 'diagnostic-scope',
+            label: t(c, 'surface.scopeLabel'),
+            value:
+              [
+                c.data.companies.find((row) => row.id === c.data.record.defaultCompanyId)?.name,
+                c.data.branches.find((row) => row.id === c.data.record.defaultBranchId)?.name,
+              ]
+                .filter(Boolean)
+                .join(' · ') || t(c, 'surface.noWorkplace'),
+          },
+        ],
+      }),
+      ...denialNotice(c),
+      SurfaceAccessView({
+        t: (key, params) => c.t(key, params),
+        surfaces: c.data.surfaces ?? [],
+        showVia: true,
+        empty: { title: t(c, 'surface.emptyTitle'), message: t(c, 'surface.emptyHint') },
+      }),
+    ],
+  })
 
 /** Where an assignment applies, written the way the person reads it. */
 const scopeName = (c: Context, row: AnyRow): string =>
@@ -485,29 +681,123 @@ const assignmentGroups = (c: Context): Array<{ key: string; title: string; rows:
   return [...groups.values()]
 }
 
+/** Where an assignment came from: someone's decision, or a rule that matched this person. */
+const sourceOf = (row: AnyRow): { kind: 'manual' } | { kind: 'policy'; policyName: string } =>
+  row.source?.kind === 'policy'
+    ? { kind: 'policy', policyName: String(row.source.policyName ?? row.source.policyId ?? '') }
+    : { kind: 'manual' }
+
+const sourceBadge = (c: Context, row: AnyRow): JSXChild => {
+  const source = sourceOf(row)
+  return source.kind === 'policy'
+    ? Badge({ label: t(c, 'access.source.policy').replace('{policy}', source.policyName), tone: 'info' })
+    : Badge({ label: t(c, 'access.source.manual'), tone: 'neutral' })
+}
+
+/** Why the reader is not offered the assign action, or the action itself. */
+const accessControls = (c: Context): JSXChild[] =>
+  readingSelf(c)
+    ? // Nobody widens or narrows their own authority, superuser or not: the change
+      // would be approved by the person it benefits.
+      [
+        Notice({
+          tone: 'info',
+          title: t(c, 'access.selfTitle'),
+          message: t(c, 'access.selfHint'),
+        }),
+      ]
+    : c.data.permissions.assign
+      ? [
+          RecordDialogTrigger({
+            dialog: 'assign',
+            children: Button({
+              label: t(c, 'action.assignRole'),
+              variant: 'primary',
+            }),
+          }),
+        ]
+      : [
+          Notice({
+            tone: 'info',
+            title: t(c, 'users.readOnlyTitle'),
+            message: t(c, 'access.readOnlyHint'),
+          }),
+        ]
+
+/**
+ * Standing in for a superuser for a while, and taking it back.
+ *
+ * Nobody is made a superuser by editing their profile: it is a grant with an end,
+ * an owner, given only by a superuser, and it shows here for as long
+ * as it lasts.
+ */
+const breakGlassSection = (c: Context): JSXChild[] => {
+  const record = c.data.record
+  const active = record.superuser === true
+  if (!c.data.permissions.breakGlass || readingSelf(c))
+    return active
+      ? [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'breakGlass.activeTitle'),
+            message: record.superuserExpiresAt
+              ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
+              : t(c, 'breakGlass.standing'),
+          }),
+        ]
+      : []
+  return [
+    Section({
+      title: t(c, 'breakGlass.title'),
+      description: t(c, 'breakGlass.hint'),
+      body: active
+        ? Stack({
+            gap: 'default',
+            items: [
+              Notice({
+                tone: 'warning',
+                title: t(c, 'breakGlass.activeTitle'),
+                message: record.superuserExpiresAt
+                  ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
+                  : t(c, 'breakGlass.standing'),
+              }),
+              RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: 'revokeBreakGlass',
+                actions: [
+                  Button({ label: t(c, 'action.revokeBreakGlass'), variant: 'destructive', type: 'submit' }),
+                ],
+              }),
+            ],
+          })
+        : RecordModalForm({
+            kind: c.kind,
+            fields: [
+              field(c, {
+                name: 'breakGlassUntil',
+                label: t(c, 'field.breakGlassUntil'),
+                type: 'datetime-local',
+                required: true,
+                disabled: false,
+              }),
+            ],
+            command: 'grantBreakGlass',
+            actions: [
+              Button({ label: t(c, 'action.grantBreakGlass'), variant: 'destructive', type: 'submit' }),
+            ],
+          }),
+    }),
+  ]
+}
+
 /** What this person may do, as rows of role and place — the authority they actually hold. */
 const accessTab = (c: Context): JSXChild => {
   const groups = assignmentGroups(c)
   return Stack({
     gap: 'default',
     items: [
-      ...(c.data.permissions.assign
-        ? [
-            RecordDialogTrigger({
-              dialog: 'assign',
-              children: Button({
-                label: t(c, 'action.assignRole'),
-                variant: 'primary',
-              }),
-            }),
-          ]
-        : [
-            Notice({
-              tone: 'info',
-              title: t(c, 'users.readOnlyTitle'),
-              message: t(c, 'access.readOnlyHint'),
-            }),
-          ]),
+      ...accessControls(c),
       ...(groups.length
         ? groups.map((group) =>
             Section({
@@ -528,6 +818,11 @@ const accessTab = (c: Context): JSXChild => {
                         children: String(row.roleName),
                       }),
                   },
+                  {
+                    key: 'source',
+                    label: t(c, 'access.sourceColumn'),
+                    cell: (row) => sourceBadge(c, row),
+                  },
                 ],
               }),
             }),
@@ -539,6 +834,17 @@ const accessTab = (c: Context): JSXChild => {
               message: t(c, 'access.emptyHint'),
             }),
           ]),
+      ...(Array.isArray(c.data.surfaces)
+        ? [
+            RecordDialogTrigger({
+              dialog: 'diagnostics',
+              children: Button({ label: t(c, 'action.checkAccess'), variant: 'secondary' }),
+            }),
+          ]
+        : []),
+      ...(breakGlassSection(c).length
+        ? [Disclosure({ summary: t(c, 'access.advanced'), body: Stack({ items: breakGlassSection(c) }) })]
+        : []),
     ],
   })
 }
@@ -595,19 +901,8 @@ const assignFields = (c: Context): FieldProps[] => {
       required: true,
       span: 'full',
       optionsOrientation: 'vertical',
-      options: c.data.roles.map((role) => ({
-        name: roleFieldName(String(role.id)),
-        value: '1',
-        label: String(role.name),
-        checked: c.draft(roleFieldName(String(role.id)), '') === '1',
-      })),
-    }),
-    field(c, {
-      name: 'reason',
-      label: t(c, 'field.reason'),
-      type: 'textarea',
-      required: true,
-      span: 'full',
+      help: roleHelp(c),
+      options: roleOptions(c, (roleId) => c.draft(roleFieldName(roleId), '') === '1'),
     }),
   ]
 }
@@ -624,6 +919,8 @@ type PreviewContext = {
   branchId: string | null
   superuser: boolean
   bundles: PreviewBundle[]
+  /** The screens whose reach the change moves, when the server measures them. */
+  surfaces?: SurfaceChange[]
   sensitiveChange: boolean
 }
 type Preview = { ok: boolean; contexts?: PreviewContext[] }
@@ -675,29 +972,72 @@ const previewPanel = (c: Context, command: string): JSXChild => {
               message: '',
             }),
           ]
-        : entry.bundles.length
+        : entry.bundles.length || entry.surfaces?.length
           ? [
-              DataTable<PreviewBundle>({
-                rows: entry.bundles,
-                id: (row) => `${entry.companyId}:${entry.branchId ?? ''}:${row.key}`,
-                columns: [
-                  {
-                    key: 'bundle',
-                    label: t(c, 'preview.bundle'),
-                    priority: 'primary',
-                    cell: (row) => row.labels[c.data.lang] ?? row.key,
-                  },
-                  {
-                    key: 'before',
-                    label: t(c, 'preview.before'),
-                    cell: (row) => coverage(c, row.before, row.total),
-                  },
-                  {
-                    key: 'after',
-                    label: t(c, 'preview.after'),
-                    cell: (row) => coverage(c, row.after, row.total),
-                  },
-                ],
+              Section({
+                title: t(c, 'preview.gains'),
+                body: Stack({
+                  items: entry.bundles
+                    .filter((row) => row.after > row.before)
+                    .map((row) => row.labels[c.data.lang] ?? row.key)
+                    .concat(
+                      entry.bundles.some((row) => row.after > row.before) ? [] : [t(c, 'value.unchanged')],
+                    ),
+                }),
+              }),
+              Section({
+                title: t(c, 'preview.loses'),
+                body: Stack({
+                  items: entry.bundles
+                    .filter((row) => row.after < row.before)
+                    .map((row) => row.labels[c.data.lang] ?? row.key)
+                    .concat(
+                      entry.bundles.some((row) => row.after < row.before) ? [] : [t(c, 'value.unchanged')],
+                    ),
+                }),
+              }),
+              Disclosure({
+                summary: t(c, 'preview.details'),
+                body: Stack({
+                  items: [
+                    // Screens first: "can open the quotation form but not pick a tax" is
+                    // the consequence a reader acts on; the bundles below say why.
+                    ...(entry.surfaces?.length
+                      ? [
+                          Section({
+                            title: t(c, 'surface.previewTitle'),
+                            body: SurfaceChangeTable(
+                              (key, params) => c.t(key, params),
+                              entry.surfaces,
+                              `${entry.companyId}:${entry.branchId ?? ''}`,
+                            ),
+                          }),
+                        ]
+                      : []),
+                    DataTable<PreviewBundle>({
+                      rows: entry.bundles,
+                      id: (row) => `${entry.companyId}:${entry.branchId ?? ''}:${row.key}`,
+                      columns: [
+                        {
+                          key: 'bundle',
+                          label: t(c, 'preview.bundle'),
+                          priority: 'primary',
+                          cell: (row) => row.labels[c.data.lang] ?? row.key,
+                        },
+                        {
+                          key: 'before',
+                          label: t(c, 'preview.before'),
+                          cell: (row) => coverage(c, row.before, row.total),
+                        },
+                        {
+                          key: 'after',
+                          label: t(c, 'preview.after'),
+                          cell: (row) => coverage(c, row.after, row.total),
+                        },
+                      ],
+                    }),
+                  ],
+                }),
               }),
             ]
           : [
@@ -782,6 +1122,11 @@ const roleDialog = (c: Context): JSXChild => {
             label: t(c, 'field.scope'),
             value: scopeName(c, assignment),
           },
+          {
+            id: 'source',
+            label: t(c, 'access.sourceColumn'),
+            value: sourceBadge(c, assignment),
+          },
         ],
       }),
       // What the role is for, not only where it applies.
@@ -809,23 +1154,25 @@ const roleDialog = (c: Context): JSXChild => {
             }),
           ]
         : []),
-      ...(c.data.permissions.remove
+      // A rule gave it, so a rule takes it back: removing it here would last until
+      // the next sign-in re-applied the policy.
+      ...(sourceOf(assignment).kind === 'policy'
+        ? [
+            Notice({
+              tone: 'info',
+              title: t(c, 'access.policyOwnedTitle'),
+              message: t(c, 'access.policyOwnedHint'),
+            }),
+          ]
+        : []),
+      ...(c.data.permissions.remove && !readingSelf(c) && sourceOf(assignment).kind !== 'policy'
         ? [
             Stack({
               gap: 'default',
               items: [
                 RecordModalForm({
                   kind: c.kind,
-                  fields: [
-                    field(c, {
-                      name: 'reason',
-                      label: t(c, 'field.reason'),
-                      type: 'textarea',
-                      required: true,
-                      span: 'full',
-                      disabled: false,
-                    }),
-                  ],
+                  fields: [],
                   actions: [
                     Button({
                       label: t(c, 'action.previewRemoval'),
@@ -857,6 +1204,151 @@ const roleDialog = (c: Context): JSXChild => {
 }
 
 /**
+ * How a new credential reaches this person here.
+ *
+ * The tenant chooses: a link sent to the person's own inbox, so nobody else ever
+ * holds it, or — where staff share devices or have no mailbox — a code shown once
+ * to the administrator. A deployment that cannot send the link yet falls back to
+ * the code rather than offering a button that fails.
+ */
+const deliveryOf = (c: Context): CredentialDelivery =>
+  c.data.credentialDelivery === 'email' && !c.data.externalCredential && !c.data.permissions.sendLink
+    ? 'oneTime'
+    : (c.data.credentialDelivery ?? 'oneTime')
+const activated = (c: Context): boolean => c.data.externalCredential?.activated ?? c.data.record.passwordReady
+
+/** Send the person a link to set their own password. The administrator never sees it. */
+const emailReset = (c: Context): JSXChild[] => {
+  const sent = c.outcome<{ ok?: boolean; sentTo?: string; expiresAt?: string }>('sendResetLink')
+  return [
+    ...(sent?.ok
+      ? [
+          Notice({
+            tone: 'positive',
+            title: t(c, 'login.linkSentTitle'),
+            message: t(c, 'login.linkSentHint')
+              .replace('{email}', String(sent.sentTo ?? c.data.record.email))
+              .replace('{until}', String(sent.expiresAt ?? '')),
+          }),
+        ]
+      : []),
+    Section({
+      title: t(c, activated(c) ? 'login.linkTitle' : 'login.inviteTitle'),
+      description: c.data.record.email
+        ? t(c, activated(c) ? 'login.linkHint' : 'login.inviteHint').replace('{email}', c.data.record.email)
+        : null,
+      // No address, no link: say what is missing instead of offering a send that
+      // has nowhere to go.
+      body: c.data.record.email
+        ? RecordModalForm({
+            kind: c.kind,
+            fields: [],
+            command: 'sendResetLink',
+            actions: [
+              Button({
+                label: t(
+                  c,
+                  activated(c)
+                    ? 'action.sendResetLink'
+                    : sent?.ok || c.data.record.invitationSentAt
+                      ? 'action.resendInvite'
+                      : 'action.sendInvite',
+                ),
+                variant: 'primary',
+                type: 'submit',
+              }),
+            ],
+          })
+        : Notice({
+            tone: 'warning',
+            title: t(c, 'login.linkNoEmail'),
+            message: t(c, 'login.linkNoEmailHint'),
+          }),
+    }),
+  ]
+}
+
+/** Issue a one-time code and show it, once, to the administrator who asked. */
+const oneTimeReset = (c: Context): JSXChild[] => {
+  const issued =
+    c.outcome<{ ok?: boolean; token?: string; temporaryPassword?: string }>('resetPassword') ??
+    c.outcome<{ token?: string; temporaryPassword?: string }>('claimCredential')
+  return [
+    // Shown once, by the only party that ever holds it in the clear.
+    ...(issued?.token || issued?.temporaryPassword
+      ? [
+          Section({
+            title: t(c, issued?.temporaryPassword ? 'login.temporaryShownOnce' : 'login.oneTimeTitle'),
+            body: Stack({
+              gap: 'compact',
+              items: [
+                Notice({
+                  tone: 'warning',
+                  title: t(c, issued?.temporaryPassword ? 'login.temporaryShownOnce' : 'login.oneTimeTitle'),
+                  message: t(c, 'login.oneTimeHint'),
+                }),
+                DescriptionList({
+                  columns: 1,
+                  items: [
+                    {
+                      id: 'token',
+                      label: t(c, c.data.externalCredential ? 'login.temporaryLabel' : 'login.oneTimeLabel'),
+                      value: issued.token ?? issued.temporaryPassword,
+                    },
+                  ],
+                }),
+              ],
+            }),
+          }),
+        ]
+      : []),
+    issued?.temporaryPassword
+      ? null
+      : Section({
+          title: t(
+            c,
+            c.data.externalCredential
+              ? 'login.temporaryTitle'
+              : activated(c)
+                ? 'login.resetTitle'
+                : 'login.activateTitle',
+          ),
+          description: t(
+            c,
+            c.data.externalCredential
+              ? 'login.temporaryHint'
+              : activated(c)
+                ? 'login.resetHint'
+                : 'login.activateHint',
+          ),
+          body: issued?.temporaryPassword
+            ? null
+            : RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: c.data.externalCredential?.claimable ? 'claimCredential' : 'resetPassword',
+                actions: [
+                  Button({
+                    label: t(
+                      c,
+                      c.data.externalCredential
+                        ? c.data.externalCredential.claimable
+                          ? 'action.claimPassword'
+                          : 'action.temporaryPassword'
+                        : activated(c)
+                          ? 'action.resetPassword'
+                          : 'action.activationCode',
+                    ),
+                    variant: 'primary',
+                    type: 'submit',
+                  }),
+                ],
+              }),
+        }),
+  ]
+}
+
+/**
  * What it takes to sign in as this person, and the one thing an administrator may
  * do about it.
  *
@@ -866,7 +1358,8 @@ const roleDialog = (c: Context): JSXChild => {
  * every session ended — while leaving the password itself with its owner.
  */
 const loginTab = (c: Context): JSXChild => {
-  const issued = c.outcome<{ ok?: boolean; token?: string }>('resetPassword')
+  const delivery = deliveryOf(c)
+  const mayReset = c.data.permissions.sendLink || c.data.permissions.resetPassword
   return Stack({
     gap: 'default',
     items: [
@@ -881,14 +1374,21 @@ const loginTab = (c: Context): JSXChild => {
       Section({
         title: t(c, 'login.accountTitle'),
         body: DescriptionList({
-          columns: 3,
+          columns: 2,
           items: [
             {
               id: 'credential',
               label: t(c, 'field.credential'),
               value: Badge({
-                label: c.data.record.passwordReady ? t(c, 'login.ready') : t(c, 'login.preparing'),
-                tone: c.data.record.passwordReady ? 'positive' : 'warning',
+                label: t(
+                  c,
+                  activated(c)
+                    ? 'login.ready'
+                    : c.data.record.invitationSentAt || c.outcome<{ ok?: boolean }>('sendResetLink')?.ok
+                      ? 'login.invited'
+                      : 'login.preparing',
+                ),
+                tone: activated(c) ? 'positive' : 'warning',
               }),
             },
             {
@@ -901,72 +1401,71 @@ const loginTab = (c: Context): JSXChild => {
               label: t(c, 'login.lastSignIn'),
               value: c.data.record.lastLoginAt || t(c, 'login.never'),
             },
+            {
+              id: 'delivery',
+              label: t(c, 'login.delivery'),
+              value: t(c, `login.delivery.${delivery}`),
+            },
           ],
         }),
       }),
-      // Shown once, by the only party that ever holds it in the clear.
-      ...(issued?.token
+      ...(c.data.externalCredential
         ? [
             Section({
-              title: t(c, 'login.oneTimeTitle'),
-              body: Stack({
-                gap: 'compact',
-                items: [
-                  Notice({
-                    tone: 'warning',
-                    title: t(c, 'login.oneTimeTitle'),
-                    message: t(c, 'login.oneTimeHint'),
-                  }),
-                  DescriptionList({
-                    columns: 1,
-                    items: [
-                      {
-                        id: 'token',
-                        label: t(c, 'login.oneTimeLabel'),
-                        value: issued.token,
-                      },
-                    ],
+              title: t(c, `login.externalState.${c.data.externalCredential.state}`),
+              body: RecordModalForm({
+                kind: c.kind,
+                fields: [],
+                command: c.data.permissions.retryCredential ? 'retryCredential' : 'refreshAccount',
+                actions: [
+                  Button({
+                    type: 'submit',
+                    label: t(
+                      c,
+                      c.data.permissions.retryCredential ? 'action.retryAccount' : 'action.refreshAccount',
+                    ),
                   }),
                 ],
               }),
             }),
           ]
         : []),
-      ...(c.data.permissions.resetPassword
+      ...(c.data.externalCredential?.emailState
         ? [
-            Section({
-              title: t(c, 'login.resetTitle'),
-              description: t(c, 'login.resetHint'),
-              body: RecordModalForm({
-                kind: c.kind,
-                fields: [
-                  field(c, {
-                    name: 'reason',
-                    label: t(c, 'field.reason'),
-                    type: 'textarea',
-                    required: true,
-                    span: 'full',
-                    disabled: false,
-                  }),
-                ],
-                command: 'resetPassword',
-                actions: [
-                  Button({
-                    label: t(c, 'action.resetPassword'),
-                    variant: 'primary',
-                    type: 'submit',
-                  }),
-                ],
-              }),
+            Notice({
+              tone: ['failed', 'uncertain'].includes(c.data.externalCredential.emailState)
+                ? 'warning'
+                : 'info',
+              title: t(c, `login.emailState.${c.data.externalCredential.emailState}`),
+              message: t(c, 'login.emailStateHint'),
             }),
           ]
-        : [
+        : []),
+      // Resetting your own password is the profile's job, with the current one.
+      ...(readingSelf(c)
+        ? [
             Notice({
               tone: 'info',
-              title: t(c, 'users.readOnlyTitle'),
-              message: t(c, 'login.readOnlyHint'),
+              title: t(c, 'login.selfTitle'),
+              message: t(c, 'login.selfHint'),
             }),
-          ]),
+          ]
+        : mayReset
+          ? [
+              ...(delivery !== 'oneTime' && c.data.permissions.sendLink ? emailReset(c) : []),
+              ...(delivery !== 'email' && c.data.permissions.resetPassword ? oneTimeReset(c) : []),
+            ]
+          : // An account still being prepared waits on its state, which the section above
+            // already names; calling that "read only" blames a permission the reader has.
+            c.data.externalCredential && c.data.externalCredential.state !== 'ready'
+            ? []
+            : [
+                Notice({
+                  tone: 'info',
+                  title: t(c, 'users.readOnlyTitle'),
+                  message: t(c, 'login.readOnlyHint'),
+                }),
+              ]),
     ],
   })
 }
@@ -993,11 +1492,6 @@ const auditTab = (c: Context): JSXChild =>
             key: 'roles',
             label: t(c, 'field.assignment'),
             cell: (row) => (row.roleIds as string[]).map((id) => roleNameOf(c, id)).join(' · ') || '—',
-          },
-          {
-            key: 'reason',
-            label: t(c, 'field.reason'),
-            cell: (row) => String(row.reason ?? '—'),
           },
           {
             key: 'outcome',
@@ -1042,12 +1536,20 @@ const assignSelection = (form: FormData, c: Context): Record<string, unknown> =>
 
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
+  labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
   context: {
     fn: 'user.userModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'users.create') : c.data.record.name || c.data.record.login),
   description: (c) => (c.creating ? t(c, 'users.createSubtitle') : c.data.record.login),
+  status: (c) =>
+    c.creating
+      ? undefined
+      : Badge({
+          label: c.data.record.active ? t(c, 'state.active') : t(c, 'state.archived'),
+          tone: c.data.record.active ? 'positive' : 'neutral',
+        }),
   header,
   body: (c) => (c.creating ? createView(c) : ''),
   tabs: [
@@ -1062,6 +1564,14 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       label: (c) => `${t(c, 'tab.access')} ${String(c.data.assignments.length)}`,
       visible: (c) => !c.creating,
       view: accessTab,
+    },
+    {
+      id: 'screens',
+      label: (c) => t(c, 'tab.screens'),
+      // Only where the context measured it: a deployment that does not report
+      // screens has nothing true to put in the tab.
+      visible: () => false,
+      view: screensTab,
     },
     {
       id: 'login',
@@ -1079,6 +1589,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     },
   ],
   dialogs: {
+    diagnostics: { title: (c) => t(c, 'action.checkAccess'), view: screensTab, size: 'large' },
     assign: { title: (c) => t(c, 'action.assignRole'), view: assignDialog },
     role: {
       title: (c) => String(openAssignment(c).roleName ?? ''),
@@ -1111,18 +1622,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
               ? [
                   Section({
                     title: t(c, 'users.workplaceTitle'),
-                    body: RecordModalForm({
-                      kind: c.kind,
-                      fields: workplaceFields(c),
-                      command: 'setWorkplaces',
-                      actions: [
-                        Button({
-                          label: t(c, 'action.saveWorkplaces'),
-                          variant: 'primary',
-                          type: 'submit',
-                        }),
-                      ],
-                    }),
+                    body: workplaceForm(c),
                   }),
                 ]
               : []),
@@ -1143,7 +1643,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         scopeKind: text(form, 'scopeKind') || 'branch',
         companyId: text(form, 'companyId') || null,
         branchId: text(form, 'branchId') || null,
-        reason: text(form, 'reason'),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1155,6 +1655,15 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         return typeof row.id === 'string' ? row.id : null
       },
     },
+    previewWorkplaces: {
+      fn: 'user.previewWorkplaces',
+      input: (form, c) => ({
+        userId: c.id,
+        companyIds: selectedIds(form, c.data.companies, companyFieldName),
+        branchIds: selectedIds(form, c.data.branches, branchFieldName),
+      }),
+      preview: true,
+    },
     setWorkplaces: {
       fn: 'user.setWorkplaces',
       input: (form, c) => ({
@@ -1163,16 +1672,64 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         branchIds: selectedIds(form, c.data.branches, branchFieldName),
         defaultCompanyId: text(form, 'defaultCompanyId'),
         defaultBranchId: text(form, 'defaultBranchId'),
-        reason: text(form, 'workplaceReason'),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
+      // The server names its inputs; the form names its fields.
+      issueField: (field) => ({ companyIds: 'companies', branchIds: 'branches' })[field] ?? field,
       // Read the person again: every tab shows where they now work.
+      after: 'reload',
+    },
+    sendResetLink: {
+      fn: 'user.sendCredentialLink',
+      input: (form, c) => ({
+        userId: c.id,
+        kind: c.data.record.passwordReady ? 'reset' : 'invitation',
+
+        idempotencyKey: uuid(),
+      }),
+      // Reload invitation status while keeping the delivery outcome visible.
+      after: 'reload',
+    },
+    grantBreakGlass: {
+      fn: 'user.setBreakGlass',
+      input: (form, c) => {
+        const until = text(form, 'breakGlassUntil')
+        const at = until ? new Date(until) : null
+        return {
+          userId: c.id,
+          enabled: true,
+          expiresAt: at && Number.isFinite(at.getTime()) ? at.toISOString() : null,
+
+          expectedAuthorizationRevision: c.data.revision,
+          idempotencyKey: uuid(),
+        }
+      },
+      issueField: (field) => (field === 'expiresAt' ? 'breakGlassUntil' : field),
+      confirm: (c) => t(c, 'breakGlass.confirm'),
+      after: 'reload',
+    },
+    revokeBreakGlass: {
+      fn: 'user.setBreakGlass',
+      input: (form, c) => ({
+        userId: c.id,
+        enabled: false,
+        expiresAt: null,
+
+        expectedAuthorizationRevision: c.data.revision,
+        idempotencyKey: uuid(),
+      }),
+
       after: 'reload',
     },
     resetPassword: {
       fn: 'user.issueAuthToken',
-      input: (_form, c) => ({ userId: c.id, kind: 'reset', realm: 'backend' }),
+      input: (_form, c) => ({
+        userId: c.id,
+        kind: c.data.record.passwordReady ? 'reset' : 'invitation',
+        realm: 'backend',
+      }),
       // Stay: the server hands back a credential it will never say again, and the
       // tab is where the person reading it is.
       after: 'stay',
@@ -1186,7 +1743,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
       fn: 'user.assignRoles',
       input: (form, c) => ({
         ...assignSelection(form, c),
-        reason: text(form, 'reason'),
+
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
@@ -1217,7 +1774,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
           assignmentId: String(assignment.id ?? ''),
           roleId: String(assignment.roleId ?? ''),
           scopeKey: String(assignment.scopeKey ?? 'tenant'),
-          reason: text(form, 'reason'),
+
           expectedAuthorizationRevision: c.data.revision,
           idempotencyKey: uuid(),
         }

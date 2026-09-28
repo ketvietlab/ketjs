@@ -18,8 +18,10 @@ import {
 import {
   RECORD_MODAL_LABELS,
   callRecordFunction,
+  callRecordRoute,
   delayedFlag,
   openerHref,
+  resolveRecordModalIssue,
   resolveRecordModalLabel,
 } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 
@@ -119,7 +121,16 @@ test('record modal: a record with several tabs keeps one height while tabs switc
     call,
     /height:\s*\(definition\.tabs\?\.length \?\? 0\) \+ \(definition\.extensionTabs \? 1 : 0\) > 1 \? 'fixed' : 'content'/u,
   )
-  assert.match(call, /fixedHeight: definition\.fixedHeight/u)
+  assert.match(call, /fixedHeight: definition\.fixedHeight \?\? 'auto'/u)
+  assert.match(
+    runtime,
+    /tallestRecordHeight = Math\.max\(tallestRecordHeight, Math\.ceil\(sheet\.getBoundingClientRect\(\)\.height\)\)/u,
+  )
+  assert.match(runtime, /if \(!sameRecord\) \{\s*tallestRecordHeight = 0/u)
+  assert.match(runtime, /window\.matchMedia\('\(max-width: 47\.9375rem\)'\)/u)
+  assert.match(runtime, /root\.addEventListener\('load', fitRecordHeight/u)
+  assert.match(runtime, /root\.addEventListener\('toggle', fitRecordHeight/u)
+  assert.match(runtime, /document\.fonts\?\.ready\.then/u)
   // A dialog layer opened from the record keeps sizing to its content.
   const dialogLayer = runtime.slice(
     runtime.indexOf('const dialogLayer = '),
@@ -537,4 +548,54 @@ test('record modal: a server failure never shows the server text to the user', a
   answer(400, { code: 'E_EXPECTED', message: 'Số điện thoại đã có người dùng' })
   const refused = await callRecordFunction('x.fn', {})
   assert.equal(refused.ok ? null : refused.message, 'Số điện thoại đã có người dùng')
+})
+
+test('record modal: command routes reject external destinations and preserve refusal fields', async (t) => {
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async (path: unknown, init: RequestInit) => {
+    calls++
+    assert.equal(path, '/admin/identity/command')
+    assert.equal(init.credentials, 'same-origin')
+    assert.equal((init.headers as Record<string, string>)['idempotency-key'], 'intent')
+    return Response.json({
+      ok: true,
+      value: { ok: false, errors: [{ field: 'email', code: 'unavailable' }] },
+    })
+  })
+  for (const path of ['https://evil.test/x', '//evil.test/x', '/\\evil.test/x'])
+    await assert.rejects(callRecordRoute(path, {}), /same-origin/)
+  assert.equal(calls, 0)
+  const result = await callRecordRoute('/admin/identity/command', {}, { idempotencyKey: 'intent' })
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.equal(result.issues[0].field, 'email')
+})
+
+test('record modal: unknown refusal codes use a translated fallback without hiding known field guidance', () => {
+  const labels = { 'recordModal.saveFailed': 'Không thể lưu thay đổi.' }
+  assert.equal(
+    resolveRecordModalLabel('E_PROVIDER_UNAVAILABLE', { labels }),
+    labels['recordModal.saveFailed'],
+  )
+  assert.equal(
+    resolveRecordModalLabel('E_ROLE_NOT_ASSIGNABLE', {
+      labels,
+      messages: { E_ROLE_NOT_ASSIGNABLE: 'Chọn lại vai trò.' },
+    }),
+    'Chọn lại vai trò.',
+  )
+})
+
+test('record modal: a refusal code no source translates never reaches the reader', () => {
+  const labels = {
+    'recordModal.saveFailed': 'Không thể lưu thay đổi.',
+    'users.emailTaken': 'Email đã có người dùng.',
+  }
+  for (const code of ['unknown', 'self_change_forbidden', 'E_PROVIDER_UNAVAILABLE'])
+    assert.equal(resolveRecordModalIssue(code, { labels }), labels['recordModal.saveFailed'], code)
+  assert.equal(resolveRecordModalIssue('users.emailTaken', { labels }), 'Email đã có người dùng.')
+  assert.equal(
+    resolveRecordModalIssue('unavailable', { messages: { unavailable: 'Email này không dùng được.' } }),
+    'Email này không dùng được.',
+  )
+  assert.equal(resolveRecordModalIssue('unknown', {}), RECORD_MODAL_LABELS['recordModal.saveFailed'])
 })

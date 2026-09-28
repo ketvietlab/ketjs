@@ -90,3 +90,47 @@ export const roleListSearch = defineRowList({
   ],
   defaultSort: [{ key: 'name', dir: 'asc' }],
 })
+
+const POLICY_MATCH_KINDS = ['idpGroup', 'department', 'jobTitle'] as const
+
+/** The access rules collection, which states who a rule matches and whether it runs. */
+export const accessPolicyListSearch = defineRowList({
+  key: 'user.access-policies',
+  // A row carries its match as one object; the bar reads its two halves.
+  value: (row, key) => {
+    const match = row.match as { kind?: unknown; value?: unknown } | undefined
+    return key === 'matchKind' ? match?.kind : key === 'matchValue' ? match?.value : row[key]
+  },
+  searchable: [{ key: 'name' }, { key: 'matchValue' }],
+  filterable: [
+    { key: 'name', label: 'user_backend.field.name', type: 'text' },
+    {
+      key: 'matchKind',
+      label: 'user_backend.policy.matchKind',
+      type: 'selection',
+      choices: POLICY_MATCH_KINDS,
+    },
+    { key: 'memberCount', label: 'user_backend.policy.membersColumn', type: 'number' },
+    { key: 'active', label: 'user_backend.field.state', type: 'boolean' },
+  ],
+  groupable: [{ key: 'matchKind', label: 'user_backend.policy.matchKind' }],
+  sortable: [
+    { key: 'name', label: 'user_backend.field.name' },
+    { key: 'memberCount', label: 'user_backend.policy.membersColumn' },
+  ],
+  presets: [
+    ...POLICY_MATCH_KINDS.map((kind) => ({
+      key: kind,
+      label: `user_backend.policy.match.${kind}`,
+      group: 'matchKind',
+      match: (row: Record<string, unknown>) => (row.match as { kind?: unknown } | undefined)?.kind === kind,
+    })),
+    {
+      key: 'paused',
+      label: 'user_backend.policy.paused',
+      group: 'state',
+      match: (row) => row.active === false,
+    },
+  ],
+  defaultSort: [{ key: 'name', dir: 'asc' }],
+})

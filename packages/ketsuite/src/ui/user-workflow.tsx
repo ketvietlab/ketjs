@@ -199,15 +199,8 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
             ? selected.map((x) => 'role.' + x)
             : []
       : o.review
-        ? ['reason']
-        : [
-            'scopeKind',
-            'companyId',
-            'branchId',
-            'addMembership',
-            'reason',
-            ...selected.map((x) => 'role.' + x),
-          ],
+        ? []
+        : ['scopeKind', 'companyId', 'branchId', 'addMembership', ...selected.map((x) => 'role.' + x)],
   )
   return (
     <div class="user-workflow">
@@ -215,6 +208,7 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
         {Object.entries(v)
           .filter(
             ([k]) =>
+              k !== 'reason' &&
               !visible.has(k) &&
               !['step', 'command', 'currentStep', 'expectedAuthorizationRevision'].includes(k),
           )
@@ -367,17 +361,6 @@ export const UserWorkflow = (o: UserWorkflowOptions) => {
           />
         ) : null}
         {o.preview}
-        {mode !== 'create'
-          ? formField({
-              name: 'reason',
-              label: 'Lý do thay đổi',
-              type: 'textarea',
-              value: v.reason ?? '',
-              required: true,
-              span: 'full',
-              error: o.fieldErrors?.reason,
-            })
-          : null}
         <footer class="user-action-bar">
           <div>
             {mode === 'assign' && o.review

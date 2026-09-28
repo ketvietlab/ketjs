@@ -77,3 +77,36 @@ test('users list keeps ListPage identity and empty state without decorative page
   assert.match(html, /user_backend\.users\.empty/)
   assert.doesNotMatch(html, /data-ui="table"|data-ui="pager"/)
 })
+
+test('users list offers no create action to a viewer who may not create a user', () => {
+  const html = renderToString(
+    usersScreen(
+      translate,
+      { chrome: { search: { name: 'q', value: '', placeholder: 'Search users' } } },
+      {
+        rows: [
+          {
+            id: 'ada',
+            login: 'ada',
+            name: 'Ada Lovelace',
+            accessKind: 'internal',
+            securityVersion: 1,
+            passwordReady: true,
+            active: true,
+            superuser: false,
+            detailHref: '/admin/users?record=user.user%3Aada',
+          },
+        ],
+        total: 1,
+        createHref: null,
+      },
+    ),
+  )
+  // Title, then controls, then the table — the order holds without the action.
+  assert.match(
+    html,
+    /data-ui="list-page-title-row"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+  )
+  assert.doesNotMatch(html, /user_backend\.action\.createUser/)
+  assert.doesNotMatch(html, /record=user\.user%3Anew|\/admin\/users\/new/)
+})
