@@ -9,6 +9,8 @@ test('user record refusals resolve to business guidance in Vietnamese and Englis
   for (const lang of ['vi', 'en']) {
     const messages = userModalMessages({ manifest }, lang)
     for (const code of [
+      'user_backend.login.temporaryLabel',
+      'user_backend.login.temporaryShownOnce',
       'E_ROLE_NOT_ASSIGNABLE',
       'E_DIRECTORY_VALUE_UNKNOWN',
       'E_AUTHORIZATION_REVISION_CONFLICT',
