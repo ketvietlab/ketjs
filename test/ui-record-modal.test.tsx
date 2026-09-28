@@ -21,6 +21,7 @@ import {
   callRecordRoute,
   delayedFlag,
   openerHref,
+  resolveRecordModalIssue,
   resolveRecordModalLabel,
 } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 
@@ -582,4 +583,19 @@ test('record modal: unknown refusal codes use a translated fallback without hidi
     }),
     'Chọn lại vai trò.',
   )
+})
+
+test('record modal: a refusal code no source translates never reaches the reader', () => {
+  const labels = {
+    'recordModal.saveFailed': 'Không thể lưu thay đổi.',
+    'users.emailTaken': 'Email đã có người dùng.',
+  }
+  for (const code of ['unknown', 'self_change_forbidden', 'E_PROVIDER_UNAVAILABLE'])
+    assert.equal(resolveRecordModalIssue(code, { labels }), labels['recordModal.saveFailed'], code)
+  assert.equal(resolveRecordModalIssue('users.emailTaken', { labels }), 'Email đã có người dùng.')
+  assert.equal(
+    resolveRecordModalIssue('unavailable', { messages: { unavailable: 'Email này không dùng được.' } }),
+    'Email này không dùng được.',
+  )
+  assert.equal(resolveRecordModalIssue('unknown', {}), RECORD_MODAL_LABELS['recordModal.saveFailed'])
 })

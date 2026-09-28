@@ -349,6 +349,18 @@ export const resolveRecordModalLabel = (
   RECORD_MODAL_LABELS[key] ??
   (/^E_[A-Z_]+$/u.test(key) ? resolveRecordModalLabel('recordModal.saveFailed', sources) : key)
 
+/**
+ * The text for a refusal code. A server may refuse with any code; one no source
+ * translates reads as the save failure rather than as the code itself.
+ */
+export const resolveRecordModalIssue = (
+  code: string,
+  sources: Parameters<typeof resolveRecordModalLabel>[1],
+): string => {
+  const text = resolveRecordModalLabel(code, sources)
+  return text === code ? resolveRecordModalLabel('recordModal.saveFailed', sources) : text
+}
+
 /** Field a form (or its submitter) uses to name the command it runs. */
 export const RECORD_COMMAND_FIELD = '__command'
 /** Field a link or button uses to open a dialog of the same record. */
@@ -560,15 +572,11 @@ export const createRecordModal =
     let previousMessages: Record<string, string> | null = null
     const labels = (): Record<string, string> =>
       typeof definition.labels === 'function' ? definition.labels() : (definition.labels ?? {})
+    const sources = () => ({ messages: envelope()?.messages, previous: previousMessages, labels: labels() })
     const t = (key: string, params?: Record<string, unknown>): string =>
-      interpolate(
-        resolveRecordModalLabel(key, {
-          messages: envelope()?.messages,
-          previous: previousMessages,
-          labels: labels(),
-        }),
-        params,
-      )
+      interpolate(resolveRecordModalLabel(key, sources()), params)
+    const issueText = (issue: RecordIssue): string =>
+      issue.message ?? interpolate(resolveRecordModalIssue(issue.code, sources()), issue.params)
     const visibleTabs = (context: RecordModalContext<Data>) =>
       [...(definition.tabs ?? []), ...(definition.extensionTabs?.(context) ?? [])].filter(
         (tab) => tab.visible?.(context) ?? true,
@@ -589,7 +597,7 @@ export const createRecordModal =
         t,
         fieldError: (name) => {
           const hit = issues().find((issue) => issue.field === name)
-          return hit ? (hit.message ?? t(hit.code, hit.params)) : null
+          return hit ? issueText(hit) : null
         },
         draft: (name, fallback = '') => {
           const draft = draftState()
@@ -1043,7 +1051,7 @@ export const createRecordModal =
           : ''
       return Notice({
         title: context.t('recordModal.errorTitle'),
-        message: all.map((issue) => issue.message ?? context.t(issue.code, issue.params)).join(' · '),
+        message: all.map(issueText).join(' · '),
         tone: 'danger',
       })
     }
