@@ -237,7 +237,7 @@ export const messages = {
     'roles.subtitle': 'Xem mỗi vai trò được làm gì và ai đang sử dụng.',
     'roles.create': 'Tạo vai trò',
     'roles.empty': 'Chưa có vai trò',
-    'roles.emptyHint': 'Áp dụng mẫu User/Manager hoặc tạo vai trò tùy chỉnh.',
+    'roles.emptyHint': 'Liên hệ quản trị viên để được cung cấp các vai trò cần dùng.',
     'roles.identity': 'Thông tin vai trò',
     'roles.provenance': 'Nguồn cấp quyền',
     'roles.provenanceHint': 'Xem các công việc mà vai trò này cho phép.',
