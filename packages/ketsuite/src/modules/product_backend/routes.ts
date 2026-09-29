@@ -36,7 +36,7 @@ import { listSearchFilterConfig, loadListFavorites, searchFilterBar } from '../b
 import { tableGrid } from '../backend/ket-table.ts'
 import type { KetTableGroup } from '../backend/ket-table.ts'
 import type { TableSelection } from '../../ui/index.ts'
-import { backendPage, modalWorkspace } from '../../ui/index.ts'
+import { backendPage } from '../../ui/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
@@ -522,6 +522,19 @@ export const routes: Record<string, RouteEntry> = {
             'product-template-filter',
             listSearchFilterConfig(_, {
               name: 'product-template-filter',
+              favoriteHref: (() => {
+                const next = new URL(url)
+                next.searchParams.set('modal', 'favorite')
+                return `${next.pathname}${next.search}`
+              })(),
+              fieldChoices: {
+                type: ['goods', 'service'].map((value) => ({
+                  value,
+                  label: _(`product_backend.type.${value}`),
+                })),
+                categoryId: [...categoryMap].map(([value, label]) => ({ value, label })),
+                uomId: [...unitMap].map(([value, label]) => ({ value, label })),
+              },
               bodyId: 'product-template-list',
               spec,
               state,
@@ -581,6 +594,7 @@ export const routes: Record<string, RouteEntry> = {
                   labels: {
                     selectAll: _('backend.table.selectAll'),
                     selectRow: _('backend.table.selectRow'),
+                    region: _('backend.table.results'),
                     sortedAscending: _('product_backend.table.sortAscending'),
                     sortedDescending: _('product_backend.table.sortDescending'),
                     previousPage: _('backend.chrome.previous'),
@@ -593,7 +607,20 @@ export const routes: Record<string, RouteEntry> = {
                   },
                 })
               : null
-          const workspace = productsScreen(
+          const returnUrl = new URL(url)
+          returnUrl.searchParams.delete('modal')
+          returnUrl.searchParams.delete('favoriteError')
+          const favoriteOverlay =
+            url.searchParams.get('modal') === 'favorite'
+              ? favoriteModal(
+                  _,
+                  `${returnUrl.pathname}${returnUrl.search}`,
+                  localeQuery(url),
+                  url.searchParams.has('favoriteError') ? [_('product_backend.favorite.invalid')] : undefined,
+                )
+              : undefined
+          // The route modal belongs inside backend.content so fragment open/close replaces it too.
+          return productsScreen(
             _,
             decoratedRows,
             view,
@@ -639,20 +666,7 @@ export const routes: Record<string, RouteEntry> = {
             grid,
             count,
             extensionActions,
-          )
-          if (url.searchParams.get('modal') !== 'favorite') return workspace
-          const returnUrl = new URL(url)
-          returnUrl.searchParams.delete('modal')
-          returnUrl.searchParams.delete('favoriteError')
-          const returnTo = `${returnUrl.pathname}${returnUrl.search}`
-          return modalWorkspace(
-            workspace,
-            favoriteModal(
-              _,
-              returnTo,
-              localeQuery(url),
-              url.searchParams.has('favoriteError') ? [_('product_backend.favorite.invalid')] : undefined,
-            ),
+            favoriteOverlay,
           )
         },
       })

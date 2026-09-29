@@ -1440,6 +1440,7 @@ const sources = {
       previewRoleTemplate: ['sensitive', 'sensitive', 'user.sensitive-data'],
       provisionUser: ['security', 'security', 'user.security-audit'],
       revokeBranch: ['security', 'security', 'user.security-audit'],
+      managedRoleModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
       roleModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
       setRoleBundles: ['security', 'security', 'user.security-audit'],
       setWorkplaces: ['security', 'security', 'user.security-audit'],
@@ -1452,12 +1453,21 @@ const sources = {
       unassignRole: ['security', 'security', 'user.security-audit'],
       unassignScopedRole: ['security', 'security', 'user.security-audit'],
       userModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      accessPolicyModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      listAccessPolicies: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      previewAccessPolicy: ['security', 'security', 'user.security-audit'],
+      saveAccessPolicy: ['security', 'security', 'user.security-audit'],
+      setAccessPolicyActive: ['security', 'security', 'user.security-audit'],
     },
     exemptions: {
       authenticate: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       consumeAuthToken: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       contextOptions: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       issueAuthToken: ['internal-route', 'user.trusted-route-worker-or-service'],
+      // Only a tenant-bound directory adapter, with the system actor checked in the handler.
+      replaceDirectoryFacts: ['internal-route', 'user.trusted-directory-adapter'],
+      // Best-effort server denial callback; the handler binds target to actor and stores no input.
+      recordAccessDenial: ['internal-route', 'user.server-denial-telemetry'],
       prepareContext: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       provisionAdmin: ['bootstrap-only', 'operator-provisioning-boundary'],
       // Run by `ketsuite serve` as `system:role-templates` before any request, and

@@ -236,3 +236,19 @@
     background: var(--kv-table-row-hover);
   }
 }
+
+@layer ket.app {
+  :where([data-kv-design-system][data-density="compact"]) [data-ui="list-page"][data-variant="operational"] {
+    --kv-page-title-size: var(--kv-text-lg);
+  }
+  :where([data-kv-design-system][data-density="compact"])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-header"] {
+    padding-block: var(--kv-space-2);
+  }
+  :where([data-kv-design-system][data-density="compact"])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-toolbar"] {
+    padding-block: var(--kv-space-2);
+  }
+}

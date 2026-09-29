@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -57,7 +58,7 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   )
   assert.equal((html.match(/href="\/admin\/users\/new\?lang=en"/g) ?? []).length, 1)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
 })
 
 test('users list keeps ListPage identity and empty state without decorative pager', () => {
@@ -75,4 +76,37 @@ test('users list keeps ListPage identity and empty state without decorative page
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /user_backend\.users\.empty/)
   assert.doesNotMatch(html, /data-ui="table"|data-ui="pager"/)
+})
+
+test('users list offers no create action to a viewer who may not create a user', () => {
+  const html = renderToString(
+    usersScreen(
+      translate,
+      { chrome: { search: { name: 'q', value: '', placeholder: 'Search users' } } },
+      {
+        rows: [
+          {
+            id: 'ada',
+            login: 'ada',
+            name: 'Ada Lovelace',
+            accessKind: 'internal',
+            securityVersion: 1,
+            passwordReady: true,
+            active: true,
+            superuser: false,
+            detailHref: '/admin/users?record=user.user%3Aada',
+          },
+        ],
+        total: 1,
+        createHref: null,
+      },
+    ),
+  )
+  // Title, then controls, then the table — the order holds without the action.
+  assert.match(
+    html,
+    /data-ui="list-page-title-row"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+  )
+  assert.doesNotMatch(html, /user_backend\.action\.createUser/)
+  assert.doesNotMatch(html, /record=user\.user%3Anew|\/admin\/users\/new/)
 })

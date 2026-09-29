@@ -97,9 +97,9 @@ export type FrameOptions = {
 /**
  * The shell's half of a screen.
  *
- * `sidebar.foot` is skipped for a navigation fragment on purpose: the foot sits
- * outside the `backend.sidebar-main` navigation slot, so it is not one of the slots the client
- * replaces, and rendering its islands would build markup the browser discards.
+ * The historical `sidebar.foot` joint now renders inside the replaceable location bar.
+ * Include it in navigation fragments so indicators and extension tools survive navigation.
+ * Only the document runtime stays outside the replaceable slots.
  */
 export const frameOf = async (
   ctx: ServeContext,
@@ -113,18 +113,16 @@ export const frameOf = async (
   const lang = ctx.localeOf(url, req)
   return {
     navigation,
+    globalSearchQuery: url.pathname === '/admin/search' ? (url.searchParams.get('q') ?? '') : '',
     collectionUrl: url.pathname + url.search,
     viewer: await viewerOf(ctx, url, req),
     menu: await ctx.menu(menuUrl, req),
-    // The sidebar's search is in the URL like every other list's, so a filtered
-    // menu is a link and the back button walks out of it.
-    menuFilter: url.searchParams.get('menu')?.trim() || null,
     rootList: ctx.navigation?.rootList,
     extras: {
       runtime: navigation ? undefined : await ctx.joint(url, req, 'backend:runtime'),
       'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active, lang }),
       'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-      'sidebar.foot': navigation ? undefined : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
+      'sidebar.foot': await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
       ...options.extras,
     },
   }

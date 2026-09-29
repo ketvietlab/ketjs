@@ -22,7 +22,8 @@ export type UsersListScreenOptions = {
   rows: readonly UserListRow[]
   clearHref?: string | null
   total: number
-  createHref: string
+  /** Null when the viewer may not create a user: the header then offers no create action. */
+  createHref: string | null
   /** What the search-filter bar decided about the table, such as its groups. */
   table?: Partial<DataTable<UserListRow>>
 }
@@ -103,7 +104,13 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       title={_('user_backend.users.title')}
       description={_('user_backend.users.subtitle')}
       headerActions={
-        <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton
+            label={_('user_backend.action.createUser')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, _('user_backend.users.title'), frame)}

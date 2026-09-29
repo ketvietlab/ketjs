@@ -84,58 +84,8 @@
     min-block-size: 0;
   }
 
-  [data-ui="navigation-context"] [data-ui="sidebar-search"] {
-    margin: 0.5rem 0 0;
-  }
-
   [data-ui="navigation-footer"] {
     padding: 0;
-  }
-
-  /* The menu search, not the record search. This one narrows the sidebar; the
-     one in the control panel narrows the list. Both are GET forms. */
-  [data-ui="sidebar-search"] {
-    position: relative;
-    flex-shrink: 0;
-    margin: 0 0.75rem 0.625rem;
-  }
-
-  [data-ui="sidebar-search-icon"] {
-    position: absolute;
-    inset-inline-start: 0.625rem;
-    inset-block-start: 50%;
-    display: grid;
-    inline-size: 0.75rem;
-    block-size: 0.75rem;
-    place-items: center;
-    color: var(--admin-ink-muted);
-    pointer-events: none;
-    transform: translateY(-50%);
-  }
-
-  [data-ui="sidebar-search-input"] {
-    inline-size: 100%;
-    padding: 0.4375rem 0.625rem 0.4375rem 1.875rem;
-    border: 1px solid var(--admin-control-border);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-control-bg);
-    color: var(--admin-ink);
-    font: inherit;
-    font-size: 0.875rem;
-    line-height: 1.3;
-    outline: none;
-    transition:
-      border-color var(--admin-motion-fast),
-      box-shadow var(--admin-motion-fast);
-  }
-
-  [data-ui="sidebar-search-input"]::placeholder {
-    color: var(--admin-placeholder);
-  }
-
-  [data-ui="sidebar-search-input"]:focus {
-    border-color: var(--admin-focus-border);
-    box-shadow: 0 0 0 3px var(--admin-focus-ring);
   }
 
   [data-ui="sidebar-empty"] {
@@ -162,7 +112,6 @@
     block-size: 1em;
   }
 
-  [data-ui="sidebar-search-icon"] > [data-ui="icon"],
   [data-ui="chrome-search-icon"] > [data-ui="icon"],
   [data-ui="chrome-search-toggle"] > [data-ui="icon"],
   [data-ui="indicator-icon"] > [data-ui="icon"],

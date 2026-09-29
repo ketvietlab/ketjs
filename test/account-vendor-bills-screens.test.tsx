@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -139,5 +140,8 @@ test('vendor bill FormPage keeps every document field, bundled relations, errors
   assert.match(html, /data-ui="form-errors" role="alert"/)
   assert.match(html, /form="vendor-bill-create-form"[\s\S]*?Tạo/)
   assert.match(html, /href="\/admin\/accounting\/vendor-bills\?lang=vi"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 })

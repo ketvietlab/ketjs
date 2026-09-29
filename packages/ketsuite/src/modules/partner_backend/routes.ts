@@ -588,6 +588,7 @@ export const routes: Record<string, RouteEntry> = {
               pageSize: PAGE_SIZE,
             },
             labels: {
+              region: _('backend.table.results'),
               selectAll: _('partner_backend.table.selectAll'),
               selectRow: _('partner_backend.table.selectRow'),
               sortedAscending: _('partner_backend.table.sortAscending'),

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { test, type TestContext } from 'node:test'
@@ -64,7 +65,7 @@ const secretFrom = (html: string): string => {
 test('attendance credentials HTTP owns localized modals, validation, CSRF, allowlist and PIN PRG', async (t) => {
   const { e2e } = await bootCredentials(t)
   const hub = await (await e2e.client.get(base)).text()
-  assert.doesNotMatch(hub, /data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(hub), /data-ui="modal-layer"/)
   for (const issue of ['kiosk', 'pin', 'qr'])
     assert.match(hub, new RegExp(`href="/admin/attendance/credentials\\?issue=${issue}&amp;lang=en"`))
 

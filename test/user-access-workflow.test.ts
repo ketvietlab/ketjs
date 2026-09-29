@@ -36,7 +36,6 @@ const probe = defineModule({
             email: String(args.email),
             companyId: 'c',
             roleIds: args.roleIds as string[],
-            reason: 'Thêm nhân sự',
           },
           async () => {
             if (args.fail) throw new Error('outbox failed')
@@ -121,7 +120,6 @@ test('user workflow: atomic creation, batch assignment, preview, exact removal a
       expectedRoleRevision: 0,
       expectedAuthorizationRevision: await revision(),
       idempotencyKey: `seed-${id}`,
-      reason: 'Khởi tạo vai trò hệ thống',
     })
     assert.equal(result.ok, true, JSON.stringify(result))
   }
@@ -134,7 +132,7 @@ test('user workflow: atomic creation, batch assignment, preview, exact removal a
   assert.equal((await adapter.all('SELECT * FROM user_assignment')).length, 0)
   const batch = {
     ...selection,
-    reason: 'Phân công công việc',
+
     expectedAuthorizationRevision: before,
     idempotencyKey: 'batch',
   }
@@ -163,7 +161,7 @@ test('user workflow: atomic creation, batch assignment, preview, exact removal a
         roleId: 'viewer',
         assignmentId: assignments[0]!.id,
         scopeKey: 'company:c',
-        reason: 'Đổi công việc',
+
         expectedAuthorizationRevision: await revision(),
         idempotencyKey: 'remove',
       })
@@ -253,7 +251,7 @@ test('user workflow: atomic creation, batch assignment, preview, exact removal a
         roleId: 'viewer',
         assignmentId: 'legacy',
         scopeKey: 'tenant',
-        reason: 'Gỡ quyền cũ',
+
         expectedAuthorizationRevision: await revision(),
         idempotencyKey: 'legacy-remove',
       })

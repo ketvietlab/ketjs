@@ -47,7 +47,7 @@
     font-size: var(--kv-text-2xs);
     font-weight: var(--kv-weight-semibold);
     text-align: left;
-    text-transform: uppercase;
+    text-transform: none;
     white-space: nowrap;
   }
   /* Badge deliberately shrinks-and-breaks (`overflow-wrap: anywhere`) for tight
@@ -248,5 +248,35 @@
     content: attr(data-label);
     color: var(--kv-text-secondary);
     font-weight: var(--kv-weight-semibold);
+  }
+}
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="kt-selection-target"] {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--kv-space-6);
+    min-block-size: var(--kv-space-6);
+    vertical-align: middle;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="kt-scroll"]:focus-visible {
+    outline: 2px solid var(--kv-accent);
+    outline-offset: -2px;
+  }
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="ket-table"] {
+      --kv-row-height: var(--kv-touch-target);
+    }
+    :where([data-kv-design-system]) [data-ui="kt-selection-target"] {
+      min-inline-size: var(--kv-touch-target);
+      min-block-size: var(--kv-touch-target);
+    }
+    :where([data-kv-design-system]) [data-ui="kt-select-cell"] {
+      padding-block: 0;
+    }
   }
 }

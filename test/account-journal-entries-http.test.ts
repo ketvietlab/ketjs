@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -36,7 +37,10 @@ test('journal entries HTTP keeps list filters, URL modal, locale and safe return
   assert.equal(initial.status, 200)
   assert.match(initialHtml, /data-ui="list-page"/)
   assert.match(initialHtml, /href="\/admin\/accounting\/entries\?lang=vi&amp;create=1"/)
-  assert.doesNotMatch(initialHtml, /id="journal-entry-create-form"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(initialHtml),
+    /id="journal-entry-create-form"|data-ui="modal-layer"|mail\.chatter/,
+  )
 
   const journals = (await app.client.call<Row[]>('account.listJournals', {})).value
   const generalJournalId = String(journals.find((row) => row.type === 'general')?.id)

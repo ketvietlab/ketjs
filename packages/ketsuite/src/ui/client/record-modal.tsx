@@ -63,12 +63,15 @@ const issuesOf = (source: unknown): RecordIssue[] => {
  * permission refusal (`ok: false` on the envelope) come back in one shape, so a
  * view never has to know which layer said no.
  */
-export const callRecordFunction = async <Value = unknown>(
-  name: string,
+export const callRecordRoute = async <Value = unknown>(
+  route: string,
   input: Record<string, unknown>,
   options: { signal?: AbortSignal; idempotencyKey?: string } = {},
 ): Promise<RecordCallResult<Value>> => {
-  const response = await fetch(`/_ket/fn/${encodeURIComponent(name)}`, {
+  const target = new URL(route, 'https://record.invalid')
+  if (target.origin !== 'https://record.invalid' || !route.startsWith('/') || route.startsWith('//'))
+    throw new Error('Record commands require a same-origin route')
+  const response = await fetch(target.pathname + target.search, {
     method: 'POST',
     credentials: 'same-origin',
     headers: {
@@ -98,6 +101,14 @@ export const callRecordFunction = async <Value = unknown>(
     return { ok: false, issues: issuesOf(value), message: null, status: response.status }
   return { ok: true, value: payload.value as Value }
 }
+
+/** Call a declared function through the same response and refusal contract. */
+export const callRecordFunction = <Value = unknown>(
+  name: string,
+  input: Record<string, unknown>,
+  options: { signal?: AbortSignal; idempotencyKey?: string } = {},
+): Promise<RecordCallResult<Value>> =>
+  callRecordRoute<Value>(`/_ket/fn/${encodeURIComponent(name)}`, input, options)
 
 // ── Definition ────────────────────────────────────────────────────────────────
 
@@ -171,8 +182,7 @@ export type RecordModalCommandStep<Data> = {
   when?: (context: RecordModalContext<Data>) => boolean
 }
 
-export type RecordModalCommand<Data> = {
-  fn: string
+export type RecordModalCommand<Data> = ({ fn: string; route?: never } | { fn?: never; route: string }) & {
   /** Same-origin destination after a successful command; evaluated by the runtime. */
   navigate?: (value: unknown, context: RecordModalContext<Data>) => string
   /** Map server paths to stable native field names using the submitted snapshot. */
@@ -243,10 +253,9 @@ export type RecordModalDefinition<Data> = {
   kind: string
   size?: 'default' | 'large'
   /**
-   * Caps a tabbed record's fixed height (a CSS length or `min()`/`calc()`
-   * expression) below the viewport-filling default, for a record whose own
-   * content is shorter than that — see `ModalSheet.fixedHeight`. Ignored for a
-   * record with one tab or none, since those never turn on `height: 'fixed'`.
+   * Compatibility override for workflows with an explicitly sized tabbed surface.
+   * By default the runtime holds the tallest rendered tab as a min-height,
+   * capped by the available viewport. Single-tab and nested dialogs size to content.
    */
   fixedHeight?: string
   /**
@@ -324,7 +333,7 @@ export const RECORD_MODAL_LABELS: Readonly<Record<string, string>> = Object.free
 /**
  * The text for a key: the loaded context's messages, then the messages of the
  * last record this modal opened, then the module's labels, then the defaults.
- * Only an unknown key falls through to itself.
+ * Unknown refusal codes use a friendly fallback; other unknown keys fall through to themselves.
  */
 export const resolveRecordModalLabel = (
   key: string,
@@ -338,7 +347,19 @@ export const resolveRecordModalLabel = (
   sources.previous?.[key] ??
   sources.labels?.[key] ??
   RECORD_MODAL_LABELS[key] ??
-  key
+  (/^E_[A-Z_]+$/u.test(key) ? resolveRecordModalLabel('recordModal.saveFailed', sources) : key)
+
+/**
+ * The text for a refusal code. A server may refuse with any code; one no source
+ * translates reads as the save failure rather than as the code itself.
+ */
+export const resolveRecordModalIssue = (
+  code: string,
+  sources: Parameters<typeof resolveRecordModalLabel>[1],
+): string => {
+  const text = resolveRecordModalLabel(code, sources)
+  return text === code ? resolveRecordModalLabel('recordModal.saveFailed', sources) : text
+}
 
 /** Field a form (or its submitter) uses to name the command it runs. */
 export const RECORD_COMMAND_FIELD = '__command'
@@ -551,15 +572,11 @@ export const createRecordModal =
     let previousMessages: Record<string, string> | null = null
     const labels = (): Record<string, string> =>
       typeof definition.labels === 'function' ? definition.labels() : (definition.labels ?? {})
+    const sources = () => ({ messages: envelope()?.messages, previous: previousMessages, labels: labels() })
     const t = (key: string, params?: Record<string, unknown>): string =>
-      interpolate(
-        resolveRecordModalLabel(key, {
-          messages: envelope()?.messages,
-          previous: previousMessages,
-          labels: labels(),
-        }),
-        params,
-      )
+      interpolate(resolveRecordModalLabel(key, sources()), params)
+    const issueText = (issue: RecordIssue): string =>
+      issue.message ?? interpolate(resolveRecordModalIssue(issue.code, sources()), issue.params)
     const visibleTabs = (context: RecordModalContext<Data>) =>
       [...(definition.tabs ?? []), ...(definition.extensionTabs?.(context) ?? [])].filter(
         (tab) => tab.visible?.(context) ?? true,
@@ -580,7 +597,7 @@ export const createRecordModal =
         t,
         fieldError: (name) => {
           const hit = issues().find((issue) => issue.field === name)
-          return hit ? (hit.message ?? t(hit.code, hit.params)) : null
+          return hit ? issueText(hit) : null
         },
         draft: (name, fallback = '') => {
           const draft = draftState()
@@ -656,6 +673,36 @@ export const createRecordModal =
       root ? [...root.querySelectorAll<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')] : []
     const recordLayer = (): HTMLElement | null => layers()[0] ?? null
     const topLayer = (): HTMLElement | null => layers().at(-1) ?? null
+
+    // Hold only the height actually seen for this record, never the viewport height.
+    let tallestRecordHeight = 0
+    const fitRecordHeight = (): void => {
+      if (definition.fixedHeight || status() !== 'ready') return
+      const sheet = recordLayer()?.querySelector<HTMLElement>('[data-ui="modal-sheet"][data-height="fixed"]')
+      if (!sheet) return
+      // Match ModalSheet's compact contract: mobile dialogs occupy the screen.
+      // Do not retain that viewport height as a desktop content measurement.
+      if (window.matchMedia('(max-width: 47.9375rem)').matches) {
+        sheet.style.setProperty('height', '100dvh', 'important')
+        sheet.style.removeProperty('min-height')
+        return
+      }
+      const tabs = sheet.querySelector<HTMLElement>('[data-ui="tabbed-view"]')
+      if (!tabs) return
+      const panel = tabs.querySelector<HTMLElement>('[data-ui="tab-panel"]')
+      const scrollTop = panel?.scrollTop ?? 0
+      sheet.style.setProperty('height', 'auto', 'important')
+      sheet.style.setProperty('min-height', '0')
+      tabs.style.setProperty('height', 'auto')
+      tallestRecordHeight = Math.max(tallestRecordHeight, Math.ceil(sheet.getBoundingClientRect().height))
+      tabs.style.removeProperty('height')
+      const cap = getComputedStyle(sheet).maxHeight
+      sheet.style.setProperty(
+        'min-height',
+        cap === 'none' ? `${tallestRecordHeight}px` : `min(${tallestRecordHeight}px, ${cap})`,
+      )
+      if (panel) panel.scrollTop = scrollTop
+    }
 
     const keepDrafts = (current: HTMLElement | null, scope: DraftScope): void => {
       if (!current) return
@@ -743,6 +790,7 @@ export const createRecordModal =
       const sameRecord = current?.id === id
       const nextTab = tab ?? (sameRecord ? current.tab : '')
       if (!sameRecord) {
+        tallestRecordHeight = 0
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
         saved.set(false)
@@ -777,6 +825,7 @@ export const createRecordModal =
     const hide = (how: 'history' | 'replace' | 'none'): void => {
       request?.abort()
       open.set(null)
+      tallestRecordHeight = 0
       dialog.set(null)
       issues.set([])
       saved.set(false)
@@ -865,7 +914,11 @@ export const createRecordModal =
         }
         const invoke = (fn: string, input: Record<string, unknown>) =>
           callRecordFunction(fn, input, { idempotencyKey: uuid() })
-        let result = await invoke(command.fn, command.input(formData, context, uploads))
+        let result = command.route
+          ? await callRecordRoute(command.route, command.input(formData, context, uploads), {
+              idempotencyKey: uuid(),
+            })
+          : await invoke(command.fn!, command.input(formData, context, uploads))
         // Further calls run only once the first succeeds, and stop at the first
         // one that does not — a later step's success never papers over an
         // earlier failure.
@@ -998,7 +1051,7 @@ export const createRecordModal =
           : ''
       return Notice({
         title: context.t('recordModal.errorTitle'),
-        message: all.map((issue) => issue.message ?? context.t(issue.code, issue.params)).join(' · '),
+        message: all.map(issueText).join(' · '),
         tone: 'danger',
       })
     }
@@ -1093,13 +1146,11 @@ export const createRecordModal =
               mode: 'client',
               presentation: 'dialog',
               size: definition.size ?? 'default',
-              // Tabs have different heights; a fixed dialog does not jump when the reader switches
-              // tabs, nor when the loading state gives way to the record.
-              // A definition that takes extension tabs may gain one at any time, so it
-              // keeps the fixed height its declared tabs would otherwise earn.
+              // The runtime measures rendered tabs and holds their largest height.
+              // Start at natural height so loading/short records never fill the viewport.
               height:
                 (definition.tabs?.length ?? 0) + (definition.extensionTabs ? 1 : 0) > 1 ? 'fixed' : 'content',
-              fixedHeight: definition.fixedHeight,
+              fixedHeight: definition.fixedHeight ?? 'auto',
               title: context ? definition.title(context) : t('recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               status: context ? definition.status?.(context) : undefined,
@@ -1412,6 +1463,7 @@ export const createRecordModal =
           node instanceof Element &&
           (node.matches(islandSelector) || node.querySelector(islandSelector) !== null)
         const observer = new MutationObserver((records) => {
+          fitRecordHeight()
           for (const record of records) {
             for (const node of record.removedNodes)
               if (holdsIsland(node))
@@ -1421,8 +1473,17 @@ export const createRecordModal =
                 document.dispatchEvent(new CustomEvent('ket:islands-attach', { detail: { root: node } }))
           }
         })
-        observer.observe(root, { childList: true, subtree: true })
+        observer.observe(root, { childList: true, subtree: true, characterData: true })
         lifetime.addEventListener('abort', () => observer.disconnect())
+        window.addEventListener('resize', fitRecordHeight, { signal: lifetime })
+        // Images and native disclosures change layout without adding text nodes.
+        root.addEventListener('load', fitRecordHeight, { capture: true, signal: lifetime })
+        root.addEventListener('toggle', fitRecordHeight, { capture: true, signal: lifetime })
+        // Web fonts can arrive after the first record measurement.
+        void document.fonts?.ready.then(() => {
+          if (!lifetime.aborted) fitRecordHeight()
+        })
+        fitRecordHeight()
 
         // Another island (or this one) changed records of this kind: drop them so the
         // next opening reads fresh data first.
@@ -1447,6 +1508,19 @@ export const createRecordModal =
             event.preventDefault()
             if (mine && target) show(target.id, target.tab ?? null, 'none')
             else hide('none')
+          },
+          { signal: lifetime },
+        )
+
+        // Cross-collection links (for example global search results) use the
+        // shell navigation first. This persistent island is not remounted when
+        // those slots change, so open the destination record after URL commit.
+        // A refresh of an already open record must not reset its draft or tab.
+        document.addEventListener(
+          'ket:navigation-complete',
+          () => {
+            const target = readRecordModalTarget(location.href)
+            if (target?.kind === definition.kind && !open()) show(target.id, target.tab ?? null, 'none')
           },
           { signal: lifetime },
         )
