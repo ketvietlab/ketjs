@@ -208,6 +208,14 @@ try {
         const at = (name, selector) => document.querySelector('[data-layering-case="' + name + '"] ' + selector)
         const size = (element) => element && getComputedStyle(element).fontSize
         const cells = [...document.querySelectorAll('[data-layering-case="modal-strip"] [data-ui="key-value"]')]
+        const labels = (name) =>
+          [...document.querySelectorAll('[data-layering-case="' + name + '"] [data-ui="field"]')]
+            .map((field) => {
+              const label = field.querySelector('[data-ui="field-label"]').getBoundingClientRect()
+              const control = field.querySelector('[data-ui="field-control"]').getBoundingClientRect()
+              return control.top >= label.bottom - 1 ? 'above' : 'beside'
+            })
+            .join(',')
         return {
           canvasSurface: frame(at('canvas-surface', '[data-ui="surface"]')),
           canvasTable: frame(at('canvas-table', '[data-ui="surface"]')),
@@ -229,6 +237,7 @@ try {
             modalTable: size(at('modal-table', '[data-ui="surface-title"]')),
             section: size(at('modal-section', '[data-ui="section-title"]')),
           },
+          forms: { wide: labels('wide-form'), narrow: labels('narrow-form') },
           strip: {
             borders: cells.map((cell) => getComputedStyle(cell).borderInlineStartWidth).join(','),
             rows: String(new Set(cells.map((cell) => cell.offsetTop)).size),
@@ -283,6 +292,11 @@ try {
       `${presentation}: canvas title`,
     )
     assert.deepEqual(layering.strip, { borders: '0px,1px,1px', rows: '1' }, `${presentation}: metadata strip`)
+    assert.deepEqual(
+      layering.forms,
+      { wide: 'beside,beside', narrow: 'above,above' },
+      `${presentation}: a record form in a narrow column puts its labels above their controls`,
+    )
   }
 
   const viewports = [
