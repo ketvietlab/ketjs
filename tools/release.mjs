@@ -14,23 +14,8 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const node = process.execPath
 const command = process.argv[2] ?? 'check'
 
+// Publish order: every package comes after the packages it depends on.
 const workspaces = [
-  {
-    name: '@ketvietlab/flow-client',
-    dir: 'packages/flow-client',
-    // Measured import: 305 KB, including the bundled brand assets and three message catalogs.
-    maxPackedBytes: 350_000,
-    requiredPaths: [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/index.mjs',
-      'dist/workspace.mjs',
-      'dist/server-extensions.mjs',
-      'EXTENSIONS.md',
-      'NOTICE',
-    ],
-  },
   { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
   {
     name: '@ketvietlab/ketjs-view-tools',
@@ -67,6 +52,22 @@ const workspaces = [
       'dist/index.mjs',
       'dist/index.d.mts',
       'dist/styles.css',
+    ],
+  },
+  {
+    name: '@ketvietlab/flow-client',
+    dir: 'packages/flow-client',
+    // Measured import: 305 KB, including the bundled brand assets and three message catalogs.
+    maxPackedBytes: 350_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.mjs',
+      'dist/workspace.mjs',
+      'dist/server-extensions.mjs',
+      'EXTENSIONS.md',
+      'NOTICE',
     ],
   },
 ]
