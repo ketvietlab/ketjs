@@ -59,8 +59,10 @@ npm run release:check
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
 embedded by the deterministic PDF renderer. The design-system package has a 350 KB ceiling for its public
-component catalogue, machine-readable inventory and KetAtlas adapter. KetSuite has a 5.2 MB ceiling for its
-composed business modules, address catalogues, browser clients, and source maps. These ceilings leave limited
+component catalogue, machine-readable inventory and KetAtlas adapter. KetSuite has a 6.4 MB ceiling for its
+composed business modules, address catalogues, browser clients, and source maps. The 0.1.29 archive
+was inspected at 6,150,837 packed bytes across 3,623 files; the largest new entries are user/access-policy,
+product and CRM client source maps plus the two brand images. These ceilings leave limited
 headroom for accidental growth. A release that crosses a ceiling must inspect the tarball contents before
 changing the budget.
 
