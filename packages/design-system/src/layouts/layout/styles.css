@@ -1,15 +1,22 @@
 @layer ket.app {
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"] {
+    --kv-stack-gap: var(--kv-space-4);
     display: grid;
-    gap: var(--kv-space-4);
+    gap: var(--kv-stack-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"][data-gap="compact"] {
-    gap: var(--kv-space-2);
+    --kv-stack-gap: var(--kv-space-2);
   }
 
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"][data-gap="loose"] {
-    gap: var(--kv-space-8);
+    --kv-stack-gap: var(--kv-space-8);
+  }
+
+  /* A divider sits halfway: the gap above it and the same space below it. */
+  :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"][data-divided="true"] > * + * {
+    padding-block-start: var(--kv-stack-gap);
+    border-block-start: 1px solid var(--kv-panel-border);
   }
 
   :where([data-kv-design-system]) [data-ui="inline"] {
@@ -79,7 +86,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="surface"][data-padding="default"] {
-    padding: var(--kv-space-5);
+    padding: var(--kv-surface-inset);
   }
 
   :where([data-kv-design-system]) [data-ui="surface"][data-has-heading="true"] {
@@ -92,7 +99,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--kv-space-3);
-    margin-bottom: var(--kv-space-5);
+    margin-bottom: var(--kv-surface-head-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="surface"][data-padding="none"][data-has-heading="true"] {

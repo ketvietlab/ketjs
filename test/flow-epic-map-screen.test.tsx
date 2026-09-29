@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -34,7 +35,10 @@ test('flow epic map: specialized workspace preserves island, identity, return ac
   const textContent = rendered.replace(/<!--k\[?-->/g, '')
 
   assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(rendered),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(textContent, /data-ui="board-page-title"[^>]*>First release/)
   assert.match(textContent, /Internal platform/)
   assert.match(rendered, /data-island="flow.map"/)

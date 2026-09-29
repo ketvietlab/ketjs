@@ -187,6 +187,8 @@ export type MenuDef = {
    * every entry did before this existed.
    */
   for?: readonly string[]
+  /** Required reads/lookups for this surface; optional work actions belong in `for`. */
+  requires?: readonly string[]
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**
@@ -534,7 +536,17 @@ export type BrowserBehaviorDefinition = {
 }
 
 export type BrowserNavigation = {
-  navigate(target: string | URL, options?: { replace?: boolean }): Promise<void>
+  navigate(
+    target: string | URL,
+    options?: {
+      replace?: boolean
+      /** Keep focus and scroll when refreshing the current working surface. */
+      preserveContext?: boolean
+      /** Let the caller show an error without discarding the current page. */
+      fallback?: 'reload' | 'error'
+      signal?: AbortSignal
+    },
+  ): Promise<void>
   apply(response: Response, options?: { signal?: AbortSignal }): Promise<void>
   replace(target: string | URL): void
   reload(target?: string | URL): void

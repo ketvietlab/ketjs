@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -70,7 +71,10 @@ test('partner statement stays specialized and reports full-result totals above a
   )
 
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
   assert.match(html, /250[,.]000[\s\S]*Total debit/)
   assert.match(html, /50[,.]000[\s\S]*Total credit/)
   assert.match(html, /200[,.]000[\s\S]*Residual/)

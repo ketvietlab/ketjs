@@ -1,0 +1,159 @@
+/*
+ * Layering: see LAYOUT.md, rules L1 and L2.
+ *
+ * A frame separates a white working region from the canvas behind it, and it is
+ * drawn once. Inside a white region (a surface, a modal sheet or dialog, a
+ * popover, a card, the grouped record rail) a container renders flat. Its heading
+ * and spacing stay; its border, fill, radius and shadow go, and its title steps
+ * down to the section size. So a titled table or a form group placed in a modal
+ * reads as a section of that modal, not as a card inside it.
+ *
+ * Record objects (ContentCard, KanbanCard) keep their boundary everywhere: each
+ * is one thing that opens, moves or is selected on its own. A nested `subtle`
+ * surface stays a tinted well, the one sanctioned fill inside a white region.
+ *
+ * Loaded after every presentation, so these rules win at equal specificity.
+ */
+@layer ket.app {
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="surface"],
+  [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] [data-ui="surface"] {
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="surface"][data-tone="subtle"],
+  [data-kv-design-system][data-presentation="grouped"]
+    [data-ui="record-page-aside"]
+    [data-ui="surface"][data-tone="subtle"] {
+    padding: var(--kv-space-3);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="surface"]
+    > [data-ui="surface-head"],
+  [data-kv-design-system][data-presentation="grouped"]
+    [data-ui="record-page-aside"]
+    [data-ui="surface"]
+    > [data-ui="surface-head"] {
+    padding: 0;
+    margin-bottom: var(--kv-space-3);
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="surface"]
+    [data-ui="surface-title"],
+  [data-kv-design-system][data-presentation="grouped"]
+    [data-ui="record-page-aside"]
+    [data-ui="surface"]
+    [data-ui="surface-title"] {
+    font-size: var(--kv-text-md);
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="table-scroll"][data-pattern="data-table"],
+  [data-kv-design-system][data-presentation="grouped"]
+    [data-ui="record-page-aside"]
+    [data-ui="table-scroll"][data-pattern="data-table"] {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="disclosure"],
+  [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] [data-ui="disclosure"] {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    :is([data-ui="disclosure-summary"], [data-ui="disclosure-body"]),
+  [data-kv-design-system][data-presentation="grouped"]
+    [data-ui="record-page-aside"]
+    :is([data-ui="disclosure-summary"], [data-ui="disclosure-body"]) {
+    padding-inline: 0;
+  }
+
+  [data-kv-design-system]
+    :is(
+      [data-ui="surface"],
+      [data-ui="modal-sheet"],
+      [data-ui="dialog"],
+      [data-ui="popover-panel"],
+      [data-ui="content-card"],
+      [data-ui="kanban-card"]
+    )
+    [data-ui="metric"],
+  [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] [data-ui="metric"] {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+}

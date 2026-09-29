@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import { setImmediate } from 'node:timers/promises'
@@ -69,7 +70,10 @@ test('flow project issues: URL-owned create modal preserves list state, validati
   const listHtml = await list.text()
   assert.equal(list.status, 200)
   assert.match(listHtml, /data-ui="list-page"/)
-  assert.doesNotMatch(listHtml, /data-ui="form-page"|data-ui="modal-layer"|flow-issue-create-form/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(listHtml),
+    /data-ui="form-page"|data-ui="modal-layer"|flow-issue-create-form/,
+  )
   assert.match(listHtml, /Internal platform/)
   assert.match(listHtml, /href="\/admin\/flow\/issues\/issue-login\?lang=en"/)
   assert.match(

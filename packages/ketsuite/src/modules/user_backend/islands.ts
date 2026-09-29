@@ -5,10 +5,15 @@ import { defineRecordModalIsland } from '../../ui/record-modal.tsx'
  * record-modal contract), including its create action. `backend:runtime` places
  * the closed host on every admin page, so a link naming a record opens it.
  *
- * The role modal (`user.role-modal`, `role-modal.mjs`) is not registered while the
- * roles screen is off; see the note in routes.ts.
+ * The role modal is read-only for managed roles; custom-role authoring has no product route.
  */
 export const USER_MODAL_ISLANDS = {
+  'user.role-modal': { kind: 'user.role', client: 'role-modal.mjs', export: 'roleModal' },
+  'user.access-policy-modal': {
+    kind: 'user.accessPolicy',
+    client: 'access-policy-modal.mjs',
+    export: 'accessPolicyModal',
+  },
   'user.user-modal': { kind: 'user.user', client: 'user-modal.mjs', export: 'userModal' },
 } as const
 

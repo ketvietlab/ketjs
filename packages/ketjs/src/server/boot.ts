@@ -381,6 +381,13 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => Promise<readonly string[] | null>
+  /** Server-observed authorization refusal. Receives no submitted inputs or secrets. */
+  onFunctionDenied?: (
+    ctx: ServeContext,
+    event: { fn: string; actor: string; scope: Scope },
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<void>
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -915,26 +922,43 @@ export async function bootDeployment(
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
       const actor = await actorOf(url, req)
-      return tenants.ofRequest(
-        url,
-        req,
-        async (t) =>
-          (
-            await callFn(name, input, {
-              adapter: t.adapter,
-              manifest: t.live,
-              scope,
-              allow,
-              actor,
-              idempotencyKey: options?.idempotencyKey,
-              idempotencyNamespace: options?.idempotencyNamespace,
-              idempotencyDigest: options?.idempotencyDigest,
-              correlationId: options?.correlationId,
-              queueNotify: config.queueNotify,
-              log: callLog(t.key, scope, actor, options?.correlationId),
-            })
-          ).value,
-      )
+      try {
+        return await tenants.ofRequest(
+          url,
+          req,
+          async (t) =>
+            (
+              await callFn(name, input, {
+                adapter: t.adapter,
+                manifest: t.live,
+                scope,
+                allow,
+                actor,
+                idempotencyKey: options?.idempotencyKey,
+                idempotencyNamespace: options?.idempotencyNamespace,
+                idempotencyDigest: options?.idempotencyDigest,
+                correlationId: options?.correlationId,
+                queueNotify: config.queueNotify,
+                log: callLog(t.key, scope, actor, options?.correlationId),
+              })
+            ).value,
+        )
+      } catch (error) {
+        if (
+          error instanceof KetError &&
+          error.code === 'E_FN_NOT_PERMITTED' &&
+          actor &&
+          serve.onFunctionDenied
+        ) {
+          // The lease has ended. Telemetry must never change the original refusal.
+          try {
+            await serve.onFunctionDenied(ctx, { fn: name, actor, scope }, url, req)
+          } catch {
+            /* best effort */
+          }
+        }
+        throw error
+      }
     },
   }
 
@@ -1232,6 +1256,9 @@ export async function bootDeployment(
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     resolveActor: actorOf,
+    onFunctionDenied: serve.onFunctionDenied
+      ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)
+      : undefined,
     queueNotify: config.queueNotify,
     islandClients: (url: URL, req: IncomingMessage) =>
       tenants.ofRequest(url, req, async (tenant) =>

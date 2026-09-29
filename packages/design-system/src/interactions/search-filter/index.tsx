@@ -170,6 +170,14 @@ export type SearchFilterManager = {
   setDefaultFavoriteFunction?: string
 }
 
+/** A shell handles this event synchronously and supplies its navigation promise. */
+export type SearchFilterNavigateDetail = {
+  id: string
+  href: string
+  signal: AbortSignal
+  respondWith(result: Promise<void>): void
+}
+
 export type SearchFilterLabels = {
   searchLabel: string
   searchPlaceholder: string
@@ -469,6 +477,8 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
   })
 
   let applyVersion = 0
+  let navigationRequest: AbortController | null = null
+  let startingNavigation = false
   /**
    * Sends the current facets. `consumed` is text the triggering action moved
    * out of the search field into a chip; a failed request hands it back.
@@ -477,6 +487,9 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     closeMenu()
     if (!manager?.applyFunction) return
     const version = ++applyVersion
+    navigationRequest?.abort()
+    const request = new AbortController()
+    navigationRequest = request
     const attempted: Draft = { facets: facets(), rules: customFilterRules() }
     pending.set(true)
     error.set('')
@@ -486,26 +499,40 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
         | { html?: unknown; href?: unknown }
         | undefined
       if (version !== applyVersion) return
-      settled = attempted
       const body = document.getElementById(manager.bodyId)
       if (body && typeof value?.html === 'string') body.innerHTML = value.html
-      // A bare `pushState` only edits the address bar — nothing reads the URL back
-      // out and re-renders, so a function that answers with an `href` alone (no
-      // `html`) would otherwise apply nothing. Real navigation is what a filter
-      // whose backend can only recompute an href, not build the body itself
-      // (its RPC transport has no page-rendering context — see `applyFunction`'s
-      // own contract), needs in order to take effect at all.
       if (typeof value?.href === 'string' && typeof value.html !== 'string') {
-        window.location.assign(value.href)
-        return
+        // The shell owns routing, history and island reconciliation. A standalone
+        // consumer without that shell keeps the native navigation fallback.
+        let navigation: Promise<void> | undefined
+        const detail: SearchFilterNavigateDetail = {
+          id: props.id,
+          href: value.href,
+          signal: request.signal,
+          respondWith: (result) => {
+            navigation = result
+          },
+        }
+        startingNavigation = true
+        try {
+          document.dispatchEvent?.(new CustomEvent('ket:search-filter-navigate', { detail }))
+        } finally {
+          startingNavigation = false
+        }
+        if (navigation) await navigation
+        else window.location.assign(value.href)
+      } else if (typeof value?.href === 'string') {
+        history.pushState(null, '', value.href)
       }
-      if (typeof value?.href === 'string') history.pushState(null, '', value.href)
+      if (version === applyVersion) settled = attempted
     } catch (caught) {
       if (version !== applyVersion) return
       facets.set(settled.facets)
       customFilterRules.set(settled.rules)
       if (consumed && !query()) setQuery(consumed)
-      if (caught instanceof ApiError && caught.retryable) retryDraft.set({ ...attempted, consumed })
+      if (caught instanceof Error && 'retryable' in caught && caught.retryable === true)
+        retryDraft.set({ ...attempted, consumed })
+      if (caught instanceof Error && caught.name === 'AbortError') return
       // The server's message is an English diagnostic, not copy for the reader.
       error.set(labels.applyError)
     } finally {
@@ -1321,6 +1348,7 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     view: () => (
       <div
         data-ui="search-filter"
+        id={props.id}
         role="search"
         aria-label={labels.searchLabel}
         data-name={config.name}
@@ -1484,6 +1512,20 @@ export function createSearchFilterView(props: SearchFilterIslandProps): IslandCo
     ),
     mount: ({ root, lifetime }) => {
       mountedRoot = root
+      document.addEventListener(
+        'ket:navigation-start',
+        () => {
+          // A link or Back/Forward supersedes an RPC which has not returned yet.
+          // Our own navigation emits this event synchronously from respondWith.
+          if (startingNavigation) return
+          applyVersion++
+          navigationRequest?.abort()
+          facets.set(settled.facets)
+          customFilterRules.set(settled.rules)
+          pending.set(false)
+        },
+        { signal: lifetime },
+      )
       // Autocomplete is an island-owned popup rather than a native <details>
       // disclosure, so the shared details-menu dismissor cannot see it. Keep
       // the boundary local to the component: an outside click abandons the

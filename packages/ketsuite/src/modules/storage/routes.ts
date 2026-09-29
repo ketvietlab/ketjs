@@ -144,14 +144,19 @@ const download =
     // Use the same resolved identity and permission boundary as every function
     // call. A verified gateway identity need not have a local session cookie.
     const authenticated = await ctx.allows('storage.getAttachment', url, req)
-    const publicAttachment = (await ctx
-      .call('storage.getPublicAttachment', { id: params.id }, url, req)
-      .catch((error: unknown) => {
-        // A caller granted only storage.getAttachment must still be able to
-        // download: refusal here means "not public", not that the request failed.
-        if ((error as { code?: string }).code === 'E_FN_NOT_PERMITTED') return null
-        throw error
-      })) as Attachment | null
+    // A caller granted only storage.getAttachment must still be able to
+    // download: refusal here means "not public", not that the request failed.
+    // Ask first, because a refused call is recorded as an access denial.
+    const publicAttachment = (
+      (await ctx.allows('storage.getPublicAttachment', url, req))
+        ? await ctx
+            .call('storage.getPublicAttachment', { id: params.id }, url, req)
+            .catch((error: unknown) => {
+              if ((error as { code?: string }).code === 'E_FN_NOT_PERMITTED') return null
+              throw error
+            })
+        : null
+    ) as Attachment | null
     const attachment =
       publicAttachment ??
       (authenticated

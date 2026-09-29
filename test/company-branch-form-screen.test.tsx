@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -42,7 +43,7 @@ test('branch detail uses full-route FormPage with external save and lifecycle ac
   assert.match(html, /name="action" value="restore"/)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
   assert.match(html, /href="\/admin\/companies\/company%2Fa\?lang=en"/)
-  assert.doesNotMatch(html, /data-ui="modal-layer"|data-has-aside="true"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="modal-layer"|data-has-aside="true"/)
 })
 
 test('branch create preserves a rejected parent and stable command id', () => {

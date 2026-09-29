@@ -159,10 +159,10 @@ test('saving sends the bundles ticked, never the all boxes', () => {
   form.set('__all:bundle:store:pricing:', '1')
   form.set('bundle:store:pricing:pricing.view', '1')
   form.set('bundle:store:pos:pos.refund', '1')
-  form.set('reason', 'Mở cửa hàng mới')
   const input = roleModalDefinition.commands!.setBundles!.input(form, contextOf(data), {})
   assert.deepEqual(input.bundleKeys, ['pos.refund', 'pricing.view'])
-  assert.equal(input.reason, 'Mở cửa hàng mới')
+  // Reasons are optional (USR-N03) and the permissions form no longer asks for one.
+  assert.equal('reason' in input, false)
 })
 
 test('the runtime ticks every enabled box under an all box, then re-renders from the form', () => {

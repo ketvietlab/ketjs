@@ -481,3 +481,56 @@
     }
   }
 }
+
+@layer ket.app {
+  [data-ui="sidebar-foot"][data-placement="header"] {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  [data-ui="sidebar-foot"][data-placement="header"] [data-ui="sidebar-tools"] {
+    padding: 0;
+    border: 0;
+    gap: var(--kv-space-2);
+  }
+  [data-ui="sidebar-foot"][data-placement="header"]
+    :is([data-ui="action"][name="theme"], [data-ui="viewer-trigger"]) {
+    inline-size: var(--kv-space-7);
+    block-size: var(--kv-space-7);
+    min-inline-size: var(--kv-space-7);
+    min-block-size: var(--kv-space-7);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: var(--kv-radius-full);
+  }
+  [data-ui="sidebar-foot"][data-placement="header"] [data-ui="viewer-trigger"] > [data-ui="avatar"] {
+    inline-size: var(--kv-space-7);
+    block-size: var(--kv-space-7);
+    border-radius: var(--kv-radius-full);
+    font-size: var(--kv-text-xs);
+  }
+  [data-ui="sidebar-foot"][data-placement="header"] [data-ui="viewer-presence"] {
+    inline-size: var(--kv-space-2);
+    block-size: var(--kv-space-2);
+    inset-inline-end: calc((100% - var(--kv-space-7)) / 2 - var(--kv-space-0-5));
+    inset-block-end: calc((100% - var(--kv-space-7)) / 2 - var(--kv-space-0-5));
+  }
+  [data-ui="sidebar-foot"][data-placement="header"] [data-ui="viewer-menu"] {
+    inset-block-start: calc(100% + var(--kv-space-2));
+    inset-block-end: auto;
+    max-inline-size: calc(100vw - var(--kv-space-4));
+  }
+  @media (max-width: 48rem) {
+    [data-ui="sidebar-foot"][data-placement="header"]
+      [data-ui="sidebar-tools"]
+      :is([data-ui="action"], [data-ui="viewer-trigger"], [data-ui="indicator"]) {
+      min-inline-size: var(--kv-touch-target);
+      min-block-size: var(--kv-touch-target);
+    }
+    [data-ui="sidebar-foot"][data-placement="header"] [data-ui="sidebar-tools"] {
+      gap: var(--kv-space-1);
+    }
+  }
+}

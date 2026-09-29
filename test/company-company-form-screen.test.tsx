@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -68,7 +69,10 @@ test('company create is a full FormPage with stable identity and no premature ch
     html,
     /name="partnerId"[\s\S]*?name="code"[\s\S]*?name="currency"[\s\S]*?name="accountingTimezone"[\s\S]*?name="parentId"/,
   )
-  assert.doesNotMatch(html, /data-ui="modal-layer"|data-ui="form-page-aside"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="modal-layer"|data-ui="form-page-aside"|mail\.chatter/,
+  )
 })
 
 test('company detail keeps lifecycle, branches, rejected relations and one-third chatter rail', () => {
@@ -131,5 +135,5 @@ test('company detail keeps lifecycle, branches, rejected relations and one-third
   assert.match(html, /root:company-1|Công ty Két Việt/)
   assert.match(html, /href="\/admin\/companies\/company-1\/branches\/branch-north\?lang=vi"/)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.doesNotMatch(html, /data-ui="modal-layer"|data-layout="inline"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="modal-layer"|data-layout="inline"/)
 })
