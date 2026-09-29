@@ -206,4 +206,34 @@
       grid-column: 1;
     }
   }
+
+  /* A record form in a narrow column (a record aside, a side panel) puts every
+     label above its control, whatever the viewport: beside it, the label track
+     takes a third of the column. The record form is the container; the extra
+     `record-form` step outranks the full-row label track above. */
+  @container record-form (max-width: 28rem) {
+    :where([data-kv-design-system])
+      [data-ui="record-form"]
+      [data-ui="form-grid"]
+      [data-ui="field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="record-form"]
+      [data-ui="form-grid"]
+      [data-ui="field"]:not([data-kind="checkbox"])
+      > * {
+      grid-column: 1;
+      grid-row: auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="record-form"]
+      [data-ui="form-grid"]
+      [data-ui="field"][data-kind="textarea"]
+      > [data-ui="field-label"] {
+      padding-top: 0;
+    }
+  }
 }
