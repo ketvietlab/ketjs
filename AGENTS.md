@@ -9,8 +9,17 @@ These rules apply to every change in this repository. The public design-system c
 - Use design tokens. Do not introduce hard-coded colour, spacing, radius, shadow, typography, or z-index values in product modules.
 - Keep server views render-pure. Browser state, focus, history, network calls, and DOM access belong in a client runtime or island; server and shared views must not use browser globals.
 - Extend an existing public component compatibly when possible. When adding a new hook, update the hook contract, catalogue/inventory, documentation, and tests in the same change.
+- `packages/flow-ui` (`@ketvietlab/flow-ui`) is a documented exception: compact work-management components authored in `.mjs` with JSDoc types, scoped under `[data-flow-ui]` with `data-flow` hooks and `--flow-*` aliases of `--kv-*` tokens. Its own `AGENTS.md` governs it. It currently re-implements roughly 40 primitives (buttons, inputs, selects, dialogs, tags, lists, tables) that design-system also provides; when changing one, move the shared contract into `packages/design-system` rather than widening the copy. It depends on ketsuite only for `@ketvietlab/ketsuite/livedoc`; that editor should become its own package so flow-ui stops pulling in ketsuite server dependencies.
 
 ## Collection lists
+
+- The KetSuite shell uses `AppBrand` in the sidebar header and `AppShell.location` for the
+  main-column organisation context and tools. It does not show breadcrumbs or a full-width
+  global topbar. Standalone page patterns retain their context contract. Do not recreate shell
+  chrome inside a module. Preserve the `backend.global-topbar` fragment slot despite its name.
+- Global search is a compact dialog launcher, distinct from collection search. Preserve native
+  links/GET fallback, Cmd/Ctrl+K, layered Escape, focus return and query drafts. See
+  `docs/src/content/docs/ketsuite/design-system.md` for the public composition contract.
 
 - Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell, breadcrumbs/context, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
 - Declare the create link in `frame.chrome.create`; the shared list wrapper places it at the right of the title, above filters. Use `headerActions` for an explicit permission-controlled primary action. Do not put a create link into `actions`, the filter region, or module-local positioned markup.

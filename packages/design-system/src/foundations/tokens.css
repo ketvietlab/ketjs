@@ -168,6 +168,14 @@
     --kv-color-info-soft: var(--kv-info-bg);
 
     /* Type. */
+    --kv-touch-target: 2.75rem;
+    --kv-app-topbar-height: 3rem;
+    --kv-app-topbar-bg: #20243e;
+    --kv-app-topbar-text: #f5f6ff;
+    --kv-app-topbar-muted: #d4d8ee;
+    --kv-app-topbar-search-bg: #2c3152;
+    --kv-app-topbar-border: #626b95;
+    --kv-app-topbar-focus: #bbc5ff;
     --kv-font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --kv-font-display: var(--kv-font-sans);
     --kv-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;

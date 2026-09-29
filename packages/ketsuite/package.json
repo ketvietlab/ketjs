@@ -51,6 +51,14 @@
     "./user-backend": {
       "types": "./dist/modules/user_backend/index.d.ts",
       "default": "./dist/modules/user_backend/index.js"
+    },
+    "./livedoc": {
+      "types": "./dist/ui/client/live-doc-view.d.ts",
+      "default": "./dist/ui/client/live-doc-view.js"
+    },
+    "./user-modal-client": {
+      "types": "./dist/ui/client/user-modal-client.d.ts",
+      "default": "./dist/ui/client/user-modal-client.js"
     }
   },
   "dependencies": {

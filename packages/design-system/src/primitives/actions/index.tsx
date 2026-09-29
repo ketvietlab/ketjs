@@ -21,6 +21,10 @@ export type ButtonProps = ActionBase & {
   name?: string | null
   value?: string | null
   form?: string | null
+  /** For a button that shows or hides a region: whether that region is open now. */
+  expanded?: boolean
+  /** The id of the region an `expanded` button shows or hides. */
+  controls?: string | null
 }
 
 export type LinkButtonProps = ActionBase & { href: string }
@@ -53,6 +57,8 @@ export const Button = (props: ButtonProps): TemplateResult => (
     disabled={props.disabled === true || props.loading === true}
     aria-busy={props.loading === true ? 'true' : null}
     aria-describedby={props.describedBy ?? null}
+    aria-expanded={props.expanded === undefined ? null : String(props.expanded)}
+    aria-controls={props.controls ?? null}
   >
     <ActionContent {...props} />
   </button>
@@ -74,6 +80,8 @@ export const IconButton = (props: IconButtonProps): TemplateResult => (
     aria-pressed={props.pressed === undefined ? null : String(props.pressed)}
     aria-busy={props.loading === true ? 'true' : null}
     aria-describedby={props.describedBy ?? null}
+    aria-expanded={props.expanded === undefined ? null : String(props.expanded)}
+    aria-controls={props.controls ?? null}
     title={props.label}
   >
     <ActionContent {...props} leading={props.icon} iconOnly />

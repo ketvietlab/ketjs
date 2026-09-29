@@ -162,6 +162,7 @@ export const collectionTable = <R,>(_: Translator, table: DataTable<R>): Templat
       table.colsHref && table.columns.some((column) => column.optional) ? columnMenu(_, table) : undefined
     }
     labels={{
+      region: _('backend.table.results'),
       selectAll: _('backend.table.selectAll'),
       selectRow: _('backend.table.selectRow'),
       sortedAscending: _('backend.table.sortAscending'),

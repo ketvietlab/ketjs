@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -71,7 +72,7 @@ test('manufacturing work centers list: ListPage exposes edit and archive without
   assert.match(html, /data-ui="badge" data-tone="positive"[\s\S]*?Đang hoạt động/)
   assert.match(html, /name="action" value="archive"/)
   assert.match(html, /name="id" value="packing"/)
-  assert.doesNotMatch(html, /manufacturing-work-center-form|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /manufacturing-work-center-form|data-ui="modal-layer"/)
 })
 
 test('manufacturing work center edit: dialog retains capacity, efficiency, cost and errors', () => {

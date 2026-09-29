@@ -109,8 +109,8 @@ test('a refusal changes nothing at all', async (t) => {
   })
   const before = await held()
 
+  // A blank reason is not in this list: reasons are optional (USR-N03).
   for (const [field, patch] of [
-    ['reason', { reason: '  ' }],
     ['companyIds', { companyIds: [] }],
     // Landing somewhere they do not work is the mistake this guards against.
     ['defaultCompanyId', { companyIds: ['company-b'], defaultCompanyId: 'company-a' }],

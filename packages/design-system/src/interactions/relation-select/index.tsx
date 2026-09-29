@@ -103,6 +103,16 @@ export type RelationSelectConfig = {
   manager?: RelationManager
 }
 
+/** Client-only composition hooks; keep callbacks out of serialized island props. */
+export type RelationSelectCallbacks = {
+  options?: () => RelationOption[]
+  disabled?: () => boolean
+  onSelect?: (option: RelationOption) => void
+  onCreate?: (query: string) => void
+  /** An add-to-list picker returns to its placeholder after each selection. */
+  resetAfterSelect?: boolean
+}
+
 type RelationRow = Record<string, unknown>
 type RelationEditor = { id: string; row: RelationRow }
 type RelationSelectIslandProps = IslandProps & { id: string; config: RelationSelectConfig }
@@ -134,7 +144,10 @@ const callApi = async (name: string, input: unknown, requestSignal?: AbortSignal
   return payload.value
 }
 
-export function createRelationSelectView(props: RelationSelectIslandProps): IslandController {
+export function createRelationSelectView(
+  props: RelationSelectIslandProps,
+  callbacks: RelationSelectCallbacks = {},
+): IslandController {
   const { id: islandId, config } = props
   const labels = config.labels
   const manager = config.manager
@@ -150,6 +163,8 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
   const selected = (): string => chosen()[0] ?? ''
   const isChosen = (value: unknown): boolean => chosen().includes(string(value))
   const options = signal<RelationOption[]>(array<RelationOption>(config.options))
+  const availableOptions = (): RelationOption[] => callbacks.options?.() ?? options()
+  const disabled = (): boolean => callbacks.disabled?.() ?? config.disabled === true
   const open = signal(false)
   const dialog = signal(false)
   const query = signal('')
@@ -172,19 +187,21 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
   const filteredOptions = (): RelationOption[] => {
     const needle = query().trim().toLocaleLowerCase()
     const held = needle
-      ? options().filter((entry) =>
+      ? availableOptions().filter((entry) =>
           `${string(entry.label)} ${string(entry.description)}`.toLocaleLowerCase().includes(needle),
         )
-      : options()
-    return held.slice(0, 7)
+      : availableOptions()
+    return callbacks.options ? held : held.slice(0, 7)
   }
 
   const choose = (value: unknown, label: unknown, description: unknown = ''): void => {
+    if (disabled()) return
     const id = string(value)
     if (!options().some((entry) => string(entry.value) === id))
       options.set([...options(), { value: id, label: string(label), description: string(description) }])
     if (multiple) {
       chosen.set(isChosen(id) ? chosen().filter((held) => held !== id) : [...chosen(), id])
+      callbacks.onSelect?.({ value: id, label: string(label), description: string(description) })
       return
     }
     chosen.set(id ? [id] : [])
@@ -193,6 +210,8 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
     query.set('')
     editor.set(null)
     pendingRemove.set('')
+    if (callbacks.resetAfterSelect) chosen.set([])
+    callbacks.onSelect?.({ value: id, label: string(label), description: string(description) })
   }
 
   const unchoose = (value: unknown): void => {
@@ -508,8 +527,15 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
 
   const handleKeydown = (event: Event): void => {
     if (!(event instanceof KeyboardEvent) || event.key !== 'Escape') return
+    if (!open() && !dialog()) return
+    event.preventDefault()
+    event.stopPropagation()
+    const trigger = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
+      '[data-ui="relation-trigger"]',
+    )
     open.set(false)
     closeDialog()
+    trigger?.focus()
   }
 
   const handleInvalid = (event: Event): void => {
@@ -527,7 +553,7 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
           data-ui="relation-native"
           name={config.name}
           required={config.required === true}
-          disabled={config.disabled === true}
+          disabled={disabled()}
           tabindex="-1"
           aria-hidden="true"
           onInvalid={handleInvalid}
@@ -559,7 +585,7 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
           aria-label={config.ariaLabel}
           aria-expanded={String(open())}
           aria-controls={`${islandId}-relation-menu`}
-          disabled={config.disabled === true}
+          disabled={disabled()}
           onClick={() => open.set(!open())}
         >
           <span data-ui="relation-value">{multiple ? labels.choose : selectedLabel()}</span>
@@ -580,7 +606,7 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
                     type="button"
                     aria-label={`${labels.clear}: ${labelOf(value)}`}
                     title={labels.clear}
-                    disabled={config.disabled === true}
+                    disabled={disabled()}
                     onClick={() => unchoose(value)}
                   >
                     ×
@@ -626,11 +652,32 @@ export function createRelationSelectView(props: RelationSelectIslandProps): Isla
                 <p data-ui="relation-empty">{labels.noRecords}</p>
               )}
             </div>
-            <footer data-ui="relation-footer">
-              <button data-ui="action" data-variant="tertiary" type="button" onClick={openDialog}>
-                {labels.more}
-              </button>
-            </footer>
+            {manager || !callbacks.options || callbacks.onCreate ? (
+              <footer data-ui="relation-footer">
+                {manager || !callbacks.options ? (
+                  <button data-ui="action" data-variant="tertiary" type="button" onClick={openDialog}>
+                    {labels.more}
+                  </button>
+                ) : null}
+                {callbacks.onCreate ? (
+                  <button
+                    data-ui="action"
+                    data-variant="tertiary"
+                    type="button"
+                    disabled={disabled()}
+                    onClick={() => {
+                      if (disabled()) return
+                      const name = query().trim()
+                      open.set(false)
+                      query.set('')
+                      callbacks.onCreate?.(name)
+                    }}
+                  >
+                    {labels.create}
+                  </button>
+                ) : null}
+              </footer>
+            ) : null}
           </div>
         ) : null}
         {dialog() ? dialogView() : null}

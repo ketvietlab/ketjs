@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -91,7 +92,7 @@ test('HR employees HTTP: modal create/edit preserves roles, relations, state, lo
   assert.match(list, /data-row-href="\/admin\/hr\?edit=employee-1&amp;lang=vi"/)
   assert.match(list, /NV001/)
   assert.match(list, /Nguyễn Minh Anh/)
-  assert.doesNotMatch(list, /id="hr-employee-form"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(list), /id="hr-employee-form"|data-ui="modal-layer"/)
 
   const create = await (await e2e.client.get('/admin/hr?create=1&lang=vi')).text()
   assert.match(create, /data-ui="list-page"/)

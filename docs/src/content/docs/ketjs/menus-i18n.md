@@ -218,3 +218,20 @@ and checks a valid `?lang=` before parsing `Accept-Language`.
 
 Keep locale preference separate from tenant and company identity. A user may change language without
 changing the database or legal entity in scope.
+
+
+## Required reads and access diagnostics
+
+`MenuDef.requires` lists the read/lookup function keys that a screen must call after its
+`needs` gate succeeds. Composition rejects unknown required functions. Keep optional work
+in `for`: intentionally withholding a write must not label a read-only user as broken.
+Access diagnostics compare `needs` and `requires` with the effective permission union at
+one company/branch. Suggested templates must cover the missing requirements without adding
+unrelated or security authority. An empty suggestion is preferable to a broader role.
+
+Server deployments may implement `ServeSpec.onFunctionDenied` to collect bounded support
+telemetry from both routed calls and the generic function transport. The callback receives
+only the verified actor, function and scope, after the request's database lease ends.
+It never receives submitted inputs; callback failures preserve the original refusal.
+KetSuite stores the latest refusal per user and exposes it only with authorization-audit
+permission. This is a support signal, not a complete audit export or proof of delivery.

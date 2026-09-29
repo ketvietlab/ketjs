@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -91,7 +92,7 @@ test('HR employees list: public ListPage keeps edit, state and archive commands'
   assert.match(html, /data-ui="badge" data-tone="positive"[\s\S]*?Đang làm việc/)
   assert.match(html, /name="action" value="archive"/)
   assert.match(html, /name="id" value="employee-1"/)
-  assert.doesNotMatch(html, /id="hr-employee-form"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /id="hr-employee-form"|data-ui="modal-layer"/)
 })
 
 test('HR employee create: large modal retains rejected relational and date values', () => {

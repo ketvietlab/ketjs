@@ -85,7 +85,7 @@ test('identity lists HTTP: the bar replaces the GET search and drives the same U
 test('identity lists HTTP: custom role administration remains unavailable', async (t) => {
   const app = await boot(t)
   const html = await (await app.client.get(`${ROLES}?lang=vi`)).text()
-  assert.doesNotMatch(html, /data-island="backend\.search-filter"/)
+  assert.match(html, /data-island="backend\.search-filter"/)
   assert.doesNotMatch(html, /data-row="manager"/)
 })
 

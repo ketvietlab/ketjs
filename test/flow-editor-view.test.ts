@@ -140,3 +140,49 @@ test('flow editor: a person keeps the same colour wherever they appear', () => {
   assert.match(row, />LM</)
   assert.match(row, /Also here:/)
 })
+
+test('flow editor: a table keeps its cells as plain, separately editable text', () => {
+  const html = documentHtml(
+    [
+      {
+        type: 'table',
+        delta: [],
+        rows: [
+          ['a<b', ''],
+          ['two\nlines', 'd'],
+        ],
+      },
+    ],
+    'en',
+  )
+  assert.match(html, /^<div data-block="table" data-index="0" contenteditable="false"><table><tbody>/)
+  assert.match(
+    html,
+    /<td data-live-cell data-row="0" data-col="0" contenteditable="plaintext-only">a&lt;b<\/td>/,
+  )
+  // An empty cell still needs a line box to put the caret in.
+  assert.match(html, /data-row="0" data-col="1" contenteditable="plaintext-only"><br><\/td>/)
+  assert.match(html, /data-row="1" data-col="0" contenteditable="plaintext-only">two<br>lines<\/td>/)
+})
+
+test('flow editor: a divider is structure, not text', () => {
+  assert.equal(
+    documentHtml([{ type: 'divider', delta: [] }], 'en'),
+    '<hr data-block="divider" data-index="0" contenteditable="false">',
+  )
+})
+
+test('flow editor: a block id becomes its anchor and only known alignments survive', () => {
+  const html = documentHtml(
+    [
+      { type: 'p', delta: [text('centred')], id: 'a"b', align: 'center' },
+      { type: 'p', delta: [text('plain')], align: 'x;color:red' },
+    ],
+    'en',
+  )
+  assert.match(
+    html,
+    /<p data-block="p" data-index="0" id="doc-a&quot;b" style="text-align:center">centred<\/p>/,
+  )
+  assert.match(html, /<p data-block="p" data-index="1">plain<\/p>/)
+})

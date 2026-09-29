@@ -1,6 +1,40 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 
-export const HOOKS = ['badge', 'tag', 'tag-remove', 'count-badge', 'avatar', 'code'] as const
+export const HOOKS = [
+  'badge',
+  'tag',
+  'tag-remove',
+  'count-badge',
+  'avatar',
+  'code',
+  'text',
+  'media-label',
+  'media-label-image',
+  'media-label-copy',
+] as const
+
+/** Plain information; use badges only when a state or exception needs emphasis. */
+export const Text = (props: { children: string; tone?: 'default' | 'muted' }): TemplateResult => (
+  <span data-ui="text" data-tone={props.tone ?? 'default'}>
+    {props.children}
+  </span>
+)
+
+/** A readable row name with optional media. Empty collections do not pay for an unused image column. */
+export const MediaLabel = (props: {
+  label: string
+  src?: string
+  reserveImage?: boolean
+}): TemplateResult => (
+  <span data-ui="media-label">
+    {props.src || props.reserveImage ? (
+      <span data-ui="media-label-image" aria-hidden="true">
+        {props.src ? <img src={props.src} alt="" loading="lazy" decoding="async" /> : null}
+      </span>
+    ) : null}
+    <span data-ui="media-label-copy">{props.label}</span>
+  </span>
+)
 
 export type Tone = 'neutral' | 'info' | 'positive' | 'warning' | 'danger'
 

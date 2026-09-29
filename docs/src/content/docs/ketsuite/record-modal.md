@@ -76,7 +76,7 @@ The runtime owns, for every module:
 | Commands | A form inside the modal names its command with a `__command` field (or a submit button with `name="__command"`). The runtime maps `FormData` through `command.input`, calls `/_ket/fn` with an idempotency key, and applies `after`: `close`, `reload`, `refresh`, `stay`, `{ tab }` or `{ dialog }`. |
 | Previews | A command marked `preview: true` asks what would happen instead of making it happen. Its function writes nothing, so the record is not re-read, the collection is not told and what was typed stays on screen. The answer reaches the view as `context.outcome<T>('<command>')`, beside the form that asked for it, and is cleared as soon as anything moves — another record, tab or dialog, a refusal, or the write itself. This is how a change with consequences is confirmed: one form, two submit buttons, and the commit offered only once the consequence has been read. |
 | Answers | `context.outcome` also carries what a command with `after: 'stay'` returned, which is how something the server can say only once — a one-time credential — reaches the reader. Every other `after` replaces the layer, and the answer goes with it. |
-| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. Text/select values survive through `context.draft(name, fallback)` and checkbox/radio state through `context.draftChecked(name, value, fallback)`. |
+| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. A code that neither `messages` nor `labels` translate reads as `recordModal.saveFailed`, never as the code itself. Text/select values survive through `context.draft(name, fallback)` and checkbox/radio state through `context.draftChecked(name, value, fallback)`. |
 | Success | A command that leaves the modal open says so where a refusal would have appeared: a positive notice at the top of the layer (`recordModal.savedTitle` / `recordModal.saved`). It clears on the next submit and when another record opens. A command that closes the modal says it by closing. |
 | Unsaved input | Switching tabs preserves text, select, checkbox and radio drafts without prompting. Closing asks `recordModal.unsaved` only for the top layer being discarded. |
 | Dialogs | An element with `data-record-dialog="<name>"` opens a dialog layer of the same record; `data-record-param-*` attributes become its params. Closing it returns to the record without reloading. |
@@ -155,7 +155,7 @@ still ship the same keys in `messages`:
 | `recordModal.notFound` | The record is gone or not visible |
 | `recordModal.retry` | Retry after a load failure |
 | `recordModal.errorTitle` | Title of the refusal notice |
-| `recordModal.saveFailed` | A command failed without issues |
+| `recordModal.saveFailed` | A command failed without issues, or with a code nothing translates |
 | `recordModal.savedTitle` | Title of the notice a succeeded command leaves |
 | `recordModal.saved` | A command succeeded and the modal stayed open |
 | `recordModal.unsaved` | Prompt before discarding typed input |

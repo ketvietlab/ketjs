@@ -202,7 +202,7 @@ test('a role dialog says where the role applies and takes it back behind a previ
   assert.match(html, /coverage\.full/)
   assert.match(html, /Khiếu nại/)
   assert.match(html, /coverage\.partial/)
-  assert.match(html, /name="reason"/)
+  assert.doesNotMatch(html, /name="reason"/)
   assert.match(html, /name="__command" value="previewUnassign"/)
   // Removal is committed only after its own preview, like an assignment.
   assert.doesNotMatch(html, /name="__command" value="unassign"/)
@@ -256,7 +256,7 @@ test('a viewer who may not reset sees the account without the action', () => {
   assert.match(html, /login\.readOnlyHint/)
 })
 
-test('the log says what changed, who did it and why — and is its own permission', () => {
+test('the log says what changed and who did it — and is its own permission', () => {
   const rows = [
     {
       id: 'e1',
@@ -273,7 +273,7 @@ test('the log says what changed, who did it and why — and is its own permissio
 
   assert.match(html, /audit\.event\.authorization\.assignment\.created/)
   assert.match(html, /an@ketviet\.test/)
-  assert.match(html, /Chuyển sang tổ chăm sóc/)
+  assert.doesNotMatch(html, /Chuyển sang tổ chăm sóc/)
   // The role is named, not shown as the id it was recorded under.
   assert.match(html, /Chăm sóc khách hàng/)
   assert.match(html, /audit\.outcome\.success/)
@@ -300,7 +300,7 @@ test('the profile dialog edits who a person is and where they work as two decisi
   assert.match(html, /name="company_company-a"[^>]*checked/)
   assert.match(html, /name="branch_cau-giay"/)
   assert.match(html, /name="defaultCompanyId"/)
-  assert.match(html, /name="workplaceReason"/)
+  assert.doesNotMatch(html, /name="workplaceReason"/)
 
   // A company nobody ticked offers none of its branches.
   const other = render(
@@ -351,7 +351,7 @@ test('the commands send the selection the person made, and the revision they wer
   const assign = commands.assign!.input(form, context, {})
   assert.equal(commands.assign!.fn, 'user.assignRoles')
   assert.deepEqual(assign.roleIds, ['care-agent'])
-  assert.equal(assign.reason, 'Chuyển sang tổ chăm sóc')
+  assert.equal('reason' in assign, false)
   assert.equal(assign.expectedAuthorizationRevision, 7)
   assert.equal(assign.addMembership, true)
 
@@ -361,7 +361,7 @@ test('the commands send the selection the person made, and the revision they wer
   assert.equal(unassign.roleId, 'care-agent')
   // The scope the row was stored with, not one re-derived from its display names.
   assert.equal(unassign.scopeKey, 'branch:company-a:cau-giay')
-  assert.equal(unassign.reason, 'Chuyển sang tổ chăm sóc')
+  assert.equal('reason' in unassign, false)
   assert.equal(unassign.expectedAuthorizationRevision, 7)
 })
 
@@ -374,4 +374,29 @@ test('the sign-in tab links provider identities only when the viewer may list th
     tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities: false } }))),
   )
   assert.doesNotMatch(denied, /\/admin\/oauth\/identities/)
+})
+
+test('user identity is rendered once in modal chrome; body header contains only actions', () => {
+  const context = contextOf(dataOf())
+  assert.equal(userModalDefinition.title(context), 'Minh Trang')
+  assert.equal(userModalDefinition.description?.(context), 'minhtrang')
+  assert.match(render(userModalDefinition.status?.(context)), /data-ui="badge"/u)
+  const header = render(userModalDefinition.header?.(context))
+  assert.doesNotMatch(header, /Minh Trang|minhtrang|data-ui="record-summary"/u)
+  assert.match(header, /data-record-dialog="edit"/u)
+})
+
+test('user tabs and nested dialogs never ask for a change reason', () => {
+  const context = contextOf(dataOf())
+  for (const tab of userModalDefinition.tabs ?? []) {
+    assert.doesNotMatch(
+      render(tab.view(context)),
+      /name="(?:reason|workplaceReason|breakGlassReason)"|field.reason/u,
+      tab.id,
+    )
+  }
+  for (const name of ['assign', 'role', 'edit']) {
+    const html = render(dialogView(name)(contextOf(dataOf(), { dialog: { name, params: { id: 'a1' } } })))
+    assert.doesNotMatch(html, /name="(?:reason|workplaceReason|breakGlassReason)"|field.reason/u, name)
+  }
 })
