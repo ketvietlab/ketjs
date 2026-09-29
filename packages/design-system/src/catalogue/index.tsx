@@ -7,6 +7,7 @@ import { designSystemInventory } from './inventory.generated.ts'
 import { componentRegistry } from './registry.ts'
 
 export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
+export { LayeringPreview, layeringPresentations } from './layering.tsx'
 export {
   InventoryPage,
   inventoryDecisions,

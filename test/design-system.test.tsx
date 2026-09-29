@@ -413,13 +413,19 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /--kv-page-chrome-bg: var\(--kv-page-bg\)/)
   assert.match(grouped, /--kv-page-padding-x: var\(--kv-space-3\)/)
   assert.match(grouped, /gap: var\(--kv-space-2\)/)
-  assert.match(grouped, /\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-space-3\)/)
+  // One 12px inset for a working group's heading and body, through the surface role tokens.
+  assert.match(grouped, /--kv-surface-inset: var\(--kv-space-3\)/)
+  assert.match(grouped, /--kv-surface-head-gap: var\(--kv-space-3\)/)
   assert.match(
     grouped,
     /\[data-ui="table-scroll"\]\[data-framed="false"\] \{\s*width: auto;\s*margin-inline: 0/,
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
-  assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  // The rail's contents render flat through the layering rules, like any white region's.
+  assert.match(
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8'),
+    /\[data-presentation="grouped"\] \[data-ui="record-page-aside"\] \[data-ui="metric"\]/,
+  )
   assert.match(
     grouped,
     /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,

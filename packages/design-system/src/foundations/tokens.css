@@ -218,6 +218,9 @@
     --kv-gap-form-row: 0.875rem;
     --kv-gap-field-group: var(--kv-space-5);
     --kv-gap-section: var(--kv-space-7);
+    /* A surface's inset and the gap under its heading (LAYOUT.md L6). */
+    --kv-surface-inset: var(--kv-space-5);
+    --kv-surface-head-gap: var(--kv-space-5);
     --kv-page-padding-x: var(--kv-space-7);
     --kv-page-padding-y: var(--kv-space-6);
 
