@@ -198,7 +198,7 @@ const CHROME: ListChrome = {
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
-test('KetSuite ListPage derives breadcrumbs and company context from its frame', () => {
+test('KetSuite ListPage derives breadcrumbs without duplicating the global company context', () => {
   const output = renderToString(
     KetSuiteListPage({
       variant: 'operational',
@@ -235,8 +235,8 @@ test('KetSuite ListPage derives breadcrumbs and company context from its frame',
   assert.match(output, /data-ui="list-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /href="\/admin\/flow\/projects"[^>]*>[\s\S]*?Flow/)
   assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
-  assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
 test('KetSuite ListPage keeps external bulk submission beside Create while only selected tools are hidden', () => {
@@ -339,7 +339,7 @@ test('KetSuite FormPage derives its operational topbar from the application fram
   assert.match(output, /data-ui="form-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /Kế toán[\s\S]*?Hệ thống tài khoản[\s\S]*?Tạo tài khoản/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
 test('KetSuite DashboardPage derives context and preserves extension actions', () => {
@@ -367,7 +367,7 @@ test('KetSuite DashboardPage derives context and preserves extension actions', (
   assert.match(output, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /Bán hàng[\s\S]*?Tổng quan bán hàng/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="dashboard-page-actions"[\s\S]*?Tạo báo giá[\s\S]*?Extension action/)
 })
 
@@ -397,7 +397,7 @@ test('KetSuite BoardPage derives context and preserves extension actions', () =>
   assert.match(output, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /CRM[\s\S]*?Pipeline bán hàng/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="board-page-actions"[\s\S]*?Tạo cơ hội[\s\S]*?Extension action/)
   assert.match(output, /data-ui="board-page-toolbar"[\s\S]*?Lọc theo đội/)
 })
@@ -769,8 +769,8 @@ const everything = [
     asOfLabel: 'Cập nhật',
     note: 'Asia/Ho_Chi_Minh',
   }),
-  // A sidebar whose search matched nothing: the label goes, a note takes its place.
-  pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // A viewer with no menu entries still gets a readable empty sidebar.
+  pagesScreen(_, [page()], { menu: [] }),
   // How far along a record is. A value, because the empty case draws nothing at
   // all — which is the point of it, and would show none of the parts.
   progressBar({ value: 62, label: 'Tiến độ' }),
@@ -1055,10 +1055,12 @@ test('routes: the segment after /admin names the section, so a path says where i
     'settings',
     'profile',
     'context',
+    'search',
     'addresses',
     'companies',
     'users',
     'roles',
+    'access-policies',
     'permission-presets',
   ])
   const manifest = compose(ketsuite.modules, { headless: true })
@@ -1267,9 +1269,9 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.match(html, /^<ket-fragments data-title=/)
   assert.deepEqual(
     [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
-    ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
+    ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'],
   )
-  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?persistent foot/)
 })
 
 test('backend shell: the document uses the design-system application shell', () => {
@@ -1281,19 +1283,29 @@ test('backend shell: the document uses the design-system application shell', () 
   ).replace(/<!--k\[?\]?-->/g, '')
   assert.match(
     html,
-    /^<div data-kv-design-system(?:="true")? data-presentation="grouped"><div data-ui="app-shell"/,
+    /^<div data-kv-design-system(?:="true")? data-presentation="grouped" data-density="compact"><div data-ui="app-shell"/,
     'the grouped presentation gives every screen the mocks page gutter',
   )
   assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
   assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
-  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
-  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.content'])
+  assert.match(html, /<main data-ui="app-main">[\s\S]*?<span data-ui="runtime-probe">/)
+  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'])
     assert.equal(
       (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
       1,
       slot,
     )
   assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  assert.doesNotMatch(html, /data-ui="app-topbar"|data-ui="app-shell-topbar"/)
+  assert.match(html, /data-has-location="true"/)
+  const sidebar = html.match(/<aside data-ui="app-sidebar">[\s\S]*?<\/aside>/)?.[0] ?? ''
+  assert.match(sidebar, /data-ui="navigation-header"[\s\S]*?data-ui="app-brand"[\s\S]*?alt="KetSuite"/)
+  assert.match(
+    html,
+    /data-ui="app-main"[\s\S]*?data-ui="app-location-bar"[\s\S]*?data-ui="app-location-context"[\s\S]*?data-ui="global-search-trigger"[\s\S]*?data-ui="sidebar-foot"/,
+  )
+  assert.doesNotMatch(sidebar, /data-ui="sidebar-foot"|name="theme"|data-ui="viewer"/)
+  assert.equal((html.match(/name="theme"/g) ?? []).length, 1)
   const runtimeAt = html.indexOf('runtime-probe')
   const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
   assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')

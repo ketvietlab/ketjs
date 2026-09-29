@@ -255,3 +255,11 @@ test('who holds a role is part of reading it', async (t) => {
   )
   assert.deepEqual((await run<RoleContext>('user.roleModalContext', { id: 'local' }))!.data.holders, [])
 })
+
+test('the product role context refuses legacy records and never exposes authoring commands', async (t) => {
+  const { run } = await boot(t)
+  assert.equal(await run('user.managedRoleModalContext', { id: 'local' }), null)
+  const result = await run<RoleContext>('user.managedRoleModalContext', { id: 'reader' })
+  assert.ok(result)
+  for (const key of ['create', 'save', 'clone', 'grant']) assert.equal(result.data.permissions[key], false)
+})

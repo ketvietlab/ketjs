@@ -5,7 +5,7 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import { createSearchFilterView } from '../packages/design-system/src/interactions/search-filter/index.tsx'
 import { searchFilterDemoConfig } from '../packages/design-system/src/interactions/search-filter/demo.ts'
 
-test('search filter: active group-by fields render as one ordered pipeline, not search chips', () => {
+test('search filter: active groups render in the chip row and retain their ordered pipeline', () => {
   const html = renderToString(
     createSearchFilterView({ id: 'search-filter-grouping-test', config: searchFilterDemoConfig }).view(),
   )
@@ -14,10 +14,10 @@ test('search filter: active group-by fields render as one ordered pipeline, not 
   assert.match(html, /data-ui="search-filter-grouping-order">[\s\S]*?1</)
   assert.match(html, /data-ui="search-filter-grouping-label">[\s\S]*?Customer/)
   assert.match(html, /data-ui="search-filter-grouping-clear"[\s\S]*?Clear all/)
-  assert.doesNotMatch(
+  assert.match(
     html,
     /data-ui="search-filter-facet" data-type="groupBy"/,
-    'grouping state stays in its ordered control rather than consuming the search field',
+    'grouping is visible outside the popup without consuming the search input',
   )
 })
 

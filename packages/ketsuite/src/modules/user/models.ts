@@ -140,6 +140,58 @@ export const models: Record<string, ModelDef> = {
     indexes: { user_role_scope: { fields: ['userId', 'roleId', 'scopeKey'], unique: true } },
   },
 
+  /** Bounded, server-observed support telemetry: only the most recent refusal per user. */
+  AccessDenial: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      fnKey: 'text',
+      occurredAt: 'datetime',
+      count: 'int',
+      companyId: 'text?',
+      branchId: 'text?',
+    },
+  },
+
+  /** Trusted directory facts; only the tenant directory adapter may replace them. */
+  DirectoryFact: {
+    scope: 'shared',
+    fields: { id: 'id', userId: 'ref:user.User', kind: 'text', value: 'text', label: 'text' },
+    indexes: { fact: { fields: ['userId', 'kind', 'value'], unique: true } },
+  },
+
+  AccessPolicy: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      name: 'text',
+      description: 'text?',
+      active: 'bool',
+      matchKind: 'text',
+      matchValue: 'text',
+      roleIds: 'json',
+      scopeKind: 'text',
+      companyId: 'ref:company.Company?',
+      branchId: 'ref:company.Branch?',
+    },
+  },
+
+  /** Separate ownership prevents a policy from removing a manual or another policy's grant. */
+  PolicyAssignment: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      policyId: 'ref:user.AccessPolicy',
+      userId: 'ref:user.User',
+      roleId: 'ref:user.Role',
+      scopeKind: 'text',
+      scopeKey: 'text',
+      companyId: 'ref:company.Company?',
+      branchId: 'ref:company.Branch?',
+    },
+    indexes: { owner: { fields: ['policyId', 'userId', 'roleId', 'scopeKey'], unique: true } },
+  },
+
   /** Monotonic tenant authorization revision used for CAS and future cache invalidation. */
   AuthorizationRevision: {
     scope: 'shared',

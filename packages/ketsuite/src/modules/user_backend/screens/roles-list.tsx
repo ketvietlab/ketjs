@@ -17,7 +17,11 @@ export type RoleListRow = RoleRow & { detailHref: string }
 
 export type RolesListScreenOptions = {
   rows: readonly RoleListRow[]
-  createHref: string
+  /**
+   * Null while roles come only from role templates: a custom role cannot be
+   * assigned, so the header offers no create action.
+   */
+  createHref: string | null
   presetsHref?: string
   /** What the search-filter bar decided about the table, such as its groups. */
   table?: Partial<DataTable<RoleListRow>>
@@ -30,14 +34,6 @@ export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
     priority: 'primary',
     width: 'wide',
     cell: (row) => row.name,
-  },
-  {
-    key: 'mode',
-    label: _('user_backend.field.roleMode'),
-    cell: (row) =>
-      row.mode === 'managed'
-        ? `${_('user_backend.role.managed')} · v${String(row.templateVersion ?? '—')}`
-        : _('user_backend.role.custom'),
   },
   {
     key: 'description',
@@ -53,9 +49,7 @@ export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
     key: 'health',
     label: _('user_backend.access.health'),
     cell: (row) =>
-      row.healthIssues?.length
-        ? row.healthIssues.map((issue) => _(`user_backend.health.${issue}`)).join(', ')
-        : _('user_backend.health.healthy'),
+      row.healthIssues?.length ? _('user_backend.roles.stale') : _('user_backend.roles.healthy'),
   },
 ]
 
@@ -83,7 +77,13 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       controls={collectionControls(_, _('user_backend.roles.title'), frame)}
       description={_('user_backend.roles.subtitle')}
       headerActions={
-        <LinkButton label={_('user_backend.action.createRole')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton
+            label={_('user_backend.action.createRole')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
       actions={collectionActions(_, frame)}
       status={`${_('user_backend.roles.title')}: ${String(options.rows.length)}`}

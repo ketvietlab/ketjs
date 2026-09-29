@@ -1,3 +1,4 @@
+import { userModalMessages } from './modal-messages.ts'
 // The record-modal context for a user (KetSuite record-modal contract).
 //
 // The users collection opens a person — and its create action — in a client-side
@@ -9,24 +10,18 @@
 
 import { and, defineFn, desc, eq, from, isNotNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { AUTHORIZATION_EFFECTS, authorizationRevisionOf, effectiveFunctionKeys } from './authorization.ts'
+import {
+  AUTHORIZATION_EFFECTS,
+  authorizationRevisionOf,
+  effectiveFunctionKeys,
+  resolveEffectivePermissions,
+} from './authorization.ts'
+import { functionLabel, surfaceRows, templateTier } from './access-surfaces.ts'
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
 
 /** Message prefixes the user views read. */
-const MESSAGE_PREFIXES = ['user_backend.', 'user.']
-
-const messagesFor = (ctx: Ctx, lang: Lang): Record<string, string> => {
-  const catalog = ctx.manifest.messages?.[lang] ?? {}
-  const out: Record<string, string> = {}
-  for (const [key, message] of Object.entries(catalog)) {
-    if (!MESSAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue
-    out[key] =
-      typeof message === 'string' ? message : String(message.other ?? Object.values(message)[0] ?? key)
-  }
-  return out
-}
 
 const readEffects = AUTHORIZATION_EFFECTS.filter((effect) => !effect.startsWith('write:'))
 
@@ -63,9 +58,39 @@ const assignableRoles = async (ctx: Ctx): Promise<Row[]> =>
       (role): Row => ({
         id: String(role.id),
         name: String(role.name ?? role.id),
+        tier: templateTier(ctx, String(role.templateKey)),
       }),
     )
     .sort(byName)
+
+/**
+ * What this person can open and work on, one row per screen.
+ *
+ * Measured where the person lands — their default company and branch — because
+ * that is where they will first meet a refusal. Each row names the held roles
+ * that open it.
+ */
+const surfacesOf = async (ctx: Ctx, lang: Lang, record: Row): Promise<Row[]> => {
+  const effective = await resolveEffectivePermissions(ctx, String(record.id), {
+    companyId: record.defaultCompanyId ? String(record.defaultCompanyId) : null,
+    branchId: record.defaultBranchId ? String(record.defaultBranchId) : null,
+  })
+  const roleNames = new Map(
+    (await ctx.db.select('user.Role')).map((role) => [String(role.id), String(role.name ?? role.id)]),
+  )
+  const held = new Map(
+    effective.functions.map((fn) => [
+      fn.key,
+      [...new Set(fn.paths.map((path) => roleNames.get(path.roleId) ?? path.roleId))],
+    ]),
+  )
+  return surfaceRows(
+    ctx,
+    lang,
+    (fn) => effective.superuser || held.has(fn),
+    (fn) => (effective.superuser ? [] : (held.get(fn) ?? [])),
+  )
+}
 
 /**
  * What a company is called.
@@ -87,7 +112,7 @@ const companyNames = async (ctx: Ctx): Promise<Map<string, string>> => {
   )
 }
 
-const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[] }> => {
+export const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches: Row[] }> => {
   const names = await companyNames(ctx)
   const companies = (await ctx.db.select('company.Company', { active: true }))
     .map(
@@ -126,12 +151,26 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
   const branches = new Map(
     (await ctx.db.select('company.Branch')).map((row) => [String(row.id), String(row.name ?? row.id)]),
   )
-  return (await ctx.db.select('user.Assignment', { userId })).map((assignment): Row => {
+  const policies = new Map(
+    (await ctx.db.select('user.AccessPolicy')).map((row) => [String(row.id), String(row.name)]),
+  )
+  const assignments = [
+    ...(await ctx.db.select('user.Assignment', { userId })),
+    ...(await ctx.db.select('user.PolicyAssignment', { userId })),
+  ]
+  return assignments.map((assignment): Row => {
     const companyId = assignment.companyId ? String(assignment.companyId) : ''
     const branchId = assignment.branchId ? String(assignment.branchId) : ''
     return {
       id: String(assignment.id),
       roleId: String(assignment.roleId),
+      source: assignment.policyId
+        ? {
+            kind: 'policy',
+            policyId: String(assignment.policyId),
+            policyName: policies.get(String(assignment.policyId)) ?? String(assignment.policyId),
+          }
+        : { kind: 'manual' },
       roleName: roles.get(String(assignment.roleId)) ?? String(assignment.roleId),
       scopeKind: String(assignment.scopeKind ?? 'tenant'),
       companyId: companyId || null,
@@ -241,12 +280,15 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       'read:user.User',
       'read:user.Role',
       'read:user.Assignment',
+      'read:user.PolicyAssignment',
+      'read:user.AccessPolicy',
       'read:company.Company',
       'read:company.Branch',
       // A company is named by its party record.
       'read:partner.Partner',
       // The log tab reads what was done to this person's authority.
       'read:user.SecurityAudit',
+      'read:user.AccessDenial',
       // The profile form edits where this person works.
       'read:user.Membership',
       'read:user.BranchMembership',
@@ -255,6 +297,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
+      // Only a superuser may give emergency access, and the check is the server's own.
+      const actorSuperuser = !!ctx.actor && (await effectiveFunctionKeys(ctx, ctx.actor)) === null
       const permissions = {
         create: can('user.createUser'),
         save: can('user.saveUser'),
@@ -267,6 +311,13 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
         audit: can('user.listAuthorizationAudit'),
         workplaces: can('user.setWorkplaces'),
         identities: Boolean(ctx.manifest.functions['oauth.listIdentities']) && can('oauth.listIdentities'),
+        // Offered only where the function ships: a superuser may call everything,
+        // including a function this build does not have.
+        breakGlass: Boolean(ctx.manifest.functions['user.setBreakGlass']) && actorSuperuser,
+        sendLink:
+          Boolean(ctx.manifest.functions['user.sendCredentialLink']) && can('user.sendCredentialLink'),
+        previewWorkplaces:
+          Boolean(ctx.manifest.functions['user.previewWorkplaces']) && can('user.previewWorkplaces'),
       }
       const creating = !args.id
       // The modal is a read of a person, so it answers only a viewer allowed that read:
@@ -280,6 +331,8 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       const { companies, branches } = await workplaces(ctx)
       const assignments = creating ? [] : await assignmentsOf(ctx, String(args.id))
       const lang: Lang = args.locale === 'en' ? 'en' : 'vi'
+      const denial =
+        !creating && permissions.audit ? (await ctx.db.select('user.AccessDenial', { id: args.id }))[0] : null
       return {
         data: {
           record: {
@@ -300,7 +353,26 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
             // among the workplaces it is being given.
             defaultCompanyId: record.defaultCompanyId ? String(record.defaultCompanyId) : null,
             defaultBranchId: record.defaultBranchId ? String(record.defaultBranchId) : null,
+            // A superuser grant with an end is break-glass; the tab shows until when.
+            superuserExpiresAt: record.superuserExpiresAt ? String(record.superuserExpiresAt) : null,
+            superuserReason: record.superuserReason ? String(record.superuserReason) : null,
           },
+          // The guards are about the reader: nobody changes their own authority, and
+          // only a superuser gives a security-tier role.
+          actor: { self: !creating && ctx.actor === String(args.id), superuser: actorSuperuser },
+          surfaces: creating ? undefined : await surfacesOf(ctx, lang, record),
+          lastDenial: denial
+            ? {
+                fn: String(denial.fnKey),
+                label: functionLabel(ctx, lang, String(denial.fnKey)),
+                surface: null,
+                at: String(denial.occurredAt),
+                count: Number(denial.count),
+                templates: [],
+                companyId: denial.companyId,
+                branchId: denial.branchId,
+              }
+            : null,
           // Where this person works today, which the profile form edits as a whole.
           memberships: creating
             ? { companies: [], branches: [] }
@@ -330,7 +402,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
           permissions,
           lang,
         },
-        messages: messagesFor(ctx, lang),
+        messages: userModalMessages(ctx, lang),
       }
     },
   }),

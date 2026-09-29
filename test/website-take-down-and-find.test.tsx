@@ -201,7 +201,7 @@ test('content list: the site selector is what is left once the bar owns the quer
   // Which site's content this is remains a choice the screen makes; the query
   // and the publication state moved to the search-filter bar the route builds.
   assert.match(html, /name="site"/u)
-  assert.doesNotMatch(html, /name="q"|name="status"/u)
+  assert.doesNotMatch(html.slice(html.indexOf('data-ui="list-page"')), /name="q"|name="status"/u)
 })
 
 test('routes: taking a page down does not answer a GET', async () => {

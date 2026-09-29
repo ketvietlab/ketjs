@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -100,7 +101,10 @@ const base = () =>
 test('Attendance My Work: specialized surface keeps employee timezone, schedule, sessions and leave relations', () => {
   const html = renderToString(base())
 
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(html, /NV001 · Nguyễn Minh Anh/)
   assert.match(html, /Asia\/Ho_Chi_Minh/)
   assert.match(html, /2026-08-27T01:00:00\.000Z/)

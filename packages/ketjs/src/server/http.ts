@@ -29,6 +29,9 @@ import { claimRateSlot } from './ratelimit.ts'
 import type { RatePolicy } from './ratelimit.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
+import { acceptWebSocket, isWebSocketUpgrade, rejectUpgrade } from './websocket.ts'
+import type { WebSocketPeer } from './websocket.ts'
+import type { Duplex } from 'node:stream'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
@@ -153,6 +156,12 @@ export type ServeOpts = {
   resolveScope?: (url: URL, req: IncomingMessage) => Scope | Promise<Scope>
   /** Authenticated user id captured into functions and any jobs they enqueue. */
   resolveActor?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /** Runs after the database lease ends; callback failures never replace the refusal. */
+  onFunctionDenied?: (
+    event: { fn: string; actor: string; scope: Scope },
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<void>
   /** Functions this request may call. Null means unrestricted — see boot.ts. */
   resolveAllow?: (url: URL, req: IncomingMessage) => Promise<readonly string[] | null>
   /** Disable PostgreSQL notification while retaining polling correctness. */
@@ -479,20 +488,44 @@ const applyResponse = async (response, signal) => {
   }
   if (!response.headers.get('content-type')?.toLowerCase().startsWith(fragmentsType))
     throw new Error('server did not return a navigation fragment')
-  const markup = await response.text()
+  let markup
+  try { markup = await response.text() } catch (cause) {
+    throw Object.assign(new Error('navigation response was interrupted', { cause }), { retryable: true })
+  }
   requireActive(signal)
   const changed = await applyFragments(markup, signal)
-  const location = response.headers.get('x-ket-location')
-  if (location) history.replaceState(history.state ?? {}, '', location)
+  const nextLocation = response.headers.get('x-ket-location')
+  if (nextLocation) history.replaceState(history.state ?? {}, '', nextLocation)
   return changed
 }
 
 let active = null
+// Store only positions and element identities, never field values or record data.
+const contextPath = (element) => {
+  if (!element) return null
+  if (element === document.body) return 'body'
+  if (element.id) return '#' + CSS.escape(element.id)
+  const parent = element.parentElement
+  if (!parent) return element.localName
+  const siblings = Array.from(parent.children).filter((child) => child.localName === element.localName)
+  return contextPath(parent) + ' > ' + element.localName + ':nth-of-type(' + (siblings.indexOf(element) + 1) + ')'
+}
+const contextIdentity = (element) => JSON.stringify([
+  element?.localName,
+  ...['data-ui', 'rel', 'data-direction', 'data-dir', 'name', 'type'].map((name) => element?.getAttribute?.(name) ?? null),
+])
+const captureContext = () => ({
+  focus: document.activeElement === document.body ? null : contextPath(document.activeElement),
+  focusIdentity: contextIdentity(document.activeElement),
+  scrolls: Array.from(document.querySelectorAll('[data-ket-slot], [data-ket-slot] *'))
+    .filter((element) => element.scrollLeft || element.scrollTop)
+    .map((element) => [contextPath(element), element.scrollLeft, element.scrollTop]),
+})
 const saveScroll = () => {
-  const state = { ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY] }
+  const state = { ...(history.state ?? {}), __ketScroll: [window.scrollX, window.scrollY], __ketContext: captureContext() }
   history.replaceState(state, '', location.href)
 }
-const focusAfterNavigation = (url, changed, scroll) => {
+const focusAfterNavigation = (url, changed, scroll, context = null) => {
   if (url.hash) {
     const target = document.getElementById(decodeURIComponent(url.hash.slice(1)))
     if (target) {
@@ -503,6 +536,15 @@ const focusAfterNavigation = (url, changed, scroll) => {
   }
   const [x, y] = scroll ?? [0, 0]
   window.scrollTo(x, y)
+  for (const [path, left, top] of context?.scrolls ?? []) {
+    const element = path && document.querySelector(path)
+    if (element) { element.scrollLeft = left; element.scrollTop = top }
+  }
+  const previous = context?.focus && document.querySelector(context.focus)
+  if (previous?.getClientRects().length && !previous.disabled && contextIdentity(previous) === context.focusIdentity) {
+    previous.focus?.({ preventScroll: true })
+    if (document.activeElement === previous) return
+  }
   const target = changed.find((slot) => slot.matches?.('[data-ket-slot$="content"], main')) ?? changed[0]
   if (!target) return
   const hadTabIndex = target.hasAttribute('tabindex')
@@ -511,18 +553,24 @@ const focusAfterNavigation = (url, changed, scroll) => {
   if (!hadTabIndex) target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true })
 }
 
-const navigate = async (asked, mode = 'push', scroll = null) => {
+const navigate = async (asked, mode = 'push', scroll = null, options = {}) => {
   const target = new URL(asked, location.href)
+  requireActive(options.signal)
+  const context = options.preserveContext ? captureContext() : options.context
+  if (options.preserveContext && !scroll) scroll = [window.scrollX, window.scrollY]
   if (mode === 'push') saveScroll()
   active?.abort()
   const controller = new AbortController()
+  const abort = () => controller.abort()
+  options.signal?.addEventListener('abort', abort, { once: true })
   active = controller
   document.documentElement.setAttribute('data-ket-navigating', '')
   document.documentElement.setAttribute('aria-busy', 'true')
   event('ket:navigation-start', { url: target.href, mode })
   let fallback = target.href
   try {
-    const response = await fetch(target, {
+    let response
+    try { response = await fetch(target, {
       credentials: 'same-origin',
       headers: {
         accept: fragmentsType + ', text/html;q=0.9',
@@ -530,20 +578,27 @@ const navigate = async (asked, mode = 'push', scroll = null) => {
         'x-ket-build': buildId,
       },
       signal: controller.signal,
-    })
+    }) } catch (cause) {
+      throw Object.assign(new Error('navigation request failed', { cause }), { retryable: true })
+    }
     fallback = response.url || fallback
-    if (!response.ok) throw new Error('server refused the navigation request')
+    if (!response.ok) throw Object.assign(new Error('server refused the navigation request'), { status: response.status, retryable: response.status >= 500 })
     const changed = await applyResponse(response, controller.signal)
     const finalUrl = new URL(response.url || target.href)
     if (mode === 'push') history.pushState({ __ketScroll: [0, 0] }, '', finalUrl.href)
     if (mode === 'replace') history.replaceState({ ...(history.state ?? {}), __ketScroll: [0, 0] }, '', finalUrl.href)
-    focusAfterNavigation(finalUrl, changed, scroll)
+    focusAfterNavigation(finalUrl, changed, scroll, context)
     event('ket:navigation-complete', { url: finalUrl.href, mode })
   } catch (caught) {
-    if (controller.signal.aborted) return
+    if (controller.signal.aborted) {
+      if (options.fallback === 'error') throw new DOMException('Navigation aborted', 'AbortError')
+      return
+    }
     event('ket:navigation-error', { url: fallback, mode, error: caught })
+    if (options.fallback === 'error') throw caught
     hardNavigate(fallback)
   } finally {
+    options.signal?.removeEventListener('abort', abort)
     if (active === controller) {
       active = null
       document.documentElement.removeAttribute('data-ket-navigating')
@@ -564,7 +619,7 @@ document.addEventListener('click', (click) => {
   if (target.origin !== location.origin) return
   if (target.pathname === location.pathname && target.search === location.search && target.hash !== location.hash) return
   click.preventDefault()
-  void navigate(target)
+  void navigate(target, 'push', null, { preserveContext: target.pathname === location.pathname && Boolean(anchor.closest('[data-ket-preserve-context]')) })
 })
 
 document.addEventListener('submit', (submit) => {
@@ -578,7 +633,7 @@ document.addEventListener('submit', (submit) => {
   for (const [name, value] of new FormData(form, submit.submitter))
     target.searchParams.append(name, typeof value === 'string' ? value : value.name)
   submit.preventDefault()
-  void navigate(target)
+  void navigate(target, 'push', null, { preserveContext: target.pathname === location.pathname && Boolean(form.closest('[data-ket-preserve-context]')) })
 })
 
 if (navigationEnabled) {
@@ -590,11 +645,11 @@ if (navigationEnabled) {
     // event so going back closes the modal instead of re-fetching the page.
     const owned = new CustomEvent('ket:popstate', { cancelable: true, detail: { url: location.href, state: pop.state } })
     if (!document.dispatchEvent(owned)) return
-    void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0])
+    void navigate(location.href, 'pop', pop.state?.__ketScroll ?? [0, 0], { context: pop.state?.__ketContext })
   })
 }
 navigation = {
-  navigate: (target, options = {}) => navigate(target, options.replace ? 'replace' : 'push'),
+  navigate: (target, options = {}) => navigate(target, options.replace ? 'replace' : 'push', null, options),
   apply: (response, options = {}) => applyResponse(response, options.signal),
   replace: (target) => history.replaceState(history.state ?? {}, '', new URL(target, location.href)),
   reload: (target = location.href) => hardNavigate(target),
@@ -839,7 +894,10 @@ export async function createKetServer(o: ServeOpts) {
     }
   }
 
-  const server = createServer(async (req, res) => {
+  // Only a WebSocket handshake leaves the HTTP path. Any other Upgrade header —
+  // h2c from a curious client — is still an ordinary request, as it was before
+  // a listener for 'upgrade' existed.
+  const server = createServer({ shouldUpgradeCallback: isWebSocketUpgrade }, async (req, res) => {
     const started = Date.now()
     // The route pattern, never the pathname: a raw path carries record ids and a
     // query string, which is how customer data reaches a log aggregator. An
@@ -1055,7 +1113,21 @@ export async function createKetServer(o: ServeOpts) {
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
             idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
           }),
-        )
+        ).catch(async (error) => {
+          if (
+            error instanceof KetError &&
+            error.code === 'E_FN_NOT_PERMITTED' &&
+            actor &&
+            o.onFunctionDenied
+          ) {
+            try {
+              await o.onFunctionDenied({ fn: fnKey, actor, scope: scope ?? { company: null } }, url, req)
+            } catch {
+              /* best effort */
+            }
+          }
+          throw error
+        })
         return json(res, 200, result)
       }
 
@@ -1145,6 +1217,112 @@ export async function createKetServer(o: ServeOpts) {
     }
   })
 
+  /**
+   * A WebSocket asks the same route the same question a request would.
+   *
+   * The route runs with the upgrade request — its sign-in check, the rate limit
+   * and its own authentication see exactly what a fetch would show them — and
+   * only an answer made by websocket() opens a socket. Anything else is written
+   * back as the HTTP answer it is, and the connection closed.
+   */
+  const peers = new Set<WebSocketPeer>()
+  server.on('upgrade', async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const started = Date.now()
+    let route = '(unmatched)'
+    let requestLog = o.log
+    let status = 101
+    socket.on('error', () => {})
+    try {
+      const url = requestUrl(req)
+      requestLog = o.log?.child({ tenant: tenantForLog(url, req) })
+      const policy = o.rateLimit?.(url, req)
+      if (policy) {
+        const verdict = await withDb(url, req, (adapter) => claimRateSlot(adapter, policy))
+        if (!verdict.ok) {
+          route = `rate:${policy.action}`
+          status = 429
+          return rejectUpgrade(
+            socket,
+            429,
+            {
+              'content-type': 'application/json; charset=utf-8',
+              'retry-after': String(Math.max(1, Math.ceil(verdict.retryAfterMs / 1_000))),
+            },
+            JSON.stringify({ code: 'E_RATE_LIMITED', message: `too many "${policy.action}" requests` }),
+          )
+        }
+      }
+      const matched = matchRoute(url.pathname)
+      if (!matched) {
+        status = 404
+        return rejectUpgrade(
+          socket,
+          404,
+          { 'content-type': 'application/json; charset=utf-8' },
+          JSON.stringify({ code: 'E_NOT_FOUND', message: `no route for ${url.pathname}` }),
+        )
+      }
+      route = matched.path
+      const result = await matched.value(url, req, matched.params)
+      if (!result.webSocket) {
+        status = result.status ?? 200
+        const body = typeof result.body === 'string' || result.body instanceof Uint8Array ? result.body : ''
+        return rejectUpgrade(
+          socket,
+          status,
+          { 'content-type': contentType(result.type ?? 'text/html'), ...result.headers },
+          body,
+        )
+      }
+      const socketRoute = route
+      const log = requestLog
+      const peer = acceptWebSocket(req, socket, head, result.webSocket, {
+        closed: (code, durationMs) => {
+          peers.delete(peer as WebSocketPeer)
+          log?.log({
+            level: 'info',
+            event: 'websocket_closed',
+            durationMs,
+            fields: { route: socketRoute, code },
+          })
+        },
+        failed: (error) =>
+          log?.log({
+            level: 'error',
+            event: 'unhandled',
+            error,
+            fields: { route: socketRoute, websocket: true },
+          }),
+      })
+      if (!peer) status = 400
+      else if (!socket.destroyed) peers.add(peer)
+    } catch (e) {
+      const defect = !(e instanceof KetError) || isDefectError(e.code)
+      if (defect)
+        requestLog?.log({
+          level: 'error',
+          event: 'unhandled',
+          durationMs: Date.now() - started,
+          error: e,
+          fields: { method: req.method ?? '', route, websocket: true },
+        })
+      status = defect ? 500 : statusForError((e as KetError).code)
+      rejectUpgrade(
+        socket,
+        status,
+        { 'content-type': 'application/json; charset=utf-8' },
+        JSON.stringify(defect ? INTERNAL_ERROR : (e as KetError).toJSON()),
+      )
+    } finally {
+      requestLog?.log({
+        level: 'info',
+        event: 'http_request',
+        durationMs: Date.now() - started,
+        fields: { method: req.method ?? '', route, status, websocket: true },
+      })
+    }
+  })
+
   return {
     server,
     streams: await streamsFor(o.adapter ?? null),
@@ -1154,7 +1332,11 @@ export async function createKetServer(o: ServeOpts) {
       )
     },
     close(): Promise<void> {
-      return new Promise((r) => server.close(() => r()))
+      // An open socket keeps server.close() waiting, so each is asked to leave:
+      // 1001, "going away", which a client reads as reconnect-elsewhere.
+      const closed = new Promise<void>((r) => server.close(() => r()))
+      for (const peer of peers) peer.close(1001, 'server shutting down')
+      return closed
     },
   }
 }

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -61,7 +62,10 @@ test('vendor bill HTTP separates filtered ListPage from the stable full FormPage
   assert.match(listHtml, /data-island="backend\.search-filter"/)
   assert.doesNotMatch(listHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(listHtml, /href="\/admin\/accounting\/vendor-bills\/new\?lang=vi&amp;returnTo=/)
-  assert.doesNotMatch(listHtml, /id="vendor-bill-create-form"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(listHtml),
+    /id="vendor-bill-create-form"|data-ui="modal-layer"|mail\.chatter/,
+  )
 
   const returnTo = `${path}?lang=vi&preset=draft&preset=not_paid&q=Nh%C3%A0+cung+c%E1%BA%A5p+HTTP`
   const create = await app.client.get(`${path}/new?lang=vi&returnTo=${encodeURIComponent(returnTo)}`)
@@ -92,7 +96,10 @@ test('vendor bill HTTP separates filtered ListPage from the stable full FormPage
   assert.equal((createHtml.match(/data-island="backend\.relation-select"/g) ?? []).length, 4)
   assert.match(createHtml, /type="hidden" name="id" value="[^"]+"/)
   assert.match(createHtml, /href="\/admin\/accounting\/vendor-bills\?lang=vi&amp;preset=draft/)
-  assert.doesNotMatch(createHtml, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(createHtml),
+    /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 
   const unsafe = await (await app.client.get(`${path}/new?lang=en&returnTo=https://evil.example/`)).text()
   assert.match(unsafe, /href="\/admin\/accounting\/vendor-bills\?lang=en"/)

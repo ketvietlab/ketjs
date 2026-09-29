@@ -146,12 +146,12 @@ test('provisioning without a role creates a person who works somewhere and may d
   assert.ok(!audit.some((row) => String(row.event) === 'authorization.assignment.created'))
 })
 
-test('provisioning refuses without a reason, with a role it may not give, or against a stale revision', async (t) => {
+// A reason is optional (USR-N03), so a blank one is not a refusal.
+test('provisioning refuses a role it may not give or a stale revision', async (t) => {
   const { run, revisionOf } = await boot(t)
   const revision = await revisionOf()
 
   for (const [field, overrides] of [
-    ['reason', { reason: '   ' }],
     ['roleIds', { roleIds: ['no-such-role'] }],
     ['expectedAuthorizationRevision', { expectedAuthorizationRevision: revision + 5 }],
   ] as const) {

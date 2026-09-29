@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -66,7 +67,7 @@ test('flow page detail route: FormPage preserves Live Doc, modal sub-actions and
   const textContent = html.replace(/<!--k\[?-->/g, '')
   assert.equal(page.status, 200)
   assert.match(html, /data-ui="form-page" data-scope="flow-page-detail-form-page"/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="form-page-title"[^>]*>Local setup/)
   assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
   assert.match(html, /data-island="livedoc.editor"/)
