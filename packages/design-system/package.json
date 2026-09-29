@@ -28,7 +28,8 @@
     "prepack": "npm run build --prefix ../.."
   },
   "bin": {
-    "ket-design-system-atlas": "./dist/atlas-cli.js"
+    "ket-design-system-atlas": "./dist/atlas-cli.js",
+    "ket-design-system-layout-audit": "./dist/layout-audit-cli.js"
   },
   "exports": {
     ".": {
