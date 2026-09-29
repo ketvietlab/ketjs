@@ -901,3 +901,7 @@ export const FlowMeterList = (p) =>
     (x) =>
       html`<li><div>${x.onClick ? html`<button type="button" on:click=${() => x.onClick?.()}>${x.title}</button>` : html`<span>${x.title}</span>`}<b>${x.value}</b></div>${x.bar}${x.meta ? html`<small>${x.meta}</small>` : null}</li>`,
   )}</ul>`
+
+/** @param {{main:Child,aside:Child}} p */
+export const FlowQualityColumns = (p) =>
+  html`<div data-flow="quality-columns"><div>${p.main}</div><aside>${p.aside}</aside></div>`

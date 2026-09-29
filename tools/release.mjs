@@ -15,6 +15,22 @@ const node = process.execPath
 const command = process.argv[2] ?? 'check'
 
 const workspaces = [
+  {
+    name: '@ketvietlab/flow-client',
+    dir: 'packages/flow-client',
+    // Measured import: 305 KB, including the bundled brand assets and three message catalogs.
+    maxPackedBytes: 350_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.mjs',
+      'dist/workspace.mjs',
+      'dist/server-extensions.mjs',
+      'EXTENSIONS.md',
+      'NOTICE',
+    ],
+  },
   { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
   {
     name: '@ketvietlab/ketjs-view-tools',
@@ -26,8 +42,8 @@ const workspaces = [
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
     // The public 115-component catalogue includes its machine-readable inventory and KetAtlas adapter.
-    // 0.1.26 packs 321 KB: 127 components, inventory, search/filter and table interactions.
-    maxPackedBytes: 350_000,
+    // 0.1.29 packs 353430 bytes (463 files): reviewed dist/catalogue/layout audit plus LICENSE, README and manifest.
+    maxPackedBytes: 375_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
@@ -193,6 +209,11 @@ const pack = (destination, version) => {
       if (!paths.has(required)) {
         fail(`${workspace.name} tarball omitted ${required}`)
       }
+    if (workspace.name === '@ketvietlab/flow-client') {
+      for (const path of paths)
+        if (/(^|\/)(atlas|test|client|node_modules)(\/|$)/.test(path))
+          fail(`core tarball includes development source: ${path}`)
+    }
     const tarball = join(destination, result.filename)
     if (!existsSync(tarball)) fail(`${workspace.name} tarball was not written`)
     tarballs.set(workspace.name, tarball)
@@ -232,7 +253,26 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents'), import('@ketvietlab/flow-client'), import('@ketvietlab/flow-client/server')])`,
+    ],
+    { cwd: consumer },
+  )
+
+  // A tarball consumer has no private checkout or fixture runtime to fall back to.
+  run(
+    node,
+    [
+      '--input-type=module',
+      '--eval',
+      `
+    import assert from 'node:assert/strict';
+    import {createFlowWorkspace,routes} from '@ketvietlab/flow-client';
+    import {renderToStaticString} from '@ketvietlab/ketjs-view';
+    assert.equal(Object.keys(routes).length,76);
+    for(const key of ['performance','workload','goals','github','atlas','gantt','automations','epic-map']) assert.equal(routes[key],undefined);
+    assert.match(renderToStaticString(createFlowWorkspace({screen:'my-work'}).view()),/data-flow/);
+    assert.throws(()=>import.meta.resolve('@repo/flow-pro-client'));
+  `,
     ],
     { cwd: consumer },
   )
