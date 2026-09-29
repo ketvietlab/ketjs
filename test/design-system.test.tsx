@@ -396,6 +396,18 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
   assert.match(entry, /layouts\/flat\/styles\.css/)
 })
 
+test('design system: a record form in a narrow column puts every label above its control', () => {
+  // The browser check measures this on /layering; this keeps the rule from being
+  // dropped where CI does not run a browser.
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const narrow = css.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/u)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /\[data-ui="record-form"\]\s+\[data-ui="form-grid"\]\s+\[data-ui="field"\]:not\(\[data-kind="checkbox"\]\) \{\s+grid-template-columns: minmax\(0, 1fr\);/u,
+  )
+  assert.match(narrow, />\s*\* \{\s+grid-column: 1;\s+grid-row: auto;/u)
+})
+
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
