@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -61,7 +62,7 @@ test('attendance period screen keeps month context, lifecycle version and comput
     }),
   )
 
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="list-page"|data-ui="modal-layer"/)
   assert.match(html, /data-ui="record-page"[^>]*data-variant="operational"/)
   assert.match(html, /method="get" action="\/admin\/attendance\?lang=vi"/)
   assert.match(html, /type="hidden" name="lang" value="vi"/)

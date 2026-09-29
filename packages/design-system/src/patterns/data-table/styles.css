@@ -44,7 +44,7 @@
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
     text-align: left;
-    text-transform: uppercase;
+    text-transform: none;
     white-space: nowrap;
   }
 

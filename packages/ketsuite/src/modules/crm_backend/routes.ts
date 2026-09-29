@@ -521,6 +521,8 @@ const pipelineSummaryOf = async (
   req: Req,
   filters: Record<string, unknown>,
 ): Promise<AnyRow | null> => {
+  // Ask first: a refused call is recorded as an access denial, and this one is expected.
+  if (!(await ctx.allows('crm.pipeline.summary', url, req))) return null
   try {
     return (await ctx.call('crm.pipeline.summary', filters, url, req)) as AnyRow
   } catch (error) {

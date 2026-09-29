@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketsuite",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
@@ -51,12 +51,20 @@
     "./user-backend": {
       "types": "./dist/modules/user_backend/index.d.ts",
       "default": "./dist/modules/user_backend/index.js"
+    },
+    "./livedoc": {
+      "types": "./dist/ui/client/live-doc-view.d.ts",
+      "default": "./dist/ui/client/live-doc-view.js"
+    },
+    "./user-modal-client": {
+      "types": "./dist/ui/client/user-modal-client.d.ts",
+      "default": "./dist/ui/client/user-modal-client.js"
     }
   },
   "dependencies": {
-    "@ketvietlab/design-system": "0.1.28",
-    "@ketvietlab/ketjs": "0.1.28",
-    "@ketvietlab/ketjs-view": "0.1.28",
+    "@ketvietlab/design-system": "0.1.29",
+    "@ketvietlab/ketjs": "0.1.29",
+    "@ketvietlab/ketjs-view": "0.1.29",
     "chart.js": "4.5.1",
     "ioredis": "^6.0.0",
     "sharp": "0.35.4",

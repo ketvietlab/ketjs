@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -76,7 +77,10 @@ test('general ledger HTTP keeps exact totals while paging and searching the incl
   const html = clean(await response.text())
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
   assert.equal((html.match(/data-ui="row"/g) ?? []).length, 30)
   assert.match(html, /data-ui="record-fact-value">32</)
   assert.equal((html.match(/data-ui="record-fact-value">[^<]*16[,.]000/g) ?? []).length, 2)

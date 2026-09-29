@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -96,7 +97,7 @@ test('manufacturing BOM list: ListPage is collection-only with a localized modal
   assert.match(html, /BOM\/0001/)
   assert.match(html, /Giỏ trái cây/)
   assert.match(html, />10</)
-  assert.doesNotMatch(html, /data-ui="record-form"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-form"|data-ui="modal-layer"/)
 })
 
 test('manufacturing BOM create: modal keeps list context, values, errors and safe close action', () => {

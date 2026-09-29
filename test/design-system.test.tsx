@@ -1232,7 +1232,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       footer="End of results"
     />,
   )
-  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list">/)
+  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list"[^>]*>/)
+  assert.match(listPage, /<section[^>]*data-ket-preserve-context=""/)
   assert.match(listPage, /data-ui="list-page-eyebrow"[^>]*>[\s\S]*?Catalogue/)
   assert.match(listPage, /data-ui="list-page-title"[^>]*>[\s\S]*?Products/)
   assert.match(listPage, /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"/)
@@ -1532,6 +1533,14 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(iconAction, /type="button" name="theme"/)
   assert.match(iconAction, /aria-label="Toggle theme" aria-pressed="true"/)
   assert.doesNotMatch(iconAction, /data-ui="action-label"/)
+  assert.doesNotMatch(iconAction, /aria-expanded|aria-controls/)
+
+  const disclosureAction = renderToString(
+    <Button label="Edit variant" expanded={false} controls="variant-1-details" />,
+  )
+  assert.match(disclosureAction, /aria-expanded="false" aria-controls="variant-1-details"/)
+  const plainAction = renderToString(<Button label="Save" />)
+  assert.doesNotMatch(plainAction, /aria-expanded|aria-controls/)
 })
 
 test('design system: interaction essentials preserve native and accessible fallbacks', () => {
@@ -1995,7 +2004,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 127)
+  assert.equal(names.length, 133)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2032,8 +2041,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 267)
-  assert.equal(designSystemInventory.summary.runtimeExports, 132)
+  assert.equal(designSystemInventory.summary.publicExports, 275)
+  assert.equal(designSystemInventory.summary.runtimeExports, 138)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

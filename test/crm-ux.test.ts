@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import { tableNameFor } from '@ketvietlab/ketjs'
@@ -358,7 +359,11 @@ test('crm backend: legacy configuration links redirect to sections and record mo
   assert.match(html, /data-ui="record-modal-host" data-record-kind="crm\.team"/)
   for (const kind of ['crm\\.stage', 'crm\\.tag', 'crm\\.assignmentRule', 'crm\\.scoreRule'])
     assert.match(html, new RegExp(`data-record-kind="${kind}"`))
-  assert.doesNotMatch(html, /data-ui="modal-layer"/, 'the server renders every modal host closed')
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="modal-layer"/,
+    'the server renders every modal host closed',
+  )
   assert.match(
     html,
     /href="\/admin\/crm\/configuration\?section=teams&amp;lang=en&amp;record=crm\.team%3Acrm-team-sales"/,

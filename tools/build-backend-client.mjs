@@ -58,6 +58,11 @@ const entries = [
     source: join(USER_BACKEND_DIR, 'modal/role-modal-view.tsx'),
     output: join(USER_BACKEND_DIR, 'client/role-modal.mjs'),
   },
+  // The access-rule record modal, including the rules collection's create action.
+  {
+    source: join(USER_BACKEND_DIR, 'modal/access-policy-modal-view.tsx'),
+    output: join(USER_BACKEND_DIR, 'client/access-policy-modal.mjs'),
+  },
   // The product template record modal, including the catalogue's create action.
   {
     source: join(PRODUCT_BACKEND_DIR, 'modal/product-modal-view.tsx'),
@@ -66,6 +71,11 @@ const entries = [
   {
     source: join(PRODUCT_BACKEND_DIR, 'modal/attribute-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/attribute-modal.mjs'),
+  },
+  // Loaded when the template modal opens its Attributes & variants tab.
+  {
+    source: join(UI_CLIENT_DIR, 'variant-editor-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/variant-editor.mjs'),
   },
 ]
 

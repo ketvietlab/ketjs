@@ -12,7 +12,6 @@ import { ketTableDemoConfig } from '../packages/design-system/src/interactions/k
 const messages: Record<string, string> = {
   'product_backend.menu.app': 'Sản phẩm',
   'product_backend.screen.title': 'Danh mục sản phẩm',
-  'product_backend.screen.description': 'Quản lý hàng hoá và dịch vụ trong một danh mục thống nhất.',
   'product_backend.screen.results': '{count} sản phẩm',
   'product_backend.screen.empty.message': 'Chưa có sản phẩm nào.',
   'product_backend.screen.empty.hint': 'Tạo mẫu sản phẩm đầu tiên để bắt đầu.',
@@ -66,7 +65,7 @@ const rows = [
   },
 ]
 
-const grid = (items = rows) =>
+const grid = (items: Record<string, unknown>[] = rows) =>
   ketTable({
     id: 'product-table',
     config: {
@@ -128,12 +127,11 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.equal(html.match(/data-ui="topbar"/g), null)
   assert.match(html, /data-ui="list-page" data-variant="operational"/)
-  assert.match(
-    html,
-    /data-ui="list-page-context"[\s\S]*?Sản phẩm[\s\S]*?Danh mục sản phẩm[\s\S]*?data-ui="page-context-viewer" href="\/admin\/context\?lang=vi"/,
-  )
-  assert.match(html, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
-  assert.match(html, /data-ui="list-page-description"/)
+  assert.doesNotMatch(html, /data-ui="list-page-context"/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.equal(html.match(/data-ui="list-page-description"/g), null)
+  // The content pane drops its padding only for a direct operational page child.
+  assert.match(html, /data-ket-slot="backend\.content">(?:<!--[^>]*-->)*<section data-ui="list-page"/)
   assert.match(
     html,
     /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-variant="primary"/,
@@ -170,7 +168,16 @@ test('product list: follows the design-system list hierarchy without a duplicate
     html.indexOf('data-ui="list-page-body"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
-  assert.match(html, /data-col="name"[\s\S]*?data-ui="thumbnail"[\s\S]*?Áo khoác gió vận hành/)
+  assert.match(html, /data-col="name"[\s\S]*?data-ui="media-label-image"[\s\S]*?Áo khoác gió vận hành/)
+  // Kind and stock tracking are properties, written as words rather than badges.
+  const cell = (key: string) => {
+    const start = html.indexOf(`data-ui="kt-cell" data-col="${key}"`)
+    assert.notEqual(start, -1, key)
+    return html.slice(start, html.indexOf('</td>', start))
+  }
+  assert.match(cell('type'), /Hàng hoá/)
+  assert.match(cell('isStorable'), /Có/)
+  assert.doesNotMatch(cell('type') + cell('isStorable'), /data-ui="badge"/)
   assert.match(html, /data-col="listPrice"[^>]*data-priority="primary"/)
   assert.match(html, /href="\/admin\/product\/templates\?record=product\.template:ao-khoac-gio&amp;lang=vi"/)
 })
@@ -210,4 +217,13 @@ test('product list: renders contributed catalogue actions beside native actions'
   assert.match(htmlOutput.slice(headerStart, headerEnd), /data-ui="list-page-tools"[\s\S]*?Kênh bán/)
   assert.doesNotMatch(htmlOutput.slice(headerEnd), /data-ui="list-page-actions"|data-ui="list-page-tools"/)
   assert.match(htmlOutput, /href="\/admin\/channels\/products"/)
+})
+
+test('product media columns omit empty space for an imageless page and align mixed pages', () => {
+  const withoutImage = { ...rows[0], id: 'no-image', image: null }
+  const empty = renderToString(grid([withoutImage]))
+  assert.doesNotMatch(empty, /data-ui="media-label-image"/)
+  const mixed = renderToString(grid([rows[0]!, withoutImage]))
+  assert.equal(mixed.match(/data-ui="media-label-image"/g)?.length, 2)
+  assert.equal(mixed.match(/<img /g)?.length, 1)
 })

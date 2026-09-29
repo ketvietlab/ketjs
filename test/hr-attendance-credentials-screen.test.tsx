@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -47,7 +48,10 @@ const hub = () =>
 test('attendance credential hub is specialized and exposes URL-owned short workflows', () => {
   const html = renderToString(hub())
   assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   for (const issue of ['kiosk', 'pin', 'qr'])
     assert.match(html, new RegExp(`href="/admin/attendance/credentials\\?issue=${issue}&amp;lang=vi"`))
 })

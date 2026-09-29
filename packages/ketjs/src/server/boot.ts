@@ -46,6 +46,7 @@ import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 import { randomBytes } from 'node:crypto'
+import { notificationHub } from './notify.ts'
 import type { Streams, StreamStore } from './stream.ts'
 
 export type { Html, RouteResult } from './respond.ts'
@@ -80,6 +81,21 @@ export type ServeContext = {
   clientCompatibility: ClientCompatibilityPolicy | null
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
+  /**
+   * Listen for `ctx.notify` on a channel — what a websocket route waits on.
+   *
+   * One database listener per channel per process, however many connections
+   * share it. `onReady` runs when listening starts and after every reconnect,
+   * because notifications sent during the gap were lost and whatever they would
+   * have said needs re-reading. Refused for a deployment with a database per
+   * tenant: a connection outliving its tenant's pooled database is not something
+   * the pool can promise yet.
+   */
+  subscribe: (
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+  ) => Promise<() => Promise<void>>
   config: RuntimeConfig
   /**
    * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
@@ -365,6 +381,13 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => Promise<readonly string[] | null>
+  /** Server-observed authorization refusal. Receives no submitted inputs or secrets. */
+  onFunctionDenied?: (
+    ctx: ServeContext,
+    event: { fn: string; actor: string; scope: Scope },
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<void>
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -798,9 +821,6 @@ export async function bootDeployment(
     menu: async (url, req) => {
       const allow = await allowFor(url, req)
       const _ = translate(localeOf(url, req))
-      // The sidebar's search is in the URL like every other list's, so a filtered
-      // menu is a link and the back button walks out of it.
-      const q = url.searchParams.get('menu')?.trim() || undefined
       // Someone who may call an inspection capability is looking, not working, and
       // `for` describes work. Narrowing their sidebar would hide the very thing
       // they were let in to see.
@@ -811,13 +831,9 @@ export async function bootDeployment(
           translate: (k) => _(k),
           locale: _.locale,
           active: url.pathname,
-          q,
           groups: spec.navigation?.groups,
           demote: spec.navigation?.demote,
-          // Searching is how someone reaches a surface that is not their daily
-          // work, so the search results are the permitted tree, not the narrowed
-          // one. Hiding what a person typed the name of would be a bug.
-          intent: !inspecting && !q,
+          intent: !inspecting,
         }),
       )
     },
@@ -838,6 +854,14 @@ export async function bootDeployment(
       return allow === null || allow.includes(name)
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
+    subscribe: async (channel, onMessage, onReady) => {
+      if (!adapter)
+        throw new KetError({
+          code: 'E_NOT_SUPPORTED',
+          message: 'subscribe needs a single datastore; this deployment has one per tenant',
+        })
+      return notificationHub(adapter).subscribe(channel, onMessage, onReady)
+    },
     callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
@@ -898,26 +922,43 @@ export async function bootDeployment(
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
       const actor = await actorOf(url, req)
-      return tenants.ofRequest(
-        url,
-        req,
-        async (t) =>
-          (
-            await callFn(name, input, {
-              adapter: t.adapter,
-              manifest: t.live,
-              scope,
-              allow,
-              actor,
-              idempotencyKey: options?.idempotencyKey,
-              idempotencyNamespace: options?.idempotencyNamespace,
-              idempotencyDigest: options?.idempotencyDigest,
-              correlationId: options?.correlationId,
-              queueNotify: config.queueNotify,
-              log: callLog(t.key, scope, actor, options?.correlationId),
-            })
-          ).value,
-      )
+      try {
+        return await tenants.ofRequest(
+          url,
+          req,
+          async (t) =>
+            (
+              await callFn(name, input, {
+                adapter: t.adapter,
+                manifest: t.live,
+                scope,
+                allow,
+                actor,
+                idempotencyKey: options?.idempotencyKey,
+                idempotencyNamespace: options?.idempotencyNamespace,
+                idempotencyDigest: options?.idempotencyDigest,
+                correlationId: options?.correlationId,
+                queueNotify: config.queueNotify,
+                log: callLog(t.key, scope, actor, options?.correlationId),
+              })
+            ).value,
+        )
+      } catch (error) {
+        if (
+          error instanceof KetError &&
+          error.code === 'E_FN_NOT_PERMITTED' &&
+          actor &&
+          serve.onFunctionDenied
+        ) {
+          // The lease has ended. Telemetry must never change the original refusal.
+          try {
+            await serve.onFunctionDenied(ctx, { fn: name, actor, scope }, url, req)
+          } catch {
+            /* best effort */
+          }
+        }
+        throw error
+      }
     },
   }
 
@@ -1215,6 +1256,9 @@ export async function bootDeployment(
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     resolveActor: actorOf,
+    onFunctionDenied: serve.onFunctionDenied
+      ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)
+      : undefined,
     queueNotify: config.queueNotify,
     islandClients: (url: URL, req: IncomingMessage) =>
       tenants.ofRequest(url, req, async (tenant) =>

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -76,7 +77,10 @@ test('HR roster HTTP: weekly workflow preserves locale, CSRF, rejected values an
   const { e2e, fixture } = await bootRoster(t)
 
   const empty = await (await e2e.client.get(weekPath)).text()
-  assert.doesNotMatch(empty, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(empty),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(empty, /action="\/admin\/hr\/roster\?lang=en"/)
   assert.match(empty, /name="branchId"[^>]*value="root:default"/)
   assert.match(empty, /name="weekStart"[^>]*value="2026-08-17"/)

@@ -187,6 +187,8 @@ export type MenuDef = {
    * every entry did before this existed.
    */
   for?: readonly string[]
+  /** Required reads/lookups for this surface; optional work actions belong in `for`. */
+  requires?: readonly string[]
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**
@@ -534,7 +536,17 @@ export type BrowserBehaviorDefinition = {
 }
 
 export type BrowserNavigation = {
-  navigate(target: string | URL, options?: { replace?: boolean }): Promise<void>
+  navigate(
+    target: string | URL,
+    options?: {
+      replace?: boolean
+      /** Keep focus and scroll when refreshing the current working surface. */
+      preserveContext?: boolean
+      /** Let the caller show an error without discarding the current page. */
+      fallback?: 'reload' | 'error'
+      signal?: AbortSignal
+    },
+  ): Promise<void>
   apply(response: Response, options?: { signal?: AbortSignal }): Promise<void>
   replace(target: string | URL): void
   reload(target?: string | URL): void
@@ -805,6 +817,17 @@ export type Ctx = {
   change(model: string, params: Row, base?: Row | null): import('./data/changeset.ts').Changeset
   /** Run several writes atomically. Stock reservation is unsafe without it. */
   tx<T>(fn: (ctx: Ctx) => Promise<T>): Promise<T>
+  /**
+   * Tell whoever is listening on `channel` that something changed.
+   *
+   * A hint, not the data: send the id of what moved and let the listener re-read
+   * it through a path that checks who is asking. Inside `tx` it is delivered on
+   * commit and not at all on rollback. With PostgreSQL it reaches every process
+   * (NOTIFY, at most 7999 bytes); with SQLite only listeners in this process.
+   * Delivery is best effort, so a listener must also have some slower way to
+   * catch up.
+   */
+  notify(channel: string, payload: string): Promise<void>
   db: {
     all(q: import('./data/query.ts').Query): Promise<Row[]>
     one(q: import('./data/query.ts').Query): Promise<Row | null>
