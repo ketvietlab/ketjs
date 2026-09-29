@@ -22,12 +22,23 @@ export const KeyValue = (props: KeyValueProps): TemplateResult => (
   </div>
 )
 
+/**
+ * `layout="strip"` lays the pairs out in one row divided by hairlines, the
+ * metadata strip of LAYOUT.md L7 (due date, SLA, owner under a record title).
+ * It has no box around it; `columns` applies to the grid layout only.
+ */
 export const DescriptionList = (props: {
   label?: string
   items: readonly (KeyValueProps & { id: string })[]
   columns?: 1 | 2 | 3
+  layout?: 'grid' | 'strip'
 }): TemplateResult => (
-  <dl data-ui="description-list" aria-label={props.label} data-columns={String(props.columns ?? 2)}>
+  <dl
+    data-ui="description-list"
+    aria-label={props.label}
+    data-columns={String(props.columns ?? 2)}
+    data-layout={props.layout === 'strip' ? 'strip' : null}
+  >
     {each(
       props.items,
       (item) => item.id,

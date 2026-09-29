@@ -25,6 +25,10 @@ Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on t
 application root. Components own their markup and `data-ui` hooks; applications
 provide business data and translated labels.
 
+[LAYOUT.md](./LAYOUT.md) holds the layout rules: where a frame, a heading and a gap
+go, which the components apply by themselves and which `ket-design-system-layout-audit`
+checks in application CSS. Read it before composing a screen or overriding a style.
+
 Compose content with unframed `Section`, `Stack` and `Grid`. `DataTable`, `Metric`
 and `ContentCard` already own their surfaces; do not wrap them in `Surface` or
 another card. Reserve `Surface` for unframed content that needs a working panel,
@@ -38,6 +42,8 @@ For titled working blocks, use `Surface title="..." body={form}` or
 `DataTable title="..."`. The title sits inside the panel at 18px (`--kv-text-xl`),
 with optional `actions` beside it. A titled table owns one panel, with a borderless,
 transparent scrolling viewport inside; never wrap it in another `Surface`.
+Inside a white region (a surface, modal, dialog, popover or card) a `Surface` or
+titled table renders flat, as a section of that region (LAYOUT.md L2).
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 

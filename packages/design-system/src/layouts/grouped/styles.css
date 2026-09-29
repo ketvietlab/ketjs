@@ -27,6 +27,9 @@
     --kv-color-surface-subtle: var(--kv-surface-raised);
     --kv-color-surface-hover: var(--kv-surface-hover);
     --kv-color-line: var(--kv-panel-border);
+    /* One 12px inset for every working group, heading and body alike. */
+    --kv-surface-inset: var(--kv-space-3);
+    --kv-surface-head-gap: var(--kv-space-3);
   }
 
   [data-kv-design-system][data-presentation="grouped"] :is([data-ui="app-main"], [data-ui="modal-layer"]) {
@@ -68,26 +71,13 @@
     gap: var(--kv-space-2);
   }
 
-  [data-kv-design-system][data-presentation="grouped"]
-    :is([data-ui="surface"], [data-ui="metric"], [data-ui="content-card"]) {
+  [data-kv-design-system][data-presentation="grouped"] :is([data-ui="metric"], [data-ui="content-card"]) {
     padding: var(--kv-space-3);
-  }
-
-  [data-kv-design-system][data-presentation="grouped"] [data-ui="surface-head"] {
-    padding: 0;
-    margin-bottom: var(--kv-space-3);
   }
 
   [data-kv-design-system][data-presentation="grouped"] [data-ui="table-scroll"][data-framed="false"] {
     width: auto;
     margin-inline: 0;
-  }
-
-  [data-kv-design-system][data-presentation="grouped"]
-    [data-ui="surface"][data-padding="none"]
-    > [data-ui="surface-head"] {
-    padding: 0;
-    margin-bottom: var(--kv-space-3);
   }
 
   [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
@@ -102,30 +92,9 @@
     gap: var(--kv-space-3);
   }
 
-  /* The context surface already owns its background. */
-  [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] [data-ui="metric"] {
-    padding: 0;
-    min-height: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
   @media (max-width: 63.9375rem) {
     [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
       margin: 0 var(--kv-space-3) var(--kv-space-3);
     }
-  }
-
-  [data-kv-design-system][data-presentation="grouped"] [data-ui="surface"] [data-ui="disclosure"] {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  [data-kv-design-system][data-presentation="grouped"]
-    [data-ui="surface"]
-    :is([data-ui="disclosure-summary"], [data-ui="disclosure-body"]) {
-    padding-inline: 0;
   }
 }
