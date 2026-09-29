@@ -83,3 +83,5 @@ npm-debug.log*
 .vscode/
 *.swp
 .DS_Store
+
+packages/flow-client/atlas/vendor/
