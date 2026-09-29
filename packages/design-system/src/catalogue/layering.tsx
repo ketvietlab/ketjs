@@ -4,6 +4,7 @@ import { Field } from '../primitives/field.tsx'
 import { Notice } from '../primitives/feedback.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
+import { RecordForm } from '../patterns/record-form.tsx'
 import { DescriptionList } from '../record/display/index.tsx'
 
 export const layeringPresentations = ['default', 'grouped'] as const
@@ -35,6 +36,18 @@ const fields = (prefix: string): TemplateResult => (
   />
 )
 
+/** One form, drawn in a wide surface and in a record-aside-sized column (LAYOUT.md L7). */
+const noteForm = (prefix: string): TemplateResult => (
+  <RecordForm
+    action="#layering"
+    submitLabel="Save"
+    fields={[
+      { id: `${prefix}-subject`, name: 'subject', label: 'Subject', value: 'Follow-up call', span: 'full' },
+      { id: `${prefix}-note`, name: 'note', label: 'Note', type: 'textarea', value: '', span: 'full' },
+    ]}
+  />
+)
+
 /** Tags a specimen so the browser check can find it; the tag carries no style. */
 const Case = (props: { name: string; body: JSXChild }): TemplateResult => (
   <div data-layering-case={props.name}>{props.body}</div>
@@ -56,6 +69,15 @@ export const LayeringPreview = (props: {
     <Stack
       items={[
         <Case name="canvas-surface" body={<Surface title="On the canvas" body={fields('layering-1')} />} />,
+        <Case name="wide-form" body={<Surface title="A wide form" body={noteForm('layering-wide')} />} />,
+        <Case
+          name="narrow-form"
+          body={
+            <div style="max-inline-size: 20rem">
+              <Surface title="A narrow column" body={noteForm('layering-narrow')} />
+            </div>
+          }
+        />,
         <Case name="canvas-table" body={table('Titled table on the canvas')} />,
         <Case name="canvas-metric" body={<Metric label="Open" value={12} />} />,
         <Case
