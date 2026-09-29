@@ -30,6 +30,7 @@ type Rule = {
   /** Only the package's own entry point may be imported, never a path inside it. */
   publicOnly?: boolean
   /** Also scan .mjs sources: set for packages authored in JavaScript with JSDoc types. */
+  sourceDirectory?: string
   javascript?: boolean
 }
 
@@ -79,6 +80,17 @@ const RULES: Record<string, Rule> = {
   // view runtime, the translator, the design tokens it styles with, and one
   // suite export, the live document binding at `@ketvietlab/ketsuite/livedoc`.
   // Written as .mjs with JSDoc types, so its .mjs sources are scanned.
+  'flow-client': {
+    allow: [
+      '@ketvietlab/design-system',
+      '@ketvietlab/flow-ui',
+      '@ketvietlab/ketjs',
+      '@ketvietlab/ketjs-view',
+      '@ketvietlab/ketsuite',
+    ],
+    javascript: true,
+    sourceDirectory: 'client',
+  },
   'flow-ui': {
     allow: [
       '@ketvietlab/design-system',
@@ -139,8 +151,9 @@ for (const [name, rule] of Object.entries(RULES)) {
 
   let files = 0
   let external = 0
-  const patterns = [`${dir}/src/**/*.ts`, `${dir}/src/**/*.tsx`]
-  if (rule.javascript) patterns.push(`${dir}/src/**/*.mjs`)
+  const source = `${dir}/${rule.sourceDirectory ?? 'src'}`
+  const patterns = [`${source}/**/*.ts`, `${source}/**/*.tsx`]
+  if (rule.javascript) patterns.push(`${source}/**/*.mjs`)
   for (const pattern of patterns) {
     for await (const file of glob(pattern)) {
       files++

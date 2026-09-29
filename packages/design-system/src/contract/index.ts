@@ -105,3 +105,6 @@ export const HOOKS: readonly string[] = [...new Set(Object.values(GROUPS).flat()
 export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
   Object.fromEntries(Object.entries(GROUPS).map(([owner, hooks]) => [owner, [...hooks]])),
 )
+
+export { auditLayoutCss } from './layout-audit.ts'
+export type { LayoutRule, LayoutViolation } from './layout-audit.ts'

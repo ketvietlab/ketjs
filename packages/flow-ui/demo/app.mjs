@@ -50,6 +50,7 @@ import {
   FlowMetrics,
   FlowNotice,
   FlowToast,
+  FlowQualityColumns,
   FlowSection,
   FlowProjectViews,
   FlowPropertyFields,
@@ -383,7 +384,8 @@ function library() {
         paint()
       },
     })}
-    ${FlowSection({ title: 'Bố cục lồng nhau', description: 'Mô tả thuộc tiêu đề; section ngoài sở hữu lề trang.', children: html`${FlowListItem({ title: 'Thông tin độc lập', description: 'Cùng lề tiêu đề, không tự thêm padding hoặc đường phân cách.', actions: FlowButton({ label: 'Xem chi tiết', size: 'sm' }) })}${FlowSection({ inset: 'none', title: 'Danh sách có container', actions: FlowButton({ label: 'Thêm mục', size: 'sm' }), children: FlowList({ children: html`${FlowListItem({ title: 'Mục thứ nhất', description: 'Container danh sách sở hữu padding và đường phân cách.' })}${FlowListItem({ title: 'Mục thứ hai', description: 'Dùng cùng component dòng; không cần tự đặt khoảng cách.' })}` }) })}` })}
+    ${FlowQualityColumns({ main: FlowSection({ title: 'Nội dung chính', children: html`<p>Nội dung làm việc.</p>` }), aside: FlowSection({ title: 'Ngữ cảnh', children: html`<p>Thông tin bổ sung.</p>` }) })}
+      ${FlowSection({ title: 'Bố cục lồng nhau', description: 'Mô tả thuộc tiêu đề; section ngoài sở hữu lề trang.', children: html`${FlowListItem({ title: 'Thông tin độc lập', description: 'Cùng lề tiêu đề, không tự thêm padding hoặc đường phân cách.', actions: FlowButton({ label: 'Xem chi tiết', size: 'sm' }) })}${FlowSection({ inset: 'none', title: 'Danh sách có container', actions: FlowButton({ label: 'Thêm mục', size: 'sm' }), children: FlowList({ children: html`${FlowListItem({ title: 'Mục thứ nhất', description: 'Container danh sách sở hữu padding và đường phân cách.' })}${FlowListItem({ title: 'Mục thứ hai', description: 'Dùng cùng component dòng; không cần tự đặt khoảng cách.' })}` }) })}` })}
     ${sectionHeading('foundations', '01 — Nền tảng', 'Bình tĩnh, rõ ràng, nhất quán')}
     <div class="demo-grid">
       ${specimen(
