@@ -36,7 +36,9 @@ const workspaces = [
   // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
   // filter menu, with no stray files — about half the package is source maps.
   // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 5_200_000 },
+  // 0.1.29 packs 6,150,837 bytes: reviewed user/access-policy, product and CRM client bundles,
+  // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 6_400_000 },
   // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
   {
     name: '@ketvietlab/flow-ui',
