@@ -5834,3 +5834,18 @@
     margin-inline-start: calc(var(--kv-space-5) + var(--kv-space-3));
   }
 }
+
+[data-flow-ui] [data-flow="quality-columns"] {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  gap: var(--kv-space-4);
+  align-items: start;
+}
+[data-flow-ui] [data-flow="quality-columns"] > * {
+  min-width: 0;
+}
+@container (max-width: 1000px) {
+  [data-flow-ui] [data-flow="quality-columns"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

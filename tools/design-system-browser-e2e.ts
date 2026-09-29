@@ -178,6 +178,127 @@ try {
   ])
   assert.equal(standaloneAudit.current, 'Profit')
 
+  // LAYOUT.md L1–L2, by computed style: a container is framed on the canvas and
+  // flat inside a white region; objects keep their boundary everywhere.
+  for (const presentation of ['default', 'grouped'] as const) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1440,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    })
+    const url = `http://127.0.0.1:${appPort}/layering?presentation=${presentation}`
+    await cdp.send('Page.navigate', { url })
+    await waitFor(
+      () =>
+        evaluate<boolean>(
+          cdp!,
+          `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && Boolean(document.querySelector('[data-layering-case="modal-strip"]'))`,
+        ),
+      `Layering did not render (${presentation})`,
+    )
+    const layering: Record<string, Record<string, string> | null> = await evaluate(
+      cdp,
+      `(() => {
+        const frame = (element) => {
+          if (!element) return null
+          const style = getComputedStyle(element)
+          return { border: style.borderTopWidth, radius: style.borderTopLeftRadius, fill: style.backgroundColor, padding: style.paddingTop }
+        }
+        const at = (name, selector) => document.querySelector('[data-layering-case="' + name + '"] ' + selector)
+        const size = (element) => element && getComputedStyle(element).fontSize
+        const cells = [...document.querySelectorAll('[data-layering-case="modal-strip"] [data-ui="key-value"]')]
+        const labels = (name) =>
+          [...document.querySelectorAll('[data-layering-case="' + name + '"] [data-ui="field"]')]
+            .map((field) => {
+              const label = field.querySelector('[data-ui="field-label"]').getBoundingClientRect()
+              const control = field.querySelector('[data-ui="field-control"]').getBoundingClientRect()
+              return control.top >= label.bottom - 1 ? 'above' : 'beside'
+            })
+            .join(',')
+        return {
+          canvasSurface: frame(at('canvas-surface', '[data-ui="surface"]')),
+          canvasTable: frame(at('canvas-table', '[data-ui="surface"]')),
+          canvasMetric: frame(at('canvas-metric', '[data-ui="metric"]')),
+          outer: frame(at('surface-in-surface', '[data-ui="surface"]')),
+          inner: frame(at('surface-in-surface', '[data-ui="surface"] [data-ui="surface"]')),
+          modalTable: frame(at('modal-table', '[data-ui="surface"]')),
+          modalTableScroll: frame(at('modal-untitled-table', '[data-ui="table-scroll"]')),
+          modalSurface: frame(at('modal-surface', '[data-ui="surface"]')),
+          modalWell: frame(at('modal-well', '[data-ui="surface"]')),
+          modalDisclosure: frame(at('modal-disclosure', '[data-ui="disclosure"]')),
+          modalMetric: frame(at('modal-metric', '[data-ui="metric"]')),
+          modalCard: frame(at('modal-card', '[data-ui="content-card"]')),
+          dividedFirst: frame(at('modal-divided', '[data-ui="stack"] > :first-child')),
+          dividedSecond: frame(at('modal-divided', '[data-ui="stack"] > :nth-child(2)')),
+          titles: {
+            canvas: size(at('canvas-surface', '[data-ui="surface-title"]')),
+            nested: size(at('surface-in-surface', '[data-ui="surface"] [data-ui="surface"] [data-ui="surface-title"]')),
+            modalTable: size(at('modal-table', '[data-ui="surface-title"]')),
+            section: size(at('modal-section', '[data-ui="section-title"]')),
+          },
+          forms: { wide: labels('wide-form'), narrow: labels('narrow-form') },
+          strip: {
+            borders: cells.map((cell) => getComputedStyle(cell).borderInlineStartWidth).join(','),
+            rows: String(new Set(cells.map((cell) => cell.offsetTop)).size),
+          },
+        }
+      })()`,
+    )
+    const transparent = 'rgba(0, 0, 0, 0)'
+    for (const name of ['canvasSurface', 'canvasTable', 'canvasMetric', 'outer', 'modalCard']) {
+      assert.equal(layering[name]?.border, '1px', `${presentation}: ${name} keeps its frame`)
+      assert.notEqual(layering[name]?.fill, transparent, `${presentation}: ${name} keeps its fill`)
+    }
+    for (const name of [
+      'inner',
+      'modalTable',
+      'modalTableScroll',
+      'modalSurface',
+      'modalDisclosure',
+      'modalMetric',
+    ]) {
+      assert.equal(
+        layering[name]?.border,
+        '0px',
+        `${presentation}: ${name} has no border inside a white region`,
+      )
+      assert.equal(
+        layering[name]?.radius,
+        '0px',
+        `${presentation}: ${name} has no radius inside a white region`,
+      )
+      assert.equal(
+        layering[name]?.fill,
+        transparent,
+        `${presentation}: ${name} has no fill inside a white region`,
+      )
+    }
+    for (const name of ['inner', 'modalTable', 'modalSurface', 'modalMetric'])
+      assert.equal(layering[name]?.padding, '0px', `${presentation}: ${name} adds no inset of its own`)
+    assert.equal(layering.modalWell?.border, '0px', `${presentation}: a well has no border`)
+    assert.notEqual(layering.modalWell?.fill, transparent, `${presentation}: a well keeps its tint`)
+    assert.equal(layering.dividedFirst?.border, '0px', `${presentation}: no divider above the first group`)
+    assert.equal(layering.dividedSecond?.border, '1px', `${presentation}: a divider between groups`)
+    const titles = layering.titles ?? {}
+    assert.equal(titles.nested, titles.section, `${presentation}: a nested surface title is a section title`)
+    assert.equal(
+      titles.modalTable,
+      titles.section,
+      `${presentation}: a table title in a modal is a section title`,
+    )
+    assert.ok(
+      Number.parseFloat(titles.canvas) > Number.parseFloat(titles.section),
+      `${presentation}: canvas title`,
+    )
+    assert.deepEqual(layering.strip, { borders: '0px,1px,1px', rows: '1' }, `${presentation}: metadata strip`)
+    assert.deepEqual(
+      layering.forms,
+      { wide: 'beside,beside', narrow: 'above,above' },
+      `${presentation}: a record form in a narrow column puts its labels above their controls`,
+    )
+  }
+
   const viewports = [
     { key: 'desktop', width: 1440, height: 1000, mobile: false },
     { key: 'mobile', width: 390, height: 844, mobile: true },
