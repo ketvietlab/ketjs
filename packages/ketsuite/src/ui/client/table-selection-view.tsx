@@ -2,6 +2,7 @@ import { installBulkSelection } from './bulk-selection.ts'
 import { installUserWorkflow } from './user-workflow.ts'
 import type { BrowserBehavior, BrowserNavigation } from '@ketvietlab/ketjs'
 import { attachDesignSystemInteractions } from '@ketvietlab/design-system'
+import type { SearchFilterNavigateDetail } from '@ketvietlab/design-system'
 
 const themeStorageKey = 'ket.backend.theme'
 const dismissibleDropdown = [
@@ -515,6 +516,24 @@ const installRecordRefresh = (signal: AbortSignal, navigation: BrowserNavigation
 }
 
 export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
+  document.addEventListener(
+    'ket:search-filter-navigate',
+    (event) => {
+      const { id, href, signal, respondWith } = (event as CustomEvent<SearchFilterNavigateDetail>).detail
+      respondWith(
+        navigation.navigate(href, { preserveContext: true, fallback: 'error', signal }).then(() => {
+          const control = matchMedia('(max-width: 640px)').matches
+            ? 'search-filter-toggle'
+            : 'search-filter-input'
+          document
+            .getElementById(id)
+            ?.querySelector<HTMLElement>(`[data-ui="${control}"]`)
+            ?.focus({ preventScroll: true })
+        }),
+      )
+    },
+    { signal: lifetime },
+  )
   installRecordRefresh(lifetime, navigation)
   const cleanupDesignSystem = attachDesignSystemInteractions(document)
   const cleanupUserWorkflow = installUserWorkflow(lifetime)

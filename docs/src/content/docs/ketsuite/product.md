@@ -149,6 +149,31 @@ Brand and origin are template fields. Brand is a managed relation, so another mo
 catalogue without copying brand names into free text; origin remains text because no country-of-origin
 catalogue is required by the product domain.
 
+The template modal loads its Attributes & variants editor as the nested `product.variant-editor`
+island. `tools/build-backend-client.mjs` bundles `ui/client/variant-editor-view.tsx` into the product
+backend's `client/variant-editor.mjs` asset on every build. The product modal context tests verify that
+every declared product island client is served, including clients loaded only after switching tabs.
+
+The Attributes & variants tab uses the shared `RelationSelect` to search and add existing attributes,
+excluding those already on the template. Its dropdown also offers Create attribute to users with both
+`product.saveVariantSetup` and `product.saveAttributeDraft`, carrying the search text into the inline
+creation form. The form accepts a name and one value per line, saves the shared
+attribute and its values atomically, then selects them in the current template draft. Existing
+unsaved attribute lines and variant rows stay intact. The template's Save applies that draft;
+discarding it does not delete the shared attribute. Validation and network failures keep the form
+open with its input, and retries reuse the same attribute and value identifiers.
+
+The tab reads as two steps. Step 1 lists one line per attribute: a checkbox group of the attribute's
+catalogue values, where ticked values are the ones this template is sold in, a Select all action, and
+a remove action. Each line's price extras sit in a closed disclosure whose summary names the extras
+already set; a value that is not a number keeps the disclosure open and blocks Save. Unticking a value
+does not delete the variants that use it — their rows become incomplete until the user archives them or
+picks another value, and ticking the value again restores its saved extra. Step 2 names the missing
+combinations in a notice with one Create action, then lists one compact row per variant: its
+combination as text, SKU, status, and computed price. Edit opens the row in place, with `aria-expanded`
+on the toggle, to change its combination, codes, measures, and image. Saving is still the modal
+footer's Save; Reset in the tab footer restores the last saved setup.
+
 ## Units of measure
 
 A template has one default unit. `addProductUom` adds an alternate packaging unit for a variant, and

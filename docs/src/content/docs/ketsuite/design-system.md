@@ -17,6 +17,21 @@ Run `npm run design:system` from the repository root to open the documentation a
   exports, planned components, ownership, maturity, promotion decisions, evidence posture, and CSS
   ownership.
 
+## Relation selectors
+
+`createRelationSelectView` also accepts optional client-only `RelationSelectCallbacks`. A composing
+island can supply reactive `options` and `disabled` readers, handle `onSelect`, and enable an
+`onCreate(query)` action in the dropdown. `resetAfterSelect` returns an add-to-list picker to its
+placeholder after selecting an option. Local callback-backed options are searchable in full, with no
+empty remote-manager dialog. These callbacks do not go into serialized island configuration; existing
+form fields and server-managed relation selectors retain their contracts.
+
+## Disclosure actions
+
+`Button` and `IconButton` accept optional `expanded` and `controls` props for an action that shows or
+hides a region, such as a row's inline editor. They render `aria-expanded` and `aria-controls`; the
+application still owns the open state and the region's id. Omitting both keeps the previous markup.
+
 ## Inventory contract
 
 `npm run design:inventory` regenerates the inventory from the public and compatibility entry points.
@@ -101,6 +116,26 @@ KetTable supports two delivery modes through the same public `createKetTableView
 Both modes share row selection and external bulk forms. The primary `kt-row-link` has
 `data-primary="true"`; its hit area spans the row while checkboxes and cell controls remain separate.
 An empty grouped result uses the same empty-state contract as a flat result.
+
+All `ListPage` consumers preserve navigation context for same-path GET controls. SearchFilter's
+`{ href }` apply result uses the backend shell's shared fragment navigation: filtering, grouping,
+clearing and selecting favorites no longer reload the document. The shell updates the results,
+toolbar and URL together, then focuses the search input (desktop) or filter trigger (mobile).
+Back/Forward re-renders the corresponding server state. This covers native/static `KetTable`
+adapters and island-backed tables without duplicating domain queries in the browser.
+
+This is an SSR-first hybrid, not JSON-only CSR: URL-driven responses still contain server-rendered
+fragments; islands hydrate/reconcile those fragments and own their client interactions. The first
+document remains complete SSR. Permissions, localized cells and custom server cell callbacks retain
+their server contracts. RPC-driven tables retain their existing client loading mode.
+
+For a custom shell, listen for `ket:search-filter-navigate` on `document`. Its exported
+`SearchFilterNavigateDetail` contains the filter `id`, `href`, cancellation `signal` and
+`respondWith(promise)` callback. Supply the navigation promise synchronously. A failed navigation
+rolls back chips to the displayed list; retryable failures retain the exact attempted draft. Without
+a handler the component retains native navigation, and the legacy `{ html, href }` response remains
+supported. A new filter attempt aborts its preceding navigation request.
+
 `locale` controls formatted cells. Currency cells and `FormattedMoney` accept decimal strings without
 coercing them through a floating-point number, preserving database precision.
 
@@ -303,12 +338,20 @@ columns and scroll horizontally; the scroll region is keyboard focusable. Classi
 `MediaLabel` renders a 24px thumbnail only when present or explicitly reserved. Product lists reserve
 image space across a page only when at least one visible record has an image.
 
-`AppShell.topbar` accepts `AppTopbar`, a 48px indigo application bar with a native GET search form,
-brand link, and context slot. `NavigationToggle` can control `AppNavigation` with `externalTrigger`;
-the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K focuses
-search when no dialog is open. KétSuite moves organisation context into the topbar, removes duplicate
-sidebar branding/search, and updates the `backend.global-topbar` fragment alongside the existing
-slots. Only Product list suppresses breadcrumbs; every other page keeps its existing trail.
+`AppShell.location` places `AppTopbar` with its `location` prop inside the main column: organisation context
+on the left, compact search and all account/indicator/theme tools on the right. `AppBrand` lives in
+the sidebar navigation header. The strip is 48px high; no global bar spans both columns.
+The optional `AppShell.topbar` remains available to other consumers. The launcher opens a native modal dialog
+containing the existing GET search form; local list search remains visible beside its results. `NavigationToggle` can control `AppNavigation` with `externalTrigger`;
+the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K opens global search and focuses its input when no other dialog is open.
+Escape, the close button and backdrop close search and return focus to its launcher without clearing
+the draft. The modal frame stays in an inert template until opened; its search form remains
+inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher with a 44px target and a full-screen dialog. The optional
+`search.triggerLabel`, `search.closeLabel` and `search.id` localize the launcher and close action and
+distinguish multiple catalogue shells. A native link and noscript form preserve search without JavaScript. KétSuite retains the `backend.global-topbar` fragment slot for navigation compatibility, now inside
+the main column. KétSuite no longer displays breadcrumbs. A shell with `location` hides
+the nested page identity context; standalone pages keep their context. The sidebar footer tools
+move into this strip, including extension items and the account menu. Account menus open downward.
 
 `/admin/search` requires a session and searches permitted menus, products and partners. Optional record
 providers call the same permission-checked, company-scoped functions as their lists, with eight results

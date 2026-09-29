@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -69,7 +70,7 @@ test('flow project pages: specialized tree keeps hierarchy, identity, counts and
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="list-page-title"[^>]*>Internal platform/)
   assert.match(textContent, /Documents/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/pages\?q=guide&amp;lang=en&amp;create=1"/)

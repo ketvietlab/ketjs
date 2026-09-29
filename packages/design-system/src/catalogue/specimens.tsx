@@ -19,7 +19,7 @@ import {
   Stack,
   Surface,
 } from '../layouts/index.tsx'
-import { AppShell, AppTopbar, Page } from '../layouts/shell.tsx'
+import { AppBrand, AppShell, AppTopbar, Page } from '../layouts/shell.tsx'
 import { NavigationToggle, AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
@@ -127,7 +127,7 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
   <AppNavigation
     id={`demo-navigation-${props.active}`}
     label="KétSuite workspace"
-    identity="KétSuite"
+    identity={<AppBrand label="KétSuite" href="#app-shell" />}
     context="Operations workspace"
     menuLabel="Workspace menu"
     groups={[
@@ -185,14 +185,17 @@ const DemoShell = (props: {
 }): TemplateResult => (
   <AppShell
     mode="embedded"
-    topbar={
+    location={
       <AppTopbar
-        brand={{ label: 'KétSuite', href: '#app-shell' }}
+        location={<span>Acme · Main branch</span>}
         navigation={
           <NavigationToggle controls={`demo-navigation-${props.active}-drawer`} label="Open navigation" />
         }
         search={{
+          id: `demo-global-search-${props.active}`,
           action: '#app-shell',
+          triggerLabel: 'Search everywhere',
+          closeLabel: 'Close',
           label: 'Global search',
           placeholder: 'Search…',
           submitLabel: 'Search',
@@ -328,6 +331,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Unavailable" disabled />,
               <LinkButton label="Opening record" href="#record-page" loading />,
               <IconButton label="Toggle theme" icon="☾" />,
+              <Button label="Collapse details" variant="tertiary" expanded controls="button-details" />,
             ]}
           />
         ),
@@ -1774,8 +1778,32 @@ export const componentGroups: readonly ComponentGroup[] = [
         name: 'Relation select',
         description:
           'Unlike its neighbors above, this is a ketjs-view island — it owns state and fetches its own results client-side, so it keeps working after this static snapshot only once the page hydrates it. Shown in its default (closed) state with one value already chosen; distinct from RelationPicker below, which is href-driven and receives results pre-fetched by the server.',
-        render: () =>
-          createRelationSelectView({ id: 'demo-relation-select', config: relationSelectDemoConfig }).view(),
+        render: () => (
+          <Stack
+            items={[
+              createRelationSelectView({
+                id: 'demo-relation-select',
+                config: relationSelectDemoConfig,
+              }).view(),
+              createRelationSelectView(
+                {
+                  id: 'demo-relation-add',
+                  config: {
+                    ...relationSelectDemoConfig,
+                    value: null,
+                    ariaLabel: 'Add a partner',
+                    labels: { ...relationSelectDemoConfig.labels, choose: 'Add a partner' },
+                  },
+                },
+                {
+                  options: () => relationSelectDemoConfig.options,
+                  resetAfterSelect: true,
+                  onCreate: () => {},
+                },
+              ).view(),
+            ]}
+          />
+        ),
       },
       {
         id: 'lightbox',

@@ -22,7 +22,7 @@ export const accessError = (result: { errors?: Array<{ field?: string; code: str
       (e) =>
         messages[e.code] ??
         (e.code === 'user.error.required'
-          ? 'Vui lòng điền đầy đủ thông tin và lý do.'
+          ? 'Vui lòng điền đầy đủ thông tin.'
           : 'Không thể lưu thay đổi. Kiểm tra lại thông tin.'),
     )
     .join(' ') ?? 'Không thể lưu thay đổi.'

@@ -924,6 +924,24 @@ test('backend content: a breadcrumb that has to shrink clips instead of overprin
   )
 })
 
+test('record form: a narrow column puts labels above their controls, inside a FormPage too', () => {
+  // A form in a record aside kept the 7-9rem label track beside every control,
+  // so a third of the column went to the label; screens patched it one by one.
+  const narrow =
+    ADMIN_CSS.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /:is\(\[data-ui="form-page"\], :root\)\s+\[data-ui="record-form"\]\[data-layout="default"\]/,
+  )
+  assert.match(narrow, /grid-template-columns: minmax\(0, 1fr\)/)
+  assert.match(narrow, /\[data-ui="form-label"\],[\s\S]*?grid-column: 1;/)
+  assert.ok(
+    ADMIN_CSS.indexOf('@container record-form') >
+      ADMIN_CSS.lastIndexOf('[data-ui="form-page"]\n      [data-ui="record-form"]'),
+    'declared after the FormPage label rhythm it has to outrank',
+  )
+})
+
 test('backend content lets operational page patterns own their spacing', () => {
   assert.match(
     ADMIN_CSS,
@@ -1060,6 +1078,7 @@ test('routes: the segment after /admin names the section, so a path says where i
     'companies',
     'users',
     'roles',
+    'access-policies',
     'permission-presets',
   ])
   const manifest = compose(ketsuite.modules, { headless: true })
@@ -1270,7 +1289,7 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
     [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
     ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'],
   )
-  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?persistent foot/)
 })
 
 test('backend shell: the document uses the design-system application shell', () => {
@@ -1287,7 +1306,7 @@ test('backend shell: the document uses the design-system application shell', () 
   )
   assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
   assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
-  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
+  assert.match(html, /<main data-ui="app-main">[\s\S]*?<span data-ui="runtime-probe">/)
   for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'])
     assert.equal(
       (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
@@ -1295,6 +1314,16 @@ test('backend shell: the document uses the design-system application shell', () 
       slot,
     )
   assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  assert.doesNotMatch(html, /data-ui="app-topbar"|data-ui="app-shell-topbar"/)
+  assert.match(html, /data-has-location="true"/)
+  const sidebar = html.match(/<aside data-ui="app-sidebar">[\s\S]*?<\/aside>/)?.[0] ?? ''
+  assert.match(sidebar, /data-ui="navigation-header"[\s\S]*?data-ui="app-brand"[\s\S]*?alt="KetSuite"/)
+  assert.match(
+    html,
+    /data-ui="app-main"[\s\S]*?data-ui="app-location-bar"[\s\S]*?data-ui="app-location-context"[\s\S]*?data-ui="global-search-trigger"[\s\S]*?data-ui="sidebar-foot"/,
+  )
+  assert.doesNotMatch(sidebar, /data-ui="sidebar-foot"|name="theme"|data-ui="viewer"/)
+  assert.equal((html.match(/name="theme"/g) ?? []).length, 1)
   const runtimeAt = html.indexOf('runtime-probe')
   const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
   assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')

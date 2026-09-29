@@ -34,7 +34,114 @@ const focusables = (root) =>
 const DISMISSIBLE_POPUPS = ['[data-ui="timeframe-menu"]', '[data-ui="view-settings"]']
 const DISMISSIBLE_POPUPS_OPEN = DISMISSIBLE_POPUPS.map((selector) => `${selector}[open]`).join(', ')
 
+/** @param {ParentNode} root */
+const attachGlobalSearch = (root) => {
+  /** @type {(() => void)[]} */
+  const cleanups = []
+  const launchers = [...root.querySelectorAll('[data-ui="global-search-trigger"]')]
+  /** @type {(() => boolean)[]} */
+  const openers = []
+  for (const launcher of launchers) {
+    const dialog = [...root.querySelectorAll('[data-ui="global-search-dialog"]')].find(
+      (candidate) => candidate.id === launcher.getAttribute('aria-controls'),
+    )
+    if (!(launcher instanceof HTMLElement) || !(dialog instanceof HTMLDialogElement)) continue
+    const input = dialog.querySelector('[data-ui="global-search-input"]')
+    const form = dialog.querySelector('[data-ui="global-search"]')
+    const template = dialog.querySelector('template')
+    if (
+      !(input instanceof HTMLInputElement) ||
+      !(form instanceof HTMLElement) ||
+      !(template instanceof HTMLTemplateElement)
+    )
+      continue
+    const layer = template.content.querySelector('[data-ui="modal-layer"]')
+    const body = template.content.querySelector('[data-ui="modal-body"]')
+    if (!layer || !body) continue
+    const parkContent = () => {
+      dialog.append(form)
+      template.content.append(layer)
+    }
+    const shortcut = launcher.querySelector('[data-ui="global-search-shortcut"]')
+    if (shortcut instanceof HTMLElement) {
+      shortcut.textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
+      shortcut.hidden = false
+    }
+    const open = () => {
+      if (launcher.closest('[inert]')) return false
+      if (!dialog.open) {
+        if (root.querySelector('dialog[open], [data-ui="modal-layer"][data-route-modal="true"]')) return false
+        dialog.append(layer)
+        body.append(form)
+        dialog.showModal()
+      }
+      launcher.setAttribute('aria-expanded', 'true')
+      input.focus()
+      input.select()
+      return true
+    }
+    openers.push(open)
+    const restore = () => {
+      parkContent()
+      launcher.setAttribute('aria-expanded', 'false')
+      if (launcher.isConnected) launcher.focus()
+    }
+    /** @param {MouseEvent} event */
+    const launch = (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      if (open()) event.preventDefault()
+    }
+    /** @param {Event} event */
+    const dismiss = (event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"]')
+      ) {
+        dialog.close()
+      }
+    }
+    /** @param {Event} event */
+    const cancel = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      dialog.close()
+    }
+    const submit = () => dialog.close()
+    launcher.addEventListener('click', launch)
+    dialog.addEventListener('click', dismiss)
+    dialog.addEventListener('cancel', cancel)
+    dialog.addEventListener('close', restore)
+    dialog.addEventListener('submit', submit)
+    cleanups.push(() => {
+      launcher.removeEventListener('click', launch)
+      dialog.removeEventListener('click', dismiss)
+      dialog.removeEventListener('cancel', cancel)
+      dialog.removeEventListener('close', restore)
+      dialog.removeEventListener('submit', submit)
+      if (dialog.open) dialog.close()
+      parkContent()
+    })
+  }
+  /** @param {KeyboardEvent} event */
+  const shortcut = (event) => {
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key.toLowerCase() === 'k' &&
+      !event.altKey &&
+      !event.defaultPrevented
+    ) {
+      if (openers.some((open) => open())) event.preventDefault()
+    }
+  }
+  document.addEventListener('keydown', shortcut)
+  return () => {
+    document.removeEventListener('keydown', shortcut)
+    for (const cleanup of cleanups) cleanup()
+  }
+}
+
 export const attachDesignSystemInteractions = (root = document) => {
+  const cleanupGlobalSearch = attachGlobalSearch(root)
   const activeBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const modal = root.querySelector('[data-ui="modal-layer"][data-route-modal="true"] [role="dialog"]')
   const appShell = root.querySelector('[data-ui="app-shell"], [data-ui="shell"]')
@@ -216,19 +323,6 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   /** @param {KeyboardEvent} event */
   const onKeydown = (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !event.altKey) {
-      const search = root.querySelector('[data-ui="global-search-input"]')
-      if (
-        search instanceof HTMLInputElement &&
-        !search.closest('[inert]') &&
-        !root.querySelector('dialog[open], [data-ui="modal-layer"][data-route-modal="true"]')
-      ) {
-        search.focus()
-        search.select()
-        event.preventDefault()
-        return
-      }
-    }
     const openNavigation = navigations.find((navigation) => navigationMedia.matches && navigation.open)
     if (openNavigation instanceof HTMLDetailsElement) {
       const drawer = openNavigation.querySelector('[data-ui="navigation-drawer"]')
@@ -505,6 +599,7 @@ export const attachDesignSystemInteractions = (root = document) => {
   document.addEventListener('click', onDocumentClick)
 
   return () => {
+    cleanupGlobalSearch()
     document.removeEventListener('keydown', onKeydown)
     document.removeEventListener('click', onDocumentClick)
     document.removeEventListener('change', onSelectionChange)

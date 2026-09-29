@@ -81,6 +81,7 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('KanbanGrid', 'Layout', 'layouts/layout', 'layouts', 'kanban-card'),
   entry('Metric', 'Layout', 'layouts/layout', 'layouts', 'surface-section'),
   entry('AppShell', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
+  entry('AppBrand', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
   entry('AppTopbar', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
   entry(
     'NavigationToggle',

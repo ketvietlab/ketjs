@@ -396,6 +396,18 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
   assert.match(entry, /layouts\/flat\/styles\.css/)
 })
 
+test('design system: a record form in a narrow column puts every label above its control', () => {
+  // The browser check measures this on /layering; this keeps the rule from being
+  // dropped where CI does not run a browser.
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const narrow = css.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/u)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /\[data-ui="record-form"\]\s+\[data-ui="form-grid"\]\s+\[data-ui="field"\]:not\(\[data-kind="checkbox"\]\) \{\s+grid-template-columns: minmax\(0, 1fr\);/u,
+  )
+  assert.match(narrow, />\s*\* \{\s+grid-column: 1;\s+grid-row: auto;/u)
+})
+
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
@@ -413,13 +425,19 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /--kv-page-chrome-bg: var\(--kv-page-bg\)/)
   assert.match(grouped, /--kv-page-padding-x: var\(--kv-space-3\)/)
   assert.match(grouped, /gap: var\(--kv-space-2\)/)
-  assert.match(grouped, /\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-space-3\)/)
+  // One 12px inset for a working group's heading and body, through the surface role tokens.
+  assert.match(grouped, /--kv-surface-inset: var\(--kv-space-3\)/)
+  assert.match(grouped, /--kv-surface-head-gap: var\(--kv-space-3\)/)
   assert.match(
     grouped,
     /\[data-ui="table-scroll"\]\[data-framed="false"\] \{\s*width: auto;\s*margin-inline: 0/,
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
-  assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  // The rail's contents render flat through the layering rules, like any white region's.
+  assert.match(
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8'),
+    /\[data-presentation="grouped"\] \[data-ui="record-page-aside"\] \[data-ui="metric"\]/,
+  )
   assert.match(
     grouped,
     /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
@@ -1232,7 +1250,8 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       footer="End of results"
     />,
   )
-  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list">/)
+  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list"[^>]*>/)
+  assert.match(listPage, /<section[^>]*data-ket-preserve-context=""/)
   assert.match(listPage, /data-ui="list-page-eyebrow"[^>]*>[\s\S]*?Catalogue/)
   assert.match(listPage, /data-ui="list-page-title"[^>]*>[\s\S]*?Products/)
   assert.match(listPage, /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"/)
@@ -1532,6 +1551,14 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(iconAction, /type="button" name="theme"/)
   assert.match(iconAction, /aria-label="Toggle theme" aria-pressed="true"/)
   assert.doesNotMatch(iconAction, /data-ui="action-label"/)
+  assert.doesNotMatch(iconAction, /aria-expanded|aria-controls/)
+
+  const disclosureAction = renderToString(
+    <Button label="Edit variant" expanded={false} controls="variant-1-details" />,
+  )
+  assert.match(disclosureAction, /aria-expanded="false" aria-controls="variant-1-details"/)
+  const plainAction = renderToString(<Button label="Save" />)
+  assert.doesNotMatch(plainAction, /aria-expanded|aria-controls/)
 })
 
 test('design system: interaction essentials preserve native and accessible fallbacks', () => {
@@ -1995,7 +2022,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 132)
+  assert.equal(names.length, 133)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2032,8 +2059,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 272)
-  assert.equal(designSystemInventory.summary.runtimeExports, 137)
+  assert.equal(designSystemInventory.summary.publicExports, 275)
+  assert.equal(designSystemInventory.summary.runtimeExports, 138)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

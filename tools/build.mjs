@@ -240,8 +240,10 @@ try {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }
-      const atlasCli = join(PACKAGES, 'design-system', 'dist', 'atlas-cli.js')
-      if (existsSync(atlasCli)) chmodSync(atlasCli, 0o755)
+      for (const name of ['atlas-cli.js', 'layout-audit-cli.js']) {
+        const cli = join(PACKAGES, 'design-system', 'dist', name)
+        if (existsSync(cli)) chmodSync(cli, 0o755)
+      }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
     } finally {
       rmSync(stage, { recursive: true, force: true })

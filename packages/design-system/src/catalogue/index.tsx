@@ -7,6 +7,7 @@ import { designSystemInventory } from './inventory.generated.ts'
 import { componentRegistry } from './registry.ts'
 
 export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
+export { LayeringPreview, layeringPresentations } from './layering.tsx'
 export {
   InventoryPage,
   inventoryDecisions,
@@ -87,7 +88,7 @@ const CatalogueRail = (props: {
       <span aria-hidden="true">K</span>
       <strong>Két Việt</strong>
     </a>
-    <p data-ui="catalogue-kicker">Design system · 0.1.28</p>
+    <p data-ui="catalogue-kicker">Design system · 0.1.29</p>
     <nav data-ui="catalogue-nav" aria-label="Design system documentation">
       <span data-ui="catalogue-nav-section">Get started</span>
       <a

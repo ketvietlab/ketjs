@@ -16,3 +16,10 @@ export {
 } from './roles-list.tsx'
 export type { PermissionRow, RoleRow } from './types.ts'
 export { profileScreen, type ProfileScreenOptions } from './profile-form.tsx'
+export {
+  accessPolicyListColumns,
+  accessPoliciesScreen,
+  type AccessPolicyMatchKind,
+  type AccessPolicyRow,
+  type AccessPoliciesListScreenOptions,
+} from './access-policies-list.tsx'

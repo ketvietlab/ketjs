@@ -96,6 +96,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
         archive: can('product.archiveTemplate'),
         delete: can('product.deleteTemplates'),
         saveVariantSetup: can('product.saveVariantSetup'),
+        createAttribute: can('product.saveAttributeDraft'),
         setCost: can('product.setCost'),
         setProductUom: can('product.setProductUom'),
         // An image is two calls — the upload stores an attachment, then the gallery

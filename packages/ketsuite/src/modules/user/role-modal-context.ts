@@ -1,3 +1,4 @@
+import { userModalMessages } from './modal-messages.ts'
 // The record-modal context for a role (KetSuite record-modal contract).
 //
 // The roles collection opens a role — and its create action — in a client-side
@@ -12,6 +13,7 @@ import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { AUTHORIZATION_EFFECTS, effectiveFunctionKeys, managedRoleHealthIssues } from './authorization.ts'
 import { authorizationRevisionOf } from './authorization.ts'
+import { surfaceRows, templateTier } from './access-surfaces.ts'
 import {
   capabilityTone,
   permissionArea,
@@ -21,19 +23,6 @@ import {
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
-
-const MESSAGE_PREFIXES = ['user_backend.', 'user.']
-
-const messagesFor = (ctx: Ctx, lang: Lang): Record<string, string> => {
-  const catalog = ctx.manifest.messages?.[lang] ?? {}
-  const out: Record<string, string> = {}
-  for (const [key, message] of Object.entries(catalog)) {
-    if (!MESSAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue
-    out[key] =
-      typeof message === 'string' ? message : String(message.other ?? Object.values(message)[0] ?? key)
-  }
-  return out
-}
 
 const readEffects = AUTHORIZATION_EFFECTS.filter((effect) => !effect.startsWith('write:'))
 
@@ -126,7 +115,12 @@ const bundleChoices = async (ctx: Ctx, roleId: string, lang: Lang): Promise<Row[
 const holders = async (ctx: Ctx, roleId: string): Promise<Row[]> => {
   const A = ctx.table('user.Assignment')
   const userIds = [
-    ...new Set((await ctx.db.all(from(A).where(eq(A.roleId, roleId)))).map((row) => String(row.userId))),
+    ...new Set(
+      [
+        ...(await ctx.db.all(from(A).where(eq(A.roleId, roleId)))),
+        ...(await ctx.db.select('user.PolicyAssignment', { roleId })),
+      ].map((row) => String(row.userId)),
+    ),
   ]
   if (!userIds.length) return []
   const people = await ctx.db.select('user.User')
@@ -154,6 +148,54 @@ const newRoleRecord = (): Row => ({
   healthy: true,
 })
 
+const RISK_ORDER = ['read', 'operate', 'approve', 'configure', 'sensitive', 'security'] as const
+
+/**
+ * The bundles a managed role's template carries, direct ones first.
+ *
+ * A bundle names the bundles it `includes` — the lookups its screens need — and
+ * those arrive with it. They are listed with the bundle that brought them, so a
+ * reader sees why a sales role can read the tax list.
+ */
+const templateBundles = (ctx: Ctx, templateKey: string, lang: Lang): Row[] => {
+  const template = ctx.manifest.permissions.roleTemplates[templateKey]
+  if (!template) return []
+  const catalogue = ctx.manifest.permissions.bundles
+  const direct = new Set(template.bundles)
+  const labelOf = (key: string): string => catalogue[key]?.labels[lang] ?? key
+  const riskOf = (key: string): string =>
+    (catalogue[key]?.functions ?? []).reduce<string>((top, fn) => {
+      const risk = ctx.manifest.permissions.functions[fn]?.risk ?? 'read'
+      return RISK_ORDER.indexOf(risk) > RISK_ORDER.indexOf(top as (typeof RISK_ORDER)[number]) ? risk : top
+    }, 'read')
+  const rows: Row[] = [...direct].map((key) => ({
+    key,
+    label: labelOf(key),
+    risk: riskOf(key),
+    via: 'direct',
+    includedBy: null,
+  }))
+  // Breadth first, so a lookup is credited to the nearest bundle that brought it.
+  const seen = new Set(direct)
+  const queue = [...direct]
+  while (queue.length) {
+    const key = queue.shift() as string
+    for (const included of catalogue[key]?.includes ?? []) {
+      if (seen.has(included)) continue
+      seen.add(included)
+      queue.push(included)
+      rows.push({
+        key: included,
+        label: labelOf(included),
+        risk: riskOf(included),
+        via: 'included',
+        includedBy: labelOf(key),
+      })
+    }
+  }
+  return rows
+}
+
 export const roleModalContextFunctions: Record<string, FnSpec> = {
   roleModalContext: defineFn({
     input: { id: 'id?', locale: 'text?' },
@@ -163,6 +205,7 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
       'read:user.Grant',
       'read:user.GrantSource',
       'read:user.Assignment',
+      'read:user.PolicyAssignment',
       'read:user.User',
     ],
     handler: async (ctx, args) => {
@@ -208,6 +251,17 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
               !managed ||
               managedRoleHealthIssues(ctx.manifest, role, grants, sources).length === 0,
           },
+          ...(managed && role.templateKey && !creating
+            ? (() => {
+                const key = String(role.templateKey)
+                const functions = new Set(ctx.manifest.permissions.roleTemplates[key]?.functions ?? [])
+                return {
+                  tier: templateTier(ctx, key),
+                  templateBundles: templateBundles(ctx, key, lang),
+                  surfaces: surfaceRows(ctx, lang, (fn) => functions.has(fn)),
+                }
+              })()
+            : {}),
           sources: creating || !managed ? [] : await grantSources(ctx, roleId, lang),
           bundles: creating || managed ? [] : await bundleChoices(ctx, roleId, lang),
           groups: permissionGroupOrder.map((id) => ({ id, label: permissionGroupLabels[id][lang] })),
@@ -216,8 +270,29 @@ export const roleModalContextFunctions: Record<string, FnSpec> = {
           permissions,
           lang,
         },
-        messages: messagesFor(ctx, lang),
+        messages: userModalMessages(ctx, lang),
       }
     },
   }),
 }
+
+/** Product-facing read: legacy/custom administration remains a separate compatibility API. */
+roleModalContextFunctions.managedRoleModalContext = defineFn({
+  ...roleModalContextFunctions.roleModalContext,
+  input: { id: 'id', locale: 'text?' },
+  handler: async (ctx, args) => {
+    const role = (await ctx.db.select('user.Role', { id: args.id }))[0]
+    if (!role || role.mode !== 'managed') return null
+    const result = (await roleModalContextFunctions.roleModalContext.handler(ctx, args)) as {
+      data: { permissions: Record<string, boolean> }
+    } | null
+    if (!result) return null
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        permissions: { ...result.data.permissions, create: false, save: false, clone: false, grant: false },
+      },
+    }
+  },
+})
