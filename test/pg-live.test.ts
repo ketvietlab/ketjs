@@ -49,6 +49,7 @@ import {
   user,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
 import backend from '@ketvietlab/ketsuite/backend'
 
 /** Every request acts as some company; these tests act as one. */
@@ -1847,3 +1848,61 @@ test('live pg: concurrent online reservations admit one winner without overselli
     await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
   }
 })
+
+test(
+  'live pg: a tenant listener hears its own database and holds it open until it stops',
+  live,
+  async (t) => {
+    // NOTIFY is per database, so tenants need databases of their own; skip where they cannot be made.
+    const admin = postgresAdapter(URL)
+    await admin.open()
+    const names = ['ketjs_tenant_listen_a', 'ketjs_tenant_listen_b']
+    try {
+      for (const name of names) {
+        const [row] = await admin.all('SELECT 1 AS present FROM pg_database WHERE datname = $1', [name])
+        if (!row) await admin.exec(`CREATE DATABASE ${name}`)
+      }
+    } catch (error) {
+      await admin.close()
+      t.skip(`cannot create tenant databases: ${(error as Error).message}`)
+      return
+    }
+    await admin.close()
+    const urlOf = (key: string) => {
+      const url = new globalThis.URL(URL)
+      url.pathname = `/ketjs_tenant_listen_${key}`
+      return url.toString()
+    }
+    const pool = createAdapterPool({ max: 2, idleMs: 0, create: (key) => postgresAdapter(urlOf(key)) })
+    const tenants = createTenants({
+      spec: { resolve: () => null, open: (key) => postgresAdapter(urlOf(key)), list: async () => ['a', 'b'] },
+      pool,
+      manifest,
+      joints: () => ({}) as never,
+    })
+    try {
+      const heard: string[] = []
+      let ready = 0
+      const stop = await tenants.listen(
+        'a',
+        'ket_tenant_test',
+        (payload) => heard.push(payload),
+        () => ready++,
+      )
+      assert.equal(ready, 1)
+      await tenants.with('b', (tenant) => tenant.adapter.notifications!.publish('ket_tenant_test', 'from b'))
+      await tenants.with('a', (tenant) => tenant.adapter.notifications!.publish('ket_tenant_test', 'from a'))
+      const deadline = Date.now() + 2_000
+      while (!heard.length && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      assert.deepEqual(heard, ['from a'], "another tenant's notification is another database's")
+
+      assert.equal(await pool.evictIdle(), 1)
+      assert.deepEqual(pool.open, ['a'], 'the listened tenant is not idled out')
+      await stop()
+      assert.equal(await pool.evictIdle(), 1, 'stopping gives it back')
+    } finally {
+      await tenants.close()
+    }
+  },
+)

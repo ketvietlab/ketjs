@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/design-system",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "description": "Két Việt's public, server-rendered operational design system.",
   "type": "module",
   "license": "MIT",
@@ -28,7 +28,8 @@
     "prepack": "npm run build --prefix ../.."
   },
   "bin": {
-    "ket-design-system-atlas": "./dist/atlas-cli.js"
+    "ket-design-system-atlas": "./dist/atlas-cli.js",
+    "ket-design-system-layout-audit": "./dist/layout-audit-cli.js"
   },
   "exports": {
     ".": {
@@ -52,7 +53,7 @@
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.29"
+    "@ketvietlab/ketjs-view": "0.1.30"
   },
   "publishConfig": {
     "access": "public",

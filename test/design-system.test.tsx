@@ -396,6 +396,18 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
   assert.match(entry, /layouts\/flat\/styles\.css/)
 })
 
+test('design system: a record form in a narrow column puts every label above its control', () => {
+  // The browser check measures this on /layering; this keeps the rule from being
+  // dropped where CI does not run a browser.
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  const narrow = css.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/u)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /\[data-ui="record-form"\]\s+\[data-ui="form-grid"\]\s+\[data-ui="field"\]:not\(\[data-kind="checkbox"\]\) \{\s+grid-template-columns: minmax\(0, 1fr\);/u,
+  )
+  assert.match(narrow, />\s*\* \{\s+grid-column: 1;\s+grid-row: auto;/u)
+})
+
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
@@ -413,13 +425,19 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /--kv-page-chrome-bg: var\(--kv-page-bg\)/)
   assert.match(grouped, /--kv-page-padding-x: var\(--kv-space-3\)/)
   assert.match(grouped, /gap: var\(--kv-space-2\)/)
-  assert.match(grouped, /\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-space-3\)/)
+  // One 12px inset for a working group's heading and body, through the surface role tokens.
+  assert.match(grouped, /--kv-surface-inset: var\(--kv-space-3\)/)
+  assert.match(grouped, /--kv-surface-head-gap: var\(--kv-space-3\)/)
   assert.match(
     grouped,
     /\[data-ui="table-scroll"\]\[data-framed="false"\] \{\s*width: auto;\s*margin-inline: 0/,
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
-  assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  // The rail's contents render flat through the layering rules, like any white region's.
+  assert.match(
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8'),
+    /\[data-presentation="grouped"\] \[data-ui="record-page-aside"\] \[data-ui="metric"\]/,
+  )
   assert.match(
     grouped,
     /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,

@@ -924,6 +924,24 @@ test('backend content: a breadcrumb that has to shrink clips instead of overprin
   )
 })
 
+test('record form: a narrow column puts labels above their controls, inside a FormPage too', () => {
+  // A form in a record aside kept the 7-9rem label track beside every control,
+  // so a third of the column went to the label; screens patched it one by one.
+  const narrow =
+    ADMIN_CSS.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /:is\(\[data-ui="form-page"\], :root\)\s+\[data-ui="record-form"\]\[data-layout="default"\]/,
+  )
+  assert.match(narrow, /grid-template-columns: minmax\(0, 1fr\)/)
+  assert.match(narrow, /\[data-ui="form-label"\],[\s\S]*?grid-column: 1;/)
+  assert.ok(
+    ADMIN_CSS.indexOf('@container record-form') >
+      ADMIN_CSS.lastIndexOf('[data-ui="form-page"]\n      [data-ui="record-form"]'),
+    'declared after the FormPage label rhythm it has to outrank',
+  )
+})
+
 test('backend content lets operational page patterns own their spacing', () => {
   assert.match(
     ADMIN_CSS,

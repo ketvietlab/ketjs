@@ -62,11 +62,22 @@ const Items = (props: { items: readonly JSXChild[] }): TemplateResult => (
   </>
 )
 
+/**
+ * `divided` draws a hairline between items, the peer-section divider of LAYOUT.md
+ * L3 (a form with several groups, a list of sections in a modal). It never frames
+ * an item.
+ */
 export const Stack = (props: {
   items: readonly JSXChild[]
   gap?: 'compact' | 'default' | 'loose'
+  divided?: boolean
 }): TemplateResult => (
-  <div data-ui="stack" data-pattern="stack" data-gap={props.gap ?? 'default'}>
+  <div
+    data-ui="stack"
+    data-pattern="stack"
+    data-gap={props.gap ?? 'default'}
+    data-divided={props.divided === true ? 'true' : null}
+  >
     <Items items={props.items} />
   </div>
 )

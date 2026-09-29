@@ -35,13 +35,25 @@ const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
     (entry) =>
       entry.isDirectory() &&
       existsSync(join(PACKAGES, entry.name, 'package.json')) &&
-      existsSync(join(PACKAGES, entry.name, 'src')),
+      (existsSync(join(PACKAGES, entry.name, 'src')) || existsSync(join(PACKAGES, entry.name, 'client'))),
   )
   .map((entry) => entry.name)
 
 const tsc = join(ROOT, 'node_modules', '.bin', 'tsc')
 const codeExtension = new Set(['.ts', '.tsx', '.mts', '.cts'])
-const buildInputs = new Set(['.ts', '.tsx', '.mts', '.cts', '.mjs', '.json', '.css', '.ktl', '.tmpl'])
+const buildInputs = new Set([
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.mjs',
+  '.json',
+  '.css',
+  '.ktl',
+  '.tmpl',
+  '.png',
+  '.svg',
+])
 
 /** @param {number} milliseconds */
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -188,6 +200,20 @@ try {
       for (const name of packageNames) {
         const emitted = join(stageBuild, 'packages', name, 'src')
         const dist = join(stageDist, name)
+        const legacyClient = join(PACKAGES, name, 'client')
+        if (existsSync(legacyClient)) {
+          // Imported Flow application: syntax checked JS, with no source compilation.
+          const check = spawnSync(process.execPath, [join(ROOT, 'tools/check-flow-client.mjs')], {
+            cwd: ROOT,
+            stdio: 'inherit',
+          })
+          if (check.error) throw check.error
+          if (check.status !== 0) throw new Error('Flow client syntax check failed')
+          mkdirSync(emitted, { recursive: true })
+          mkdirSync(dist, { recursive: true })
+          copyAssets(legacyClient, [emitted, dist])
+          continue
+        }
         if (!existsSync(emitted)) throw new Error(`TypeScript emitted no package artifact for ${name}`)
         cpSync(emitted, dist, { recursive: true })
         const declarations = join(stageTypes, name, 'src')
@@ -214,8 +240,10 @@ try {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }
-      const atlasCli = join(PACKAGES, 'design-system', 'dist', 'atlas-cli.js')
-      if (existsSync(atlasCli)) chmodSync(atlasCli, 0o755)
+      for (const name of ['atlas-cli.js', 'layout-audit-cli.js']) {
+        const cli = join(PACKAGES, 'design-system', 'dist', name)
+        if (existsSync(cli)) chmodSync(cli, 0o755)
+      }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
     } finally {
       rmSync(stage, { recursive: true, force: true })

@@ -6,6 +6,7 @@ import { KetError } from '../kernel/errors.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
+import { notificationHub } from './notify.ts'
 import { scopeForSession } from './session.ts'
 import type { Sessions } from './session.ts'
 import type { Joints } from '../theme/joints.ts'
@@ -79,6 +80,20 @@ export type Tenants = {
    */
   with: <T>(key: string, fn: (t: Tenant) => Promise<T>) => Promise<T>
   ofRequest: <T>(url: URL, req: IncomingMessage, fn: (t: Tenant) => Promise<T>) => Promise<T>
+  /**
+   * Listen on a channel of one tenant's database until the returned stop runs.
+   *
+   * The listener holds a lease on that datastore for as long as it lasts: the pool
+   * neither evicts nor idles out a database someone is listening on, so a tenant
+   * with an open socket keeps its connections, and a pool whose every entry is
+   * listened on refuses the next tenant rather than cutting a listener off.
+   */
+  listen: (
+    key: string,
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+  ) => Promise<() => Promise<void>>
   keys: () => Promise<string[]>
   close: () => Promise<void>
 }
@@ -286,6 +301,27 @@ export function createTenants(o: {
     pool: o.pool,
     with: withTenant,
     ofRequest: (url, req, fn) => withTenant(keyOf(url, req), fn),
+    listen: async (key, channel, onMessage, onReady) => {
+      const adapter = await o.pool.acquire(key)
+      let stop: () => Promise<void>
+      try {
+        await prepare(key, adapter)
+        stop = await notificationHub(adapter).subscribe(channel, onMessage, onReady)
+      } catch (error) {
+        o.pool.release(key)
+        throw error
+      }
+      let stopped = false
+      return async () => {
+        if (stopped) return
+        stopped = true
+        try {
+          await stop()
+        } finally {
+          o.pool.release(key)
+        }
+      }
+    },
     keys: () => o.spec.list(),
     close: () => o.pool.close(),
   }
@@ -333,6 +369,8 @@ export function singleTenant(o: {
     pool: null,
     with: run,
     ofRequest: (_url, _req, fn) => run('', fn),
+    listen: (_key, channel, onMessage, onReady) =>
+      notificationHub(o.adapter).subscribe(channel, onMessage, onReady),
     keys: async () => [''],
     close: async () => {},
   }

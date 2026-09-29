@@ -87,15 +87,23 @@ export type ServeContext = {
    * One database listener per channel per process, however many connections
    * share it. `onReady` runs when listening starts and after every reconnect,
    * because notifications sent during the gap were lost and whatever they would
-   * have said needs re-reading. Refused for a deployment with a database per
-   * tenant: a connection outliving its tenant's pooled database is not something
-   * the pool can promise yet.
+   * have said needs re-reading.
+   *
+   * A deployment with a database per tenant listens to one tenant at a time: pass
+   * the request whose tenant it is. Until the returned stop runs, that tenant's
+   * database stays open in the pool, so stop when its last listener goes.
    */
   subscribe: (
     channel: string,
     onMessage: (payload: string) => void,
     onReady?: () => void,
+    request?: { url: URL; req: IncomingMessage },
   ) => Promise<() => Promise<void>>
+  /**
+   * Which tenant a request belongs to; empty for a deployment with one datastore.
+   * What a route keys per-tenant state by, such as the listeners of `subscribe`.
+   */
+  tenantKeyOf: (url: URL, req: IncomingMessage) => string
   config: RuntimeConfig
   /**
    * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
@@ -854,14 +862,16 @@ export async function bootDeployment(
       return allow === null || allow.includes(name)
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
-    subscribe: async (channel, onMessage, onReady) => {
-      if (!adapter)
+    subscribe: async (channel, onMessage, onReady, request) => {
+      if (adapter) return notificationHub(adapter).subscribe(channel, onMessage, onReady)
+      if (!request)
         throw new KetError({
           code: 'E_NOT_SUPPORTED',
-          message: 'subscribe needs a single datastore; this deployment has one per tenant',
+          message: 'this deployment has a database per tenant; subscribe with the request whose tenant it is',
         })
-      return notificationHub(adapter).subscribe(channel, onMessage, onReady)
+      return tenants.listen(tenants.keyOf(request.url, request.req), channel, onMessage, onReady)
     },
+    tenantKeyOf: (url, req) => tenants.keyOf(url, req),
     callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
