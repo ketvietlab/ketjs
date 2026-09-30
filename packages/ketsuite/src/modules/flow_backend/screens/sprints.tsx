@@ -151,7 +151,6 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
     <ListScreen
       translator={_}
       title={options.projectName}
-      subtitle={_('flow_backend.menu.sprints')}
       frame={frame}
       headerActions={
         <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />

@@ -102,7 +102,6 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       variant="operational"
       frame={frame}
       title={_('user_backend.users.title')}
-      description={_('user_backend.users.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton

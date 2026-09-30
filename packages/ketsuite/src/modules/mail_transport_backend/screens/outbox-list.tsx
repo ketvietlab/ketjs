@@ -44,7 +44,6 @@ export const outboxScreen = (_: Translator, frame: Frame, options: OutboxScreenO
       variant="operational"
       frame={frame}
       title={_('mail_transport_backend.title')}
-      description={_('mail_transport_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}
       status={`${_('mail_transport_backend.title')}: ${String(options.rows.length)}`}
       body={

@@ -42,7 +42,7 @@ test('company hierarchy HTTP preserves nesting, archived state, encoding and loc
   assert.ok(html.indexOf('Child Company') < html.indexOf('Grandchild'))
   assert.match(html, /data-row-href="\/admin\/companies\/child%2Fa\?lang=en"/)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.match(html, /Companies: 3/)
+  assert.doesNotMatch(html, /list-page-description/)
   assert.equal(
     (await app.client.request('/admin/companies/hierarchy?lang=en', { method: 'POST' })).status,
     405,

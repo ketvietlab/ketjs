@@ -62,12 +62,6 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
-      [data-ui="list-page-description"] {
-      order: 2;
-    }
-
-    :where([data-kv-design-system])
-      [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-actions"] {
       width: 100%;
     }

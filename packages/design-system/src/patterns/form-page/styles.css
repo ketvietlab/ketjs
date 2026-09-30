@@ -79,14 +79,6 @@
     gap: var(--kv-space-2);
   }
 
-  :where([data-kv-design-system]) [data-ui="form-page-description"] {
-    max-width: 48rem;
-    margin: 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
-  }
-
   :where([data-kv-design-system]) [data-ui="form-page-actions"] {
     display: flex;
     min-width: 0;
