@@ -190,4 +190,5 @@ second overlay or write on drop.
 `RecordStateTrigger({ name, value, children })` wraps a public button to select a record-local view
 state, such as the active milestone note editor. The runtime retains form drafts before changing
 state. Give editors for different records distinct field names so switching editors never reuses the
-wrong draft. State triggers do not save a record.
+wrong draft. For an inline Cancel action, pass `resetFields: [name]` to discard only that
+editor's draft while preserving other fields and tabs. State triggers do not save a record.

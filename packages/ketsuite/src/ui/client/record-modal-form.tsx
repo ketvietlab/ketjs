@@ -105,9 +105,15 @@ export const RecordDialogTrigger = (props: {
 export const RecordStateTrigger = (props: {
   name: string
   value: string
+  /** Discard only this inline editor's named drafts when cancelling it. */
+  resetFields?: readonly string[]
   children: JSXChild
 }): TemplateResult => (
-  <span data-record-state-trigger={props.name} data-record-value={props.value}>
+  <span
+    data-record-state-trigger={props.name}
+    data-record-value={props.value}
+    data-record-reset-fields={props.resetFields ? JSON.stringify(props.resetFields) : null}
+  >
     {props.children}
   </span>
 )
