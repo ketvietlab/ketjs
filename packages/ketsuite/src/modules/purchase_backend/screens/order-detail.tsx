@@ -265,7 +265,8 @@ export const purchaseOrderDetailScreen = (
       : []),
     ...(options.printActions === undefined ? [] : [options.printActions]),
   ]
-  const description = [
+  // Who the order is with and when it is due: the record's identity, in its facts strip.
+  const identity = [
     String(order.partnerName ?? order.partnerId),
     order.datePlanned
       ? `${_('purchase_backend.field.datePlanned')}: ${String(order.datePlanned).slice(0, 10)}`
@@ -281,7 +282,6 @@ export const purchaseOrderDetailScreen = (
       frame={options.frame}
       scope="purchase-order-form-page"
       title={String(order.name)}
-      description={description}
       status={badge(labelOf(_, 'state', state), stateTone(state), state)}
       actions={
         headerActions.length ? (
@@ -289,6 +289,7 @@ export const purchaseOrderDetailScreen = (
         ) : undefined
       }
       meta={inline([
+        identity,
         badge(
           `${_('purchase_backend.field.invoiceStatus')}: ${labelOf(_, 'invoiceStatus', order.invoiceStatus)}`,
           order.invoiceStatus === 'to invoice' ? 'warning' : 'neutral',

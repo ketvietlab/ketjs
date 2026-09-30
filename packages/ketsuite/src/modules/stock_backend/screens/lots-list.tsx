@@ -101,7 +101,6 @@ export const lotsListScreen = (
       frame={collection.frame}
       title={_('stock_backend.lot.list.title')}
       controls={collectionControls(_, _('stock_backend.lot.list.title'), collection.frame)}
-      description={_('stock_backend.lot.list.subtitle')}
       headerActions={
         <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }

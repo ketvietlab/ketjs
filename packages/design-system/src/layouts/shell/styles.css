@@ -72,8 +72,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="page-eyebrow"],
-  :where([data-kv-design-system]) [data-ui="page-title"],
-  :where([data-kv-design-system]) [data-ui="page-description"] {
+  :where([data-kv-design-system]) [data-ui="page-title"] {
     overflow-wrap: anywhere;
   }
 

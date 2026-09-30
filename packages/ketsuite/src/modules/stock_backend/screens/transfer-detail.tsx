@@ -136,7 +136,8 @@ export const transferDetailScreen = (
         _('stock_backend.transfer.operations.empty'),
         _('stock_backend.transfer.operations.emptyHint'),
       )
-  const description = [
+  // The operation type and schedule: the transfer's identity, in the facts strip.
+  const identity = [
     transfer.pickingTypeName,
     transfer.scheduledDate ? `${_('stock_backend.field.scheduledDate')}: ${transfer.scheduledDate}` : null,
   ]
@@ -148,8 +149,8 @@ export const transferDetailScreen = (
       frame={frame}
       scope="stock-transfer-form-page"
       title={transfer.name}
-      description={description}
       status={badge(selectionLabel(_, 'state', transfer.state), stateTone(transfer.state), transfer.state)}
+      meta={identity}
       actions={
         actions.length ? (
           <FormCluster forms={actions} label={_('stock_backend.transfer.actions.label')} />

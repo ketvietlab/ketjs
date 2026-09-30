@@ -44,7 +44,6 @@ export const vendorPricelistCreateScreen = (
       frame={options.frame}
       scope="purchase-vendor-pricelist-create"
       title={_('purchase_backend.action.addVendorPrice')}
-      description={_('purchase_backend.pricelists.title')}
       actions={
         <FormCluster
           label={_('purchase_backend.action.addVendorPrice')}

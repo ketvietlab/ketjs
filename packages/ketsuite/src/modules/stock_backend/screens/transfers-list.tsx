@@ -113,7 +113,6 @@ export const transfersListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.transfer.list.title')}
-      description={_('stock_backend.transfer.list.subtitle')}
       headerActions={
         <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }

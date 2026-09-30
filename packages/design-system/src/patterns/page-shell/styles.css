@@ -46,14 +46,6 @@
     line-height: var(--kv-leading-tight);
   }
 
-  :where([data-kv-design-system]) [data-kv-page-identity="description"] {
-    max-width: 48rem;
-    margin: 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
-  }
-
   :where([data-kv-design-system]) [data-kv-page-identity="eyebrow"] {
     margin: 0;
     color: var(--kv-accent);

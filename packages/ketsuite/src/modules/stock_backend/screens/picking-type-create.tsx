@@ -116,7 +116,6 @@ export const pickingTypeCreateScreen = (
       frame={frame}
       scope="picking-type-create"
       title={_('stock_backend.pickingType.create.title')}
-      description={_('stock_backend.pickingType.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.pickingType.create.title')}

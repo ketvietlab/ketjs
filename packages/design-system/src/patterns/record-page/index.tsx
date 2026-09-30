@@ -10,7 +10,6 @@ export const HOOKS = [
   'record-page-title',
   'record-page-subline',
   'record-page-status',
-  'record-page-description',
   'record-page-actions',
   'record-page-meta',
   'record-page-controller',
@@ -33,7 +32,6 @@ export type RecordPageProps = {
   variant?: 'operational'
   width?: 'default' | 'wide'
   scope?: string | null
-  description?: string | null
   status?: JSXChild
   actions?: JSXChild
   meta?: JSXChild
@@ -51,9 +49,7 @@ export const recordPage = (props: RecordPageProps, compatibilityKind?: RecordPag
   if (props.slots?.fragmentTitle !== undefined)
     return (
       <ket-fragments data-title={props.slots.fragmentTitle}>
-        <template data-ket-slot={props.slots.header}>
-          {pageIdentityContent(kind, { ...props, groupDescription: true })}
-        </template>
+        <template data-ket-slot={props.slots.header}>{pageIdentityContent(kind, props)}</template>
         <template data-ket-slot={props.slots.body}>{props.body}</template>
       </ket-fragments>
     )
@@ -68,7 +64,7 @@ export const recordPage = (props: RecordPageProps, compatibilityKind?: RecordPag
     >
       {props.context !== undefined && <div data-ui={`${kind}-context`}>{props.context}</div>}
       <header data-ui={`${kind}-header`} data-ket-slot={props.slots?.header}>
-        {pageIdentityContent(kind, { ...props, groupDescription: true })}
+        {pageIdentityContent(kind, props)}
       </header>
       {props.controller !== undefined && <div data-ui={`${kind}-controller`}>{props.controller}</div>}
       {props.navigation !== undefined && <div data-ui={`${kind}-navigation`}>{props.navigation}</div>}

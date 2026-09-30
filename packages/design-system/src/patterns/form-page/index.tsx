@@ -10,7 +10,6 @@ export const HOOKS = [
   'form-page-title',
   'form-page-subline',
   'form-page-status',
-  'form-page-description',
   'form-page-actions',
   'form-page-meta',
   'form-page-controller',
