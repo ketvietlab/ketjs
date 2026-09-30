@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15485
+    "cssLines": 15480
   },
   "rows": [
     {
@@ -12449,7 +12449,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 931,
+      "lines": 926,
       "hooks": [
         "action",
         "action-group",
