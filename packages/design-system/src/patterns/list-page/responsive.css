@@ -76,7 +76,6 @@
       [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-actions"]
       [data-ui="action"][data-variant="primary"] {
-      min-height: 2.75rem;
       flex: 1 1 auto;
     }
 
