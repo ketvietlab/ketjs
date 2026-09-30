@@ -1,25 +1,264 @@
 @layer ket.app {
-  :where([data-kv-design-system]) [data-ui="date-range"] {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  :where([data-kv-design-system]) [data-ui="date-picker"] {
     min-width: 0;
-    gap: var(--kv-space-3);
-    margin: 0;
-    padding: var(--kv-space-3);
-    border: 1px solid var(--kv-panel-border);
+  }
+  :where([data-kv-design-system]) [data-ui="date-range"],
+  :where([data-kv-design-system]) [data-ui="date-inputs"] {
+    min-width: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-boundary"] {
+    display: none;
+  }
+  :where([data-kv-design-system]) [data-ui="date-field-control"] {
+    display: flex;
+    min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
+    border: 1px solid var(--kv-field-border);
     border-radius: var(--kv-radius-sm);
+    background: var(--kv-input-bg);
   }
-
-  :where([data-kv-design-system]) [data-ui="date-range"] legend {
-    padding-inline: var(--kv-space-1);
-    color: var(--kv-text-secondary);
+  :where([data-kv-design-system]) [data-ui="date-field-control"]:focus-within {
+    border-color: var(--kv-input-border-focus);
+    box-shadow: var(--kv-input-ring);
+  }
+  :where([data-kv-design-system]) [data-ui="date-field-control"]:has([aria-invalid="true"]) {
+    border-color: var(--kv-color-danger);
+  }
+  :where([data-kv-design-system]) [data-ui="date-range-preset"] {
+    width: var(--kv-space-32, 8rem);
+    min-width: 0;
+    margin-inline-start: auto;
+  }
+  :where([data-kv-design-system]) [data-ui="date-field-control"] > [data-ui="date-control-row"] {
+    flex: 1;
+    gap: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-control-row"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--kv-space-1);
+    grid-column: 2;
+    grid-row: 1;
+  }
+  :where([data-kv-design-system]) [data-ui="date-tools"] {
+    display: none;
+  }
+  :where([data-kv-design-system]) [data-date-enhanced="true"] [data-ui="date-tools"] {
+    display: flex;
+    flex: none;
+  }
+  /* DatePicker owns this native-control slot; enhancement supplies its calendar launcher. */
+  :where([data-kv-design-system])
+    [data-date-enhanced="true"]
+    [data-ui="date-control-row"]
+    > input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+  :where([data-kv-design-system]) [data-ui="date-range-error"] {
+    grid-column: 2;
+    margin: 0;
+    color: var(--kv-color-danger);
+    font-size: var(--kv-text-xs);
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar"] {
+    --kv-date-left: var(--kv-space-3);
+    --kv-date-top: var(--kv-space-3);
+    --kv-date-max-height: calc(100dvh - var(--kv-space-6));
+    --kv-date-month-width: 18rem;
+    position: fixed;
+    inset: auto;
+    top: var(--kv-date-top);
+    left: var(--kv-date-left);
+    width: calc(var(--kv-date-month-width) + var(--kv-space-8));
+    max-width: calc(100vw - var(--kv-space-6));
+    max-height: var(--kv-date-max-height);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scroll-margin: var(--kv-space-3);
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    box-shadow: var(--kv-shadow-popover);
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar"]:popover-open {
+    display: grid;
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar"][data-months="2"] {
+    width: calc(var(--kv-date-month-width) * 2 + var(--kv-space-8) + var(--kv-space-5));
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-head"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-3) var(--kv-space-4);
+    border-bottom: 1px solid var(--kv-panel-border);
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-title"] {
+    margin: 0;
+    font-size: var(--kv-text-md);
+    font-weight: var(--kv-weight-semibold);
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-body"] {
+    display: grid;
+    min-width: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-months"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-5);
+    padding: var(--kv-space-4);
+  }
+  :where([data-kv-design-system])
+    [data-ui="date-calendar"][data-months="2"]
+    [data-ui="date-calendar-months"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :where([data-kv-design-system]) [data-ui="date-month"] {
+    min-width: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-month-title"] {
+    margin: 0 0 var(--kv-space-3);
     font-size: var(--kv-text-sm);
-    font-weight: var(--kv-weight-medium);
+    font-weight: var(--kv-weight-semibold);
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="date-grid"] {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-weekday"] {
+    padding: var(--kv-space-2) 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-normal);
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="date-cell"] {
+    height: var(--kv-control-height);
+    padding: var(--kv-space-0-5) 0;
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="date-cell"][data-in-range="true"] {
+    background: var(--kv-color-accent-soft);
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    height: var(--kv-control-height);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: inherit;
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"]:hover:not(:disabled) {
+    background: var(--kv-interactive-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"][aria-current="date"] {
+    border-color: var(--kv-color-accent);
+    font-weight: var(--kv-weight-semibold);
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"][data-selected="true"] {
+    background: var(--kv-action-primary-bg);
+    color: var(--kv-action-primary-ink);
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"][data-selected="true"]:hover {
+    background: var(--kv-action-primary-hover);
+  }
+  :where([data-kv-design-system]) [data-ui="date-day"]:disabled {
+    color: var(--kv-text-disabled);
+    cursor: not-allowed;
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-footer"] {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-3) var(--kv-space-4);
+    border-top: 1px solid var(--kv-panel-border);
+    background: var(--kv-panel-bg);
+  }
+  :where([data-kv-design-system]) [data-ui="date-calendar-status"] {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="date-field-control"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="date-calendar"] {
+      inset: 0;
+      width: 100%;
+      max-width: none;
+      height: 100dvh;
+      max-height: 100dvh;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    :where([data-kv-design-system]) [data-ui="date-calendar-head"] {
+      padding-top: max(var(--kv-space-3), env(safe-area-inset-top));
+    }
+    :where([data-kv-design-system]) [data-ui="date-calendar-body"] {
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr);
+      overflow: hidden;
+    }
+    :where([data-kv-design-system]) [data-ui="date-calendar-months"] {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      grid-auto-rows: max-content;
+      align-content: start;
+    }
+    :where([data-kv-design-system]) [data-ui="date-cell"],
+    :where([data-kv-design-system]) [data-ui="date-day"] {
+      height: var(--kv-space-12);
+    }
+    :where([data-kv-design-system]) [data-ui="date-calendar-footer"] {
+      position: static;
+      padding-bottom: max(var(--kv-space-3), env(safe-area-inset-bottom));
+    }
+    :where([data-kv-design-system]) [data-ui="date-control-row"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
   }
 
-  @container (max-width: 34rem) {
-    :where([data-kv-design-system]) [data-ui="date-range"] {
-      grid-template-columns: minmax(0, 1fr);
+  @container (max-width: 28rem) {
+    :where([data-kv-design-system]) [data-ui="date-field-control"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="date-control-row"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
     }
   }
 }

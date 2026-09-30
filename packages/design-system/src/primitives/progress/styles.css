@@ -1,6 +1,7 @@
 @layer ket.app {
   :where([data-kv-design-system]) [data-ui="progress"] {
     display: grid;
+    min-width: 0;
     gap: var(--kv-space-2);
   }
 
@@ -11,9 +12,11 @@
     gap: var(--kv-space-3);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    overflow-wrap: anywhere;
   }
 
   :where([data-kv-design-system]) [data-ui="progress-value"] {
+    flex: none;
     color: var(--kv-text-muted);
     font-variant-numeric: tabular-nums;
   }
