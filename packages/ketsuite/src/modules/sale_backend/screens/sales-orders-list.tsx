@@ -143,7 +143,6 @@ export const salesOrdersListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.orderList.title')}
-      description={_('sale_backend.orderList.subtitle')}
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('sale_backend.orderList.title'), collection.frame)}
       footer={summary}

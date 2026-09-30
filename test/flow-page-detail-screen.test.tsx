@@ -79,7 +79,7 @@ test('flow page detail: FormPage preserves Live Doc, versioned title save, trail
   assert.match(html, /data-ui="form-page" data-scope="flow-page-detail-form-page"/)
   assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="form-page-title"[^>]*>Local setup/)
-  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
+  assert.match(textContent, /data-ui="form-page-meta"[\s\S]*?Internal platform/)
   assert.match(html, /data-island="livedoc.editor"/)
   assert.match(textContent, /Collaborative document/)
   assert.match(html, /id="flow-page-detail-form"/)

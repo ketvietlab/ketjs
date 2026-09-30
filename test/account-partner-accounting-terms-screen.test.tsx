@@ -52,7 +52,7 @@ test('partner accounting terms: FormPage keeps defaults, errors and locale-aware
     /data-ui="form-page" data-scope="partner-accounting-terms-form-page" data-has-aside="false"/,
   )
   assert.match(html, /data-ui="form-page-title"[\s\S]*?Kế toán · Công ty Minh An/)
-  assert.match(html, /Các lựa chọn chỉ áp dụng cho công ty đang hoạt động\./)
+  assert.doesNotMatch(html, /form-page-description/)
   assert.match(html, /data-ui="section-title"[\s\S]*?Điều khoản và tài khoản công nợ/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit" form="partner-accounting-terms-form"/)
   assert.match(html, /href="\/admin\/partner\/partners\/customer\?lang=vi"[\s\S]*?Quay lại đối tác/)

@@ -76,7 +76,6 @@ export const contextScreen = (_: Translator, frame: Frame, options: ContextScree
       frame={frame}
       scope="working-context-page"
       title={_('company_backend.context.title')}
-      description={_('company_backend.context.writeHint')}
       actions={button({
         label: _('company_backend.context.apply'),
         type: 'submit',

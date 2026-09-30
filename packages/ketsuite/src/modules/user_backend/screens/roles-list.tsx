@@ -75,7 +75,6 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
       frame={frame}
       title={_('user_backend.roles.title')}
       controls={collectionControls(_, _('user_backend.roles.title'), frame)}
-      description={_('user_backend.roles.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton
