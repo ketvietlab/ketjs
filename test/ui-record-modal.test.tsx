@@ -649,3 +649,17 @@ test('record modal: cancelling one inline editor preserves other drafts and thei
   assert.equal(record.values.milestone, 'discard', 'draft snapshots stay immutable')
   assert.equal(recordDraftHasChanges(resetRecordDraftFields(cancelled, ['call', 'confirmed'])), false)
 })
+
+test('record modal: a section-composed form does not reserve an empty field grid', async () => {
+  const { RecordModalForm } = await import('../packages/ketsuite/src/ui/client/record-modal-form.tsx')
+  const html = renderToString(
+    RecordModalForm({ kind: 'test', fields: [], command: 'save', body: <section>Grouped fields</section> }),
+  )
+  assert.doesNotMatch(html, /data-ui="form-grid"/)
+  assert.match(html, /name="__command" value="save"/)
+  assert.match(html.replace(/<!--.*?-->/g, ''), /<section>Grouped fields<\/section>/)
+  const withFields = renderToString(
+    RecordModalForm({ kind: 'test', fields: [{ id: 'name', name: 'name', label: 'Name' }] }),
+  )
+  assert.match(withFields, /data-ui="form-grid"/)
+})

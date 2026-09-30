@@ -49,7 +49,7 @@ export const RecordModalForm = (props: {
     {Object.entries(props.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
-    <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
+    {props.fields.length ? <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div> : null}
     {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
