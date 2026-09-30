@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15491
+    "cssLines": 15485
   },
   "rows": [
     {
@@ -12347,7 +12347,6 @@
       "file": "packages/ketsuite/src/modules/backend/design/content.css",
       "lines": 709,
       "hooks": [
-        "action",
         "action-label",
         "action-spinner",
         "app-location-bar",
@@ -12418,9 +12417,8 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/controls.css",
-      "lines": 327,
+      "lines": 321,
       "hooks": [
-        "action-group",
         "action-icon",
         "action-spinner",
         "code",

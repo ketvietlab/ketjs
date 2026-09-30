@@ -156,12 +156,6 @@
     border-radius: 50%;
     animation: ket-action-spin 700ms linear infinite;
   }
-  [data-ui="action-group"] {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--admin-gap-xs);
-  }
   @keyframes ket-action-spin {
     to {
       transform: rotate(1turn);
