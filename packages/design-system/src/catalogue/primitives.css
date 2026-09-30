@@ -1,0 +1,77 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="primitive-harness"] {
+    display: grid;
+    gap: var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-section"] {
+    min-width: 0;
+    scroll-margin-top: var(--kv-space-6);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-section-head"] {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--kv-space-2) var(--kv-space-3);
+    padding-bottom: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-section-head"] h2 {
+    margin: 0;
+    font-size: var(--kv-text-lg);
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-section-head"] span {
+    color: var(--kv-text-muted);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-section-head"] span:last-child {
+    flex-basis: 100%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-row"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+    align-items: start;
+    gap: var(--kv-space-6);
+    padding-block: var(--kv-space-5);
+    border-top: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-caption"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-caption"] h3 {
+    margin: 0 0 var(--kv-space-1);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-caption"] p {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    line-height: var(--kv-leading-relaxed);
+  }
+
+  :where([data-kv-design-system]) [data-ui="primitive-sample"] {
+    min-width: 0;
+  }
+
+  @media (max-width: 63.9375rem) {
+    :where([data-kv-design-system]) [data-ui="primitive-section"] {
+      scroll-margin-top: calc(var(--kv-space-16) + var(--kv-space-4));
+    }
+
+    :where([data-kv-design-system]) [data-ui="primitive-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--kv-space-3);
+    }
+  }
+}

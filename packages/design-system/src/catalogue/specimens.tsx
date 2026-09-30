@@ -56,7 +56,8 @@ import {
   TextField,
 } from '../forms/scalar-fields/index.tsx'
 import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
-import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
+import { DatePickerExamples } from './date-pickers.tsx'
+import { DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
 import { DropZone, FileUpload } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
 import {
@@ -1929,20 +1930,13 @@ export const componentGroups: readonly ComponentGroup[] = [
       },
       {
         id: 'date-time',
-        name: 'Civil date and local time',
-        description: 'Civil dates and local times submit their source text without implicit UTC conversion.',
+        name: 'Date pickers and local time',
+        description:
+          'Interactive calendars, seven quick ranges, draft selection and native civil-date submission. Open /dates for the focused playground.',
         render: () => (
           <Stack
             items={[
-              <DatePicker id="date" name="date" label="Delivery date" value="2026-09-08" />,
-              <DateRangePicker
-                id="range"
-                label="Reporting period"
-                start={{ id: 'from', name: 'from', value: '2026-09-01' }}
-                end={{ id: 'to', name: 'to', value: '2026-09-30' }}
-                startLabel="From"
-                endLabel="To"
-              />,
+              <DatePickerExamples />,
               <DateTimePicker
                 id="appointment"
                 name="appointment"
