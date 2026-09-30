@@ -13,7 +13,7 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, idempotencyKey, routesOf } from '../channel_api/core.ts'
 import { emptyIssueListState } from '../flow/search.ts'
-import { commandRecordId } from '../flow/operations.ts'
+import { commandRecordId } from '../flow/domain/command.ts'
 import { ISSUE_PRIORITIES } from '../flow/types.ts'
 
 type Req = Parameters<Route>[1]
