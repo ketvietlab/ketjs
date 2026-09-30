@@ -744,8 +744,38 @@ test('design system: canonical page titles share one dense hierarchy', () => {
     // A page header has no description (LAYOUT.md L5), so nothing styles one.
     assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
   }
-  assert.match(patterns, /--kv-page-title-size: 1\.5rem/)
-  assert.equal((patterns.match(/font-size: var\(--kv-text-lg\)/g) ?? []).length >= 4, true)
+})
+
+test('design system: every page title is 24px from tablet width and 17px below it', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  assert.match(tokens, /:root \{[^}]*--kv-page-title-size: 1\.5rem;/)
+  assert.match(
+    tokens,
+    /@media \(max-width: 47\.9375rem\) \{\s*:root \{\s*--kv-page-title-size: var\(--kv-text-lg\);\s*\}/,
+  )
+  // Tokens, the tablet step and compact density are the only places that size a title.
+  assert.deepEqual([...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]).sort(), [
+    '1.5rem',
+    'var(--kv-text-lg)',
+    'var(--kv-text-lg)',
+  ])
+  assert.match(
+    css,
+    /\[data-density="compact"\]\) \[data-ui="list-page"\]\[data-variant="operational"\] \{\s*--kv-page-title-size/,
+  )
+
+  const identity = css.match(/\[data-kv-page-identity="title"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body
+  assert.match(identity ?? '', /font-size: var\(--kv-page-title-size\)/)
+
+  // `Page` included: no pattern gives its title another size at any width.
+  const titleHook =
+    /\[data-ui="(?:page|list-page|record-page|form-page|dashboard-page|board-page)-title"\]|\[data-kv-page-identity="title"\]/
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!titleHook.test(selector ?? '')) continue
+    for (const [declaration] of (body ?? '').matchAll(/font-size:[^;]+/g)) {
+      assert.equal(declaration, 'font-size: var(--kv-page-title-size)', selector?.trim())
+    }
+  }
 })
 
 test('design system: canonical page headers share compact responsive padding', () => {

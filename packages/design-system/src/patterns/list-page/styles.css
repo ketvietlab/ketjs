@@ -4,17 +4,6 @@
     display: none;
   }
 
-  :where([data-kv-design-system])
-    :is(
-      [data-ui="list-page"],
-      [data-ui="record-page"],
-      [data-ui="form-page"],
-      [data-ui="dashboard-page"],
-      [data-ui="board-page"]
-    ) {
-    --kv-page-title-size: 1.5rem;
-  }
-
   :where([data-kv-design-system]) [data-ui="list-page"] {
     display: grid;
     min-width: 0;
