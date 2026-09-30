@@ -167,3 +167,27 @@ Author the definition in TSX and bundle it with esbuild into the module's asset 
 `@ketvietlab/ketjs-view` external (it is served at `/_ket/view/`) and bundle
 `@ketvietlab/design-system` and `@ketvietlab/ketsuite/ui` in, so the island shares the page's single
 renderer and renders the same markup the design-system CSS expects.
+
+
+### Inline photo cells
+
+Use `RecordModalForm` with `dropzone: true`, an upload command, and a public `DropZone` in `body`.
+Selecting a file and dropping a file both submit that form through the record runtime. The runtime
+owns uploads, errors, busy state, and the subsequent context refresh. Keep each cell a separate form;
+placing the photo matrix inside a note or completion form creates invalid nested forms. File controls
+need no module-specific event handler or private design-system attributes.
+
+
+### Pending actions and inline editors
+
+`recordModalHref(url, { kind, id, tab, dialog })` optionally names an entry dialog with the
+`recordDialog` query parameter. The runtime reads the record first and opens only a dialog declared
+by that record definition. Opening the dialog performs no mutation: its command still validates
+permissions, current version, and fields. This is appropriate for kanban drop confirmation. A normal
+record link clears the entry dialog; closing clears it with the record cursor. Do not implement a
+second overlay or write on drop.
+
+`RecordStateTrigger({ name, value, children })` wraps a public button to select a record-local view
+state, such as the active milestone note editor. The runtime retains form drafts before changing
+state. Give editors for different records distinct field names so switching editors never reuses the
+wrong draft. State triggers do not save a record.
