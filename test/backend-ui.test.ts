@@ -961,6 +961,7 @@ test('ui contract: every documented hook has an explicit CSS rule', () => {
   const publicComponentCss = [
     'packages/design-system/src/patterns/modal-sheet/styles.css',
     'packages/design-system/src/layouts/layout/styles.css',
+    'packages/design-system/src/primitives/status/styles.css',
   ]
   const css = [...STYLESHEETS, ...publicComponentCss].map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
@@ -2066,6 +2067,8 @@ test('backend shell: the phone menu uses the design-system left drawer', () => {
 test('backend compatibility CSS leaves Section and ModalSheet geometry to the design system', () => {
   const forms = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
   assert.doesNotMatch(forms, /\[data-ui="(?:section(?:-[a-z-]+)?|modal(?:-[a-z-]+)?)"\]/u)
+  const lists = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.doesNotMatch(lists, /\[data-ui="badge"\]/u)
   const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
   const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
   assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
