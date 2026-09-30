@@ -25,6 +25,10 @@ Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on t
 application root. Components own their markup and `data-ui` hooks; applications
 provide business data and translated labels.
 
+[LAYOUT.md](./LAYOUT.md) holds the layout rules: where a frame, a heading and a gap
+go, which the components apply by themselves and which `ket-design-system-layout-audit`
+checks in application CSS. Read it before composing a screen or overriding a style.
+
 Compose content with unframed `Section`, `Stack` and `Grid`. `DataTable`, `Metric`
 and `ContentCard` already own their surfaces; do not wrap them in `Surface` or
 another card. Reserve `Surface` for unframed content that needs a working panel,
@@ -38,6 +42,8 @@ For titled working blocks, use `Surface title="..." body={form}` or
 `DataTable title="..."`. The title sits inside the panel at 18px (`--kv-text-xl`),
 with optional `actions` beside it. A titled table owns one panel, with a borderless,
 transparent scrolling viewport inside; never wrap it in another `Surface`.
+Inside a white region (a surface, modal, dialog, popover or card) a `Surface` or
+titled table renders flat, as a section of that region (LAYOUT.md L2).
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
@@ -84,8 +90,9 @@ returns them exactly where they were.
 ### Option groups
 
 `checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
-fields with those types) keep one label on the left and the options on the right,
-each option's text after its control. `optionsOrientation` sets how the options flow:
+fields with those types) keep one label on the left and the options on the right
+from tablet width up (above them below it, as every field does), each option's text
+after its control. `optionsOrientation` sets how the options flow:
 
 - `horizontal` (default): options wrap on one line. Use for a few short choices.
 - `vertical`: one option per line, rendered as `data-orientation="vertical"` on
@@ -286,9 +293,10 @@ Linked cells are display-only. Associate `selection.form` and `bulk.form` with t
 same native form to submit selected IDs and the bulk command. Selection syncing
 and select-all remain application runtime responsibilities.
 
-Forms keep labels on the left and controls on the right, including on mobile.
-Help and errors align below the control. Narrow panels reduce the number of field
-pairs per row without stacking labels above inputs. Native inputs support `readOnly`,
+From tablet width (48rem) up, a form keeps each label on the left of its control,
+with help and errors below the control. Below tablet width, and in any column
+narrower than 28rem such as a side panel, each label sits above its control
+(LAYOUT.md L7). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
 `min` and `max`; choices can be disabled individually, and invalid nested groups
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.

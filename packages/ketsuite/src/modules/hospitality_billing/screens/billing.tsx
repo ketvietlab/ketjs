@@ -30,7 +30,6 @@ export const billingScreen = (
     <ListScreen
       translator={_}
       title={_('hospitality_billing.screen.title')}
-      subtitle={_('hospitality_billing.screen.subtitle')}
       frame={collection.frame}
       body={stack([
         feedback(_, state),

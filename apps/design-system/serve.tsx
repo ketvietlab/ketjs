@@ -16,10 +16,12 @@ import {
   CatalogueHead,
   CataloguePage,
   InventoryPage,
+  LayeringPreview,
   PageSurfacePreview,
   inventoryDecisions,
   inventoryKinds,
   inventoryScopes,
+  layeringPresentations,
   surfaceKinds,
   surfaceStates,
 } from '@ketvietlab/design-system/catalogue'
@@ -118,6 +120,19 @@ const app = await createKetServer({
         }),
       })
     },
+    '/layering': (url) =>
+      page({
+        body: document({
+          lang: 'en',
+          title: 'Layering · Két Việt',
+          head: CatalogueHead(),
+          body: (
+            <LayeringPreview
+              presentation={oneOf(url.searchParams.get('presentation'), layeringPresentations, 'default')}
+            />
+          ),
+        }),
+      }),
     '/inventory': (url) =>
       page({
         body: document({

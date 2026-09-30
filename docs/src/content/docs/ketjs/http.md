@@ -106,7 +106,8 @@ Route factories receive live runtime services:
 | `document(...)`, `styles(request)` | Safe document shell and composed module styles. |
 | `joint(...)`, `jointShows(...)` | Installed extension-point output. |
 | `menu(url, request)` | Navigation filtered by install state and function permissions. |
-| `subscribe(channel, onMessage, onReady?)` | Listen for `ctx.notify(channel, …)`. One database listener per channel per process; single-datastore deployments only. |
+| `subscribe(channel, onMessage, onReady?, request?)` | Listen for `ctx.notify(channel, …)`. One database listener per channel per database per process. A deployment with a database per tenant passes `{ url, request }` to listen to that request's tenant. |
+| `tenantKeyOf(url, request)` | The request's tenant key, or `''` with one datastore. Key per-tenant listener state by it. |
 
 Do not cache `live()` or a tenant-specific service globally. Which modules, sessions, and storage
 apply can change per request.
@@ -312,6 +313,13 @@ it is delivered on commit and dropped on rollback. PostgreSQL carries it to ever
 (`NOTIFY`, payload at most 7999 bytes); SQLite delivers to listeners in the same process only.
 Delivery is best effort, so a client should re-read on connect and keep a slower poll as a
 backstop. `onReady` runs after every listener reconnect for exactly that reason.
+
+With a database per tenant, subscribe with the upgrade request so the listener lands on that
+tenant's database, and hear only that tenant's notifications. A listener holds its tenant's
+database open in the pool until its stop runs: the pool neither idles out nor evicts it, and
+when every pooled database is being listened to, the next tenant's request is refused rather
+than a listener cut off. Share one subscription per tenant between that tenant's sockets and
+stop it when the last one closes; each listened tenant costs PostgreSQL one extra connection.
 
 ## Function transport
 

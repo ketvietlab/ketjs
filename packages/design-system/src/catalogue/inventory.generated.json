@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -16,8 +16,8 @@
     "publicGaps": 138,
     "runtimeGaps": 5,
     "typeGaps": 133,
-    "cssFiles": 77,
-    "cssLines": 15625
+    "cssFiles": 78,
+    "cssLines": 15774
   },
   "rows": [
     {
@@ -518,6 +518,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -954,6 +955,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1040,6 +1042,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -1208,6 +1211,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -1347,6 +1351,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1411,6 +1416,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1475,6 +1481,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -1638,6 +1645,7 @@
         "test/company-company-form-screen.test.tsx",
         "test/company-context-screen.test.tsx",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-epic-detail-routes.test.ts",
         "test/flow-epic-detail-screen.test.tsx",
@@ -1782,6 +1790,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -1807,6 +1816,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/product-attribute-ui.test.tsx"
       ],
@@ -2509,6 +2519,7 @@
         "test/company-companies-list-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
         "test/crm-leaderboard-screen.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-all-epics-routes.test.ts",
         "test/flow-all-epics-screen.test.tsx",
@@ -2824,6 +2835,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -2846,6 +2858,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3137,6 +3150,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -3230,6 +3244,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-e2e.test.ts",
         "test/flow-membership.test.ts",
@@ -3257,7 +3272,7 @@
       "specimen": "present",
       "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -3590,6 +3605,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3635,7 +3651,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -4342,6 +4358,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -4490,6 +4507,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -4540,6 +4558,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -5267,7 +5286,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -5690,6 +5709,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -5953,6 +5973,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -6264,6 +6285,7 @@
         "test/company-company-form-screen.test.tsx",
         "test/company-context-screen.test.tsx",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-epic-detail-routes.test.ts",
         "test/flow-epic-detail-screen.test.tsx",
@@ -6424,6 +6446,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/product-attribute-ui.test.tsx"
       ],
@@ -6557,6 +6580,7 @@
         "test/company-companies-list-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
         "test/crm-leaderboard-screen.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-all-epics-routes.test.ts",
         "test/flow-all-epics-screen.test.tsx",
@@ -7593,7 +7617,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-007"
     },
     {
@@ -8298,8 +8322,8 @@
       "consumers": 2,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-page-header.test.tsx"],
       "gapTask": "DS-007"
     },
     {
@@ -8482,6 +8506,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
+        "test/design-system-layout-audit.test.ts",
         "test/global-search-launcher.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
@@ -8802,6 +8827,7 @@
         "test/current-company-context.test.ts",
         "test/date-scalar.test.ts",
         "test/decimal-exact.test.ts",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/document-sequence.test.ts",
         "test/e2e.test.ts",
@@ -9643,6 +9669,7 @@
         "test/backend-ui.test.ts",
         "test/company-company-form-screen.test.tsx",
         "test/crm-e2e.test.ts",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/experience-collection-tables.test.tsx",
         "test/list-bulk-selection.test.tsx",
@@ -9897,6 +9924,7 @@
         "test/crm-pipeline-screen.test.tsx",
         "test/crm-ux.test.ts",
         "test/design-system-atlas.test.ts",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/flow-my-work-screen.test.tsx",
         "test/flow-projects-screens.test.tsx",
@@ -10413,7 +10441,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/backend-ui.test.ts"],
+      "testFiles": ["test/backend-ui.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-019"
     },
     {
@@ -10693,6 +10721,7 @@
         "test/crm-ux.test.ts",
         "test/design-system-atlas.test.ts",
         "test/design-system-demo.test.ts",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/events.test.ts",
         "test/flow-board-screen.test.tsx",
@@ -10893,6 +10922,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/collection-ket-table.test.tsx",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/joints.test.ts",
         "test/ktl.render.test.ts",
@@ -10919,6 +10949,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-demo.test.ts",
+        "test/design-system-layout-audit.test.ts",
         "test/design-system.test.tsx",
         "test/hr-attendance-my-work-screen.test.tsx",
         "test/identity-engine.test.ts",
@@ -11349,7 +11380,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 355,
+      "lines": 367,
       "hooks": []
     },
     {
@@ -11627,7 +11658,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/grouped/styles.css",
-      "lines": 131,
+      "lines": 100,
       "hooks": [
         "-context",
         "-header",
@@ -11637,9 +11668,6 @@
         "board-page-body",
         "content-card",
         "dashboard-page-body",
-        "disclosure",
-        "disclosure-body",
-        "disclosure-summary",
         "grid",
         "list-page",
         "list-page-body",
@@ -11651,8 +11679,6 @@
         "record-page-body",
         "section-body",
         "stack",
-        "surface",
-        "surface-head",
         "table-scroll"
       ]
     },
@@ -11664,8 +11690,29 @@
     },
     {
       "layer": "public",
+      "file": "packages/design-system/src/layouts/layering/styles.css",
+      "lines": 159,
+      "hooks": [
+        "content-card",
+        "dialog",
+        "disclosure",
+        "disclosure-body",
+        "disclosure-summary",
+        "kanban-card",
+        "metric",
+        "modal-sheet",
+        "popover-panel",
+        "record-page-aside",
+        "surface",
+        "surface-head",
+        "surface-title",
+        "table-scroll"
+      ]
+    },
+    {
+      "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 547,
+      "lines": 554,
       "hooks": [
         "card-actions",
         "card-body",
@@ -11722,7 +11769,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/shell/styles.css",
-      "lines": 436,
+      "lines": 435,
       "hooks": [
         "app-brand",
         "app-location-bar",
@@ -11749,7 +11796,6 @@
         "page-actions",
         "page-body",
         "page-context",
-        "page-description",
         "page-eyebrow",
         "page-header",
         "page-heading",
@@ -11773,14 +11819,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 164,
+      "lines": 152,
       "hooks": [
         "board-page",
         "board-page-actions",
         "board-page-body",
         "board-page-context",
         "board-page-controls",
-        "board-page-description",
         "board-page-eyebrow",
         "board-page-header",
         "board-page-heading",
@@ -11796,14 +11841,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 169,
+      "lines": 157,
       "hooks": [
         "action",
         "dashboard-page",
         "dashboard-page-actions",
         "dashboard-page-body",
         "dashboard-page-context",
-        "dashboard-page-description",
         "dashboard-page-eyebrow",
         "dashboard-page-header",
         "dashboard-page-heading",
@@ -11847,7 +11891,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/form-page/styles.css",
-      "lines": 237,
+      "lines": 225,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -11858,7 +11902,6 @@
         "form-page-body",
         "form-page-context",
         "form-page-controller",
-        "form-page-description",
         "form-page-header",
         "form-page-heading",
         "form-page-layout",
@@ -11908,7 +11951,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 136,
+      "lines": 129,
       "hooks": [
         "action",
         "cell",
@@ -11918,7 +11961,6 @@
         "list-page-body",
         "list-page-context",
         "list-page-controls",
-        "list-page-description",
         "list-page-footer",
         "list-page-header",
         "list-page-heading",
@@ -11932,17 +11974,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 254,
+      "lines": 235,
       "hooks": [
-        "board-page",
-        "dashboard-page",
-        "form-page",
         "list-page",
         "list-page-actions",
         "list-page-body",
         "list-page-context",
         "list-page-controls",
-        "list-page-description",
         "list-page-eyebrow",
         "list-page-footer",
         "list-page-header",
@@ -11952,7 +11990,6 @@
         "list-page-title-row",
         "list-page-toolbar",
         "list-page-tools",
-        "record-page",
         "row",
         "table",
         "table-scroll"
@@ -11981,7 +12018,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 131,
+      "lines": 119,
       "hooks": ["form-actions", "record-form"]
     },
     {
@@ -12033,7 +12070,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-page/styles.css",
-      "lines": 228,
+      "lines": 216,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -12043,7 +12080,6 @@
         "record-page-body",
         "record-page-context",
         "record-page-controller",
-        "record-page-description",
         "record-page-header",
         "record-page-heading",
         "record-page-layout",
@@ -12091,7 +12127,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 168,
+      "lines": 200,
       "hooks": [
         "field",
         "field-control",
@@ -12171,7 +12207,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/record/display/styles.css",
-      "lines": 63,
+      "lines": 88,
       "hooks": [
         "avatar-group",
         "description-list",
@@ -12198,7 +12234,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/styles.css",
-      "lines": 59,
+      "lines": 60,
       "hooks": []
     },
     {
@@ -12378,7 +12414,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 1081,
+      "lines": 1112,
       "hooks": [
         "action",
         "action-group",

@@ -60,7 +60,6 @@ export const invoicingPolicyCreateScreen = (
       frame={frame}
       scope="sales-invoicing-policy-form-page"
       title={_('sale_backend.policy.edit.title')}
-      description={_('sale_backend.policy.edit.hint')}
       actions={
         <FormCluster
           label={_('sale_backend.policy.edit.title')}

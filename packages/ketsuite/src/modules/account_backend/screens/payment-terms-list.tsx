@@ -167,7 +167,6 @@ export const paymentTermsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.terms.title')}
-      description={_('account_backend.term.subtitle')}
       headerActions={
         <LinkButton
           label={_('account_backend.action.createTerm')}

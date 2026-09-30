@@ -396,6 +396,26 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
   assert.match(entry, /layouts\/flat\/styles\.css/)
 })
 
+test('design system: a label sits beside its control from tablet width and above it below', () => {
+  // LAYOUT.md L7. The browser check measures this on /layering at 1440 and 390 px;
+  // this keeps the rule from being dropped where CI does not run a browser.
+  const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
+  for (const query of ['@media (max-width: 47.9375rem)', '@container (max-width: 28rem)']) {
+    const start = css.indexOf(query)
+    assert.notEqual(start, -1, query)
+    const block = css.slice(start, css.indexOf('\n  }\n', start))
+    assert.match(
+      block,
+      /\[data-ui="field"\]:not\(\[data-kind="checkbox"\]\) > \* \{\s+grid-column: 1 \/ -1;\s+grid-row: auto;/u,
+      query,
+    )
+  }
+  // One rule for every form: no pattern keeps a narrow-column copy of its own.
+  const recordForm = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.doesNotMatch(recordForm, /@container record-form/u)
+})
+
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
@@ -413,13 +433,19 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /--kv-page-chrome-bg: var\(--kv-page-bg\)/)
   assert.match(grouped, /--kv-page-padding-x: var\(--kv-space-3\)/)
   assert.match(grouped, /gap: var\(--kv-space-2\)/)
-  assert.match(grouped, /\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-space-3\)/)
+  // One 12px inset for a working group's heading and body, through the surface role tokens.
+  assert.match(grouped, /--kv-surface-inset: var\(--kv-space-3\)/)
+  assert.match(grouped, /--kv-surface-head-gap: var\(--kv-space-3\)/)
   assert.match(
     grouped,
     /\[data-ui="table-scroll"\]\[data-framed="false"\] \{\s*width: auto;\s*margin-inline: 0/,
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
-  assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  // The rail's contents render flat through the layering rules, like any white region's.
+  assert.match(
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8'),
+    /\[data-presentation="grouped"\] \[data-ui="record-page-aside"\] \[data-ui="metric"\]/,
+  )
   assert.match(
     grouped,
     /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
@@ -569,7 +595,6 @@ test('design system: headers and page recipes share one identity contract', () =
     <PageHeader
       eyebrow="Sales"
       title="Orders"
-      description="Current order queue"
       status={<Badge label="Live" tone="positive" />}
       actions={<Button label="Create" />}
       meta="Updated now"
@@ -724,14 +749,41 @@ test('design system: canonical page titles share one dense hierarchy', () => {
       ?.groups?.body
     assert.match(heading ?? '', /gap: var\(--kv-space-1\)/, `${kind}-heading`)
 
-    const description = patterns.match(
-      new RegExp(`\\[data-ui="${kind}-description"\\]\\s*\\{(?<body>[^}]+)\\}`),
-    )?.groups?.body
-    assert.match(description ?? '', /margin: 0/, `${kind}-description`)
-    assert.match(description ?? '', /line-height: var\(--kv-leading-normal\)/, `${kind}-description`)
+    // A page header has no description (LAYOUT.md L5), so nothing styles one.
+    assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
   }
-  assert.match(patterns, /--kv-page-title-size: 1\.5rem/)
-  assert.equal((patterns.match(/font-size: var\(--kv-text-lg\)/g) ?? []).length >= 4, true)
+})
+
+test('design system: every page title is 24px from tablet width and 17px below it', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  assert.match(tokens, /:root \{[^}]*--kv-page-title-size: 1\.5rem;/)
+  assert.match(
+    tokens,
+    /@media \(max-width: 47\.9375rem\) \{\s*:root \{\s*--kv-page-title-size: var\(--kv-text-lg\);\s*\}/,
+  )
+  // Tokens, the tablet step and compact density are the only places that size a title.
+  assert.deepEqual([...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]).sort(), [
+    '1.5rem',
+    'var(--kv-text-lg)',
+    'var(--kv-text-lg)',
+  ])
+  assert.match(
+    css,
+    /\[data-density="compact"\]\) \[data-ui="list-page"\]\[data-variant="operational"\] \{\s*--kv-page-title-size/,
+  )
+
+  const identity = css.match(/\[data-kv-page-identity="title"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body
+  assert.match(identity ?? '', /font-size: var\(--kv-page-title-size\)/)
+
+  // `Page` included: no pattern gives its title another size at any width.
+  const titleHook =
+    /\[data-ui="(?:page|list-page|record-page|form-page|dashboard-page|board-page)-title"\]|\[data-kv-page-identity="title"\]/
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!titleHook.test(selector ?? '')) continue
+    for (const [declaration] of (body ?? '').matchAll(/font-size:[^;]+/g)) {
+      assert.equal(declaration, 'font-size: var(--kv-page-title-size)', selector?.trim())
+    }
+  }
 })
 
 test('design system: canonical page headers share compact responsive padding', () => {
@@ -953,7 +1005,6 @@ test('design system: RecordPage renders a record surface rather than the form co
       variant="operational"
       context="Customers / CUS-0042"
       title="Mùa Hạ Riverside"
-      description="Customer record"
       actions={<Button label="Edit" />}
       body="Record fields"
       aside="Record facts"
@@ -1224,7 +1275,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
     <ListPage
       eyebrow="Catalogue"
       title="Products"
-      description="Manage the sellable catalogue."
       actions={<Button label="Create" variant="primary" />}
       controls="Search and filters"
       status="24 products"
@@ -1279,7 +1329,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       context="Sales / Overview"
       eyebrow="Commercial workspace"
       title="Sales overview"
-      description="Demand and confirmed revenue"
       actions={<Button label="Create quotation" variant="primary" />}
       body="Sales metrics"
     />,
@@ -1298,7 +1347,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       context="CRM / Pipeline"
       eyebrow="Pipeline"
       title="Sales opportunities"
-      description="Move active opportunities"
       actions={<Button label="Create opportunity" variant="primary" />}
       controls="Team and owner filters"
       body="Opportunity columns"
@@ -1316,7 +1364,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
   const formPage = renderToString(
     <FormPage
       title="ACME Distribution"
-      description="Supplier · SUP-001"
       status={<Badge label="Active" tone="positive" />}
       actions={<Button label="Save" variant="primary" />}
       body="Partner fields"
@@ -1335,7 +1382,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       variant="operational"
       context="Purchasing / Vendor bill / BILL-0042"
       title="BILL-0042"
-      description="Công ty Ánh Dương"
       actions={<Button label="Save" variant="primary" />}
       body="Vendor bill fields"
     />,

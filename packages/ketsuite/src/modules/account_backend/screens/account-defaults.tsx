@@ -92,7 +92,6 @@ export const accountDefaultsScreen = (
       frame={options.frame}
       scope="account-defaults-form-page"
       title={_('account_backend.defaults.title')}
-      description={_('account_backend.defaults.subtitle')}
       status={badge(
         `${_('account_backend.defaults.summary.categories')}: ${String(options.rows.length)}`,
         'neutral',

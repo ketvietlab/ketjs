@@ -62,7 +62,6 @@ export const pricelistsScreen = (
       frame={frame}
       title={_('pricing_backend.title')}
       controls={collectionControls(_, _('pricing_backend.title'), frame)}
-      description={_('pricing_backend.subtitle')}
       headerActions={
         <LinkButton label={_('pricing_backend.action.create')} href={options.createHref} variant="primary" />
       }

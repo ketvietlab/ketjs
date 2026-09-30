@@ -81,7 +81,6 @@ export const invoicingPoliciesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.policies.title')}
-      description={_('sale_backend.policy.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton

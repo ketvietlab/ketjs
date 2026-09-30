@@ -131,7 +131,6 @@ export const quotationsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.quotation.title')}
-      description={_('sale_backend.quotation.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />

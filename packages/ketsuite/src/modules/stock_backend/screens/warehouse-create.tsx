@@ -99,7 +99,6 @@ export const warehouseCreateScreen = (
       frame={frame}
       scope="warehouse-create"
       title={_('stock_backend.warehouse.create.title')}
-      description={_('stock_backend.warehouse.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.warehouse.create.title')}

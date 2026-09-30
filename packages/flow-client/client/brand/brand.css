@@ -1,0 +1,19 @@
+/* KétFlow artwork for the kit's FlowLogo slot. Load after @ketvietlab/flow-ui/styles.css.
+   Declared here, not through --flow-logo-*, so the relative URLs resolve against this file. */
+[data-flow-ui] {
+  --flow-logo-text: hidden;
+}
+[data-flow-ui] [data-flow="logo"] {
+  background-image: image-set(
+    url("./logo-flow-light-160.png") 1x,
+    url("./logo-flow-light-320.png") 2x,
+    url("./logo-flow-light-480.png") 3x
+  );
+}
+[data-flow-ui][data-theme="dark"] [data-flow="logo"] {
+  background-image: image-set(
+    url("./logo-flow-dark-160.png") 1x,
+    url("./logo-flow-dark-320.png") 2x,
+    url("./logo-flow-dark-480.png") 3x
+  );
+}

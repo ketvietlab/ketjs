@@ -697,7 +697,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
           title="Đơn hàng"
           context={context}
           variant="operational"
-          description={`${orders.length} đơn hàng · Kho Thảo Điền`}
           actions={actions}
           controls={
             <ListChrome
@@ -759,7 +758,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <RecordPage
           title={selected.id}
-          description={customerName(selected.customer)}
           context={context}
           variant="operational"
           status={stateBadge(selected)}
@@ -934,7 +932,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title="Bảng giao hàng"
-          description="Theo dõi đơn hàng từ xác nhận đến bàn giao."
           context={context}
           variant="operational"
           layout="canvas"
@@ -1011,7 +1008,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title={sectionLabel}
-          description={`Điều hành ${sectionLabel.toLocaleLowerCase('vi')} trong ${activeModule.label.toLocaleLowerCase('vi')}.`}
           context={context}
           variant="operational"
           actions={
@@ -1087,7 +1083,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title="Tổng quan bán hàng"
-          description="Thứ Ba, 08 tháng 09 năm 2026"
           context={context}
           variant="operational"
           actions={actions}
