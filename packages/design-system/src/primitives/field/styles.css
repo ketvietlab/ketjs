@@ -165,4 +165,36 @@
     font-size: var(--kv-text-xs);
     font-weight: 700;
   }
+
+  /* LAYOUT.md L7: a label sits beside its control from tablet width up and above
+     it below that, and above it in any narrow column (a side panel, a record
+     aside) whatever the viewport. Whatever holds the fields is the container, so
+     every field in one column switches together; a field never measures itself,
+     or half-row and full-row fields of one form would disagree. A lone checkbox
+     keeps its label beside the box. */
+  :where([data-kv-design-system]) :has(> [data-ui="field"]) {
+    container-type: inline-size;
+  }
+
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="field"]:not([data-kind="checkbox"]) > * {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="textarea"] > [data-ui="field-label"] {
+      padding-top: 0;
+    }
+  }
+
+  @container (max-width: 28rem) {
+    :where([data-kv-design-system]) [data-ui="field"]:not([data-kind="checkbox"]) > * {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="textarea"] > [data-ui="field-label"] {
+      padding-top: 0;
+    }
+  }
 }
