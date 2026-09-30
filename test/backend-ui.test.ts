@@ -1642,8 +1642,14 @@ test('design density: controls and fields follow the canonical component dimensi
   const css = ADMIN_CSS
   assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
   assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
-  assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  const actions = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
+  const fields = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
+  assert.match(
+    css,
+    /\[data-control="action"\]:not\(\[data-ui\]\)[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/,
+  )
+  assert.match(fields, /\[data-ui="field-control"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
   assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
