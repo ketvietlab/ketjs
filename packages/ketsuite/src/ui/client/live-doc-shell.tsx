@@ -27,6 +27,9 @@ export type LiveDocBlock = {
   delta: Delta
   id?: string
   align?: string
+  width?: number
+  src?: string
+  alt?: string
   rows?: string[][]
 }
 
@@ -38,6 +41,13 @@ type Labels = (typeof LABELS)['vi']
 const LABELS = {
   vi: {
     table: 'Bảng',
+    image: 'Chèn ảnh',
+    imageSize: 'Kích thước ảnh (%)',
+    imageRemove: 'Xóa ảnh',
+    imageResize: 'Kéo để đổi kích thước',
+    imageLeft: 'Căn trái',
+    imageCenter: 'Căn giữa',
+    imageRight: 'Căn phải',
     toolbar: 'Định dạng',
     editor: 'Mô tả công việc',
     blockType: 'Kiểu khối',
@@ -64,6 +74,13 @@ const LABELS = {
   },
   en: {
     table: 'Table',
+    image: 'Insert image',
+    imageSize: 'Image width (%)',
+    imageRemove: 'Remove image',
+    imageResize: 'Drag to resize',
+    imageLeft: 'Align left',
+    imageCenter: 'Align center',
+    imageRight: 'Align right',
     toolbar: 'Formatting',
     editor: 'Issue description',
     blockType: 'Block type',
@@ -90,6 +107,13 @@ const LABELS = {
   },
   ja: {
     table: '表',
+    image: '插入图片',
+    imageSize: '图片宽度 (%)',
+    imageRemove: '删除图片',
+    imageResize: '拖动调整大小',
+    imageLeft: '左对齐',
+    imageCenter: '居中',
+    imageRight: '右对齐',
     toolbar: '書式',
     editor: '本文',
     blockType: 'ブロック形式',
@@ -268,7 +292,28 @@ const tableHtml = (block: LiveDocBlock, index: number): string =>
     )
     .join('')}</tbody></table></div>`
 
-const blockHtml = (block: LiveDocBlock, index: number, labels: Labels, people: LiveDocViewer[]): string => {
+const blockHtml = (
+  block: LiveDocBlock,
+  index: number,
+  labels: Labels,
+  people: LiveDocViewer[],
+  editableImages = false,
+): string => {
+  if (block.type === 'image') {
+    const src = block.src && /^\/files\/[a-zA-Z0-9_%.-]+$/.test(block.src) ? block.src : ''
+    const width = Number.isFinite(block.width) ? Math.min(100, Math.max(20, block.width!)) : 100
+    const align = ALIGNMENTS.has(block.align ?? '') ? block.align : 'left'
+    const tools = editableImages
+      ? `<div data-live-image-tools role="group" aria-label="${labels.image}">
+      <label>${labels.imageSize}<input data-live-image-width type="range" min="20" max="100" step="5" value="${width}" aria-label="${labels.imageSize}"></label>
+      ${(['left', 'center', 'right'] as const).map((value, i) => `<button type="button" data-ui="flow-editor-mark" data-control="action" data-variant="secondary" data-size="compact" data-flow-editor-mark="image-${value}" data-live-image-align="${value}" aria-label="${[labels.imageLeft, labels.imageCenter, labels.imageRight][i]}" aria-pressed="${align === value}">${['⇤', '↔', '⇥'][i]}</button>`).join('')}
+      <button type="button" data-ui="flow-editor-mark" data-control="action" data-variant="secondary" data-size="compact" data-flow-editor-mark="image-remove" data-live-image-remove>${labels.imageRemove}</button>
+    </div>`
+      : ''
+    return src
+      ? `<figure data-block="image" data-index="${index}" contenteditable="false"${editableImages ? ' tabindex="0"' : ''} data-image-align="${align}">${tools}<div data-live-image-box style="width:${width}%"><img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt ?? '')}" loading="lazy" draggable="false">${editableImages ? `<button type="button" data-live-image-resize aria-label="${labels.imageResize}" title="${labels.imageResize}">↘</button>` : ''}</div></figure>`
+      : ''
+  }
   if (block.type === 'divider')
     return `<hr data-block="divider" data-index="${index}" contenteditable="false">`
   if (block.type === 'table') return tableHtml(block, index)
@@ -304,6 +349,7 @@ export function documentHtml(
   blocks: LiveDocBlock[] | undefined,
   lang?: string | null,
   presence?: LiveDocViewer[],
+  editableImages = false,
 ): string {
   const labels = labelsOf(lang)
   const here = new Map<number, LiveDocViewer[]>()
@@ -331,7 +377,7 @@ export function documentHtml(
       openKind = block.type
       parts.push(`<${wrapper} data-ui="flow-editor-list" data-kind="${block.type}">`)
     }
-    parts.push(blockHtml(block, index, labels, here.get(index) ?? []))
+    parts.push(blockHtml(block, index, labels, here.get(index) ?? [], editableImages))
   }
   closeList()
   return parts.join('')
@@ -352,9 +398,11 @@ export function liveDocShell(o: {
   containerId: string
   lang?: string | null
   tables?: boolean
+  images?: boolean
+  imageDisabled?: boolean
 }): TemplateResult {
   const labels = labelsOf(o.lang)
-  const mark = (key: string, glyph: string, label: string) => (
+  const mark = (key: string, glyph: string | TemplateResult, label: string) => (
     <button
       data-ui="flow-editor-mark"
       data-flow-editor-mark={key}
@@ -362,6 +410,7 @@ export function liveDocShell(o: {
       data-variant="secondary"
       data-size="compact"
       type="button"
+      disabled={key === 'image' && o.imageDisabled === true}
       aria-label={label}
       title={label}
     >
@@ -398,6 +447,25 @@ export function liveDocShell(o: {
         {mark('code', '</>', labels.inlineCode)}
         {mark('link', '\u{1F517}', labels.link)}
         {o.tables ? mark('table', '\u25A6', labels.table) : null}
+        {o.images
+          ? mark(
+              'image',
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8" cy="8" r="1.5" />
+                <path d="m3 17 6-6 4 4 3-3 5 5" />
+              </svg>,
+              labels.image,
+            )
+          : null}
       </div>
       <div data-ui="flow-editor-presence" data-flow-editor-presence role="status" aria-live="polite" />
       {/* biome-ignore lint/a11y/useFocusableInteractive: `contenteditable` makes this natively focusable and tab-reachable, which the rule does not model; the explicit tabindex is there so it reads that way too. */}
