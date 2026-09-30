@@ -310,8 +310,8 @@
     }
     :where([data-kv-design-system]) [data-ui="global-search-trigger"] {
       justify-content: center;
-      width: var(--kv-touch-target);
-      height: var(--kv-touch-target);
+      width: var(--kv-control-height);
+      height: var(--kv-control-height);
       padding: 0;
     }
     :where([data-kv-design-system])

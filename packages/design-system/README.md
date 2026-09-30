@@ -251,6 +251,10 @@ separate navigable record. Do not wrap a whole page or arbitrary sections in car
 Grouped layouts use 8px between cards and 12px padding around each entire card,
 including its heading and body. Page gutters and heading-to-body spacing are 12px.
 Field and table-row density is unchanged.
+Buttons, inputs, selects and topbar launchers are the same height at every viewport width:
+density decides it, not the screen, so a button always lines up with the field beside it.
+Below tablet width only rows a finger scrolls through (navigation items, menu items, table
+selection) take the 44px touch height.
 Collection paging lives in `ListChrome.pager` above the table, alongside search and bulk controls.
 The demo shows the visible record range and previous/next links, with no page-number strip or
 separate `ListPage.footer` pagination panel. Paging, search and status filters preserve the

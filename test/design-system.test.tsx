@@ -786,6 +786,42 @@ test('design system: every page title is 24px from tablet width and 17px below i
   }
 })
 
+test('design system: a control is the same size at every viewport width', () => {
+  // Rows the finger scrolls through keep a touch height, as do the mobile-only
+  // navigation bar and page context bars; controls follow density.
+  const touchRow =
+    /navigation-(?:item|branch-trigger|trigger)"\]|menu-item"\]|kt-selection-target"\]|-context"\]|global-search"\]/
+  const control =
+    /\[data-ui="action"\]|\b(?:button|summary|select|input)\b|-(?:trigger|toggle|close|remove|submit|action)"\]/
+  const size = /^(?:min-|max-)?(?:height|width|block-size|inline-size)$/
+  for (const path of globSync('packages/design-system/src/**/*.css')) {
+    if (path.includes('/catalogue/')) continue
+    const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const media of source.matchAll(/@media \(max-width:[^{]+\{/g)) {
+      let depth = 1
+      let end = (media.index ?? 0) + media[0].length
+      const start = end
+      while (depth > 0 && end < source.length) {
+        if (source[end] === '{') depth++
+        else if (source[end] === '}') depth--
+        end++
+      }
+      for (const [, selector = '', body = ''] of source
+        .slice(start, end - 1)
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        for (const declaration of body.split(';')) {
+          const [property = '', value = ''] = declaration.split(':').map((part) => part.trim())
+          if (!size.test(property) || touchRow.test(selector)) continue
+          const where = `${path}: ${selector.replace(/\s+/g, ' ').trim()} { ${property}: ${value} }`
+          assert.ok(!/--kv-touch-target|2\.75rem/.test(value), where)
+          assert.ok(!/\[data-ui="action"\]/.test(selector) || !/height|block-size/.test(property), where)
+          assert.ok(!control.test(selector) || !/rem|px/.test(value), where)
+        }
+      }
+    }
+  }
+})
+
 test('design system: canonical page headers share compact responsive padding', () => {
   const patterns = patternCss
   const compactPadding = /padding: var\(--kv-space-4\) var\(--kv-space-4\) var\(--kv-space-3\)/g
