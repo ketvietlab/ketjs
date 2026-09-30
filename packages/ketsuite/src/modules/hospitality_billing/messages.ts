@@ -10,7 +10,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'menu.chargeRules': 'Cách xuất hoá đơn',
 
     'screen.title': 'Hoá đơn và thanh toán',
-    'screen.subtitle': 'Theo dõi phiếu chi phí đã chốt, hoá đơn và số tiền khách còn phải trả.',
     'screen.empty': 'Chưa có phiếu chi phí nào đã chốt.',
     'screen.emptyHint':
       'Phiếu chi phí được chốt khi khách trả phòng. Bạn có thể thiết lập cách xuất hoá đơn cho từng loại phí ngay từ bây giờ.',
@@ -106,7 +105,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'menu.chargeRules': 'Invoice setup',
 
     'screen.title': 'Invoices and payments',
-    'screen.subtitle': 'Track completed guest bills, their invoices and any amount still due.',
     'screen.empty': 'No guest bill has been completed yet.',
     'screen.emptyHint':
       'A guest bill is completed at check-out. You can set up how each charge type is invoiced now.',

@@ -65,7 +65,7 @@ test('stock lot detail: uses FormPage with external save, inventory and collabor
 
   assert.match(html, /data-ui="form-page" data-scope="stock-lot-form-page" data-has-aside="true"/)
   assert.match(html, /data-ui="form-page-title"[^>]*>[\s\S]*?LOT-2026-001/)
-  assert.match(html, /data-ui="form-page-description"[^>]*>[\s\S]*?Cà phê hạt · CF-01 · NCC-08\/2026/)
+  assert.match(html, /data-ui="form-page-meta"[\s\S]*?Cà phê hạt · CF-01 · NCC-08\/2026/)
   assert.match(html, /data-ui="form-page-status"[\s\S]*?Đang hoạt động/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit"[^>]*form="lot-detail-form"/)
   assert.match(html, /id="lot-detail-form"/)

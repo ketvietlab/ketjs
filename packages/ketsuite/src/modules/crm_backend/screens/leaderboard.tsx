@@ -131,7 +131,6 @@ export const leaderboardScreen = (
       frame={frame}
       context={pageTrailFromFrame(title, frame)}
       title={title}
-      description={_('crm_backend.leaderboard.subtitle')}
       actions={collectionActions(_, frame, refresh)}
       controls={collectionControls(_, title, frame)}
       status={`${title}: ${String(options.total ?? rows.length)}`}

@@ -9,7 +9,6 @@ export const HOOKS = [
   'list-page-title-row',
   'list-page-eyebrow',
   'list-page-title',
-  'list-page-description',
   'list-page-actions',
   'list-page-tools',
   'list-page-toolbar',
@@ -33,7 +32,6 @@ export type ListPageProps = {
    */
   variant?: 'operational'
   eyebrow?: string | null
-  description?: string | null
   /** Primary actions beside the title of an operational page, above its query controls. */
   headerActions?: JSXChild
   /** Tool actions follow query controls by default, or join primary actions in the header. */
@@ -85,7 +83,6 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
         context: props.context,
         eyebrow: props.eyebrow,
         title: props.title,
-        description: props.description,
         actions: operational ? headerActions : props.actions,
         actionsHidden: headerTools && props.headerActions == null && props.actionsHidden === true,
       })}

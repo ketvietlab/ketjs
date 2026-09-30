@@ -163,7 +163,6 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
       variant="operational"
       frame={frame}
       title={options.projectName}
-      description={_('flow_backend.issues.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />

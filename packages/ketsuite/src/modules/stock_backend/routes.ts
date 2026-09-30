@@ -1,5 +1,12 @@
+import { stockOverviewScreen } from './screens/overview.tsx'
+import { transferContext } from './modal/transfer-context.ts'
+import { inventoryCountContext } from './modal/inventory-context.ts'
+import { stockConfigurationContext } from './modal/configuration-context.ts'
+import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import { optionalRead } from '../backend/optional-read.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import {
+  inventoryListSearch,
   locationListSearch,
   lotListSearch,
   pickingTypeListSearch,
@@ -200,12 +207,12 @@ const dateTimeLabel = (value: unknown, lang: string): string => {
 const common = async (ctx: ServeContext, url: URL, req: Req) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   const [warehouses, locations, pickingTypes, lots, routes, units] = (await Promise.all([
-    ctx.call('stock.listWarehouses', {}, url, req),
-    ctx.call('stock.listLocations', {}, url, req),
-    ctx.call('stock.listPickingTypes', {}, url, req),
-    ctx.call('stock.listLots', {}, url, req),
-    ctx.call('stock.listRoutes', {}, url, req),
-    ctx.call('uom.listUnits', {}, url, req),
+    optionalRead<AnyRow[]>(ctx, 'stock.listWarehouses', {}, url, req, []),
+    optionalRead<AnyRow[]>(ctx, 'stock.listLocations', {}, url, req, []),
+    optionalRead<AnyRow[]>(ctx, 'stock.listPickingTypes', {}, url, req, []),
+    optionalRead<AnyRow[]>(ctx, 'stock.listLots', {}, url, req, []),
+    optionalRead<AnyRow[]>(ctx, 'stock.listRoutes', {}, url, req, []),
+    optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []),
   ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
   return {
     warehouses,
@@ -218,6 +225,29 @@ const common = async (ctx: ServeContext, url: URL, req: Req) => {
 }
 
 export const routes: Record<string, RouteEntry> = {
+  '/admin/stock':
+    (ctx): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const rows = (await ctx.call('stock.listPickings', {}, url, req)) as AnyRow[]
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.overview.title',
+        body: async (_, frame) =>
+          stockOverviewScreen(_, frame, {
+            rows,
+            at: (path) => inLocale(url, path),
+            rowHref: (row) => recordModalHref(url, { kind: 'stock.transfer', id: String(row.id) }),
+            createHref: (await ctx.allows('stock.createPicking', url, req))
+              ? recordModalCreateHref(new URL(inLocale(url, '/admin/stock/transfers'), url), {
+                  kind: 'stock.transfer',
+                })
+              : null,
+          }),
+      })
+    },
+  '/admin/stock/transfer/{id}/context': transferContext,
+  '/admin/stock/count/{id}/context': inventoryCountContext,
+  '/admin/stock/record/{kind}/{id}/context': stockConfigurationContext,
   '/admin/stock/inventory':
     (ctx): Route =>
     async (url, req) => {
@@ -286,11 +316,26 @@ export const routes: Record<string, RouteEntry> = {
         })
       return adminPage(ctx, url, req, {
         title: 'stock_backend.inventory',
-        body: (_, frame) =>
-          inventoryScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: inventoryListSearch,
+            rows,
+            frame,
+            name: 'stock-inventory-filter',
+            bodyId: 'stock-inventory-list',
+            functions: stockSearchFunctions,
+          })
+          return inventoryScreen(
             _,
             {
-              rows,
+              rows: search.rows,
+              createHref: (await ctx.allows('stock.adjustInventory', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.count' })
+                : null,
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.count', id: row.id }),
+              },
               products: products.map(({ value, label }) => ({ value, label })),
               locations: options(data.locations.filter((row) => row.usage === 'internal')),
               inventoryLocations: options(data.locations.filter((row) => row.usage === 'inventory')),
@@ -301,8 +346,9 @@ export const routes: Record<string, RouteEntry> = {
               applied: url.searchParams.has('applied'),
               errors: invalid(url, _),
             },
-            frame,
-          ),
+            search.frame,
+          )
+        },
       })
     },
 
@@ -351,7 +397,7 @@ export const routes: Record<string, RouteEntry> = {
               destination: locationsById.get(String(row.locationDestId)) ?? String(row.locationDestId),
               scheduledDate: dateTimeLabel(row.scheduledDate, lang),
               state: String(row.state),
-              href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
+              href: recordModalHref(url, { kind: 'stock.transfer', id: String(row.id) }),
             })),
             name: 'stock-transfer-filter',
             bodyId: 'stock-transfer-list',
@@ -364,7 +410,9 @@ export const routes: Record<string, RouteEntry> = {
             {
               rows: search.rows,
               ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: inLocale(url, '/admin/stock/transfers/new'),
+              createHref: (await ctx.allows('stock.createPicking', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.transfer' })
+                : null,
             },
             search.frame,
           )
@@ -612,6 +660,7 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(createModalErrorHref(url, '/admin/stock/warehouses'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      if (!(await ctx.allows('stock.listWarehouses', url, req))) return text('Forbidden', { status: 403 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: 'stock_backend.warehouses',
@@ -637,8 +686,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: createModalHref(url, '/admin/stock/warehouses'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.warehouse', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.saveWarehouse', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.warehouse' })
+                : null,
             },
             search.frame,
           )
@@ -709,6 +763,7 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(createModalErrorHref(url, '/admin/stock/locations'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      if (!(await ctx.allows('stock.listLocations', url, req))) return text('Forbidden', { status: 403 })
       const data = await common(ctx, url, req)
       const nameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
@@ -735,8 +790,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: createModalHref(url, '/admin/stock/locations'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.location', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.saveLocation', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.location' })
+                : null,
             },
             search.frame,
           )
@@ -813,6 +873,7 @@ export const routes: Record<string, RouteEntry> = {
           : seeOther(createModalErrorHref(url, '/admin/stock/picking-types'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      if (!(await ctx.allows('stock.listPickingTypes', url, req))) return text('Forbidden', { status: 403 })
       const data = await common(ctx, url, req)
       const rawLocationNameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const completeLocationNameById = new Map(
@@ -845,8 +906,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: createModalHref(url, '/admin/stock/picking-types'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.pickingType', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.savePickingType', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.pickingType' })
+                : null,
             },
             search.frame,
           )
@@ -972,8 +1038,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: createModalHref(url, '/admin/stock/lots'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.lot', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.saveLot', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.lot' })
+                : null,
             },
             search.frame,
           )
@@ -1192,8 +1263,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: createModalHref(url, '/admin/stock/routes'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.route', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.saveRoute', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.route' })
+                : null,
             },
             search.frame,
           )
@@ -1332,6 +1408,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/stock/replenishment':
     (ctx): Route =>
     async (url, req) => {
+      const canRun = await ctx.allows('stock.runOrderpoint', url, req)
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
@@ -1425,7 +1502,7 @@ export const routes: Record<string, RouteEntry> = {
                 toOrder: String(quantity),
                 replenishmentUom:
                   unitById.get(String(row.replenishmentUomId)) ?? String(row.replenishmentUomId ?? '—'),
-                runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
+                runAction: canRun ? inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`) : null,
               }
             }),
             name: 'stock-replenishment-filter',
@@ -1438,8 +1515,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             {
               rows: search.rows,
-              ...(search.groups ? { table: { groups: search.groups } } : {}),
-              createHref: inLocale(url, '/admin/stock/replenishment/new'),
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'stock.replenishment', id: String(row.id) }),
+              },
+              createHref: (await ctx.allows('stock.saveOrderpoint', url, req))
+                ? recordModalCreateHref(url, { kind: 'stock.replenishment' })
+                : null,
             },
             search.frame,
           )

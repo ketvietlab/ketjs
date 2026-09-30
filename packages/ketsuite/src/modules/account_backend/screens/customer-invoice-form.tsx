@@ -27,7 +27,6 @@ export const customerInvoiceFormScreen = (
       frame={options.frame}
       scope="account-customer-invoice-form-page"
       title={title}
-      description={_('account_backend.customerInvoice.create.hint')}
       actions={
         <FormCluster
           label={title}

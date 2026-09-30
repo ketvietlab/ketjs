@@ -27,7 +27,6 @@ export const transferCreateScreen = (
       frame={frame}
       scope="transfer-create"
       title={_('stock_backend.transfer.create.title')}
-      description={_('stock_backend.transfer.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.transfer.actions.label')}

@@ -65,7 +65,7 @@ const headcount = (rows: StayRow[]): number =>
 /**
  * Every heading on this screen says "today". The route has always accepted a
  * `?date=`, so "today" can be a Tuesday in August, and nothing on the page
- * said so. The day is now named under the title.
+ * said so. The day heads the day's counts.
  */
 const dayLabel = (day: string, locale: string, timezone: string): string =>
   formatDateTime(locale, zonedMidnight(day, timezone), {
@@ -202,54 +202,59 @@ export const frontDeskScreen = (
     <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.frontDesk.title')}
-      subtitle={dayLabel(today.day, locale, timezone)}
       frame={frame}
       body={stack([
-        // Three counts of movement and one of trouble. Each says how many people
-        // that is, because a shift plans around guests rather than rows.
-        <CardGrid
-          items={[
-            {
-              id: 'arrivals',
-              label: _('hospitality_core.metric.arrivals'),
-              value: today.arrivals.length,
-              detail: _('hospitality_core.screen.frontDesk.guestCount', {
-                count: headcount(today.arrivals),
-              }),
-              tone: 'neutral' as const,
-            },
-            {
-              id: 'departures',
-              label: _('hospitality_core.metric.departures'),
-              value: today.departures.length,
-              detail: _('hospitality_core.screen.frontDesk.guestCount', {
-                count: headcount(today.departures),
-              }),
-              tone: 'neutral' as const,
-            },
-            {
-              id: 'in-house',
-              label: _('hospitality_core.metric.inHouse'),
-              value: today.inHouse.length,
-              detail: _('hospitality_core.screen.frontDesk.guestCount', {
-                count: headcount(today.inHouse),
-              }),
-              tone: 'neutral' as const,
-            },
-            {
-              id: 'overdue',
-              label: _('hospitality_core.metric.overdue'),
-              value: today.overdue.length,
-              detail: today.overdue.length
-                ? _('hospitality_core.screen.frontDesk.overdueDetail')
-                : _('hospitality_core.screen.frontDesk.overdueClear'),
-              tone: today.overdue.length ? ('danger' as const) : ('positive' as const),
-            },
-          ]}
-          id={(item) => item.id}
-          card={(item) => (
-            <Metric label={item.label} value={String(item.value)} detail={item.detail} tone={item.tone} />
-          )}
+        // Three counts of movement and one of trouble, headed by the day they
+        // count. Each says how many people that is, because a shift plans around
+        // guests rather than rows.
+        <Section
+          title={dayLabel(today.day, locale, timezone)}
+          body={
+            <CardGrid
+              items={[
+                {
+                  id: 'arrivals',
+                  label: _('hospitality_core.metric.arrivals'),
+                  value: today.arrivals.length,
+                  detail: _('hospitality_core.screen.frontDesk.guestCount', {
+                    count: headcount(today.arrivals),
+                  }),
+                  tone: 'neutral' as const,
+                },
+                {
+                  id: 'departures',
+                  label: _('hospitality_core.metric.departures'),
+                  value: today.departures.length,
+                  detail: _('hospitality_core.screen.frontDesk.guestCount', {
+                    count: headcount(today.departures),
+                  }),
+                  tone: 'neutral' as const,
+                },
+                {
+                  id: 'in-house',
+                  label: _('hospitality_core.metric.inHouse'),
+                  value: today.inHouse.length,
+                  detail: _('hospitality_core.screen.frontDesk.guestCount', {
+                    count: headcount(today.inHouse),
+                  }),
+                  tone: 'neutral' as const,
+                },
+                {
+                  id: 'overdue',
+                  label: _('hospitality_core.metric.overdue'),
+                  value: today.overdue.length,
+                  detail: today.overdue.length
+                    ? _('hospitality_core.screen.frontDesk.overdueDetail')
+                    : _('hospitality_core.screen.frontDesk.overdueClear'),
+                  tone: today.overdue.length ? ('danger' as const) : ('positive' as const),
+                },
+              ]}
+              id={(item) => item.id}
+              card={(item) => (
+                <Metric label={item.label} value={String(item.value)} detail={item.detail} tone={item.tone} />
+              )}
+            />
+          }
         />,
         // The band says what is wrong; the table under it is the list to work
         // through, so it carries no second heading repeating the same sentence.

@@ -126,7 +126,6 @@ export const providersScreen = (
       frame={frame}
       title={_('oauth_backend.providers.title')}
       controls={collectionControls(_, _('oauth_backend.providers.title'), frame)}
-      description={_('oauth_backend.providers.subtitle')}
       headerActions={linkButton({
         label: _('oauth_backend.action.create'),
         href: localized('/admin/oauth/providers/new', locale),
@@ -287,7 +286,6 @@ export const providerFormScreen = (
       frame={frame}
       scope="oauth-provider-form"
       title={title}
-      description={_('oauth_backend.configuration.hint')}
       status={
         existing
           ? badge(
@@ -450,7 +448,6 @@ export const identitiesScreen = (
       frame={frame}
       title={_('oauth_backend.identities.title')}
       controls={collectionControls(_, _('oauth_backend.identities.title'), frame)}
-      description={_('oauth_backend.identities.subtitle')}
       headerActions={linkButton({
         label: _('oauth_backend.action.linkIdentity'),
         href: localized('/admin/oauth/identities/new', locale),
@@ -492,7 +489,6 @@ export const identityFormScreen = (
       frame={frame}
       scope="oauth-identity-form"
       title={_('oauth_backend.identities.link')}
-      description={_('oauth_backend.identities.linkHint')}
       actions={collectionActions(_, frame)}
       body={
         <Section
@@ -569,7 +565,6 @@ export const linkProviderScreen = (
       frame={frame}
       scope="oauth-link-provider"
       title={_('oauth_backend.link.title')}
-      description={_('oauth_backend.link.hint')}
       actions={collectionActions(_, frame)}
       body={
         <Section
