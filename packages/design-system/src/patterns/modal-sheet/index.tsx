@@ -83,7 +83,9 @@ export const ModalSheet = (props: {
         data-ui="modal-sheet"
         data-size={props.size ?? 'default'}
         data-height={props.height === 'fixed' ? 'fixed' : null}
-        style={props.height === 'fixed' && props.fixedHeight ? `height: ${props.fixedHeight} !important` : ''}
+        style={
+          props.height === 'fixed' && props.fixedHeight ? `--kv-modal-fixed-height: ${props.fixedHeight}` : ''
+        }
         {...(props.dialogSemantics === 'parent'
           ? {}
           : { role: 'dialog', 'aria-modal': embedded ? 'false' : 'true' })}

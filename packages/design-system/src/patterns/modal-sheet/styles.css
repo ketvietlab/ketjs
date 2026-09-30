@@ -94,7 +94,7 @@
   :where([data-kv-design-system])
     [data-ui="modal-layer"][data-presentation="dialog"]
     [data-ui="modal-sheet"][data-height="fixed"] {
-    height: calc(100dvh - var(--kv-space-12));
+    height: var(--kv-modal-fixed-height, calc(100dvh - var(--kv-space-12)));
   }
 
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {
