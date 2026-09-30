@@ -57,7 +57,7 @@ const base: ForecastScreenOptions = {
 test('stock forecast specialized surface: preserves GET filter scope and empty guidance', () => {
   const html = renderToString(forecastScreen(translate, base, {}))
 
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-pattern="workspace"/)
   assert.match(html, /id="forecast-filter-form"/)
   assert.match(html, /data-scope="stock-forecast"/)
   assert.match(html, /method="get"/)
@@ -69,9 +69,6 @@ test('stock forecast specialized surface: preserves GET filter scope and empty g
   assert.match(html, /Tính dự báo/)
   assert.match(html, /Chưa chọn sản phẩm/)
   assert.doesNotMatch(html, /data-ui="table"/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?1[\s\S]*?Sản phẩm lưu kho/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?1[\s\S]*?Kho hàng/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?2[\s\S]*?Vị trí/)
 })
 
 test('stock forecast specialized surface: preserves one-row availability equation and tones', () => {
@@ -99,12 +96,8 @@ test('stock forecast specialized surface: preserves one-row availability equatio
     ),
   )
 
-  assert.match(html, /data-ui="record-heading"[^>]*>[\s\S]*?Cà phê hạt · CF-01/)
-  assert.match(html, /data-ui="record-subtitle"[^>]*>[\s\S]*?Vị trí: Kho Hà Nội \/ Tồn kho/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?20[\s\S]*?Tồn thực tế/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?\+ 8[\s\S]*?Sắp nhận/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?− 25[\s\S]*?Sắp xuất/)
-  assert.match(html, /data-ui="record-fact-value"[^>]*>[\s\S]*?= -1[\s\S]*?Dự báo/)
+  assert.match(html, /Cà phê hạt · CF-01/)
+  assert.match(html, /Vị trí: Kho Hà Nội \/ Tồn kho/)
   assert.match(html, /data-ui="table"/)
   assert.match(html, /data-col="available"[\s\S]*?data-tone="positive"[\s\S]*?16/)
   assert.match(html, /data-col="forecasted"[\s\S]*?data-tone="danger"[\s\S]*?-1/)

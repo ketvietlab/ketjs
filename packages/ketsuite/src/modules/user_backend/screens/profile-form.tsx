@@ -39,7 +39,6 @@ export const profileScreen = (
       frame={frame}
       scope="profile-form-page"
       title={_('user_backend.profile.title')}
-      description={`${row.name} · ${row.login}`}
       status={badge(_(`user_backend.access.${row.accessKind}`), 'info', row.accessKind)}
       body={stack([
         <Section

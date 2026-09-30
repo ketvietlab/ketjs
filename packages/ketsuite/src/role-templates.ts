@@ -25,7 +25,12 @@ const role = (
   bundles: string[],
   version = 1,
 ): RoleTemplateDef => ({
-  version,
+  // Commerce lookup grants and the quotation line-edit command changed this template.
+  version: bundles.some((bundle) =>
+    ['sale.quote-operate', 'purchase.operate', 'stock.operate'].includes(bundle),
+  )
+    ? Math.max(2, version + 1)
+    : version,
   labels: { en, vi },
   summary: { en: summaryEn, vi: summaryVi },
   bundles,
@@ -38,6 +43,9 @@ const salesRepresentativeBundles = [
   'product.view',
   'sale.quote-operate',
   'sale.view',
+  'sale_backend.view',
+  'stock.view',
+  'uom.view',
 ]
 
 const posCashierBundles = ['pos.order-operate', 'pos.shift-operate', 'pos.tender', 'pos.view']
@@ -128,7 +136,16 @@ export const commerceRoleTemplates = {
     'Nhân viên mua hàng',
     'Prepare requests for quotation and purchase orders.',
     'Chuẩn bị yêu cầu báo giá và đơn mua hàng.',
-    ['company.view', 'partner.view', 'product.view', 'purchase.operate', 'purchase.view'],
+    [
+      'company.view',
+      'partner.view',
+      'product.view',
+      'purchase.operate',
+      'purchase.view',
+      'purchase_backend.view',
+      'stock.view',
+      'uom.view',
+    ],
   ),
   'commerce.purchasing-manager': role(
     'Purchasing Manager',
@@ -142,6 +159,9 @@ export const commerceRoleTemplates = {
       'purchase.approve',
       'purchase.configure',
       'purchase.operate',
+      'purchase_backend.view',
+      'stock.view',
+      'uom.view',
       'purchase.report',
       'purchase.view',
     ],
@@ -151,7 +171,7 @@ export const commerceRoleTemplates = {
     'Nhân viên kho',
     'Perform ordinary stock movements inside the assigned scope.',
     'Thực hiện nghiệp vụ kho thông thường trong phạm vi được giao.',
-    ['company.view', 'product.view', 'stock.operate', 'stock.view'],
+    ['company.view', 'product.view', 'stock.operate', 'stock.view', 'stock_backend.view', 'uom.view'],
   ),
   'commerce.warehouse-manager': role(
     'Warehouse Manager',
@@ -164,6 +184,8 @@ export const commerceRoleTemplates = {
       'stock.approve',
       'stock.configure',
       'stock.operate',
+      'stock_backend.view',
+      'uom.view',
       'stock.report',
       'stock.view',
     ],

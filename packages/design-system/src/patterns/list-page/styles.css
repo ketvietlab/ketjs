@@ -4,17 +4,6 @@
     display: none;
   }
 
-  :where([data-kv-design-system])
-    :is(
-      [data-ui="list-page"],
-      [data-ui="record-page"],
-      [data-ui="form-page"],
-      [data-ui="dashboard-page"],
-      [data-ui="board-page"]
-    ) {
-    --kv-page-title-size: 1.5rem;
-  }
-
   :where([data-kv-design-system]) [data-ui="list-page"] {
     display: grid;
     min-width: 0;
@@ -58,14 +47,6 @@
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
     line-height: var(--kv-leading-tight);
-  }
-
-  :where([data-kv-design-system]) [data-ui="list-page-description"] {
-    max-width: 48rem;
-    margin: 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
   }
 
   :where([data-kv-design-system]) :is([data-ui="list-page-actions"], [data-ui="list-page-tools"]) {
@@ -238,9 +219,6 @@
 }
 
 @layer ket.app {
-  :where([data-kv-design-system][data-density="compact"]) [data-ui="list-page"][data-variant="operational"] {
-    --kv-page-title-size: var(--kv-text-lg);
-  }
   :where([data-kv-design-system][data-density="compact"])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-header"] {

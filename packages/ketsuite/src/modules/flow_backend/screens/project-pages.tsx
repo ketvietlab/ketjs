@@ -82,7 +82,6 @@ export const pagesScreen = (
     <ListScreen
       translator={_}
       title={options.projectName}
-      subtitle={_('flow_backend.pages.title')}
       frame={frame}
       headerActions={
         <LinkButton label={_('flow_backend.pages.create')} href={options.createHref} variant="primary" />

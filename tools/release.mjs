@@ -26,9 +26,9 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    // The public 115-component catalogue includes its machine-readable inventory and KetAtlas adapter.
-    // 0.1.29 packs 353430 bytes (463 files): reviewed dist/catalogue/layout audit plus LICENSE, README and manifest.
-    maxPackedBytes: 375_000,
+    // 0.1.30 packs 385,621 bytes (480 files): the 133-component catalogue, primitive
+    // harness and date runtime; audited archive contains only dist, docs and metadata.
+    maxPackedBytes: 410_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
@@ -39,7 +39,9 @@ const workspaces = [
   // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
   // 0.1.29 packs 6,150,837 bytes: reviewed user/access-policy, product and CRM client bundles,
   // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 6_400_000 },
+  // 0.1.30 packs 7,249,173 bytes (3,863 files): reviewed chart/LiveDoc and record
+  // bundles with source maps; no source, test, node_modules or build-cache directories.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 7_600_000 },
   // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
   {
     name: '@ketvietlab/flow-ui',

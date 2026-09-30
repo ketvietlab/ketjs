@@ -136,7 +136,7 @@
     overflow: hidden;
     color: var(--kv-color-ink);
     font-family: var(--kv-font-display);
-    font-size: var(--kv-text-lg);
+    font-size: var(--kv-text-xl);
     font-weight: 650;
     line-height: var(--kv-leading-tight);
     text-overflow: ellipsis;

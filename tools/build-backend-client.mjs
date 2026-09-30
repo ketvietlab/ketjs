@@ -16,6 +16,34 @@ const USER_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/user_backend'
 const PRODUCT_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/product_backend')
 const entries = [
   {
+    source: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/modal/pricelist-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/modal/policy-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/transfer-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/stock-transfer-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/inventory-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/inventory-count-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/configuration-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/stock-configuration-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/modal/order-modal-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/client/purchase-order-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/modal/order-modal-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/client/sale-order-modal.mjs'),
+  },
+  {
     source: join(DESIGN_SYSTEM_DIR, 'interactions/relation-select/index.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
   },

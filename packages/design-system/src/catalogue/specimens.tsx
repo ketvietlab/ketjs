@@ -56,7 +56,8 @@ import {
   TextField,
 } from '../forms/scalar-fields/index.tsx'
 import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
-import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
+import { DatePickerExamples } from './date-pickers.tsx'
+import { DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
 import { DropZone, FileUpload } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
 import {
@@ -795,7 +796,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             main={
               <Page
                 title="Operations overview"
-                description="Resize below 768 px to review the mobile trigger and drawer."
                 body={
                   <Grid
                     columns={2}
@@ -823,7 +823,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 variant="operational"
                 context="Sales / Sales orders"
                 title="Sales orders"
-                description="Review demand, fulfillment and payment state from one operational list."
                 headerActions={<Button label="Create order" variant="primary" />}
                 actionsPlacement="header"
                 actionsHidden
@@ -857,7 +856,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 variant="operational"
                 context="Customers / Mùa Hạ Riverside"
                 title="Mùa Hạ Riverside"
-                description="Customer · CUS-0042"
                 status={<Badge label="Active" tone="positive" />}
                 actions={
                   <ActionGroup
@@ -949,7 +947,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 layout="flow"
                 context="Sales / Overview"
                 title="Revenue operations"
-                description="Follow confirmed demand, open work and handoffs across the team."
                 actions={<Button label="Create quotation" variant="primary" />}
                 controls={
                   <ActionGroup
@@ -1018,7 +1015,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 layout="canvas"
                 context="CRM / Pipeline"
                 title="Opportunities board"
-                description="Move active opportunities through a spatial workflow."
                 actions={<Button label="Create opportunity" variant="primary" />}
                 controls={
                   <Inline
@@ -1228,7 +1224,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="Sales / Sales orders"
             eyebrow="Sales"
             title="Sales orders"
-            description="Review demand, fulfillment and payment state from one operational list."
             headerActions={<Button label="Create order" variant="primary" />}
             actions={<Button label="Export orders" variant="secondary" />}
             controls={
@@ -1321,7 +1316,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="Sales / Overview"
             eyebrow="Commercial workspace"
             title="Sales overview"
-            description="Follow demand, confirmed revenue and the work waiting for the team."
             actions={<Button label="Create quotation" variant="primary" />}
             body={
               <Stack
@@ -1367,7 +1361,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="CRM / Pipeline"
             eyebrow="Pipeline"
             title="Sales opportunities"
-            description="Move active opportunities through the sales process."
             actions={<Button label="Create opportunity" variant="primary" />}
             controls={
               <ActionGroup
@@ -1469,7 +1462,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             variant="operational"
             context="Customers / Mùa Hạ Riverside"
             title="Mùa Hạ Riverside"
-            description="Customer · CUS-0042"
             status={<Badge label="Active" tone="positive" />}
             actions={<Button label="Save partner" variant="primary" />}
             body={
@@ -1938,20 +1930,13 @@ export const componentGroups: readonly ComponentGroup[] = [
       },
       {
         id: 'date-time',
-        name: 'Civil date and local time',
-        description: 'Civil dates and local times submit their source text without implicit UTC conversion.',
+        name: 'Date pickers and local time',
+        description:
+          'Interactive calendars, seven quick ranges, draft selection and native civil-date submission. Open /dates for the focused playground.',
         render: () => (
           <Stack
             items={[
-              <DatePicker id="date" name="date" label="Delivery date" value="2026-09-08" />,
-              <DateRangePicker
-                id="range"
-                label="Reporting period"
-                start={{ id: 'from', name: 'from', value: '2026-09-01' }}
-                end={{ id: 'to', name: 'to', value: '2026-09-30' }}
-                startLabel="From"
-                endLabel="To"
-              />,
+              <DatePickerExamples />,
               <DateTimePicker
                 id="appointment"
                 name="appointment"

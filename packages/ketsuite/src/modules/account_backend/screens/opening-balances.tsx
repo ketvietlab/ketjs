@@ -96,7 +96,6 @@ export const openingBalancesListScreen = (
       frame={collection.frame}
       title={_('account_backend.opening.title')}
       controls={collectionControls(_, _('account_backend.opening.title'), collection.frame)}
-      description={_('account_backend.opening.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.opening.create')} href={options.createHref} variant="primary" />
       }
@@ -130,7 +129,6 @@ export const openingBalanceImportScreen = (
       frame={options.frame}
       scope="opening-balance-import"
       title={_('account_backend.opening.create')}
-      description={_('account_backend.opening.createHint')}
       body={
         <Surface
           body={

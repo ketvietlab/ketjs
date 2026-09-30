@@ -63,7 +63,7 @@
 
   [data-kv-design-system][data-presentation="grouped"]
     :is([data-ui="dashboard-page-body"], [data-ui="board-page-body"], [data-ui="record-page-body"])
-    > [data-ui="stack"],
+    > [data-ui="stack"]:not([data-gap="loose"]):not([data-gap="compact"]),
   [data-kv-design-system][data-presentation="grouped"] [data-ui="app-main"] [data-ui="grid"],
   [data-kv-design-system][data-presentation="grouped"]
     [data-ui="section-body"]

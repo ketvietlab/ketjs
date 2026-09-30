@@ -60,10 +60,17 @@ A frame is never a way to separate groups.
 
 ## L5. Headings are pinned by level; the application passes words
 
-- Page title: `PageHeader`. Surface title: `--kv-text-xl`. Section title and nested
-  surface title: `--kv-text-md`.
+- Page title: `--kv-page-title-size`: 24px from 48rem up, 17px below that, including compact operational lists. Density does not change title size. Surface title: `--kv-text-xl`. Section title and nested
+  surface title: `--kv-text-lg`. Modal title: `--kv-text-xl`.
 - The position of title, description and actions, and the gap under them, belong
   to the component. An application does not resize a heading or move its actions.
+- A page header has no description. Every page pattern (`Page`, `PageHeader`,
+  `ListPage`, `FormPage`, `RecordPage`, `WorkspacePage`, `DashboardPage`,
+  `BoardPage`) takes a title and actions only, so the header keeps one height and
+  the controls under it never move between screens. Words that explain a region
+  go in that region's `Surface` or `Section` description, or in its empty state;
+  a record's identity goes in its fields or the record page's `meta` strip; a
+  period goes beside the controls that change it.
 
 ## L6. Spacing by level: deeper is tighter
 
@@ -88,6 +95,12 @@ edge, such as a standalone table. A titled table keeps the 12px inset.
 - **Form.** Fewer than six fields: one flat grid. Several groups: one `Section` per
   group, divided by hairlines. Secondary detail goes in a `Disclosure`, which renders
   unframed inside a white region.
+- **Field layout.** From tablet width (48rem) up, a label sits beside its control.
+  Below it, the label sits above the control. A column narrower than 28rem (a side
+  panel, a record aside) stacks too, at any viewport. The field decides: whatever
+  holds the fields is measured, so every field in one column switches together. A
+  lone checkbox keeps its label beside the box. An application passes no layout
+  prop and does not move `field-label` or `field-control`.
 - **Notice.** As wide as the content it sits in, aligned with the heading. No extra
   margin.
 - **Metadata strip** (due date, SLA, owner). A flat `DescriptionList`, cells divided
@@ -102,6 +115,10 @@ edge, such as a standalone table. A titled table keeps the 12px inset.
   wrongly, change the component in this package.
 
 ## Enforcement
+
+L5's page header is enforced by the types: no page pattern accepts a
+`description`, so passing one fails the application's type check, and no page
+pattern renders a `*-description` hook for CSS to style.
 
 `ket-design-system-layout-audit` (the `auditLayoutCss` function of
 `@ketvietlab/design-system/contract`) checks a stylesheet for three violations:

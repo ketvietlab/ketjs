@@ -1,3 +1,7 @@
+import { invoicingPolicyContext } from './modal/policy-context.ts'
+import { defineRecordModalIsland, recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import { saleOrderContext } from './modal/context.ts'
+import { optionalRead } from '../backend/optional-read.ts'
 import { loadSaleOrderCollection, loadSalePartnerNames } from './order-collection.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import { invoicingPolicyListSearch, quotationListSearch, saleOrderListSearch } from './search.ts'
@@ -140,16 +144,27 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
       // the pickers search server-side past the cap. Uncapped, a customer base
       // imported from a chat channel put every partner in the tenant into
       // memory on every sale page.
-      ctx.call('partner.listPartners', { limit: 200 }, url, req) as Promise<AnyRow[]>,
-      ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('product.listTemplates', { withVariants: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
-      ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('pricing.listPricelists', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listTaxes', { typeTaxUse: 'sale' }, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listJournals', { type: 'sale' }, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listAccounts', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listPaymentTerms', {}, url, req) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'partner.listPartners', { limit: 200 }, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'company.listCompanies', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(
+        ctx,
+        'product.listTemplates',
+        { withVariants: true, limit: 200 },
+        url,
+        req,
+        [],
+      ) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'stock.listWarehouses', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'pricing.listPricelists', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'account.listTaxes', { typeTaxUse: 'sale' }, url, req, []) as Promise<
+        AnyRow[]
+      >,
+      optionalRead<AnyRow[]>(ctx, 'account.listJournals', { type: 'sale' }, url, req, []) as Promise<
+        AnyRow[]
+      >,
+      optionalRead<AnyRow[]>(ctx, 'account.listAccounts', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'account.listPaymentTerms', {}, url, req, []) as Promise<AnyRow[]>,
     ])
   const own = new Set(companies.map((r) => r.partnerId)),
     sellable = templates.filter((r) => r.saleOk),
@@ -177,7 +192,7 @@ const partnerNames = async (
   rows: AnyRow[],
 ): Promise<Map<string, unknown>> => {
   const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
-  if (!ids.length) return new Map()
+  if (!ids.length || !(await ctx.allows('partner.listPartners', url, req))) return new Map()
   // Explicit-ID lookups are bounded too; resolve every order's customer before
   // visible-field search, including customers beyond the first lookup batch.
   return loadSalePartnerNames(
@@ -498,6 +513,8 @@ const detail =
     return backendPage(ctx, req, { lang, title: String(order.name), body })
   }
 const vi = {
+  'dashboard.awaiting': 'Báo giá đang chờ phản hồi',
+  'dashboard.queueEmpty': 'Không có báo giá đang chờ phản hồi.',
   'app.title': 'Bán hàng trong quản trị',
   'app.summary': 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   'app.category': 'Hệ thống',
@@ -587,6 +604,15 @@ const vi = {
   'invoices.title': 'Hoá đơn khách hàng',
   empty: 'Chưa có dữ liệu.',
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
+  'modal.info': 'Thông tin',
+  'modal.lines': 'Sản phẩm',
+  'modal.deliveries': 'Giao hàng',
+  'modal.invoices': 'Hoá đơn',
+  'modal.more': 'Thao tác khác',
+  'modal.edit': 'Sửa dòng',
+  'modal.confirmRemove': 'Xoá dòng sản phẩm này?',
+  'modal.confirmCancel': 'Huỷ đơn bán hàng này?',
+  'action.updateLine': 'Lưu dòng',
   'action.create': 'Tạo báo giá',
   'action.addLine': 'Thêm dòng',
   'action.removeLine': 'Xoá',
@@ -644,6 +670,8 @@ const vi = {
   'invoicePolicy.delivery': 'Theo số lượng giao',
 }
 const en = {
+  'dashboard.awaiting': 'Quotations awaiting a response',
+  'dashboard.queueEmpty': 'No quotations are awaiting a response.',
   'app.title': 'Sales administration',
   'app.summary': 'Quotations, sales orders, deliveries, and customer invoices.',
   'app.category': 'System',
@@ -733,6 +761,15 @@ const en = {
   'invoices.title': 'Customer Invoices',
   empty: 'No data yet.',
   emptyHint: 'Create the first record to get started.',
+  'modal.info': 'Information',
+  'modal.lines': 'Products',
+  'modal.deliveries': 'Deliveries',
+  'modal.invoices': 'Invoices',
+  'modal.more': 'Other actions',
+  'modal.edit': 'Edit line',
+  'modal.confirmRemove': 'Remove this product line?',
+  'modal.confirmCancel': 'Cancel this sales order?',
+  'action.updateLine': 'Save line',
   'action.create': 'Create Quotation',
   'action.addLine': 'Add line',
   'action.removeLine': 'Remove',
@@ -810,7 +847,19 @@ export default defineModule({
   version: '0.1.0',
   depends: ['sale', 'backend', 'partner_backend'],
   assets: new URL('./client/', import.meta.url),
-  islands,
+  islands: {
+    'sale.invoice-policy-modal': defineRecordModalIsland({
+      kind: 'sale.invoicePolicy',
+      client: 'invoicing-policy-modal.mjs',
+      export: 'invoicingPolicyModal',
+    }),
+    ...islands,
+    'sale.order-modal': defineRecordModalIsland({
+      kind: 'sale.order',
+      client: 'sale-order-modal.mjs',
+      export: 'saleOrderModal',
+    }),
+  },
   behaviors: {
     'sale.editor': {
       client: 'sale.mjs',
@@ -857,18 +906,21 @@ export default defineModule({
       parent: 'sale',
       label: 'menu.policies',
       path: '/admin/sales/invoicing-policies',
-      needs: 'sale.setInvoicePolicy',
+      needs: 'sale.listInvoicePolicies',
+      for: ['sale.setInvoicePolicy'],
       sequence: 2010,
     },
   },
   routes: {
+    '/admin/sales/invoice-policy/{id}/context': invoicingPolicyContext,
+    '/admin/sales/record/{id}/context': saleOrderContext,
     '/admin/sales':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         // "New today" is the reader's today, so the counting happens in their
         // timezone rather than the server's.
-        const [counts, recent] = await Promise.all([
+        const [counts, recent, awaiting] = await Promise.all([
           ctx.call(
             'sale.countOrders',
             { timezone: await timezoneOf(ctx, url, req) },
@@ -879,14 +931,20 @@ export default defineModule({
           // the rest, and a dashboard that loads five hundred rows to show five
           // is the same mistake the counters were moved into the database to fix.
           ctx.call('sale.listOrders', { state: 'sale', limit: RECENT_ORDERS }, url, req) as Promise<AnyRow[]>,
+          ctx.call('sale.listOrders', { state: 'sent', limit: 10 }, url, req) as Promise<AnyRow[]>,
         ])
-        const names = await partnerNames(ctx, url, req, recent)
+        const names = await partnerNames(ctx, url, req, [...recent, ...awaiting])
         return adminPage(ctx, url, req, {
           title: 'sale_backend.dashboard.title',
           body: async (_, shell) =>
             overviewScreen(_, {
               frame: shell,
               counts,
+              createHref: (await ctx.allows('sale.createOrder', url, req))
+                ? recordModalCreateHref(new URL(quotationListPath(url), url), { kind: 'sale.order' })
+                : null,
+              rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+              awaiting: awaiting.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
               recent: recent.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
               localeQuery: localeQuery(url),
             }),
@@ -935,12 +993,17 @@ export default defineModule({
             return quotationsListScreen(
               _,
               {
-                createHref: createPath,
+                createHref: (await ctx.allows('sale.createOrder', url, req))
+                  ? recordModalCreateHref(url, { kind: 'sale.order' })
+                  : null,
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
                 rows: search.rows,
-                ...(search.groups ? { table: { groups: search.groups } } : {}),
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+                },
                 detailSuffix,
               },
               search.frame,
@@ -1007,7 +1070,10 @@ export default defineModule({
                   (report) => report.id === 'sale.salesOrder',
                 ),
                 rows: search.rows,
-                ...(search.groups ? { table: { groups: search.groups } } : {}),
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+                },
                 detailSuffix,
               },
               search.frame,
@@ -1045,9 +1111,14 @@ export default defineModule({
             const workspace = invoicingPoliciesListScreen(
               _,
               {
-                createHref: invoicingPolicyModalPath(url),
+                createHref: (await ctx.allows('sale.setInvoicePolicy', url, req))
+                  ? recordModalCreateHref(url, { kind: 'sale.invoicePolicy' })
+                  : null,
                 rows: search.rows,
-                ...(search.groups ? { table: { groups: search.groups } } : {}),
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.invoicePolicy', id: String(row.id) }),
+                },
               },
               search.frame,
             )
@@ -1105,6 +1176,7 @@ export default defineModule({
   },
   messages: { vi, en },
   fills: {
+    'backend:runtime': `{% island "sale.order-modal" %}{% island "sale.invoice-policy-modal" %}`,
     'sale_backend:order.editor': `{% island "sale.editor" %}`,
   },
 })

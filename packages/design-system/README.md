@@ -25,6 +25,90 @@ Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on t
 application root. Components own their markup and `data-ui` hooks; applications
 provide business data and translated labels.
 
+### Primitive harness
+
+Run `npm run design:system` and open `/primitives` for a comparison surface of every
+registered primitive. The catalogue rail links to it. `theme=light|dark|system`,
+`density=compact|default|comfortable`, and `tab=overview|activity` are URL-backed;
+theme and density changes retain the navigation specimen's active tab.
+
+The six families cover action hierarchy and sizes, loading/disabled states,
+semantic tones, long labels and identifiers, field validation/access states,
+native choices, route navigation, feedback, and progress boundaries. Use keyboard
+Tab/Shift+Tab for focus, Space for checkboxes, arrow keys for radio/select controls,
+and Enter for the breadcrumb disclosure and route links. Compare at 390px, 768px
+and 1440px in both themes and all three densities. A text action and an icon action
+of the same size must share a height; fields must align and content must stay inside
+its sample at narrow widths. The harness deliberately leaves actions as specimens;
+it does not simulate saving or creating records.
+
+`PrimitiveHarness` and `primitiveSections` are available from the `/catalogue`
+entry. Its `primitive-harness`, `primitive-section`, `primitive-section-head`,
+`primitive-row`, `primitive-caption`, and `primitive-sample` hooks own only the
+comparison layout. Component internals use the same production CSS as consumers.
+Notices keep their icon beside the copy and move actions beneath it when the
+notice itself is narrow. Action icons, spinners and tag remove links do not shrink;
+long tags wrap and progress percentages remain intact.
+Select keeps the native picker and keyboard behaviour. Its field-owned chevron
+has a token-based inset, reserves space for long values, follows disabled colour,
+and moves with the control when labels stack. Vertical option groups align their
+label with the first option; checkbox/radio controls have no browser margin.
+
+### Date pickers
+
+Open `/dates` for the focused Vietnamese playground (`states=1` expands validation/access examples), or the `date-time` specimen
+under `/components/form-controls`. `DatePicker` keeps its native date input. `DateRangePicker` combines one read-only range display with a calendar icon inside the same frame as DatePicker. Two hidden boundaries retain the existing names and ISO values. The runtime enforces required, min/max and step; read-only, disabled, help and field errors remain supported. Submission stays `YYYY-MM-DD`.
+`DateTimePicker` and `TimePicker` retain their native local-time controls.
+
+Load `/runtime/auto.js` alongside the stylesheet, or call
+`attachDesignSystemInteractions(root)` from `/runtime` and dispose its returned
+cleanup when the root is removed. The runtime also enhances fields inserted later.
+Without JavaScript or the native Popover API, DatePicker retains its native input; DateRangePicker displays and submits its saved boundaries but cannot edit them.
+Server views never read the clock or access the DOM.
+
+```tsx
+<DatePicker id="delivery" name="delivery" label="Ngày giao hàng" />
+<DateRangePicker
+  id="period" label="Thời gian báo cáo"
+  start={{ id: 'from', name: 'from' }} startLabel="Từ ngày"
+  end={{ id: 'to', name: 'to' }} endLabel="Đến ngày"
+/>
+```
+
+The range calendar header select offers **Hôm nay**, **Hôm qua**, **7 ngày qua**, **Tháng này**,
+**Tháng trước**, **30 ngày qua**, and **90 ngày qua**. Rolling ranges include today;
+month presets cover the entire calendar month. `today="2026-09-30"` supplies a
+business-timezone civil date; otherwise the browser reads local today on opening.
+`presets={false}` hides quick ranges, or pass an ordered subset of `DateRangePreset`
+IDs: `today`, `yesterday`, `last7`, `thisMonth`, `lastMonth`, `last30`, `last90`.
+Presets outside either input's bounds or step are disabled, never silently clamped.
+
+Click two dates to form an inclusive range; reverse selection is ordered. Both
+calendars hold a draft until **Áp dụng** updates the fields and emits bubbling
+`input` and `change` events. **Hủy**, Escape and outside dismissal discard that draft.
+Choosing a preset commits immediately. Activating the range display opens the calendar. Invalid or incomplete required ranges show a field error and block form submission. Reset restores the original values.
+
+Arrow keys move by day/week; Home/End move to week edges; PageUp/PageDown move by
+month (Shift changes year). Enter/Space selects. Tab can leave the non-modal popup;
+Escape, Cancel and Apply return focus to its opener. Range calendars show two months
+on desktop. Below 768px, a vertical list renders twelve consecutive months around the
+selection; scrolling preserves the draft and month navigation recenters that window. Both pickers become fullscreen modal dialogs on mobile,
+with fixed commands, a scrolling month list, safe-area insets, contained focus,
+and an inert, scroll-locked background. Desktop calendars remain anchored non-modal
+popups. The native top-layer popup avoids ancestor clipping.
+`locale="vi"` is the default (`en` is also supported); `weekStartsOn` accepts 0 or 1
+(Monday by default). `calendarLabels` overrides commands, status and preset labels;
+it does not change the browser's native date-input formatting.
+
+The `date-picker` / `date-range` hooks own composition; `date-inputs`,
+`date-control-row`, `date-tools`, `date-field-control`, `date-range-preset`, `date-boundary` and `date-range-error` own the control area. The shared Field supports `labelHidden`, `selectionHidden` (select chevron only, options remain readable) and `appearance="embedded"` for accessible compound controls.
+`date-calendar`, `date-calendar-head`, `date-calendar-title`, `date-calendar-body`,
+`date-calendar-months`, `date-month`, `date-month-title`, `date-grid`,
+`date-weekday`, `date-cell`, `date-day`, `date-calendar-footer` and
+`date-calendar-status` own the popup. `data-selected`, `data-in-range`,
+`aria-current="date"` and native disabled states define calendar styling; consumers
+compose the public components rather than targeting their descendants.
+
 [LAYOUT.md](./LAYOUT.md) holds the layout rules: where a frame, a heading and a gap
 go, which the components apply by themselves and which `ket-design-system-layout-audit`
 checks in application CSS. Read it before composing a screen or overriding a style.
@@ -90,8 +174,9 @@ returns them exactly where they were.
 ### Option groups
 
 `checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
-fields with those types) keep one label on the left and the options on the right,
-each option's text after its control. `optionsOrientation` sets how the options flow:
+fields with those types) keep one label on the left and the options on the right
+from tablet width up (above them below it, as every field does), each option's text
+after its control. `optionsOrientation` sets how the options flow:
 
 - `horizontal` (default): options wrap on one line. Use for a few short choices.
 - `vertical`: one option per line, rendered as `data-orientation="vertical"` on
@@ -250,6 +335,10 @@ separate navigable record. Do not wrap a whole page or arbitrary sections in car
 Grouped layouts use 8px between cards and 12px padding around each entire card,
 including its heading and body. Page gutters and heading-to-body spacing are 12px.
 Field and table-row density is unchanged.
+Buttons, inputs, selects and topbar launchers are the same height at every viewport width:
+density decides it, not the screen, so a button always lines up with the field beside it.
+Below tablet width only rows a finger scrolls through (navigation items, menu items, table
+selection) take the 44px touch height.
 Collection paging lives in `ListChrome.pager` above the table, alongside search and bulk controls.
 The demo shows the visible record range and previous/next links, with no page-number strip or
 separate `ListPage.footer` pagination panel. Paging, search and status filters preserve the
@@ -292,9 +381,10 @@ Linked cells are display-only. Associate `selection.form` and `bulk.form` with t
 same native form to submit selected IDs and the bulk command. Selection syncing
 and select-all remain application runtime responsibilities.
 
-Forms keep labels on the left and controls on the right, including on mobile.
-Help and errors align below the control. Narrow panels reduce the number of field
-pairs per row without stacking labels above inputs. Native inputs support `readOnly`,
+From tablet width (48rem) up, a form keeps each label on the left of its control,
+with help and errors below the control. Below tablet width, and in any column
+narrower than 28rem such as a side panel, each label sits above its control
+(LAYOUT.md L7). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
 `min` and `max`; choices can be disabled individually, and invalid nested groups
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.

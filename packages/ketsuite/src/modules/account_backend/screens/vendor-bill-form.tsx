@@ -24,7 +24,6 @@ export const vendorBillFormScreen = (_: Translator, options: VendorBillFormScree
       frame={options.frame}
       scope="account-vendor-bill-form-page"
       title={title}
-      description={_('account_backend.vendorBill.create.hint')}
       actions={
         <FormCluster
           label={title}

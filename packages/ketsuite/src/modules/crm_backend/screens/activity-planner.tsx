@@ -157,7 +157,6 @@ export const plannerScreen = (
       frame={frame}
       context={pageTrailFromFrame(_('crm_backend.planner.title'), frame)}
       title={_('crm_backend.planner.title')}
-      description={_('crm_backend.planner.subtitle')}
       headerActions={
         options.tab === 'mine'
           ? linkButton({

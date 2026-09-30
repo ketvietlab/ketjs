@@ -209,9 +209,9 @@ export const issueDetailScreen = (
       frame={frame}
       scope="flow-issue-detail-form-page"
       title={String(row.title)}
-      description={String(row.projectName ?? '') || undefined}
       status={badge(String(row.columnName ?? dash), 'info', String(row.columnId ?? ''))}
       meta={inline([
+        ...(row.projectName ? [String(row.projectName)] : []),
         priorityBadge(_, row.priority),
         badge(`${_('flow_backend.field.assignee')}: ${String(row.assigneeName ?? dash)}`, 'neutral'),
       ])}
