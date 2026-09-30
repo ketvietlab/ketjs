@@ -1,7 +1,7 @@
+import { createCommerceTestDeployment as createTestDeployment } from './commerce-test-deployment.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 async function bootSale(t: TestContext) {
@@ -180,7 +180,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
       assert.match(html, /data-ui="list-page"/)
       assert.match(html, /data-ui="kt-grid"/)
       assert.match(html, /Theo số lượng giao/)
-      assert.match(html, /href="\/admin\/sales\/invoicing-policies\?create=1"/)
+      assert.match(html, /record=sale.invoicePolicy%3Anew/)
       assert.doesNotMatch(html, /id="invoicing-policy-form"|data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
@@ -218,7 +218,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   })
   const salesDashboardHtml = await salesDashboard.text()
   assert.match(salesDashboardHtml, /Tạo báo giá/)
-  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
+  assert.match(salesDashboardHtml, /record=sale.order%3Anew/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;preset=draft"/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/orders\?lang=vi"/)
 
@@ -250,13 +250,16 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   const englishQuotations = await e2e.client.get('/admin/sales/quotations?lang=en', {
     headers: { accept: 'text/html' },
   })
-  assert.match(await englishQuotations.text(), /href="\/admin\/sales\/quotations\/[^"?]+\?lang=en"/)
+  assert.match(
+    await englishQuotations.text(),
+    /href="\/admin\/sales\/quotations\?lang=en&amp;record=sale\.order%3A[^"?]+"/,
+  )
   const englishDashboard = await e2e.client.get('/admin/sales?lang=en', {
     headers: { accept: 'text/html' },
   })
   const englishDashboardHtml = await englishDashboard.text()
   assert.match(englishDashboardHtml, /Create Quotation/)
-  assert.match(englishDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=en"/)
+  assert.match(englishDashboardHtml, /record=sale.order%3Anew/)
   const english = await e2e.client.get('/admin/sales/orders/so-1?lang=en', {
     headers: { accept: 'text/html' },
   })
@@ -278,7 +281,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   const englishPoliciesHtml = await englishPolicies.text()
   assert.match(englishPoliciesHtml, /data-ui="list-page"/)
   assert.match(englishPoliciesHtml, /Delivered quantities/)
-  assert.match(englishPoliciesHtml, /href="\/admin\/sales\/invoicing-policies\?lang=en&amp;create=1"/)
+  assert.match(englishPoliciesHtml, /record=sale.invoicePolicy%3Anew/)
   assert.doesNotMatch(englishPoliciesHtml, /id="invoicing-policy-form"/)
   assert.doesNotMatch(englishPoliciesHtml, /data-island="mail\.chatter"/)
   const englishPolicyForm = await e2e.client.get(
@@ -505,4 +508,61 @@ test('sale-e2e: the print group is translated and reaches the lists', async (t) 
   // And the document itself renders, carrying the unit beside the quantity.
   const pdf = await e2e.client.get('/reports/sale.salesOrder/so-print?lang=vi')
   assert.equal(pdf.status, 200)
+})
+
+test('sale line editing is atomic, revision-checked and preserves the other quoted prices', async (t) => {
+  const { call } = await bootSale(t)
+  await call('sale.createOrder', { id: 'edit-order', partnerId: 'customer', warehouseId: 'wh' })
+  for (const id of ['first', 'second'])
+    await call('sale.addLine', {
+      id,
+      orderId: 'edit-order',
+      productId: 'chair',
+      productUomId: 'unit',
+      productUomQty: '2',
+      priceUnit: '100',
+      discount: '5',
+      taxId: 'vat10',
+    })
+  const before = (await call<Row>('sale.getOrder', { id: 'edit-order' })).value
+  const edited = (
+    await call<Row>('sale.updateLine', {
+      id: 'first',
+      expectedRevision: before.revision,
+      productUomQty: '3',
+      priceUnit: '200',
+      discount: '10',
+      taxIds: [],
+    })
+  ).value
+  assert.equal(edited.ok, true, JSON.stringify(edited))
+  const after = (await call<Row>('sale.getOrder', { id: 'edit-order' })).value
+  const lines = after.lines as Row[]
+  assert.equal(lines.find((row) => row.id === 'first')?.priceSubtotal, '540')
+  assert.deepEqual(
+    lines.find((row) => row.id === 'second'),
+    (before.lines as Row[]).find((row) => row.id === 'second'),
+  )
+  assert.equal(after.amountTotal, '749')
+  const stale = (
+    await call<Row>('sale.updateLine', {
+      id: 'second',
+      expectedRevision: before.revision,
+      productUomQty: '99',
+    })
+  ).value
+  assert.equal(stale.ok, false)
+  assert.deepEqual((await call<Row>('sale.getOrder', { id: 'edit-order' })).value, after)
+  await call('sale.confirmOrder', { id: 'edit-order', expectedRevision: after.revision })
+  const confirmed = (await call<Row>('sale.getOrder', { id: 'edit-order' })).value
+  assert.equal(
+    (
+      await call<Row>('sale.updateLine', {
+        id: 'first',
+        expectedRevision: confirmed.revision,
+        productUomQty: '9',
+      })
+    ).value.ok,
+    false,
+  )
 })

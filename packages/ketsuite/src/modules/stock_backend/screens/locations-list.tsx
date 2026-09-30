@@ -25,7 +25,7 @@ export type LocationListRow = {
 export type LocationsListScreenOptions = {
   rows: LocationListRow[]
   /** Localized `/admin/stock/locations/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<LocationListRow>>
 }
@@ -91,7 +91,9 @@ export const locationsListScreen = (
       frame={collection.frame}
       title={_('stock_backend.location.title')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('stock_backend.location.title'), collection.frame)}
