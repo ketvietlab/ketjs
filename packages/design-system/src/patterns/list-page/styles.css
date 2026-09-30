@@ -219,9 +219,6 @@
 }
 
 @layer ket.app {
-  :where([data-kv-design-system][data-density="compact"]) [data-ui="list-page"][data-variant="operational"] {
-    --kv-page-title-size: var(--kv-text-lg);
-  }
   :where([data-kv-design-system][data-density="compact"])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-header"] {

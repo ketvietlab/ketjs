@@ -11,10 +11,22 @@ import {
   registerFunctions,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
-import { BulkActions, DataTable, ListChrome, ListPage } from '@ketvietlab/design-system'
+import {
+  ActionGroup,
+  BulkActions,
+  Button,
+  DataTable,
+  LinkButton,
+  ListChrome,
+  ListPage,
+  Page,
+  Stack,
+  Surface,
+} from '@ketvietlab/design-system'
 import {
   CatalogueHead,
   CataloguePage,
+  DatePickerExamples,
   InventoryPage,
   LayeringPreview,
   PageSurfacePreview,
@@ -99,6 +111,61 @@ const app = await createKetServer({
         }),
       })
     },
+    '/specimens/dates': (url) => json(Object.fromEntries(url.searchParams)),
+    '/dates': (url) =>
+      page({
+        body: document({
+          lang: 'vi',
+          title: 'Date pickers · Két Việt Design System',
+          head: CatalogueHead(),
+          body: (
+            <div
+              data-kv-design-system
+              data-theme={oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')}
+              data-density={oneOf(
+                url.searchParams.get('density'),
+                ['compact', 'default', 'comfortable'] as const,
+                'default',
+              )}
+            >
+              <Page
+                title="Ngày & khoảng thời gian"
+                actions={
+                  <ActionGroup
+                    actions={[
+                      <LinkButton label="Sáng" href="/dates?theme=light" />,
+                      <LinkButton label="Tối" href="/dates?theme=dark" />,
+                      <LinkButton label="Catalogue" href="/components/form-controls#date-time" />,
+                    ]}
+                  />
+                }
+                body={
+                  <Surface
+                    title="DatePicker & DateRangePicker"
+                    description="Mẫu minh họa lấy ngày 30/09/2026 làm hôm nay."
+                    body={
+                      <form id="date-picker-examples" action="/specimens/dates" method="get">
+                        <Stack
+                          gap="loose"
+                          items={[
+                            <DatePickerExamples showStates={url.searchParams.get('states') === '1'} />,
+                            <ActionGroup
+                              actions={[
+                                <Button label="Kiểm tra giá trị" type="submit" variant="primary" />,
+                                <Button label="Đặt lại" type="reset" />,
+                              ]}
+                            />,
+                          ]}
+                        />
+                      </form>
+                    }
+                  />
+                }
+              />
+            </div>
+          ),
+        }),
+      }),
     '/surfaces': (url) => {
       const lang = oneOf(url.searchParams.get('lang'), ['en', 'vi'] as const, 'en')
       return page({
@@ -165,6 +232,26 @@ const app = await createKetServer({
         }),
       })
     },
+    '/primitives': (url) =>
+      page({
+        body: document({
+          lang: 'en',
+          title: 'Primitive harness · Két Việt Design System',
+          head: CatalogueHead(),
+          body: (
+            <CataloguePage
+              mode="primitives"
+              theme={oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')}
+              density={oneOf(
+                url.searchParams.get('density'),
+                ['compact', 'default', 'comfortable'] as const,
+                'default',
+              )}
+              primitiveTab={oneOf(url.searchParams.get('tab'), ['overview', 'activity'] as const, 'overview')}
+            />
+          ),
+        }),
+      }),
     '/components/{groupId}': (url, _request, params) => {
       const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')
       const density = oneOf(
@@ -216,6 +303,8 @@ console.log(`
     dark       http://127.0.0.1:${port}/?theme=dark
     compact    http://127.0.0.1:${port}/?density=compact
     inventory  http://127.0.0.1:${port}/inventory
+    primitives http://127.0.0.1:${port}/primitives
+    dates      http://127.0.0.1:${port}/dates
     app demo   http://127.0.0.1:${port}/demo
     submenu    http://127.0.0.1:${port}/demo2
 
