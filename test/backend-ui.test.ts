@@ -962,6 +962,7 @@ test('ui contract: every documented hook has an explicit CSS rule', () => {
     'packages/design-system/src/patterns/modal-sheet/styles.css',
     'packages/design-system/src/layouts/layout/styles.css',
     'packages/design-system/src/primitives/status/styles.css',
+    'packages/design-system/src/primitives/actions/styles.css',
   ]
   const css = [...STYLESHEETS, ...publicComponentCss].map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
@@ -2070,7 +2071,7 @@ test('backend compatibility CSS leaves Section and ModalSheet geometry to the de
   const lists = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
   assert.doesNotMatch(lists, /\[data-ui="badge"\]/u)
   const controls = readFileSync('packages/ketsuite/src/modules/backend/design/controls.css', 'utf8')
-  assert.doesNotMatch(controls, /\[data-ui="tag(?:-remove)?"\]/u)
+  assert.doesNotMatch(controls, /\[data-ui="(?:tag(?:-remove)?|action)"\]/u)
   const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
   const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
   assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
