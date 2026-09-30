@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -10,14 +10,14 @@
     "publicExports": 278,
     "runtimeExports": 138,
     "registeredComponents": 133,
-    "compatibilityExports": 257,
+    "compatibilityExports": 259,
     "compatibilityModules": 43,
     "plannedComponents": 0,
     "publicGaps": 138,
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 79,
-    "cssLines": 16153
+    "cssLines": 15905
   },
   "rows": [
     {
@@ -2938,6 +2938,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/backend-ui.test.ts",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -6876,6 +6877,7 @@
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
+        "test/backend-ui.test.ts",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -7255,6 +7257,24 @@
       "target": "Public core",
       "wave": 2,
       "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-015"
+    },
+    {
+      "scope": "compatibility",
+      "name": "RECORD_DIALOG_PARAM",
+      "imported": "RECORD_DIALOG_PARAM",
+      "kind": "runtime",
+      "source": "./record-modal.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7826,6 +7846,24 @@
       "tests": "present",
       "testFiles": ["test/backend-ui.test.ts"],
       "gapTask": "DS-007"
+    },
+    {
+      "scope": "compatibility",
+      "name": "RecordStateTrigger",
+      "imported": "RecordStateTrigger",
+      "kind": "runtime",
+      "source": "./client/record-modal-form.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-015"
     },
     {
       "scope": "compatibility",
@@ -9786,6 +9824,7 @@
         "test/sale-invoicing-policy-screens.test.tsx",
         "test/stock-picking-types-screens.test.tsx",
         "test/ui-modal-large-dialog.test.tsx",
+        "test/ui-record-modal.test.tsx",
         "test/website-search-index.test.ts"
       ],
       "gapTask": "DS-010"
@@ -12120,13 +12159,14 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 232,
+      "lines": 239,
       "hooks": [
         "list-page",
         "list-page-actions",
         "list-page-body",
         "list-page-context",
         "list-page-controls",
+        "list-page-description",
         "list-page-eyebrow",
         "list-page-footer",
         "list-page-header",
@@ -12144,7 +12184,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 244,
+      "lines": 249,
       "hooks": [
         "action",
         "modal-actions",
@@ -12158,6 +12198,7 @@
         "modal-sheet",
         "modal-title",
         "modal-title-row",
+        "tab-panel",
         "tabbed-view"
       ]
     },
@@ -12324,7 +12365,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/status/styles.css",
-      "lines": 146,
+      "lines": 147,
       "hooks": [
         "avatar",
         "badge",
@@ -12453,7 +12494,6 @@
       "file": "packages/ketsuite/src/modules/backend/design/content.css",
       "lines": 709,
       "hooks": [
-        "action",
         "action-label",
         "action-spinner",
         "app-location-bar",
@@ -12524,10 +12564,8 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/controls.css",
-      "lines": 347,
+      "lines": 321,
       "hooks": [
-        "action",
-        "action-group",
         "action-icon",
         "action-spinner",
         "code",
@@ -12552,15 +12590,13 @@
         "section",
         "section-body",
         "stack",
-        "surface",
-        "tag",
-        "tag-remove"
+        "surface"
       ]
     },
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 1112,
+      "lines": 926,
       "hooks": [
         "action",
         "action-group",
@@ -12614,16 +12650,6 @@
         "media-placeholder",
         "media-primary",
         "media-upload",
-        "modal-backdrop",
-        "modal-body",
-        "modal-close",
-        "modal-description",
-        "modal-head",
-        "modal-heading",
-        "modal-layer",
-        "modal-sheet",
-        "modal-title",
-        "modal-title-row",
         "record-form",
         "record-form-with-image",
         "record-image",
@@ -12637,13 +12663,6 @@
         "relation-dialog-toolbar",
         "relation-menu",
         "relation-options",
-        "section",
-        "section-actions",
-        "section-body",
-        "section-description",
-        "section-eyebrow",
-        "section-head",
-        "section-title",
         "surface"
       ]
     },
@@ -12670,12 +12689,11 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1498,
+      "lines": 1449,
       "hooks": [
         "app-main",
         "app-shell",
         "avatar",
-        "badge",
         "board-page",
         "bulk-action",
         "bulk-actions",

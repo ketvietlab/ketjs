@@ -21,6 +21,8 @@ export const RecordModalForm = (props: {
   body?: JSXChild
   /** Structural edits and retained drafts remain dirty after a view-state render. */
   dirty?: boolean
+  /** Upload a selected or dropped file immediately through this form command. */
+  dropzone?: boolean
   actions?: readonly JSXChild[]
   command?: string | null
   hidden?: Readonly<Record<string, string>>
@@ -32,6 +34,7 @@ export const RecordModalForm = (props: {
     method="post"
     action=""
     data-record-kind={props.kind}
+    data-record-dropzone={props.dropzone ? '' : null}
     id={props.id}
     data-record-dirty={props.dirty === true ? 'true' : null}
   >
@@ -46,7 +49,7 @@ export const RecordModalForm = (props: {
     {Object.entries(props.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
-    <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div>
+    {props.fields.length ? <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div> : null}
     {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
@@ -94,6 +97,23 @@ export const RecordDialogTrigger = (props: {
   children: JSXChild
 }): TemplateResult => (
   <span data-record-dialog={props.dialog} data-record-param-id={props.id ?? null}>
+    {props.children}
+  </span>
+)
+
+/** A view-state choice that preserves the current layer's form drafts. */
+export const RecordStateTrigger = (props: {
+  name: string
+  value: string
+  /** Discard only this inline editor's named drafts when cancelling it. */
+  resetFields?: readonly string[]
+  children: JSXChild
+}): TemplateResult => (
+  <span
+    data-record-state-trigger={props.name}
+    data-record-value={props.value}
+    data-record-reset-fields={props.resetFields ? JSON.stringify(props.resetFields) : null}
+  >
     {props.children}
   </span>
 )

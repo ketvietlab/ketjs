@@ -82,7 +82,7 @@ directories, their CSS moves with them and the aggregate entry remains compatibl
 
 KetSuite compatibility CSS loads after the public stylesheet. It may adapt legacy markup, but it must not
 copy public selectors or create another token scale. A compatibility file is removed only after inventory
-shows no remaining consumer.
+shows no remaining consumer. `Section` and `ModalSheet` are fully owned by the public design system; backend `forms.css` must not override their title sizes, line heights, padding, close button or viewport sizing. This keeps production record modals and catalogue/atlas specimens on the same typography and spacing scale.
 
 The public cascade order is declared once as `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
 Component styles remain aggregated through `styles.css`, but selector-bearing files live below their
