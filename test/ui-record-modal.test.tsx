@@ -626,3 +626,23 @@ test('record modal: a pending dialog deep link is cleared by normal navigation a
   assert.match(runtime, /definition\.dialogs\?\.\[pendingEntryDialog\]/u)
   assert.match(runtime, /pendingEntryDialog = null/u)
 })
+
+test('record modal: cancelling one inline editor preserves other drafts and their dirty guard', async () => {
+  const { resetRecordDraftFields, recordDraftHasChanges } = await import(
+    '../packages/ketsuite/src/ui/client/record-modal.tsx'
+  )
+  const record = {
+    values: { milestone: 'discard', call: 'keep' },
+    initialValues: { milestone: 'saved', call: '' },
+    checks: { confirmed: true },
+    initialChecks: { confirmed: false },
+  }
+  const cancelled = resetRecordDraftFields(record, ['milestone'])
+  assert.equal(cancelled.values.milestone, undefined)
+  assert.equal(cancelled.initialValues.milestone, undefined)
+  assert.equal(cancelled.values.call, 'keep')
+  assert.equal(cancelled.checks.confirmed, true)
+  assert.equal(recordDraftHasChanges(cancelled), true)
+  assert.equal(record.values.milestone, 'discard', 'draft snapshots stay immutable')
+  assert.equal(recordDraftHasChanges(resetRecordDraftFields(cancelled, ['call', 'confirmed'])), false)
+})

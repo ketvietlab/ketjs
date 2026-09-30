@@ -446,6 +446,18 @@ export const recordDraftHasChanges = (draft: DraftState): boolean =>
   Object.entries(draft.values).some(([key, value]) => value !== draft.initialValues[key]) ||
   Object.entries(draft.checks).some(([key, value]) => value !== draft.initialChecks[key])
 
+/** Cancel one inline editor without losing edits elsewhere in the record. */
+export const resetRecordDraftFields = (previous: DraftState, names: readonly string[]): DraftState => {
+  const omit = <T,>(values: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(Object.entries(values).filter(([name]) => !names.includes(name)))
+  return {
+    values: omit(previous.values),
+    checks: omit(previous.checks),
+    initialValues: omit(previous.initialValues),
+    initialChecks: omit(previous.initialChecks),
+  }
+}
+
 type DraftScope = 'record' | 'dialog'
 
 const emptyDraftState = (): DraftState => ({ values: {}, checks: {}, initialValues: {}, initialChecks: {} })
@@ -1229,6 +1241,14 @@ export const createRecordModal =
               if (stateControl) {
                 event.preventDefault()
                 keepAllDrafts()
+                const reset = stateControl.getAttribute('data-record-reset-fields')
+                if (reset) {
+                  const names: unknown = JSON.parse(reset)
+                  if (Array.isArray(names) && names.every((name) => typeof name === 'string')) {
+                    const store = dialog() ? dialogDrafts : recordDrafts
+                    store.set(resetRecordDraftFields(store(), names))
+                  }
+                }
                 viewState.set({
                   ...viewState(),
                   [stateControl.getAttribute('data-record-state-trigger') ??

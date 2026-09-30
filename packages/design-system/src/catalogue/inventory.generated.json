@@ -9718,6 +9718,7 @@
         "test/sale-invoicing-policy-screens.test.tsx",
         "test/stock-picking-types-screens.test.tsx",
         "test/ui-modal-large-dialog.test.tsx",
+        "test/ui-record-modal.test.tsx",
         "test/website-search-index.test.ts"
       ],
       "gapTask": "DS-010"
