@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15774
+    "cssLines": 15736
   },
   "rows": [
     {
@@ -11473,12 +11473,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/relation-select/styles.css",
-      "lines": 311,
+      "lines": 299,
       "hooks": [
         "action",
         "combobox-toggle",
         "field-control",
-        "modal-layer",
         "relation-caret",
         "relation-chip",
         "relation-chip-clear",
@@ -11520,7 +11519,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 580,
+      "lines": 568,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -11595,7 +11594,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 422,
+      "lines": 419,
       "hooks": [
         "app-navigation",
         "icon",
@@ -11841,7 +11840,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 157,
+      "lines": 156,
       "hooks": [
         "action",
         "dashboard-page",
@@ -11951,7 +11950,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 129,
+      "lines": 128,
       "hooks": [
         "action",
         "cell",
@@ -12101,7 +12100,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/actions/styles.css",
-      "lines": 158,
+      "lines": 149,
       "hooks": ["action", "action-group", "action-label", "action-leading", "action-spinner"]
     },
     {
