@@ -34,7 +34,7 @@ export type ListPageProps = {
   variant?: 'operational'
   eyebrow?: string | null
   /** Short operational guidance shown below the title and above controls. */
-  description?: string | null
+  description?: JSXChild
   /** Primary actions beside the title of an operational page, above its query controls. */
   headerActions?: JSXChild
   /** Tool actions follow query controls by default, or join primary actions in the header. */
