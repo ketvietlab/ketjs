@@ -132,6 +132,8 @@ export type RecordModalContext<Data> = {
   fieldError: (name: string) => string | null
   /** What was typed into a field before a refused submit, or the fallback. */
   draft: (name: string, fallback?: string) => string
+  /** Read a captured parent-record draft when explicitly seeding a child workflow. */
+  recordDraft?: (name: string, fallback?: string) => string
   /** Whether a checkbox/radio value was selected before the view re-rendered. */
   draftChecked: (name: string, value?: string, fallback?: boolean) => boolean
   /**
@@ -616,6 +618,7 @@ export const createRecordModal =
           draft.initialValues[name] ??= fallback
           return draft.values[name] ?? fallback
         },
+        recordDraft: (name, fallback = '') => recordDrafts().values[name] ?? fallback,
         draftChecked: (name, value = '1', fallback = false) => {
           const draft = draftState()
           const key = draftCheckKey(name, value)
