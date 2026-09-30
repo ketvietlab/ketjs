@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Keep explicit Stack gap variants authoritative when legacy KetSuite controls CSS is loaded.
+
+- Backport the integration page-title contract (f6c5f413): shared 24px title token, 17px below tablet width, remove the compact operational list exception so every page uses the same title scale.
+
+- Keep modal titles at the xl type step and section/nested surface headings at lg so headings remain distinct from body content.
+
+- Badge and Tag now use the full pill radius, matching CountBadge across all themes and tones.
+
 ## 0.1.14 — KetSuite application navigation
 
 - Migrated the KetSuite administration shell to the public `AppNavigation` contract.
