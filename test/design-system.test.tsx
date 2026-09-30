@@ -1262,11 +1262,10 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
-  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+  assert.match(fixedDialog, /height: var\(--kv-modal-fixed-height, calc\(100dvh - var\(--kv-space-12\)\)\)/)
 
   // A module whose own content is shorter than the viewport caps the fixed height instead.
-  // Set inline with `!important`, not a plain CSS rule: a legacy admin stylesheet targets
-  // these same hooks at equal specificity and would otherwise win by loading later.
+  // The custom property caps desktop only; the mobile full-screen rule still owns height.
   const capped = renderToString(
     <ModalSheet
       id="edit-template"
@@ -1278,7 +1277,7 @@ test('design system: modal sheets expose route metadata and become fullscreen on
       body="Template tabs"
     />,
   )
-  assert.match(capped, /style="height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\) !important"/)
+  assert.match(capped, /style="--kv-modal-fixed-height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\)"/)
   // Ignored outside `height: 'fixed'` — a content-sized dialog has nothing to cap.
   const contentSized = renderToString(
     <ModalSheet

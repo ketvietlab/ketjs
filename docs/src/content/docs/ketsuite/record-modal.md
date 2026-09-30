@@ -192,3 +192,5 @@ state, such as the active milestone note editor. The runtime retains form drafts
 state. Give editors for different records distinct field names so switching editors never reuses the
 wrong draft. For an inline Cancel action, pass `resetFields: [name]` to discard only that
 editor's draft while preserving other fields and tabs. State triggers do not save a record.
+
+Desktop `fixedHeight` is carried by `--kv-modal-fixed-height`; it never overrides the mobile full-screen height. Avoid inline `height: … !important` on a ModalSheet.
