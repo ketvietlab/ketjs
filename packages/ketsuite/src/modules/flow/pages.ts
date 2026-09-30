@@ -12,8 +12,8 @@
 
 import { asc, desc, eq, from, ilike, inArray, isNull, or } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
-import { actorRequired, commandKey, invalid, issue, n, now } from './operations.ts'
-import type { FlowResult } from './operations.ts'
+import { actorRequired, commandKey, invalid, issue, n, now } from './domain/command.ts'
+import type { FlowResult } from './domain/command.ts'
 import { canReadProject, readableProject, restrictToVisible, visibleProjects } from './membership.ts'
 
 export type SavePageInput = {
