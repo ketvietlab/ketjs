@@ -48,86 +48,49 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
-test('stock inventory: preserves the adjustment task beside current balances', () => {
+const options = {
+  rows: [
+    {
+      id: 'balance-1',
+      product: 'Cà phê rang',
+      reference: 'CF-01',
+      location: 'Kho trung tâm',
+      lot: 'LOT-2026',
+      quantity: '12',
+      reserved: '2',
+      available: '10',
+    },
+  ],
+  products: [],
+  locations: [],
+  inventoryLocations: [],
+  units: [],
+  lots: [],
+  action: '/admin/stock/inventory',
+  locationsHref: '/admin/stock/locations',
+}
+test('inventory is a compact collection with count creation above table controls', () => {
   const html = renderToString(
     inventoryScreen(
       translate,
       {
-        rows: [
-          {
-            id: 'balance-1',
-            product: 'Cà phê rang',
-            reference: 'CF-01',
-            location: 'Kho trung tâm / Tồn kho',
-            lot: 'LOT-2026-08',
-            quantity: '12',
-            reserved: '2',
-            available: '10',
-          },
-        ],
-        products: [{ value: 'product-1', label: 'Cà phê rang · CF-01' }],
-        locations: [{ value: 'stock', label: 'Kho trung tâm / Tồn kho' }],
-        inventoryLocations: [{ value: 'adjustment', label: 'Điều chỉnh tồn kho' }],
-        units: [{ value: 'unit', label: 'Đơn vị' }],
-        lots: [{ value: 'lot-1', label: 'LOT-2026-08' }],
-        action: '/admin/stock/inventory?lang=vi',
-        locationsHref: '/admin/stock/locations?lang=vi',
-        applied: true,
-        errors: ['Kiểm tra lại số lượng'],
+        ...options,
+        createHref: '/admin/stock/inventory?record=stock.count%3Anew',
+        table: { rowHref: (row) => `/admin/stock/inventory?record=stock.count%3A${row.id}` },
       },
       {},
     ),
   )
-
-  assert.match(html, /data-ui="record-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="list-page"/)
-  assert.match(html, /Đã áp dụng kiểm kê[\s\S]*?Chênh lệch đã được ghi nhận/)
-  assert.match(html, /id="inventory-adjustment-form"/)
-  assert.match(html, /data-scope="inventory-adjustment"/)
-  assert.match(html, /action="\/admin\/stock\/inventory\?lang=vi"/)
-  assert.match(
-    html,
-    /name="productId"[\s\S]*?name="locationId"[\s\S]*?name="countedQuantity"[\s\S]*?name="productUomId"[\s\S]*?name="lotId"[\s\S]*?name="inventoryLocationId"/,
-  )
-  assert.match(html, /data-ui="form-errors"[^>]*role="alert"[\s\S]*?Kiểm tra lại số lượng/)
-  assert.match(html, /data-ui="table"[\s\S]*?Cà phê rang[\s\S]*?CF-01/)
-  assert.match(html, /Kho trung tâm \/ Tồn kho[\s\S]*?LOT-2026-08/)
-  assert.match(html, /data-col="available"[\s\S]*?data-tone="positive"[\s\S]*?>10</)
-  assert.match(
-    html,
-    /data-ui="record-fact-value"[^>]*>[\s\S]*?12[\s\S]*?data-ui="record-fact-label"[^>]*>[\s\S]*?Tồn thực tế/,
-  )
-  assert.match(
-    html,
-    /data-ui="record-fact-value"[^>]*>[\s\S]*?1[\s\S]*?data-ui="record-fact-label"[^>]*>[\s\S]*?Số dư/,
-  )
-  assert.match(
-    html,
-    /data-ui="record-fact-value"[^>]*>[\s\S]*?1[\s\S]*?data-ui="record-fact-label"[^>]*>[\s\S]*?Vị trí/,
-  )
+  assert.match(html, /data-ui="list-page"/)
+  assert.doesNotMatch(html, /data-ui="record-workspace"|inventory-adjustment-form/)
+  assert.ok(html.indexOf('record=stock.count%3Anew') < html.indexOf('data-ui="kt-row"'))
+  assert.match(html, /record=stock.count%3Abalance-1/)
+  assert.match(html, /Cà phê rang/)
+  assert.match(html, /CF-01/)
+  assert.match(html, /LOT-2026/)
 })
-
-test('stock inventory: keeps configuration guidance and balance empty state when setup is incomplete', () => {
-  const html = renderToString(
-    inventoryScreen(
-      translate,
-      {
-        rows: [],
-        products: [],
-        locations: [],
-        inventoryLocations: [],
-        units: [],
-        lots: [],
-        action: '/admin/stock/inventory?lang=vi',
-        locationsHref: '/admin/stock/locations?lang=vi',
-      },
-      {},
-    ),
-  )
-
-  assert.doesNotMatch(html, /inventory-adjustment-form/)
-  assert.match(html, /Chưa đủ cấu hình để kiểm kê/)
-  assert.match(html, /href="\/admin\/stock\/locations\?lang=vi"/)
-  assert.match(html, /data-ui="empty"[\s\S]*?Chưa có tồn kho/)
-  assert.match(html, /Điều chỉnh tồn kho[\s\S]*?Tồn kho hiện tại/)
+test('inventory read-only collection omits count creation and renders its empty state', () => {
+  const html = renderToString(inventoryScreen(translate, { ...options, rows: [], createHref: null }, {}))
+  assert.doesNotMatch(html, /record=stock.count%3Anew|inventory-adjustment-form/)
+  assert.match(html, /Chưa có tồn kho/)
 })

@@ -115,7 +115,6 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.journals.title')}
-      description={_('account_backend.journal.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

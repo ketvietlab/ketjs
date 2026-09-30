@@ -106,7 +106,6 @@ export const accountingTermsScreen = (
       frame={frame}
       scope="partner-accounting-terms-form-page"
       title={title}
-      description={_('account_partner_backend.section.hint')}
       actions={
         <FormCluster
           label={_('account_partner_backend.section.title')}

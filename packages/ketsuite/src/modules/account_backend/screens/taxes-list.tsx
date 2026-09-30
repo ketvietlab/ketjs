@@ -141,7 +141,6 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.taxes.title')}
-      description={_('account_backend.tax.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

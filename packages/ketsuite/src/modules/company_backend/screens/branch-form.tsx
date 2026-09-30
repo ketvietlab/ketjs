@@ -91,7 +91,8 @@ export const branchFormScreen = (
       frame={frame}
       scope="branch-form-page"
       title={title}
-      description={`${company.name} · ${company.code} · ${_('company_backend.branch.operational')}`}
+      // The company the branch operates under, in the page's facts strip.
+      meta={`${company.name} · ${company.code} · ${_('company_backend.branch.operational')}`}
       status={
         detail
           ? values.active

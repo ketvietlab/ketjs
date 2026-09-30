@@ -135,18 +135,19 @@ export const lotDetailScreen = (
       })}
     />
   )
-  const description = `${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`
+  // The product and reference the lot belongs to: its identity, in the facts strip.
+  const identity = `${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`
   const page = (
     <FormPage
       variant="operational"
       frame={frame}
       scope="stock-lot-form-page"
       title={options.lot.name}
-      description={description}
       status={badge(
         options.lot.active ? _('stock_backend.lot.status.active') : _('stock_backend.lot.status.archived'),
         options.lot.active ? 'positive' : 'neutral',
       )}
+      meta={identity}
       actions={
         <FormCluster
           label={_('stock_backend.action.save')}

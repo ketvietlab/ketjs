@@ -17,7 +17,7 @@ export const mapScreen = (_: Translator, frame: Frame, options: EpicMapScreenOpt
     layout="canvas"
     translator={_}
     title={options.epicTitle}
-    subtitle={options.projectName}
+    meta={options.projectName}
     frame={frame}
     actions={inline([
       linkButton({

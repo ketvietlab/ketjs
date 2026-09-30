@@ -113,7 +113,6 @@ export const paymentsListScreen = (_: Translator, options: PaymentsListScreenOpt
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.payments.title')}
-      description={_('account_backend.payment.subtitle')}
       headerActions={
         <LinkButton
           label={_('account_backend.action.registerPayment')}

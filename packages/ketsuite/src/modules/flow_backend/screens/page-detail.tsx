@@ -118,7 +118,7 @@ export const pageDetailScreen = (
       frame={frame}
       scope="flow-page-detail-form-page"
       title={String(page.title ?? '')}
-      description={String(page.projectName ?? '')}
+      meta={String(page.projectName ?? '') || undefined}
       actions={inline([
         <FormCluster
           label={_('flow_backend.pages.document')}

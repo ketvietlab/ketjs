@@ -57,13 +57,6 @@
       [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-title"] {
       order: 1;
-      font-size: var(--kv-text-lg);
-    }
-
-    :where([data-kv-design-system])
-      [data-ui="list-page"][data-variant="operational"]
-      [data-ui="list-page-description"] {
-      order: 2;
     }
 
     :where([data-kv-design-system])

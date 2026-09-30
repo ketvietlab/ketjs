@@ -332,6 +332,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'screen.tapeChart.unassignedHint': 'Đặt phòng đã xác nhận nhưng chưa gán phòng cụ thể',
     'screen.tapeChart.previous': 'Tuần trước',
     'screen.tapeChart.next': 'Tuần sau',
+    'screen.tapeChart.weeks': 'Chọn tuần',
     'screen.tapeChart.availability': 'Xem phòng trống',
     'screen.tapeChart.legend': 'Chú giải',
     'screen.tapeChart.legendHint':
@@ -922,7 +923,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'folio.charge.cancellationByPolicy': 'Theo chính sách hủy của khách sạn',
     'folio.charge.noShowDescription': 'Khách không đến — tính theo chính sách hủy',
     'checkOutPrep.title': 'Chuẩn bị trả phòng {code}',
-    'checkOutPrep.subtitle': 'Xem lại trước khi đóng lượt ở. Trả phòng không có nghĩa là đã thu tiền.',
     'checkOutPrep.handover': 'Thông tin bàn giao',
     'checkOutPrep.blocked': 'Chưa trả phòng được cho tới khi việc này được xử lý.',
     'checkOutPrep.dueOut': 'Giờ trả theo lịch',
@@ -1555,6 +1555,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'screen.tapeChart.unassignedHint': 'Confirmed stays without a physical room assignment',
     'screen.tapeChart.previous': 'Previous week',
     'screen.tapeChart.next': 'Next week',
+    'screen.tapeChart.weeks': 'Choose week',
     'screen.tapeChart.availability': 'See free rooms',
     'screen.tapeChart.legend': 'Key',
     'screen.tapeChart.legendHint':
@@ -2147,7 +2148,6 @@ export const messages: Record<string, Record<string, Message>> = {
     'folio.charge.cancellationByPolicy': "Under the property's cancellation policy",
     'folio.charge.noShowDescription': 'Guest did not arrive — charged under the cancellation policy',
     'checkOutPrep.title': 'Departure check {code}',
-    'checkOutPrep.subtitle': 'Look before closing the stay. Checking out is not the same as being paid.',
     'checkOutPrep.handover': 'Handover',
     'checkOutPrep.blocked': 'Check-out is not possible until this is dealt with.',
     'checkOutPrep.dueOut': 'Due out',

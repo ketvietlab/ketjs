@@ -70,6 +70,7 @@ test('purchase vendor pricelists list: keeps policy action, price columns, curre
       action: '/vi/admin/purchase/vendor-pricelists',
       createHref: '/vi/admin/purchase/vendor-pricelists/new',
       currency: 'VND',
+      canSetMethod: true,
       methodFields: [
         {
           name: 'templateId',
@@ -124,6 +125,23 @@ test('purchase vendor pricelists list: keeps policy action, price columns, curre
   assert.match(html, /data-col="delay"[\s\S]*?>2</)
   assert.doesNotMatch(html, /purchase-vendor-pricelist-create|data-ui="form-page"/)
   assert.doesNotMatch(html, /mail\.chatter|data-ui="form-page-aside"/)
+})
+
+test('purchase vendor pricelists list: hides the policy form without purchase.setPurchaseMethod', () => {
+  const html = renderToString(
+    vendorPricelistsListScreen(translate, {
+      frame: {},
+      action: '/vi/admin/purchase/vendor-pricelists',
+      createHref: null,
+      currency: 'VND',
+      canSetMethod: false,
+      methodFields: [{ name: 'purchaseMethod', label: 'Chính sách kiểm soát', type: 'select', options: [] }],
+      rows: [],
+    }),
+  )
+  assert.match(html, /data-ui="list-page"/)
+  assert.doesNotMatch(html, /name="action" value="method"|name="purchaseMethod"/)
+  assert.doesNotMatch(html, /vendor-pricelists\/new|record=purchase\.vendorPrice/)
 })
 
 test('purchase vendor pricelist create: keeps all fields, defaults, scope, locale and company currency context', () => {
@@ -236,7 +254,11 @@ test('purchase vendor pricelist routes: /new keeps locale, POST redirect and leg
   })
   assert.equal(list.status, 200)
   const listHtml = await list.text()
-  assert.match(listHtml, /href="\/admin\/purchase\/vendor-pricelists\/new\?lang=vi"/)
+  // The list opens the create form in the record modal; /new stays for links and posts.
+  assert.match(
+    listHtml,
+    /href="\/admin\/purchase\/vendor-pricelists\?lang=vi&amp;record=purchase\.vendorPrice%3Anew"/,
+  )
   assert.doesNotMatch(listHtml, /purchase-vendor-pricelist-create/)
 
   const create = await e2e.client.get('/admin/purchase/vendor-pricelists/new?lang=vi', {

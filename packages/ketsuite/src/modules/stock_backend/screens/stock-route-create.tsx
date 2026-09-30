@@ -75,7 +75,6 @@ export const stockRouteCreateScreen = (
       frame={frame}
       scope="stock-route-create"
       title={_('stock_backend.stockRoute.create.title')}
-      description={_('stock_backend.stockRoute.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.stockRoute.create.title')}
