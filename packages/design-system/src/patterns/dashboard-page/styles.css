@@ -146,7 +146,6 @@
     :where([data-kv-design-system])
       [data-ui="dashboard-page-actions"]
       [data-ui="action"][data-variant="primary"] {
-      min-height: 2.75rem;
       flex: 1 1 auto;
     }
 

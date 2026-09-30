@@ -388,9 +388,9 @@
     :where([data-kv-design-system]) [data-ui="navigation-toggle"] {
       display: grid;
       place-items: center;
-      width: var(--kv-touch-target);
-      height: var(--kv-touch-target);
-      flex: 0 0 var(--kv-touch-target);
+      width: var(--kv-control-height);
+      height: var(--kv-control-height);
+      flex: 0 0 var(--kv-control-height);
       padding: 0;
       border: 0;
       border-radius: var(--kv-radius-sm);
@@ -412,11 +412,8 @@
   @media (max-width: 48rem) {
     :where([data-kv-design-system])
       [data-ui="app-navigation"]
-      :is([data-ui="navigation-close"], [data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {
+      :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {
       min-height: var(--kv-touch-target);
-    }
-    :where([data-kv-design-system]) [data-ui="navigation-close"] {
-      min-inline-size: var(--kv-touch-target);
     }
   }
 }

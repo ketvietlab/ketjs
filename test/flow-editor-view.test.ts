@@ -7,7 +7,12 @@
 // and watching text disappear, and both are pinned here so they stay found.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { documentHtml, presenceHtml } from '../packages/ketsuite/src/ui/client/live-doc-shell.tsx'
+import { renderToString } from '@ketvietlab/ketjs-view'
+import {
+  documentHtml,
+  presenceHtml,
+  liveDocShell,
+} from '../packages/ketsuite/src/ui/client/live-doc-shell.tsx'
 
 const text = (insert: string, attributes?: Record<string, unknown>) => ({ insert, attributes })
 const block = (type: string, delta: Array<{ insert: string }>, checked = false) => ({
@@ -185,4 +190,38 @@ test('flow editor: a block id becomes its anchor and only known alignments survi
     /<p data-block="p" data-index="0" id="doc-a&quot;b" style="text-align:center">centred<\/p>/,
   )
   assert.match(html, /<p data-block="p" data-index="1">plain<\/p>/)
+})
+
+test('flow editor: stored images use attachment URLs and escape alternative text', () => {
+  const html = documentHtml(
+    [{ type: 'image', delta: [], src: '/files/photo-1', alt: 'A "quote" <tag>' }],
+    'en',
+  )
+  assert.match(html, /<figure data-block="image" data-index="0" contenteditable="false"/)
+  assert.match(html, /src="\/files\/photo-1"/)
+  assert.match(html, /alt="A &quot;quote&quot; &lt;tag&gt;"/)
+  assert.equal(documentHtml([{ type: 'image', delta: [], src: 'javascript:alert(1)' }], 'en'), '')
+})
+
+test('flow editor: image action belongs to the toolbar and requires host capability', () => {
+  const html = renderToString(liveDocShell({ containerId: 'doc', lang: 'vi', images: true }))
+  assert.match(html, /role="toolbar"[\s\S]*data-flow-editor-mark="image"[\s\S]*aria-label="Chèn ảnh"/)
+  assert.match(html, /<svg[^>]+aria-hidden="true"/)
+  const plain = renderToString(liveDocShell({ containerId: 'doc' }))
+  assert.doesNotMatch(plain, /data-flow-editor-mark="image"/)
+  const disabled = renderToString(liveDocShell({ containerId: 'doc', images: true, imageDisabled: true }))
+  assert.match(disabled, /data-flow-editor-mark="image"[^>]*disabled/)
+})
+
+test('flow editor: image editing controls stay out of readonly output and sizes are bounded', () => {
+  const blocks = [{ type: 'image', delta: [], src: '/files/photo', alt: '', width: 45, align: 'center' }]
+  const publicHtml = documentHtml(blocks, 'vi')
+  assert.match(publicHtml, /style="width:45%"/)
+  assert.match(publicHtml, /data-image-align="center"/)
+  assert.doesNotMatch(publicHtml, /data-live-image-tools|data-live-image-resize|tabindex/)
+  const edit = documentHtml(blocks, 'vi', [], true)
+  assert.match(edit, /data-live-image-resize/)
+  assert.match(edit, /data-live-image-remove/)
+  assert.match(edit, /aria-label="Kích thước ảnh \(%\)"/)
+  assert.match(documentHtml([{ ...blocks[0], width: 1000 }], 'vi'), /width:100%/)
 })
