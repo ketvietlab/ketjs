@@ -14,7 +14,48 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const node = process.execPath
 const command = process.argv[2] ?? 'check'
 
+// Publish order: every package comes after the packages it depends on.
 const workspaces = [
+  { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
+  {
+    name: '@ketvietlab/ketjs-view-tools',
+    dir: 'packages/ketjs-view-tools',
+    maxPackedBytes: 100_000,
+  },
+  { name: '@ketvietlab/create-view', dir: 'packages/create-view', maxPackedBytes: 75_000 },
+  {
+    name: '@ketvietlab/design-system',
+    dir: 'packages/design-system',
+    // 0.1.30 packs 385,621 bytes (480 files): the 133-component catalogue, primitive
+    // harness and date runtime; audited archive contains only dist, docs and metadata.
+    maxPackedBytes: 410_000,
+  },
+  // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
+  // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
+  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
+  { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
+  // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
+  // filter menu, with no stray files — about half the package is source maps.
+  // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
+  // 0.1.29 packs 6,150,837 bytes: reviewed user/access-policy, product and CRM client bundles,
+  // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
+  // 0.1.30 packs 7,249,173 bytes (3,863 files): reviewed chart/LiveDoc and record
+  // bundles with source maps; no source, test, node_modules or build-cache directories.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 7_600_000 },
+  // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
+  {
+    name: '@ketvietlab/flow-ui',
+    dir: 'packages/flow-ui',
+    maxPackedBytes: 160_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/index.mjs',
+      'dist/index.d.mts',
+      'dist/styles.css',
+    ],
+  },
   {
     name: '@ketvietlab/flow-client',
     dir: 'packages/flow-client',
@@ -29,44 +70,6 @@ const workspaces = [
       'dist/server-extensions.mjs',
       'EXTENSIONS.md',
       'NOTICE',
-    ],
-  },
-  { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
-  {
-    name: '@ketvietlab/ketjs-view-tools',
-    dir: 'packages/ketjs-view-tools',
-    maxPackedBytes: 100_000,
-  },
-  { name: '@ketvietlab/create-view', dir: 'packages/create-view', maxPackedBytes: 75_000 },
-  {
-    name: '@ketvietlab/design-system',
-    dir: 'packages/design-system',
-    // The public 115-component catalogue includes its machine-readable inventory and KetAtlas adapter.
-    // 0.1.29 packs 353430 bytes (463 files): reviewed dist/catalogue/layout audit plus LICENSE, README and manifest.
-    maxPackedBytes: 375_000,
-  },
-  // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
-  // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
-  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
-  { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
-  // filter menu, with no stray files — about half the package is source maps.
-  // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
-  // 0.1.29 packs 6,150,837 bytes: reviewed user/access-policy, product and CRM client bundles,
-  // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 6_400_000 },
-  // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
-  {
-    name: '@ketvietlab/flow-ui',
-    dir: 'packages/flow-ui',
-    maxPackedBytes: 160_000,
-    requiredPaths: [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/index.mjs',
-      'dist/index.d.mts',
-      'dist/styles.css',
     ],
   },
 ]
