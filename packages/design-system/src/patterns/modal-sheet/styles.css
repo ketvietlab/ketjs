@@ -185,6 +185,11 @@
     overflow: hidden;
   }
 
+  /* Keep the tab-to-content rhythm aligned with modal content stacks. */
+  :where([data-kv-design-system]) [data-ui="modal-body"] [data-ui="tab-panel"] {
+    padding-block: var(--kv-space-4);
+  }
+
   :where([data-kv-design-system]) [data-ui="modal-actions"] {
     display: flex;
     flex-wrap: wrap;
