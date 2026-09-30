@@ -68,7 +68,7 @@
 
   /* Action hierarchy. Primary is brand-600, not brand-500: normal-size white
      labels need the stronger token to meet AA. */
-  :where([data-ui="action"], [data-control="action"]) {
+  :where([data-control="action"]:not([data-ui])) {
     display: inline-flex;
     min-block-size: var(--admin-control-height);
     align-items: center;
@@ -91,47 +91,47 @@
       transform var(--admin-motion-fast);
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-size="compact"] {
+  :where([data-control="action"]:not([data-ui]))[data-size="compact"] {
     min-block-size: var(--admin-control-height);
     padding-inline: 0.5rem;
     border-radius: var(--admin-radius-sm);
     font-size: 0.875rem;
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-size="prominent"] {
+  :where([data-control="action"]:not([data-ui]))[data-size="prominent"] {
     min-block-size: var(--admin-control-height);
     padding-inline: var(--admin-gap);
     font-size: 0.875rem;
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-variant="primary"] {
+  :where([data-control="action"]:not([data-ui]))[data-variant="primary"] {
     border-color: var(--admin-accent);
     background: var(--admin-accent);
     color: var(--admin-accent-ink);
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-variant="tertiary"] {
+  :where([data-control="action"]:not([data-ui]))[data-variant="tertiary"] {
     border-color: transparent;
     background: transparent;
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-variant="destructive"] {
+  :where([data-control="action"]:not([data-ui]))[data-variant="destructive"] {
     border-color: var(--admin-danger-line);
     background: var(--admin-danger-soft);
     color: var(--admin-danger-strong);
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-icon-only="true"] {
+  :where([data-control="action"]:not([data-ui]))[data-icon-only="true"] {
     inline-size: var(--admin-control-height);
     padding: 0;
   }
 
-  :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size="compact"] {
+  :where([data-control="action"]:not([data-ui]))[data-icon-only="true"][data-size="compact"] {
     min-block-size: var(--admin-control-height);
     inline-size: var(--admin-control-height);
   }
 
-  :where([data-ui="action"], [data-control="action"]):is(:disabled, [aria-disabled="true"]) {
+  :where([data-control="action"]:not([data-ui])):is(:disabled, [aria-disabled="true"]) {
     border-color: var(--admin-line);
     background: var(--admin-surface-subtle);
     color: var(--admin-ink-disabled);
@@ -139,7 +139,7 @@
     opacity: 0.82;
   }
 
-  :where([data-ui="action"], [data-control="action"]):active:not(:disabled, [aria-disabled="true"]) {
+  :where([data-control="action"]:not([data-ui])):active:not(:disabled, [aria-disabled="true"]) {
     transform: translateY(1px);
   }
   [data-ui="action-icon"] {
@@ -155,12 +155,6 @@
     border-inline-end-color: transparent;
     border-radius: 50%;
     animation: ket-action-spin 700ms linear infinite;
-  }
-  [data-ui="action-group"] {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--admin-gap-xs);
   }
   @keyframes ket-action-spin {
     to {
@@ -309,26 +303,6 @@
     opacity: 0.82;
   }
 
-  [data-ui="tag"] {
-    display: inline-flex;
-    min-block-size: 1.625rem;
-    align-items: center;
-    gap: var(--admin-gap-xs);
-    padding-inline: var(--admin-gap-sm);
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-sm);
-    background: var(--admin-surface-subtle);
-    color: var(--admin-ink-secondary);
-    font-size: var(--admin-size-sm);
-    font-weight: 600;
-  }
-
-  [data-ui="tag-remove"] {
-    color: inherit;
-    font-size: var(--admin-size-md);
-    line-height: 1;
-    text-decoration: none;
-  }
   [data-ui="count-badge"] {
     display: inline-grid;
     min-inline-size: 1.25rem;

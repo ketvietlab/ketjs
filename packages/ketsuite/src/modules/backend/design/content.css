@@ -574,18 +574,18 @@
   }
 
   @media (hover: hover) {
-    :where([data-ui="action"], [data-control="action"]):hover:not(:disabled, [aria-disabled="true"]),
+    :where([data-control="action"]:not([data-ui])):hover:not(:disabled, [aria-disabled="true"]),
     [data-ui="record-row"] > a:hover {
       border-color: var(--admin-line-strong);
       background: var(--admin-surface-hover);
       color: var(--admin-ink);
     }
-    :where([data-ui="action"], [data-control="action"])[data-variant="primary"]:hover:not(:disabled) {
+    :where([data-control="action"]:not([data-ui]))[data-variant="primary"]:hover:not(:disabled) {
       border-color: var(--admin-accent-hover);
       background: var(--admin-accent-hover);
       color: var(--admin-accent-ink);
     }
-    :where([data-ui="action"], [data-control="action"])[data-variant="destructive"]:hover:not(:disabled) {
+    :where([data-control="action"]:not([data-ui]))[data-variant="destructive"]:hover:not(:disabled) {
       border-color: var(--admin-danger);
       background: var(--admin-danger);
       color: #fff;
@@ -606,10 +606,10 @@
     /* A button sits in a row with the fields it submits, so it is the height of
        one. The 2.75rem touch target this used to take stood half again as tall
        as the input above it and read as a banner rather than a control. */
-    :where([data-ui="action"], [data-control="action"])[data-size] {
+    :where([data-control="action"]:not([data-ui]))[data-size] {
       min-block-size: var(--admin-field-height);
     }
-    :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size] {
+    :where([data-control="action"]:not([data-ui]))[data-icon-only="true"][data-size] {
       inline-size: var(--admin-field-height);
     }
     [data-ui="section-head"],
