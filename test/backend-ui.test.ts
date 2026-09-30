@@ -2069,6 +2069,8 @@ test('backend compatibility CSS leaves Section and ModalSheet geometry to the de
   assert.doesNotMatch(forms, /\[data-ui="(?:section(?:-[a-z-]+)?|modal(?:-[a-z-]+)?)"\]/u)
   const lists = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
   assert.doesNotMatch(lists, /\[data-ui="badge"\]/u)
+  const controls = readFileSync('packages/ketsuite/src/modules/backend/design/controls.css', 'utf8')
+  assert.doesNotMatch(controls, /\[data-ui="tag(?:-remove)?"\]/u)
   const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
   const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
   assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
