@@ -11,8 +11,10 @@ export const invoicingPolicyDefinition: RecordModalDefinition<Data> = {
   size: 'default',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/sales/invoice-policy/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/sales/invoice-policy/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) => (c.creating ? c.t('sale_backend.action.savePolicy') : String(c.data.record.name)),

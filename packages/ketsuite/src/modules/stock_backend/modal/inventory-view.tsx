@@ -13,8 +13,10 @@ export const inventoryCountDefinition: RecordModalDefinition<Data> = {
   size: 'large',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/stock/count/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/stock/count/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) => c.t('stock_backend.adjustment.title'),

@@ -96,6 +96,13 @@ export const inventoryScreen = (
   options: InventoryScreenOptions,
   frame: Frame,
 ): TemplateResult => {
+  // A count needs something to count, somewhere to count it and a unit; until
+  // then the screen points at the setup instead of offering a count that fails.
+  const configured =
+    options.products.length > 0 &&
+    options.locations.length > 0 &&
+    options.inventoryLocations.length > 0 &&
+    options.units.length > 0
   const collection = prepareCollectionTable(
     _,
     frame,
@@ -110,7 +117,7 @@ export const inventoryScreen = (
       frame={collection.frame}
       title={_('stock_backend.inventory.workspace.title')}
       headerActions={
-        options.createHref ? (
+        configured && options.createHref ? (
           <LinkButton
             href={options.createHref}
             label={_('stock_backend.adjustment.title')}
@@ -123,6 +130,22 @@ export const inventoryScreen = (
       body={
         <Stack
           items={[
+            ...(configured
+              ? []
+              : [
+                  <Notice
+                    tone="warning"
+                    title={_('stock_backend.inventory.configuration.title')}
+                    message={_('stock_backend.inventory.configuration.message')}
+                    actions={
+                      <LinkButton
+                        href={options.locationsHref}
+                        label={_('stock_backend.inventory.configuration.action')}
+                        variant="secondary"
+                      />
+                    }
+                  />,
+                ]),
             ...(options.applied
               ? [
                   <Notice

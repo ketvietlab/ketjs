@@ -1488,7 +1488,24 @@ test('design system: every KetSuite DashboardPage consumer uses the operational 
       .length
     assert.equal(contextual, calls, path)
   }
-  assert.equal(consumers, 5)
+  assert.equal(consumers, 3)
+})
+
+test('design system: every KetSuite WorkspacePage consumer uses the operational workspace and page context', () => {
+  let consumers = 0
+  for (const path of globSync('packages/ketsuite/src/modules/**/*.tsx')) {
+    const source = readFileSync(path, 'utf8')
+    const calls = [...source.matchAll(/<WorkspacePage\b/g)].length
+    if (!calls) continue
+    consumers += calls
+    const operational = [...source.matchAll(/<WorkspacePage\s+variant="operational"/g)].length
+    assert.equal(operational, calls, path)
+    const contextual = [...source.matchAll(/<WorkspacePage\s+variant="operational"\s+(?:frame|context)=/g)]
+      .length
+    assert.equal(contextual, calls, path)
+  }
+  // Sales, purchase and stock overviews.
+  assert.equal(consumers, 3)
 })
 
 test('design system: every KetSuite BoardPage consumer uses the operational workspace and page context', () => {

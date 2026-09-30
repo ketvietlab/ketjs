@@ -8323,7 +8323,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system-page-header.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-007"
     },
     {

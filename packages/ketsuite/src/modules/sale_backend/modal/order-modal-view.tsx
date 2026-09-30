@@ -181,8 +181,10 @@ export const saleOrderModalDefinition: RecordModalDefinition<SaleOrderModalData>
   size: 'large',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/sale/record/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/sales/record/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) => (c.creating ? t(c, 'action.create') : String(c.data.record.name)),

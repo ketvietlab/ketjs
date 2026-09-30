@@ -168,8 +168,10 @@ export const purchaseOrderModalDefinition: RecordModalDefinition<PurchaseOrderMo
   size: 'large',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/purchase/record/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/purchase/record/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) => (c.creating ? t(c, 'action.createRfq') : String(c.data.record.name)),
