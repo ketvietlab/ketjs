@@ -347,6 +347,42 @@
   }
 
   @media (max-width: 47.9375rem) {
+    /* One line cannot hold search, facets and pager on a phone. Kept on one, the
+       facets were pushed past the screen edge and stacked into a tall empty band.
+       Search takes its own line, facets wrap on the next, the pager ends the row. */
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-chrome-row"]:is([data-row="query"], [data-row="tail"]) {
+      flex-wrap: wrap;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-search"] {
+      flex-basis: 100%;
+      min-width: 0;
+      max-width: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-chrome-row"][data-row="tail"] {
+      flex: 1 1 100%;
+      margin-left: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-chrome-row"][data-row="filters"] {
+      flex: 1 1 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-chrome-row"][data-row="meta"] {
+      margin-left: auto;
+    }
+
     :where([data-kv-design-system])
       [data-ui="list-chrome"][data-pattern="list-chrome"]
       [data-ui="list-sort"] {

@@ -368,4 +368,186 @@
     [data-ui="row-link"] {
     padding-block: 0.3125rem;
   }
+
+  /* Short values read as one token: a badge, a date, a code, an amount or a name
+     broken over two lines reads as two values. They keep their width and the
+     text columns wrap instead; past the table's width the viewport scrolls. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]:is(
+      [data-kind="status"],
+      [data-kind="date"],
+      [data-kind="identifier"],
+      [data-kind="number"],
+      [data-kind="currency"],
+      [data-kind="person"]
+    ),
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]
+    [data-ui="badge"] {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  /* `width` sizes the column from its header: narrow shrinks to its content,
+     medium and wide keep a text column readable beside the fixed ones. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="col"][data-width="narrow"] {
+    width: 1%;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="col"][data-width="medium"] {
+    min-width: 10rem;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="col"][data-width="wide"] {
+    min-width: 16rem;
+  }
+
+  /* Stacked rows. These carry the pattern and the stack flag so they outrank the
+     table rules above; scoped to the attribute alone they lost to them, and each
+     cell kept its fixed row height and drew over the next. */
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"] {
+      overflow: hidden;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      > [data-ui="table"] {
+      display: block;
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      > [data-ui="table"]
+      > thead {
+      display: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      > [data-ui="table"]
+      > tbody {
+      display: block;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="row"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+      padding: var(--kv-space-3);
+      border-bottom: 1px solid var(--kv-table-border);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="row"]:last-child {
+      border-bottom: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="group-row"],
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="group-pager"] {
+      display: block;
+      height: auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="group-cell"],
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="group-pager"]
+      td {
+      display: block;
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="cell"] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--kv-space-2);
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      height: auto;
+      padding: var(--kv-space-2) 0;
+      border: 0;
+      white-space: normal;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="cell"]::before {
+      content: attr(data-label);
+      color: var(--kv-text-muted);
+      font-size: var(--kv-text-sm);
+      font-weight: var(--kv-weight-normal);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="cell"]:first-child,
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="select-cell"]
+      + [data-ui="cell"] {
+      display: block;
+      font-weight: var(--kv-weight-semibold);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="cell"]:first-child::before,
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="select-cell"]
+      + [data-ui="cell"]::before {
+      display: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="select-cell"] {
+      display: flex;
+      justify-content: flex-start;
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      height: auto;
+      padding: var(--kv-space-2) 0;
+      border: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="cell"][data-linked="true"] {
+      padding: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"]
+      [data-ui="row-link"] {
+      min-height: auto;
+      padding: var(--kv-space-2) 0;
+    }
+  }
 }
