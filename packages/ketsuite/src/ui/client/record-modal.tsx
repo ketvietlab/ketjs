@@ -563,6 +563,7 @@ export const createRecordModal =
     const dialog = signal<{ name: string; params: Record<string, string> } | null>(null)
     const version = signal(0)
     const viewState = signal<Record<string, string>>({})
+    const dialogViewState = signal<Record<string, string>>({})
     // What the last preview command answered. One at a time: a second preview
     // replaces the first, and anything that moves the layer clears it, so a
     // consequence is never read beside a selection it was not computed from.
@@ -636,7 +637,8 @@ export const createRecordModal =
         busy: busy(),
         dialog: dialog(),
         href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
-        state: (key, fallback = '') => viewState()[key] ?? fallback,
+        state: (key, fallback = '') =>
+          (scope === 'dialog' ? dialogViewState()[key] : undefined) ?? viewState()[key] ?? fallback,
       }
       const tabs = visibleTabs(base)
       if (tabs.length && !tabs.some((tab) => tab.id === current.tab)) base.tab = tabs[0]!.id
@@ -823,6 +825,7 @@ export const createRecordModal =
         saved.set(false)
         recordDrafts.set(emptyDraftState())
         dialogDrafts.set(emptyDraftState())
+        dialogViewState.set({})
         viewState.set({})
         outcome.set(null)
         dialog.set(null)
@@ -833,6 +836,7 @@ export const createRecordModal =
       if (sameRecord && entryDialog && definition.dialogs?.[entryDialog]) {
         keepAllDrafts()
         dialogDrafts.set(emptyDraftState())
+        dialogViewState.set({})
         dialog.set({ name: entryDialog, params: {} })
       }
       open.set({ id, tab: nextTab })
@@ -868,6 +872,7 @@ export const createRecordModal =
       saved.set(false)
       recordDrafts.set(emptyDraftState())
       dialogDrafts.set(emptyDraftState())
+      dialogViewState.set({})
       viewState.set({})
       outcome.set(null)
       status.set('idle')
@@ -901,6 +906,7 @@ export const createRecordModal =
             recordModalHref(location.href, { kind: definition.kind, id: current.id, tab: current.tab }),
           )
         dialogDrafts.set(emptyDraftState())
+        dialogViewState.set({})
         issues.set([])
         outcome.set(null)
         afterRender(() => (target?.isConnected ? target : null))
@@ -1003,8 +1009,10 @@ export const createRecordModal =
           version.set(version() + 1)
           return
         }
-        if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
-        else recordDrafts.set(emptyDraftState())
+        if (scope === 'dialog') {
+          dialogDrafts.set(emptyDraftState())
+          dialogViewState.set({})
+        } else recordDrafts.set(emptyDraftState())
         if (command.clearRecordDrafts?.length)
           recordDrafts.set(resetRecordDraftFields(recordDrafts(), command.clearRecordDrafts))
         // A command that stays in its layer leaves its answer for the view, which is
@@ -1042,6 +1050,7 @@ export const createRecordModal =
         if (after === 'open') {
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
+          dialogViewState.set({})
           // Replace `:new` in the address bar before the collection refreshes: the
           // shell re-fetches `location.href`, which must already name the new record.
           if (createdId) show(createdId, command.openTab ?? null, 'replace')
@@ -1056,6 +1065,7 @@ export const createRecordModal =
           dialogReturnFocus = null
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
+          dialogViewState.set({})
           history.replaceState(
             history.state ?? {},
             '',
@@ -1069,6 +1079,7 @@ export const createRecordModal =
           dialogReturnFocus = null
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
+          dialogViewState.set({})
           show(current.id, after.tab, 'replace')
           await load(current.id)
         } else {
@@ -1076,6 +1087,7 @@ export const createRecordModal =
           dialogReturnFocus = after.dialog && submitter instanceof HTMLElement ? submitter : null
           dialog.set(after.dialog ? { name: after.dialog, params: {} } : null)
           dialogDrafts.set(emptyDraftState())
+          dialogViewState.set({})
           await load(current.id, true)
           afterRender(() => (target?.isConnected ? target : null))
         }
@@ -1259,8 +1271,9 @@ export const createRecordModal =
                     store.set(resetRecordDraftFields(store(), names))
                   }
                 }
-                viewState.set({
-                  ...viewState(),
+                const stateStore = dialog() ? dialogViewState : viewState
+                stateStore.set({
+                  ...stateStore(),
                   [stateControl.getAttribute('data-record-state-trigger') ??
                     stateControl.getAttribute('data-record-state') ??
                     '']: stateControl.getAttribute('data-record-value') ?? '',
@@ -1277,6 +1290,7 @@ export const createRecordModal =
                     ? focused
                     : opener.querySelector<HTMLElement>(focusable)
                 dialogDrafts.set(emptyDraftState())
+                dialogViewState.set({})
                 const params: Record<string, string> = {}
                 for (const [key, value] of Object.entries(opener.dataset))
                   if (key.startsWith('recordParam') && value !== undefined)
@@ -1458,7 +1472,8 @@ export const createRecordModal =
                 : null)
             if ((control instanceof HTMLSelectElement || control instanceof HTMLInputElement) && stateKey) {
               keepAllDrafts()
-              viewState.set({ ...viewState(), [stateKey]: control.value })
+              const stateStore = dialog() ? dialogViewState : viewState
+              stateStore.set({ ...stateStore(), [stateKey]: control.value })
               return
             }
             if (

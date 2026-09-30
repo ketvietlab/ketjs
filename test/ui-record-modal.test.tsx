@@ -664,3 +664,15 @@ test('record modal: a section-composed form does not reserve an empty field grid
   )
   assert.match(withFields, /data-ui="form-grid"/)
 })
+
+test('record modal: child view state is isolated and cleared with its draft lifecycle', () => {
+  assert.match(runtime, /scope === 'dialog' \? dialogViewState\(\)\[key\] : undefined/u)
+  assert.equal(
+    (runtime.match(/const stateStore = dialog\(\) \? dialogViewState : viewState/gu) ?? []).length,
+    2,
+  )
+  const resets = [...runtime.matchAll(/dialogDrafts\.set\(emptyDraftState\(\)\)/gu)]
+  assert.ok(resets.length > 0)
+  for (const reset of resets)
+    assert.match(runtime.slice(reset.index, reset.index + 120), /dialogViewState\.set\(\{\}\)/u)
+})
