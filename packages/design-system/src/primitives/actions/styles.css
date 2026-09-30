@@ -6,7 +6,7 @@
     min-height: var(--kv-control-height);
     align-items: center;
     justify-content: center;
-    gap: 0.4375rem;
+    gap: var(--kv-space-2);
     padding-inline: var(--kv-space-3);
     border: 1px solid var(--kv-border-default);
     border-radius: var(--kv-radius-sm);
@@ -113,6 +113,7 @@
 
   :where([data-kv-design-system]) [data-ui="action-leading"] {
     display: inline-grid;
+    flex: none;
     width: 1rem;
     height: 1rem;
     place-items: center;
@@ -127,6 +128,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="action-spinner"] {
+    flex: none;
     width: 0.8rem;
     height: 0.8rem;
     border: 2px solid currentcolor;
