@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15480
+    "cssLines": 15487
   },
   "rows": [
     {
@@ -12013,13 +12013,14 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 232,
+      "lines": 239,
       "hooks": [
         "list-page",
         "list-page-actions",
         "list-page-body",
         "list-page-context",
         "list-page-controls",
+        "list-page-description",
         "list-page-eyebrow",
         "list-page-footer",
         "list-page-header",

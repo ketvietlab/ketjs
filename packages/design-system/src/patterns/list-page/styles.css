@@ -49,6 +49,13 @@
     line-height: var(--kv-leading-tight);
   }
 
+  :where([data-kv-design-system]) [data-ui="list-page-description"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-base);
+    line-height: var(--kv-leading-normal);
+  }
+
   :where([data-kv-design-system]) :is([data-ui="list-page-actions"], [data-ui="list-page-tools"]) {
     display: flex;
     flex: 0 0 auto;
