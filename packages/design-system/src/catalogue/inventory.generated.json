@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15736
+    "cssLines": 15735
   },
   "rows": [
     {
@@ -8507,6 +8507,7 @@
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system.test.tsx",
         "test/global-search-launcher.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
@@ -11711,7 +11712,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 554,
+      "lines": 556,
       "hooks": [
         "card-actions",
         "card-body",
@@ -11973,7 +11974,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 235,
+      "lines": 232,
       "hooks": [
         "list-page",
         "list-page-actions",
