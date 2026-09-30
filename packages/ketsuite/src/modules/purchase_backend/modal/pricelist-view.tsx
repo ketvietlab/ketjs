@@ -63,8 +63,10 @@ export const vendorPricelistDefinition: RecordModalDefinition<Data> = {
   size: 'large',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/purchase/vendor-price/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/purchase/vendor-price/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) =>

@@ -101,8 +101,10 @@ export const transferModalDefinition: RecordModalDefinition<Data> = {
   size: 'large',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
-    route: (id, creating) =>
-      `/admin/stock/transfer/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+    route: (id, creating) => {
+      const record = creating ? 'new' : encodeURIComponent(id)
+      return `/admin/stock/transfer/${record}/context?lang=${lang()}`
+    },
     query: ['company', 'branch'],
   },
   title: (c) => (c.creating ? t(c, 'transfer.create.title') : String(c.data.record.name)),

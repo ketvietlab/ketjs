@@ -96,8 +96,10 @@ export const stockConfigurationDefinition = (key: string): RecordModalDefinition
     size: 'large',
     labels: () => USER_RECORD_MODAL_LABELS[lang()],
     context: {
-      route: (id, creating) =>
-        `/admin/stock/record/${key}/${creating ? 'new' : encodeURIComponent(id)}/context?lang=${lang()}`,
+      route: (id, creating) => {
+        const record = creating ? 'new' : encodeURIComponent(id)
+        return `/admin/stock/record/${key}/${record}/context?lang=${lang()}`
+      },
       query: ['company', 'branch'],
     },
     title: (c) =>
