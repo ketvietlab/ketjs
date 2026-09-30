@@ -243,7 +243,10 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     ['another record', /outcome\.set\(null\)\n        dialog\.set/u],
     ['a closed modal', /outcome\.set\(null\)\n      status\.set\('idle'\)/u],
     ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
-    ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
+    [
+      'an opened dialog',
+      /outcome\.set\(null\)\n                saved\.set\(false\)\n                dialog\.set\(\{ name: opener/u,
+    ],
     ['another tab', /outcome\.set\(null\)\n              show\(/u],
     ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
   ] as const)
