@@ -90,8 +90,9 @@ returns them exactly where they were.
 ### Option groups
 
 `checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
-fields with those types) keep one label on the left and the options on the right,
-each option's text after its control. `optionsOrientation` sets how the options flow:
+fields with those types) keep one label on the left and the options on the right
+from tablet width up (above them below it, as every field does), each option's text
+after its control. `optionsOrientation` sets how the options flow:
 
 - `horizontal` (default): options wrap on one line. Use for a few short choices.
 - `vertical`: one option per line, rendered as `data-orientation="vertical"` on
@@ -292,9 +293,10 @@ Linked cells are display-only. Associate `selection.form` and `bulk.form` with t
 same native form to submit selected IDs and the bulk command. Selection syncing
 and select-all remain application runtime responsibilities.
 
-Forms keep labels on the left and controls on the right, including on mobile.
-Help and errors align below the control. Narrow panels reduce the number of field
-pairs per row without stacking labels above inputs. Native inputs support `readOnly`,
+From tablet width (48rem) up, a form keeps each label on the left of its control,
+with help and errors below the control. Below tablet width, and in any column
+narrower than 28rem such as a side panel, each label sits above its control
+(LAYOUT.md L7). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
 `min` and `max`; choices can be disabled individually, and invalid nested groups
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.

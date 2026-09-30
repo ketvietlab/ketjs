@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15772
+    "cssLines": 15774
   },
   "rows": [
     {
@@ -10438,7 +10438,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/backend-ui.test.ts"],
+      "testFiles": ["test/backend-ui.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-019"
     },
     {
@@ -12039,12 +12039,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 239,
+      "lines": 209,
       "hooks": [
         "bulk-action-list",
         "cell",
         "field",
-        "field-label",
         "form-actions",
         "form-errors",
         "form-grid",
@@ -12124,7 +12123,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 168,
+      "lines": 200,
       "hooks": [
         "field",
         "field-control",
