@@ -22,7 +22,7 @@ export type QuotationListRow = Record<string, unknown>
 export type QuotationsListScreenOptions = {
   rows: QuotationListRow[]
   /** Localized `/admin/sales/quotations/new` URL, including retained list state. */
-  createHref: string
+  createHref: string | null
   /** Locale-only suffix used by record and report links. */
   detailSuffix: string
   /** The quotation document, when it is installed and published. */
@@ -132,7 +132,9 @@ export const quotationsListScreen = (
       frame={collection.frame}
       title={_('sale_backend.quotation.title')}
       headerActions={
-        <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame, undefined, selection)}
       controls={collectionControls(_, _('sale_backend.quotation.title'), collection.frame)}

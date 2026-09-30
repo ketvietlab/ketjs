@@ -22,7 +22,7 @@ import { missingSetup } from './shared.tsx'
 export type RfqsListScreenOptions = {
   frame: Frame
   rows: PurchaseOrderListRow[]
-  createHref: string
+  createHref: string | null
   detailSuffix: string
   total?: number
   setup?: { pickingTypes: number; vendors: number }
@@ -60,11 +60,13 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
       frame={collection.frame}
       title={_('purchase_backend.rfqs.title')}
       headerActions={
-        <LinkButton
-          label={_('purchase_backend.action.createRfq')}
-          href={options.createHref}
-          variant="primary"
-        />
+        options.createHref ? (
+          <LinkButton
+            label={_('purchase_backend.action.createRfq')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : null
       }
       actions={collectionActions(_, collection.frame)}
       controls={collectionControls(_, _('purchase_backend.rfqs.title'), collection.frame)}

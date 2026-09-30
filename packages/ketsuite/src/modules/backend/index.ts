@@ -1,3 +1,4 @@
+export { currentCompanyContext } from './current-company.ts'
 // The backend UI.
 //
 // Deliberately NOT a theme. A storefront theme is a stranger's code, so it is
