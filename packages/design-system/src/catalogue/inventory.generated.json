@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15736
+    "cssLines": 15862
   },
   "rows": [
     {
@@ -8507,6 +8507,7 @@
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system.test.tsx",
         "test/global-search-launcher.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
@@ -11863,8 +11864,9 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/data-table/styles.css",
-      "lines": 371,
+      "lines": 553,
       "hooks": [
+        "badge",
         "cell",
         "col",
         "group-cell",
@@ -11916,7 +11918,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-chrome/styles.css",
-      "lines": 359,
+      "lines": 395,
       "hooks": [
         "bulk-action-list",
         "bulk-actions",
@@ -12042,28 +12044,19 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 209,
+      "lines": 117,
       "hooks": [
         "bulk-action-list",
-        "cell",
         "field",
         "form-actions",
         "form-errors",
         "form-grid",
-        "group-cell",
-        "group-pager",
-        "group-row",
         "list-actions",
         "list-chrome-row",
         "list-search",
         "pager-actions",
         "pager-pages",
-        "record-form",
-        "row",
-        "row-link",
-        "select-cell",
-        "table",
-        "table-scroll"
+        "record-form"
       ]
     },
     {

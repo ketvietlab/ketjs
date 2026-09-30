@@ -884,8 +884,51 @@ test('design system: stacked tables own labels and release fixed desktop row hei
   for (const hook of ['row', 'cell']) {
     assert.match(
       css,
-      new RegExp(`\\[data-responsive="stack"\\] \\[data-ui="${hook}"\\]\\s*\\{[^}]*height: auto`),
+      new RegExp(`\\[data-responsive="stack"\\]\\s+\\[data-ui="${hook}"\\]\\s*\\{[^}]*height: auto`),
     )
+  }
+})
+
+test('design system: stacked table rules outrank the table rules they replace', () => {
+  const tableCss = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8')
+  const pattern = '[data-ui="table-scroll"][data-pattern="data-table"]'
+  // Scoped to the stack flag alone, a rule loses to the pattern-scoped table rule for
+  // the same hook: cells kept their fixed row height and drew over the next row.
+  const stack = tableCss.slice(tableCss.indexOf('@media (max-width: 48rem)'))
+  const selectors = [...stack.matchAll(/([^{}]+)\{[^{}]*\}/g)].map(([, selector = '']) => selector)
+  assert.ok(selectors.length > 10)
+  for (const selector of selectors.flatMap((list) => list.split(/,(?![^(]*\))/))) {
+    assert.ok(selector.includes(`${pattern.slice(0, -1)}][data-responsive="stack"]`), selector.trim())
+  }
+  // No other stylesheet restyles a stacked table behind the pattern's back.
+  for (const path of globSync('packages/design-system/src/**/*.css')) {
+    if (path.endsWith('data-table/styles.css') || path.includes('ket-table')) continue
+    // `:not(...)` only keeps a rule off stacked tables, so it is not a restyle.
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /(?<!:not\()\[data-responsive="stack"\]/, path)
+  }
+  // With selection the first cell is the checkbox, so the row's title is the cell after it.
+  assert.match(stack, /\[data-ui="select-cell"\]\s+\+\s+\[data-ui="cell"\]::before \{\s*display: none;/)
+})
+
+test('design system: a list toolbar wraps on a phone instead of pushing facets off screen', () => {
+  const chrome = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const phone = chrome.slice(chrome.indexOf('@media (max-width: 47.9375rem)'))
+  assert.match(phone, /:is\(\[data-row="query"\], \[data-row="tail"\]\) \{\s*flex-wrap: wrap;/)
+  assert.match(phone, /\[data-ui="list-search"\] \{\s*flex-basis: 100%;/)
+  assert.match(phone, /\[data-row="filters"\] \{\s*flex: 1 1 100%;/)
+})
+
+test('design system: short table values do not break across lines', () => {
+  const tableCss = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8')
+  const rule = tableCss.match(/\[data-ui="cell"\]:is\(([^)]*)\),[^{]*\[data-ui="badge"\] \{([^}]*)\}/)
+  assert.ok(rule, 'one rule covers the short kinds and badges')
+  for (const kind of ['status', 'date', 'identifier', 'number', 'currency', 'person']) {
+    assert.match(rule[1] ?? '', new RegExp(`\\[data-kind="${kind}"\\]`), kind)
+  }
+  assert.match(rule[2] ?? '', /white-space: nowrap;\s*overflow-wrap: normal;/)
+  // The column widths the API offers are drawn, not ignored.
+  for (const width of ['narrow', 'medium', 'wide']) {
+    assert.match(tableCss, new RegExp(`\\[data-ui="col"\\]\\[data-width="${width}"\\] \\{`), width)
   }
 })
 
