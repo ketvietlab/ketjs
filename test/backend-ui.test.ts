@@ -958,7 +958,13 @@ const MODULE_STYLESHEETS = [
 ]
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+  const publicComponentCss = [
+    'packages/design-system/src/patterns/modal-sheet/styles.css',
+    'packages/design-system/src/layouts/layout/styles.css',
+    'packages/design-system/src/primitives/status/styles.css',
+    'packages/design-system/src/primitives/actions/styles.css',
+  ]
+  const css = [...STYLESHEETS, ...publicComponentCss].map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
@@ -1636,8 +1642,14 @@ test('design density: controls and fields follow the canonical component dimensi
   const css = ADMIN_CSS
   assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
   assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
-  assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  const actions = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
+  const fields = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
+  assert.match(
+    css,
+    /\[data-control="action"\]:not\(\[data-ui\]\)[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/,
+  )
+  assert.match(fields, /\[data-ui="field-control"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
   assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
@@ -2057,4 +2069,19 @@ test('backend shell: the phone menu uses the design-system left drawer', () => {
   assert.match(mobile ?? '', /\[data-ui="navigation-layer"\] \{[\s\S]*?position: fixed/)
   assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobile ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
+})
+
+test('backend compatibility CSS leaves Section and ModalSheet geometry to the design system', () => {
+  const forms = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
+  assert.doesNotMatch(forms, /\[data-ui="(?:section(?:-[a-z-]+)?|modal(?:-[a-z-]+)?)"\]/u)
+  const lists = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.doesNotMatch(lists, /\[data-ui="badge"\]/u)
+  const controls = readFileSync('packages/ketsuite/src/modules/backend/design/controls.css', 'utf8')
+  assert.doesNotMatch(controls, /\[data-ui="(?:tag(?:-remove)?|action(?:-group)?)"\]/u)
+  const content = readFileSync('packages/ketsuite/src/modules/backend/design/content.css', 'utf8')
+  assert.doesNotMatch(content, /\[data-ui="action"\]/u)
+  const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
+  assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
+  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-lg\)/u)
 })

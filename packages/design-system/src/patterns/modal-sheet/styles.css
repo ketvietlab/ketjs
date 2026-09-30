@@ -94,7 +94,7 @@
   :where([data-kv-design-system])
     [data-ui="modal-layer"][data-presentation="dialog"]
     [data-ui="modal-sheet"][data-height="fixed"] {
-    height: calc(100dvh - var(--kv-space-12));
+    height: var(--kv-modal-fixed-height, calc(100dvh - var(--kv-space-12)));
   }
 
   :where([data-kv-design-system]) [data-ui="modal-layer"][data-mode="embedded"] [data-ui="modal-sheet"] {
@@ -183,6 +183,11 @@
   :where([data-kv-design-system]) [data-ui="modal-body"]:has(> [data-ui="tabbed-view"]) {
     min-height: 0;
     overflow: hidden;
+  }
+
+  /* Keep the tab-to-content rhythm aligned with modal content stacks. */
+  :where([data-kv-design-system]) [data-ui="modal-body"] [data-ui="tab-panel"] {
+    padding-block: var(--kv-space-4);
   }
 
   :where([data-kv-design-system]) [data-ui="modal-actions"] {
