@@ -346,7 +346,7 @@ containing the existing GET search form; local list search remains visible besid
 the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K opens global search and focuses its input when no other dialog is open.
 Escape, the close button and backdrop close search and return focus to its launcher without clearing
 the draft. The modal frame stays in an inert template until opened; its search form remains
-inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher with a 44px target and a full-screen dialog. The optional
+inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher the height of the other topbar controls and a full-screen dialog. The optional
 `search.triggerLabel`, `search.closeLabel` and `search.id` localize the launcher and close action and
 distinguish multiple catalogue shells. A native link and noscript form preserve search without JavaScript. KétSuite retains the `backend.global-topbar` fragment slot for navigation compatibility, now inside
 the main column. KétSuite no longer displays breadcrumbs. A shell with `location` hides
