@@ -90,7 +90,6 @@ export const warehousesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.warehouse.title')}
-      description={_('stock_backend.warehouse.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />

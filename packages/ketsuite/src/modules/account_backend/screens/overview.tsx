@@ -308,7 +308,6 @@ export const accountingOverviewScreen = (
       frame={options.frame}
       eyebrow={_('account_backend.dashboard.kicker')}
       title={_('account_backend.overview.title')}
-      description={`${_('account_backend.overview.subtitle')} · ${options.standard}`}
       body={stack(
         [
           <Section
@@ -350,7 +349,8 @@ export const accountingOverviewScreen = (
           />,
           <Section
             title={_('account_backend.overview.headline')}
-            description={_('account_backend.overview.headlineHint')}
+            // The standard the figures are reported under; the page header carries only the title.
+            description={`${_('account_backend.overview.headlineHint')} · ${options.standard}`}
             body={kpis(_, options)}
           />,
           <Section

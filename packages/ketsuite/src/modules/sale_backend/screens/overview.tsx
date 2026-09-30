@@ -102,7 +102,6 @@ export const overviewScreen = (
       variant="operational"
       frame={o.frame}
       title={_('sale_backend.dashboard.title')}
-      description={_('sale_backend.dashboard.subtitle')}
       actions={
         o.createHref
           ? linkButton({

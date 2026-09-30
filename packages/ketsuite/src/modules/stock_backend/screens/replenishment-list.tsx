@@ -133,7 +133,6 @@ export const replenishmentListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.replenishment.title')}
-      description={_('stock_backend.replenishment.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />

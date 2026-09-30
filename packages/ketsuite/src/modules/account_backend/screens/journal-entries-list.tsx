@@ -100,7 +100,6 @@ export const journalEntriesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.entries.title')}
-      description={_('account_backend.entry.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

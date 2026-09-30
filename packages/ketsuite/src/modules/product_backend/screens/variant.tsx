@@ -66,7 +66,8 @@ export const variantScreen = (
   // tell which of the two screens they are on.
   const values = Array.isArray(row.values) ? (row.values as Array<Record<string, unknown>>) : []
   const title = String(row.name || row.defaultCode || row.id)
-  const subtitle = [
+  // The facts that identify this product, in the page's facts strip.
+  const facts = [
     `${_('product_backend.variant.template')}: ${template.name}`,
     // The combination as attribute and value, not as the key the database stores
     // it under: "Màu sắc: Đỏ" rather than "color-red".
@@ -143,7 +144,7 @@ export const variantScreen = (
       frame={frame}
       scope="product-variant-form-page"
       title={title}
-      description={subtitle}
+      meta={facts}
       status={badge(
         selectionLabel(_, 'state', archived ? 'archived' : 'active'),
         archived ? 'neutral' : 'positive',

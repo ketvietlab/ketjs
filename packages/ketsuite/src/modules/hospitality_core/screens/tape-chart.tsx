@@ -17,6 +17,7 @@ import {
   workflowTone,
   zonedMidnight,
 } from './shared.tsx'
+import { PagerBar } from '@ketvietlab/design-system'
 import { BoardPage, shell } from '../../../ui/index.ts'
 
 /** What the viewer may start from here, rather than what they may look at. */
@@ -117,7 +118,6 @@ export const tapeChartScreen = (
       variant="operational"
       frame={frame}
       title={title}
-      description={`${day(startKey)} – ${day(lastKey)}`}
       actions={
         may.book
           ? linkButton({
@@ -129,18 +129,15 @@ export const tapeChartScreen = (
       }
       controls={
         <>
-          {linkButton({
-            label: _('hospitality_core.screen.tapeChart.previous'),
-            href: week(-dayCount),
-            variant: 'tertiary',
-            size: 'compact',
-          })}
-          {linkButton({
-            label: _('hospitality_core.screen.tapeChart.next'),
-            href: week(dayCount),
-            variant: 'tertiary',
-            size: 'compact',
-          })}
+          {/* The week on the board sits between its arrows; the page header carries only the title. */}
+          <PagerBar
+            label={_('hospitality_core.screen.tapeChart.weeks')}
+            summary={`${day(startKey)} – ${day(lastKey)}`}
+            previousHref={week(-dayCount)}
+            previousLabel={_('hospitality_core.screen.tapeChart.previous')}
+            nextHref={week(dayCount)}
+            nextLabel={_('hospitality_core.screen.tapeChart.next')}
+          />
           {linkButton({
             label: _('hospitality_core.screen.tapeChart.availability'),
             href: `/admin/hospitality/inventory?lang=${encodeURIComponent(locale)}`,

@@ -18,6 +18,8 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Adapter, ServeContext, Route, Sessions } from '@ketvietlab/ketjs'
 import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
+// The same module instance as createTenants: a hub is per adapter per module copy.
+import { notificationHub } from '../packages/ketjs/src/server/notify.ts'
 
 /**
  * One deployment, many databases. Every tenant runs the deployment's immutable
@@ -619,4 +621,111 @@ test('sessions: turning them on with tenants is no longer refused', async () => 
   const b = await bootDeployment(authed, { env: { KET_LOG: 'null', KET_SECRET: 'x' }, port: 0 })
   assert.match(await b.banner(), /identity\s+sessions \(one per tenant\)/)
   await b.close()
+})
+
+test('tenants: a listener holds its tenant open and hears that tenant only', async () => {
+  const pool = createAdapterPool({ max: 2, idleMs: 0, create: () => sqliteAdapter() })
+  const tenants = createTenants({
+    spec: { resolve: () => null, open: () => sqliteAdapter(), list: async () => ['t1', 't2', 't3'] },
+    pool,
+    manifest: compose([core]),
+    joints: () => ({}) as never,
+  })
+  try {
+    const heard: string[] = []
+    let ready = 0
+    const stop = await tenants.listen(
+      't1',
+      'ket_test',
+      (payload) => heard.push(payload),
+      () => ready++,
+    )
+    await tenants.with('t2', async () => {})
+    assert.equal(await pool.evictIdle(), 1, 'the idle tenant closes')
+    assert.deepEqual(pool.open, ['t1'], 'the listened tenant stays open')
+
+    await tenants.with('t1', async (t) => notificationHub(t.adapter).deliverLocally('ket_test', 'one'))
+    await tenants.with('t2', async (t) => notificationHub(t.adapter).deliverLocally('ket_test', 'two'))
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(heard, ['one'])
+    assert.equal(ready, 1)
+
+    const stopThree = await tenants.listen('t3', 'ket_test', () => {})
+    await assert.rejects(
+      tenants.with('t2', async () => {}),
+      /pool is full/,
+      'no listener is cut off for room',
+    )
+    await stopThree()
+    await stop()
+    await stop()
+    assert.equal(await pool.evictIdle(), 2, 'stopping gives both tenants back to the pool')
+  } finally {
+    await tenants.close()
+  }
+})
+
+test('tenants: subscribe on a tenant deployment needs the request whose tenant it is', async () => {
+  dbs.clear()
+  const heard: Array<[string, string]> = []
+  const stops: Array<() => Promise<void>> = []
+  const notifying = defineModule({
+    name: 'bell',
+    functions: {
+      ring: {
+        input: { memo: 'text' },
+        output: { ok: 'bool' },
+        handler: async (ctx, a) => {
+          await ctx.notify('ket_test', String(a.memo))
+          return { ok: true }
+        },
+      },
+    },
+  })
+  const listening = defineDeployment({
+    name: 'listening',
+    modules: [core, notifying],
+    headless: true,
+    serve: {
+      routes: (ctx) => ({
+        '/listen': async (url, req) => {
+          const tenant = ctx.tenantKeyOf(url, req)
+          stops.push(
+            await ctx.subscribe('ket_test', (payload) => heard.push([tenant, payload]), undefined, {
+              url,
+              req,
+            }),
+          )
+          return json({ tenant })
+        },
+        '/bare': async () => {
+          try {
+            await ctx.subscribe('ket_test', () => {})
+            return json({ code: null })
+          } catch (error) {
+            return json({ code: (error as { code?: string }).code })
+          }
+        },
+      }),
+      tenants: app.serve!.tenants,
+    },
+  })
+  const b = await bootDeployment(listening, { port: 0, openLog: () => nullLog() })
+  try {
+    assert.deepEqual(await get(b.port, 't1', '/bare').then((r) => r.json()), { code: 'E_NOT_SUPPORTED' })
+    assert.deepEqual(await get(b.port, 't1', '/listen').then((r) => r.json()), { tenant: 't1' })
+    const ring = (tenant: string, memo: string) =>
+      get(b.port, tenant, '/_ket/fn/bell.ring', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ memo }),
+      })
+    assert.equal((await ring('t2', 'not yours')).status, 200)
+    assert.equal((await ring('t1', 'yours')).status, 200)
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(heard, [['t1', 'yours']])
+  } finally {
+    for (const stop of stops) await stop()
+    await b.close()
+  }
 })

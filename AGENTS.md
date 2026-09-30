@@ -11,6 +11,8 @@ These rules apply to every change in this repository. The public design-system c
 - Extend an existing public component compatibly when possible. When adding a new hook, update the hook contract, catalogue/inventory, documentation, and tests in the same change.
 - `packages/flow-ui` (`@ketvietlab/flow-ui`) is a documented exception: compact work-management components authored in `.mjs` with JSDoc types, scoped under `[data-flow-ui]` with `data-flow` hooks and `--flow-*` aliases of `--kv-*` tokens. Its own `AGENTS.md` governs it. It currently re-implements roughly 40 primitives (buttons, inputs, selects, dialogs, tags, lists, tables) that design-system also provides; when changing one, move the shared contract into `packages/design-system` rather than widening the copy. It depends on ketsuite only for `@ketvietlab/ketsuite/livedoc`; that editor should become its own package so flow-ui stops pulling in ketsuite server dependencies.
 
+`packages/flow-client` is the public MIT Flow application imported from ketviet. Its existing JavaScript lives in `client/` and is syntax/lint/runtime checked as a compatibility boundary; it is not yet fully TypeScript-checked. See that package’s AGENTS.md and EXTENSIONS.md. It composes flow-ui, and is separate from the existing KetSuite server modules and their strict checks.
+
 ## Collection lists
 
 - The KetSuite shell uses `AppBrand` in the sidebar header and `AppShell.location` for the

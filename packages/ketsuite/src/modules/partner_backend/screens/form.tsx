@@ -190,7 +190,8 @@ export const partnerFormScreen = (
       variant="operational"
       frame={frame}
       title={row.name}
-      description={row.ref || _(`partner.kind.${row.kind}`)}
+      // The partner's reference, or its kind when it has none, in the page's facts strip.
+      meta={row.ref || _(`partner.kind.${row.kind}`)}
       status={status}
       actions={actions}
       body={body}

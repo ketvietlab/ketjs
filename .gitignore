@@ -94,3 +94,5 @@ packages/ketsuite/src/modules/stock_backend/client/stock-transfer-modal.mjs*
 
 packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs*
 packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs*
+
+packages/flow-client/atlas/vendor/

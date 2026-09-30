@@ -28,7 +28,6 @@ export const HOOKS = [
   'page-eyebrow',
   'page-title-row',
   'page-title',
-  'page-description',
   'page-subline',
   'page-status',
   'page-actions',

@@ -320,9 +320,10 @@ not an active modal.
 
 ### Record workspace layout
 
-Forms use inline field pairs at every width: label on the left, control on the right, with help and
-errors below the control. `RecordForm` reduces the number of field pairs per row in narrow panels;
-it never moves labels above inputs. Label text may wrap within its left column. Use `Field.readOnly` for native text/date/number
+Forms use inline field pairs from tablet width (48rem) up: label on the left, control on the right, with
+help and errors below the control. Below tablet width, and in any column narrower than 28rem such as a
+side panel, every label sits above its control. The design system decides this; a module never sets it.
+Label text may wrap within its left column. Use `Field.readOnly` for native text/date/number
 controls whose values must remain selectable and submitted; `disabled` values are not submitted by
 the browser. Selects and checkbox/radio controls have no native read-only state; use a disabled
 control plus an application-owned hidden value when submission is required. Numeric and date bounds

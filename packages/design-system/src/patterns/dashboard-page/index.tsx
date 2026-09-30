@@ -11,7 +11,6 @@ export const HOOKS = [
   'dashboard-page-title',
   'dashboard-page-subline',
   'dashboard-page-status',
-  'dashboard-page-description',
   'dashboard-page-actions',
   'dashboard-page-meta',
   'dashboard-page-body',
