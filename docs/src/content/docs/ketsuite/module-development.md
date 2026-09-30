@@ -133,6 +133,36 @@ every model, queue, storage service, or transport used by the handler.
 Backend routes call these functions through `ctx.call()`. They do not copy validation or update tables
 directly. See [Functions and effects](/ketjs/functions/) and [Form validation](/ketjs/form-validation/).
 
+### Flow capability registry
+
+Flow is an example of this structure. `packages/ketsuite/src/modules/flow/functions/index.ts`
+assembles 68 descriptors from capability groups (projects and membership, catalogs, boards,
+epics, pages, sprints, and issue reads/writes/batches/discussion/dependencies). Assembly checks
+for duplicate keys **before** assigning a descriptor; it never relies on object spread to
+resolve collisions. Each descriptor uses a named handler. The configurable entity saver has
+a named closure and remains private implementation machinery, not a generic HTTP write API.
+
+The former `operations.ts` is split by responsibility:
+
+- `domain/issue-write.ts` owns CAS, validation, tracking, and lifecycle transitions reused by
+  bulk/copy workflows and the existing public domain exports.
+- `domain/issue-bulk.ts`, `issue-transfer.ts`, `issue-dependency.ts`, `issue-discussion.ts`, and
+  `sprint-lifecycle.ts` preserve their original transaction and authorization boundaries.
+- `domain/issue-validation.ts` owns issue relationship and custom-field invariants;
+  `domain/command.ts` and `command-check.ts` hold shared command identity/refusal rules.
+- `queries/` owns issue lists, dependencies, follower status, progress, project filtering,
+  calendar boundaries, and picker queries. It does not call handlers to reuse reads.
+
+Public domain exports from `flow/index.ts` are preserved. User-facing routes still dispatch
+through `ctx.call()`. This organization changes neither grants nor schemas and does not bind
+the newer Flow client to production. In particular, bulk still returns per-task `applied` and
+`refused` outcomes, and retains its existing concurrency semantics.
+
+`test/flow-function-contracts.test.ts` compares all non-handler descriptor fields against a
+pre-refactor fixture, including effects and authority flags, checks duplicate rejection and
+public exports. Review API/permission changes before updating that fixture. Existing Flow
+integration and live PostgreSQL tests remain the behavioral regression suite.
+
 ### Shared logic and migration
 
 Do not introduce an `operations.ts` layer just to forward each function to a same-named operation.
