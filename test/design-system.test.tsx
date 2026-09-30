@@ -463,6 +463,29 @@ test('design system: titled tables use the demo card inset', () => {
   )
 })
 
+test('design system: badges and tags share the pill radius', () => {
+  const status = readFileSync('packages/design-system/src/primitives/status/styles.css', 'utf8')
+  for (const hook of ['badge', 'tag', 'count-badge']) {
+    const rule = status.split(`[data-ui="${hook}"]`)[1]?.split('}')[0] ?? ''
+    assert.match(rule, /border-radius: var\(--kv-radius-full\)/)
+  }
+})
+
+test('design system: modal and section headings retain distinct type levels', () => {
+  const section = layoutCss.split('[data-ui="section-title"]')[1]?.split('}')[0] ?? ''
+  const nested =
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8')
+      .split('[data-ui="surface-title"] {')[1]
+      ?.split('}')[0] ?? ''
+  const modal =
+    readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+      .split('[data-ui="modal-title"] {')[1]
+      ?.split('}')[0] ?? ''
+  assert.match(section, /font-size: var\(--kv-text-lg\)/)
+  assert.match(nested, /font-size: var\(--kv-text-lg\)/)
+  assert.match(modal, /font-size: var\(--kv-text-xl\)/)
+})
+
 test('design system: card surfaces use the shared radius scale', () => {
   const layouts = layoutCss
   const metricRule = layouts.match(/\[data-ui="metric"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
@@ -748,8 +771,34 @@ test('design system: canonical page titles share one dense hierarchy', () => {
     assert.match(description ?? '', /margin: 0/, `${kind}-description`)
     assert.match(description ?? '', /line-height: var\(--kv-leading-normal\)/, `${kind}-description`)
   }
-  assert.match(patterns, /--kv-page-title-size: 1\.5rem/)
-  assert.equal((patterns.match(/font-size: var\(--kv-text-lg\)/g) ?? []).length >= 4, true)
+})
+
+test('design system: every page title is 24px from tablet width and 17px below it', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  assert.match(tokens, /:root \{[^}]*--kv-page-title-size: 1\.5rem;/)
+  assert.match(
+    tokens,
+    /@media \(max-width: 47\.9375rem\) \{\s*:root \{\s*--kv-page-title-size: var\(--kv-text-lg\);\s*\}/,
+  )
+  // Density must not change the page title; only the viewport controls its size.
+  assert.deepEqual([...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]).sort(), [
+    '1.5rem',
+    'var(--kv-text-lg)',
+  ])
+  assert.doesNotMatch(patternCss, /--kv-page-title-size:/)
+
+  const identity = css.match(/\[data-kv-page-identity="title"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body
+  assert.match(identity ?? '', /font-size: var\(--kv-page-title-size\)/)
+
+  // `Page` included: no pattern gives its title another size at any width.
+  const titleHook =
+    /\[data-ui="(?:page|list-page|record-page|form-page|dashboard-page|board-page)-title"\]|\[data-kv-page-identity="title"\]/
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!titleHook.test(selector ?? '')) continue
+    for (const [declaration] of (body ?? '').matchAll(/font-size:[^;]+/g)) {
+      assert.equal(declaration, 'font-size: var(--kv-page-title-size)', selector?.trim())
+    }
+  }
 })
 
 test('design system: canonical page headers share compact responsive padding', () => {
@@ -2167,4 +2216,17 @@ test('design system: indigo information text remains legible on dark surfaces', 
   const text = luminance(color('--kv-ref-info'))
   const surface = luminance(color('--kv-ref-bg-main'))
   assert.ok((text + 0.05) / (surface + 0.05) >= 4.5)
+})
+
+test('design system: Stack gap variants own their gap above legacy backend styles', () => {
+  for (const variant of ['compact', 'loose']) {
+    const selector = `[data-ui="stack"][data-pattern="stack"][data-gap="${variant}"]`
+    const rule = css.slice(css.indexOf(selector)).split('}')[0] ?? ''
+    assert.match(rule, /gap: var\(--kv-stack-gap\);/)
+  }
+})
+
+test('design system: grouped page bodies preserve explicit Stack spacing', () => {
+  const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
+  assert.ok(grouped.includes('> [data-ui="stack"]:not([data-gap="loose"]):not([data-gap="compact"])'))
 })

@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15850
+    "cssLines": 15826
   },
   "rows": [
     {
@@ -8495,6 +8495,7 @@
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system.test.tsx",
         "test/global-search-launcher.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
@@ -11365,7 +11366,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 358,
+      "lines": 367,
       "hooks": []
     },
     {
@@ -11697,7 +11698,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 554,
+      "lines": 556,
       "hooks": [
         "card-actions",
         "card-body",
@@ -11805,7 +11806,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 164,
+      "lines": 160,
       "hooks": [
         "board-page",
         "board-page-actions",
@@ -11828,7 +11829,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 169,
+      "lines": 165,
       "hooks": [
         "action",
         "dashboard-page",
@@ -11879,7 +11880,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/form-page/styles.css",
-      "lines": 237,
+      "lines": 233,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -11940,7 +11941,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 136,
+      "lines": 135,
       "hooks": [
         "action",
         "cell",
@@ -11964,11 +11965,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 254,
+      "lines": 240,
       "hooks": [
-        "board-page",
-        "dashboard-page",
-        "form-page",
         "list-page",
         "list-page-actions",
         "list-page-body",
@@ -11984,7 +11982,6 @@
         "list-page-title-row",
         "list-page-toolbar",
         "list-page-tools",
-        "record-page",
         "row",
         "table",
         "table-scroll"
@@ -12013,7 +12010,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 131,
+      "lines": 127,
       "hooks": ["form-actions", "record-form"]
     },
     {
@@ -12066,7 +12063,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-page/styles.css",
-      "lines": 228,
+      "lines": 224,
       "hooks": [
         "action-group",
         "form-cluster",
