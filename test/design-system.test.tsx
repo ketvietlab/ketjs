@@ -749,8 +749,13 @@ test('design system: canonical page titles share one dense hierarchy', () => {
       ?.groups?.body
     assert.match(heading ?? '', /gap: var\(--kv-space-1\)/, `${kind}-heading`)
 
-    // A page header has no description (LAYOUT.md L5), so nothing styles one.
-    assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    // Operational list pages may carry one muted guidance line below the title;
+    // other page identities stay compact and do not expose that hook.
+    if (kind === 'list-page') {
+      assert.match(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    } else {
+      assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    }
   }
 })
 
