@@ -147,7 +147,6 @@ export const leavesListScreen = (
       variant="operational"
       frame={frame}
       title={_('hr_backend.leaves.title')}
-      description={_('hr_backend.leaves.subtitle')}
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, _('hr_backend.leaves.title'), frame)}
       status={`${_('hr_backend.leaves.title')}: ${String(options.total)}`}

@@ -93,7 +93,6 @@ export const allPagesScreen = (
       variant="operational"
       frame={frame}
       title={options.title}
-      description={_('flow_backend.pages.title')}
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, options.title, frame)}
       status={`${options.title}: ${String(options.total ?? options.pages.length)}`}

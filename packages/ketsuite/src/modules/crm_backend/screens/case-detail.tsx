@@ -66,7 +66,6 @@ export const permissionScreen = (_: Translator, frame: Frame): TemplateResult =>
   <RecordScreen
     translator={_}
     title={_('crm_backend.permission.title')}
-    subtitle={_('crm_backend.permission.hint')}
     frame={frame}
     context={pageTrailFromFrame(_('crm_backend.permission.title'), frame)}
     body={emptyState(_('crm_backend.permission.title'), _('crm_backend.permission.hint'))}
@@ -725,7 +724,6 @@ export const caseDetailScreen = (
     <RecordScreen
       translator={_}
       title={String(row.name)}
-      subtitle={`${String(row.partnerName ?? '—')} · ${String(row.stageName ?? '—')}`}
       frame={frame}
       context={pageTrailFromFrame(String(row.name), frame)}
       body={

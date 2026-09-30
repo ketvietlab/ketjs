@@ -1,6 +1,16 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { CardGrid, DashboardPage, linkButton, Metric, shell, stack } from '../../../ui/index.ts'
+import {
+  CardGrid,
+  WorkspacePage,
+  linkButton,
+  Metric,
+  shell,
+  stack,
+  Section,
+  dataTable,
+  emptyState,
+} from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import { missingSetup } from './shared.tsx'
@@ -8,12 +18,17 @@ import { missingSetup } from './shared.tsx'
 /** The two order facts that feed the purchase workflow counters. */
 export type PurchaseOverviewOrder = {
   state?: unknown
+  id?: unknown
+  name?: unknown
+  partnerName?: unknown
   invoiceStatus?: unknown
 }
 
 export type PurchaseOverviewSetup = {
   pickingTypes: number
   vendors: number
+  createHref?: string | null
+  rowHref?: (row: PurchaseOverviewOrder) => string
 }
 
 /**
@@ -32,15 +47,19 @@ export const purchaseOverviewScreen = (
   return shell(
     _,
     _('purchase_backend.dashboard.title'),
-    <DashboardPage
+    <WorkspacePage
       variant="operational"
       frame={frame}
       title={_('purchase_backend.dashboard.title')}
-      actions={linkButton({
-        label: _('purchase_backend.action.createRfq'),
-        href: localized('/admin/purchase/rfqs/new', locale),
-        variant: 'primary',
-      })}
+      actions={
+        setup?.createHref
+          ? linkButton({
+              label: _('purchase_backend.action.createRfq'),
+              href: setup.createHref,
+              variant: 'primary',
+            })
+          : undefined
+      }
       body={stack([
         setup ? missingSetup(_, setup) : null,
         <CardGrid
@@ -78,6 +97,30 @@ export const purchaseOverviewScreen = (
           ]}
           id={(item) => item.id}
           card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
+        />,
+        <Section
+          title={_('purchase_backend.dashboard.approvalQueue')}
+          body={
+            orders.some((row) => row.state === 'to approve')
+              ? dataTable(_, {
+                  rows: orders.filter((row) => row.state === 'to approve').slice(0, 10),
+                  id: (row) => String(row.id),
+                  rowHref: setup?.rowHref,
+                  columns: [
+                    {
+                      key: 'name',
+                      label: _('purchase_backend.field.reference'),
+                      cell: (row) => String(row.name),
+                    },
+                    {
+                      key: 'partner',
+                      label: _('purchase_backend.field.vendor'),
+                      cell: (row) => String(row.partnerName ?? '—'),
+                    },
+                  ],
+                })
+              : emptyState(_('purchase_backend.dashboard.queueEmpty'), '')
+          }
         />,
       ])}
     />,

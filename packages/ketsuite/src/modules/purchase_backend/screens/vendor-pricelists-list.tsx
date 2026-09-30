@@ -38,7 +38,8 @@ export type VendorPricelistsListScreenOptions = {
   /** Locale-aware list and policy POST endpoint. */
   action: string
   /** Locale-aware `/admin/purchase/vendor-pricelists/new` URL. */
-  createHref: string
+  createHref: string | null
+  canSetMethod?: boolean
   currency?: unknown
   invalid?: string | null
   setup?: { pickingTypes: number; vendors: number }
@@ -119,11 +120,13 @@ export const vendorPricelistsListScreen = (
       frame={collection.frame}
       title={_('purchase_backend.pricelists.title')}
       headerActions={
-        <LinkButton
-          label={_('purchase_backend.action.addVendorPrice')}
-          href={options.createHref}
-          variant="primary"
-        />
+        options.createHref ? (
+          <LinkButton
+            label={_('purchase_backend.action.addVendorPrice')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
       actions={collectionActions(_, collection.frame)}
       controls={collectionControls(_, _('purchase_backend.pricelists.title'), collection.frame)}
@@ -132,27 +135,29 @@ export const vendorPricelistsListScreen = (
         [
           rejection(_, options.invalid),
           options.setup ? missingSetup(_, options.setup) : null,
-          <Disclosure
-            summary={_('purchase_backend.method.title')}
-            body={
-              <Section
-                title={_('purchase_backend.method.title')}
-                body={
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={options.action}
-                        submit={_('purchase_backend.action.saveMethod')}
-                        submitVariant="primary"
-                        hidden={{ action: 'method' }}
-                        fields={options.methodFields}
-                      />
-                    }
-                  />
-                }
-              />
-            }
-          />,
+          options.canSetMethod ? (
+            <Disclosure
+              summary={_('purchase_backend.method.title')}
+              body={
+                <Section
+                  title={_('purchase_backend.method.title')}
+                  body={
+                    <Surface
+                      body={
+                        <RecordForm
+                          action={options.action}
+                          submit={_('purchase_backend.action.saveMethod')}
+                          submitVariant="primary"
+                          hidden={{ action: 'method' }}
+                          fields={options.methodFields}
+                        />
+                      }
+                    />
+                  }
+                />
+              }
+            />
+          ) : null,
           table,
         ],
         'loose',

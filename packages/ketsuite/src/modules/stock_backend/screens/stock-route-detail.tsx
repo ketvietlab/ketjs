@@ -194,7 +194,6 @@ export const stockRouteDetailScreen = (
       frame={frame}
       scope="stock-route-form-page"
       title={options.route.name}
-      description={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}
       status={badge(
         options.route.active
           ? _('stock_backend.stockRoute.status.active')
@@ -215,6 +214,7 @@ export const stockRouteDetailScreen = (
         />
       }
       meta={inline([
+        `${_('stock_backend.field.sequence')}: ${options.route.sequence}`,
         badge(`${_('stock_backend.stockRoute.detail.summary.rules')}: ${options.rows.length}`, 'neutral'),
         badge(`${_('stock_backend.stockRoute.detail.summary.pull')}: ${pullCount}`, 'neutral'),
         badge(`${_('stock_backend.stockRoute.detail.summary.push')}: ${pushCount}`, 'info'),

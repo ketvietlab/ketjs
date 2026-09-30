@@ -93,7 +93,6 @@ const renderContracts = (): string => {
       ListPage({
         title: markers.title,
         context: markers.context,
-        description: markers.description,
         actions: markers.actions,
         controls: markers.controls,
         status: markers.status,
@@ -105,7 +104,6 @@ const renderContracts = (): string => {
       RecordPage({
         title: markers.title,
         context: markers.context,
-        description: markers.description,
         status: markers.status,
         actions: markers.actions,
         meta: markers.meta,
@@ -120,7 +118,6 @@ const renderContracts = (): string => {
       RecordPage({
         title: markers.title,
         context: markers.context,
-        description: markers.description,
         status: markers.status,
         actions: markers.actions,
         meta: markers.meta,
@@ -133,7 +130,6 @@ const renderContracts = (): string => {
       WorkspacePage({
         title: markers.title,
         context: markers.context,
-        description: markers.description,
         status: markers.status,
         actions: markers.actions,
         controls: markers.controls,
@@ -146,7 +142,6 @@ const renderContracts = (): string => {
       WorkspacePage({
         title: markers.title,
         context: markers.context,
-        description: markers.description,
         status: markers.status,
         actions: markers.actions,
         controls: markers.controls,

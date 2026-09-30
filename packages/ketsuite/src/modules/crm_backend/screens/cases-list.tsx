@@ -125,7 +125,6 @@ export const casesListScreen = (
       frame={frame}
       context={pageTrailFromFrame(_('crm_backend.cases.title'), frame)}
       title={_('crm_backend.cases.title')}
-      description={_('crm_backend.cases.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('crm_backend.action.create')} href={options.createHref} variant="primary" />

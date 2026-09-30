@@ -13,7 +13,6 @@ export type PageIdentityProps = {
   context?: JSXChild
   eyebrow?: string | null
   title: string
-  description?: string | null
   status?: JSXChild
   actions?: JSXChild
   /** Retain action content while removing an empty or conditional identity slot from layout. */
@@ -21,15 +20,14 @@ export type PageIdentityProps = {
   meta?: JSXChild
 }
 
-type PageIdentityContentProps = PageIdentityProps & {
-  groupDescription?: boolean
-}
-
-/** The single identity band shared by every full-page component and recipe. */
-export const pageIdentityContent = (
-  kind: PageIdentityKind,
-  props: PageIdentityContentProps,
-): TemplateResult => (
+/**
+ * The single identity band shared by every full-page component and recipe.
+ *
+ * A page identity has no description: every page header keeps one height, so
+ * switching screens never moves the controls and content below it. Explain a
+ * section inside the section, or put guidance in the empty state.
+ */
+export const pageIdentityContent = (kind: PageIdentityKind, props: PageIdentityProps): TemplateResult => (
   <>
     <div data-ui={`${kind}-heading`} data-kv-page-identity="heading">
       {!!props.eyebrow && (
@@ -51,26 +49,12 @@ export const pageIdentityContent = (
           </div>
         )}
       </div>
-      {(props.groupDescription || props.status !== undefined) &&
-      (!!props.description || props.status !== undefined) ? (
+      {props.status !== undefined && (
         <div data-ui={`${kind}-subline`} data-kv-page-identity="subline">
-          {!!props.description && (
-            <p data-ui={`${kind}-description`} data-kv-page-identity="description">
-              {props.description}
-            </p>
-          )}
-          {props.status !== undefined && (
-            <span data-ui={`${kind}-status`} data-kv-page-identity="status">
-              {props.status}
-            </span>
-          )}
+          <span data-ui={`${kind}-status`} data-kv-page-identity="status">
+            {props.status}
+          </span>
         </div>
-      ) : (
-        !!props.description && (
-          <p data-ui={`${kind}-description`} data-kv-page-identity="description">
-            {props.description}
-          </p>
-        )
       )}
     </div>
     {props.meta !== undefined && (

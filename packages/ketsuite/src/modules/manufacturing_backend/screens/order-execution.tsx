@@ -116,7 +116,6 @@ export const orderScreen = (
       frame={frame}
       scope="manufacturing-order-execution-form-page"
       title={String(row.name)}
-      description={_('manufacturing_backend.orders.detail')}
       status={stateBadge(row.state)}
       meta={badge(`${_('manufacturing_backend.field.quantity')}: ${String(row.productQty)}`, 'neutral')}
       actions={

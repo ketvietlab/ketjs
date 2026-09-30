@@ -358,3 +358,26 @@ export const replenishmentListSearch = defineRowList({
   ],
   defaultSort: [{ key: 'product', dir: 'asc' }],
 })
+
+export const inventoryListSearch = defineRowList({
+  key: 'stock.inventory',
+  searchable: [{ key: 'product' }, { key: 'reference' }, { key: 'location' }, { key: 'lot' }],
+  filterable: [
+    { key: 'product', label: 'stock_backend.inventory.col.product', type: 'text' },
+    { key: 'location', label: 'stock_backend.inventory.col.location', type: 'text' },
+    { key: 'available', label: 'stock_backend.inventory.col.available', type: 'number' },
+  ],
+  groupable: [{ key: 'location', label: 'stock_backend.inventory.col.location' }],
+  sortable: [
+    { key: 'product', label: 'stock_backend.inventory.col.product' },
+    { key: 'available', label: 'stock_backend.inventory.col.available' },
+  ],
+  presets: [
+    {
+      key: 'reserved',
+      label: 'stock_backend.inventory.col.reserved',
+      group: 'availability',
+      match: (row) => Number(row.reserved) > 0,
+    },
+  ],
+})

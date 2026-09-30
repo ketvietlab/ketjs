@@ -32,7 +32,6 @@ export const rfqCreateScreen = (_: Translator, options: RfqCreateScreenOptions):
       frame={options.frame}
       scope="purchase-rfq-create-form-page"
       title={_('purchase_backend.action.createRfq')}
-      description={_('purchase_backend.rfqs.title')}
       actions={
         <FormCluster
           label={_('purchase_backend.action.createRfq')}

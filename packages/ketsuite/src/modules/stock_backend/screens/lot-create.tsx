@@ -81,7 +81,6 @@ export const lotCreateScreen = (
       frame={frame}
       scope="lot-create"
       title={_('stock_backend.lot.create.title')}
-      description={_('stock_backend.lot.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.lot.create.title')}
