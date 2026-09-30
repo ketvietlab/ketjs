@@ -66,6 +66,9 @@
 
   :where([data-kv-design-system]) [data-ui="tag"] {
     display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     min-height: 1.6rem;
     align-items: center;
     gap: var(--kv-space-1);
@@ -79,6 +82,7 @@
 
   :where([data-kv-design-system]) [data-ui="tag-remove"] {
     display: grid;
+    flex: none;
     width: 1rem;
     height: 1rem;
     place-items: center;
