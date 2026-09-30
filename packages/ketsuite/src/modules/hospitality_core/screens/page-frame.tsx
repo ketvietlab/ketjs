@@ -6,7 +6,6 @@ import type { Frame } from '../../../ui/index.ts'
 type PageFrameProps = {
   translator: Translator
   title: string
-  subtitle?: string | null
   frame: Frame
   controls?: JSXChild
   body: JSXChild
@@ -17,7 +16,6 @@ type PageFrameProps = {
 export const ListScreenFrame = ({
   translator: _,
   title,
-  subtitle,
   frame,
   body,
   controls,
@@ -31,7 +29,6 @@ export const ListScreenFrame = ({
       variant="operational"
       frame={frame}
       title={title}
-      description={subtitle ?? undefined}
       headerActions={headerActions}
       actions={collectionActions(_, frame, actions)}
       controls={collectionControls(_, title, frame, controls)}
@@ -41,13 +38,7 @@ export const ListScreenFrame = ({
   )
 }
 
-export const FormScreenFrame = ({
-  translator: _,
-  title,
-  subtitle,
-  frame,
-  body,
-}: PageFrameProps): TemplateResult =>
+export const FormScreenFrame = ({ translator: _, title, frame, body }: PageFrameProps): TemplateResult =>
   shell(
     _,
     title,
@@ -55,7 +46,6 @@ export const FormScreenFrame = ({
       variant="operational"
       frame={frame}
       title={title}
-      description={subtitle ?? undefined}
       actions={collectionActions(_, frame)}
       body={body}
     />,

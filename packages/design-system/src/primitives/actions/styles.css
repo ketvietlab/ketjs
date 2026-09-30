@@ -147,12 +147,3 @@
     }
   }
 }
-
-@layer ket.app {
-  @media (max-width: 48rem) {
-    :where([data-kv-design-system]) [data-ui="action"][data-size] {
-      min-height: var(--kv-touch-target);
-      min-width: var(--kv-touch-target);
-    }
-  }
-}

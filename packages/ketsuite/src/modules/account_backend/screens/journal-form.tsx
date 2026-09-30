@@ -65,11 +65,8 @@ export const journalFormScreen = (_: Translator, options: JournalFormScreenOptio
       frame={options.frame}
       scope="account-journal-form-page"
       title={title}
-      description={
-        editing
-          ? `${String(editing.code)} · ${String(editing.name)}`
-          : _('account_backend.journal.create.hint')
-      }
+      // The journal being edited, in the page's facts strip.
+      meta={editing ? `${String(editing.code)} · ${String(editing.name)}` : undefined}
       status={
         editing
           ? badge(

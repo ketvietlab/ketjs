@@ -1235,6 +1235,7 @@ const sources = {
     ],
     functions: {
       addLine: ['operate', 'quote-operate'],
+      updateLine: ['operate', 'quote-operate'],
       cancelOrder: ['approve', 'cancel', 'sale.domain-policy'],
       confirmOrder: ['approve', 'confirm', 'sale.domain-policy'],
       countOrders: ['read', 'view'],
@@ -1279,6 +1280,7 @@ const sources = {
     functions: {
       addMove: ['operate', 'operate'],
       adjustInventory: ['operate', 'operate'],
+      previewInventoryCount: ['read', 'operate'],
       assignCategoryRoute: ['configure', 'configure', 'stock.configuration-audit'],
       assignPicking: ['operate', 'operate'],
       assignProductRoute: ['configure', 'configure', 'stock.configuration-audit'],

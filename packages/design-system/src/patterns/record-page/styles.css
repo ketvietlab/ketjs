@@ -77,14 +77,6 @@
     gap: var(--kv-space-2);
   }
 
-  :where([data-kv-design-system]) [data-ui="record-page-description"] {
-    max-width: 48rem;
-    margin: 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
-  }
-
   :where([data-kv-design-system]) [data-ui="record-page-actions"] {
     display: flex;
     min-width: 0;

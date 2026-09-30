@@ -91,7 +91,7 @@ test('stock route detail: uses FormPage with compact state, summary and external
 
   assert.match(html, /data-ui="form-page" data-scope="stock-route-form-page" data-has-aside="false"/)
   assert.match(html, /data-ui="form-page-title"[^>]*>[\s\S]*?Giao hàng hai bước/)
-  assert.match(html, /data-ui="form-page-description"[^>]*>[\s\S]*?Thứ tự: 10/)
+  assert.match(html, /data-ui="form-page-meta"[\s\S]*?Thứ tự: 10/)
   assert.match(html, /data-ui="form-page-status"[\s\S]*?Đang hoạt động/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit"[^>]*form="stock-route-detail-form"/)
   assert.match(html, /data-ui="form-page-meta"[\s\S]*?Quy tắc: 2[\s\S]*?Kéo: 1[\s\S]*?Đẩy: 1/)

@@ -133,7 +133,6 @@ export const vendorBillsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.vendorBills.title')}
-      description={_('account_backend.vendorBill.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

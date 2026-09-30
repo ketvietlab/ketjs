@@ -1,3 +1,4 @@
+import { inventoryPreviewFunctions } from './functions/inventory-preview.ts'
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
@@ -17,10 +18,16 @@ export default defineModule({
     'product.Template': { isStorable: 'bool?', tracking: 'text?', inventoryRevision: 'int?' },
   },
   relations,
-  functions: { ...functions, ...routingFunctions, ...reportFunctions },
+  functions: { ...functions, ...routingFunctions, ...reportFunctions, ...inventoryPreviewFunctions },
   reports,
   messages: {
     vi: {
+      'error.countStorable': 'Chọn sản phẩm lưu kho.',
+      'error.countLocation': 'Chọn vị trí nội bộ hoặc trung chuyển.',
+      'error.countPositive': 'Số đếm không được âm.',
+      'error.countLot': 'Chọn lô hoặc số sê-ri đúng sản phẩm.',
+      'error.countSerial': 'Số đếm mỗi sê-ri chỉ được là 0 hoặc 1.',
+      'error.countReserved': 'Số đếm thấp hơn hàng đang giữ. Xử lý phiếu giữ hàng trước khi kiểm kê.',
       'app.title': 'Kho',
       'app.summary': 'Tồn kho, dịch chuyển và bổ sung hàng.',
       'app.category': 'Kho vận',
@@ -36,6 +43,13 @@ export default defineModule({
       'report.done': 'Đã xử lý',
     },
     en: {
+      'error.countStorable': 'Choose a storable product.',
+      'error.countLocation': 'Choose an internal or transit location.',
+      'error.countPositive': 'Count cannot be negative.',
+      'error.countLot': 'Choose a lot or serial belonging to this product.',
+      'error.countSerial': 'Count per serial must be zero or one.',
+      'error.countReserved':
+        'Count is below reserved stock. Resolve the reservations before adjusting inventory.',
       'app.title': 'Inventory',
       'app.summary': 'Stock, transfers, and replenishment.',
       'app.category': 'Inventory',

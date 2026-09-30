@@ -31,7 +31,6 @@ export const replenishmentCreateScreen = (
       frame={frame}
       scope="stock-replenishment-create"
       title={_('stock_backend.replenishment.create.title')}
-      description={_('stock_backend.replenishment.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.replenishment.create.title')}

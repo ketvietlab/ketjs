@@ -44,7 +44,6 @@ export const pipelineScreen = (
       frame={frame}
       context={pageTrailFromFrame(title, frame)}
       title={title}
-      description={_('crm_backend.pipeline.subtitle')}
       controls={
         frame.chrome ? listChrome(_, title, { ...frame.chrome, layout: 'command' }, false) : undefined
       }

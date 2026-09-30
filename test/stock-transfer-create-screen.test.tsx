@@ -40,7 +40,7 @@ test('stock transfer create: renders all creation fields in a compact FormPage',
 
   assert.equal(html.match(/data-ui="form-page"/g)?.length, 1)
   assert.match(html, /data-ui="form-page-title"[^>]*>[\s\S]*?Tạo phiếu chuyển kho/)
-  assert.match(html, /data-ui="form-page-description"[^>]*>[\s\S]*?Vị trí nguồn và đích/)
+  assert.doesNotMatch(html, /form-page-description/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit"[^>]*form="transfer-create-form"/)
   assert.match(
     html,

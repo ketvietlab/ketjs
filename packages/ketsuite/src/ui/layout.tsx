@@ -207,8 +207,6 @@ export type OperationalScreenOptions = {
   body: TemplateResult
   /** The section above the title. Defaults to the active root's name. */
   kicker?: string | null
-  /** One line on what this screen is for. Worth writing; there is no sensible default. */
-  subtitle?: string | null
   /** A semantic glyph. Defaults to the active root's. */
   icon?: string | null
   /**
@@ -226,6 +224,8 @@ export type OperationalScreenOptions = {
   actions?: JSXChild
   /** Design-system location strip. CRM and customer-care pass breadcrumbs only. */
   context?: JSXChild
+  /** A record or workspace's identifying facts, in the page's facts strip. Lists have none. */
+  meta?: JSXChild
 }
 
 const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
@@ -248,7 +248,6 @@ export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
-      description={options.subtitle}
       headerActions={options.headerActions}
       actions={collectionActions(options.translator, options.frame, options.actions)}
       controls={collectionControls(options.translator, options.title, options.frame)}
@@ -263,8 +262,8 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
       variant="operational"
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       title={options.title}
-      description={options.subtitle}
       actions={operationalActions(options)}
+      meta={options.meta}
       controller={
         options.frame.chrome
           ? listChrome(options.translator, options.title, options.frame.chrome, false)
@@ -295,8 +294,8 @@ export const workspaceScreen = (
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
-      description={options.subtitle}
       actions={operationalActions(options)}
+      meta={options.meta}
       controls={
         options.controls ??
         (options.frame.chrome

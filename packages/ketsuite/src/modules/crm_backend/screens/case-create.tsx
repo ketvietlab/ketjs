@@ -46,7 +46,6 @@ export const caseCreateScreen = (
       context={pageTrailFromFrame(title, frame)}
       scope="crm-case-create"
       title={title}
-      description={_('crm_backend.case.create.subtitle')}
       actions={
         <FormCluster
           label={title}

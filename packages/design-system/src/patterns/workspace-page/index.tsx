@@ -11,7 +11,6 @@ export const HOOKS = [
   'workspace-page-title',
   'workspace-page-subline',
   'workspace-page-status',
-  'workspace-page-description',
   'workspace-page-actions',
   'workspace-page-meta',
   'workspace-page-toolbar',
@@ -27,7 +26,6 @@ export type WorkspacePageProps = {
   /** Vertical work surfaces use flow; boards, timelines and maps use canvas. */
   layout?: 'flow' | 'canvas'
   eyebrow?: string | null
-  description?: string | null
   status?: JSXChild
   meta?: JSXChild
   actions?: JSXChild

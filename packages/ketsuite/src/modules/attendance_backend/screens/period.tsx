@@ -43,7 +43,6 @@ export const periodScreen = (
     <RecordScreen
       translator={_}
       title={_('attendance_backend.admin.title')}
-      subtitle={_('attendance_backend.admin.subtitle')}
       frame={frame}
       actions={
         options.exportHref ? (

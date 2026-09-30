@@ -113,7 +113,6 @@ export const accountsListScreen = (_: Translator, options: AccountsListScreenOpt
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.accounts.title')}
-      description={_('account_backend.account.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

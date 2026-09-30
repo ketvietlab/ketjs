@@ -37,7 +37,8 @@ export const taxFormScreen = (_: Translator, options: TaxFormScreenOptions): Tem
       frame={options.frame}
       scope="account-tax-form-page"
       title={title}
-      description={editing ? String(editing.name) : _('account_backend.tax.create.hint')}
+      // The tax being edited, in the page's facts strip.
+      meta={editing ? String(editing.name) : undefined}
       status={
         editing
           ? badge(

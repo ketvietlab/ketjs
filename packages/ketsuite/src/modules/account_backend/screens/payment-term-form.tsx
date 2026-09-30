@@ -109,7 +109,8 @@ export const paymentTermFormScreen = (
       frame={options.frame}
       scope="account-payment-term-form-page"
       title={title}
-      description={options.editing ? String(options.editing.name) : _('account_backend.term.create.hint')}
+      // The term being edited, in the page's facts strip.
+      meta={options.editing ? String(options.editing.name) : undefined}
       status={
         options.editing
           ? badge(
@@ -176,7 +177,6 @@ export const paymentTermLineFormScreen = (
       frame={options.frame}
       scope="account-payment-term-line-form-page"
       title={title}
-      description={_('account_backend.term.line.create.hint')}
       actions={
         <FormCluster
           label={title}

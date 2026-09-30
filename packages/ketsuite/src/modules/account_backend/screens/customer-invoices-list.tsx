@@ -138,7 +138,6 @@ export const customerInvoicesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.customerInvoices.title')}
-      description={_('account_backend.customerInvoice.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.action.create')} href={options.createHref} variant="primary" />
       }

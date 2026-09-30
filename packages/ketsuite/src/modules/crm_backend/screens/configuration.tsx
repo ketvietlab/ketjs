@@ -276,7 +276,6 @@ export const configurationScreen = (
       frame={frame}
       context={pageTrailFromFrame(_('crm_backend.configuration.title'), frame)}
       title={_('crm_backend.configuration.title')}
-      description={_('crm_backend.configuration.subtitle')}
       headerActions={
         options.canCreate
           ? linkButton({
