@@ -248,11 +248,6 @@
     grid-column: 2;
     align-self: end;
   }
-  [data-ui="form-grid"] {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--admin-gap-sm) var(--admin-gap-lg);
-  }
   [data-ui="form-field"] {
     display: grid;
     min-inline-size: 0;
