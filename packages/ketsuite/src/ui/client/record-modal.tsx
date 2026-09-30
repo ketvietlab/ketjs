@@ -624,6 +624,7 @@ export const createRecordModal =
       return base
     }
 
+    let pendingEntryDialog: string | null = null
     const load = async (id: string, quiet = false): Promise<void> => {
       request?.abort()
       const controller = new AbortController()
@@ -662,6 +663,11 @@ export const createRecordModal =
         if (definition.cache !== false) remember(id, result.value)
         envelope.set(result.value)
         status.set('ready')
+        if (pendingEntryDialog && definition.dialogs?.[pendingEntryDialog]) {
+          dialog.set({ name: pendingEntryDialog, params: {} })
+          afterRender()
+        }
+        pendingEntryDialog = null
       } catch (caught) {
         if (controller.signal.aborted || (caught as Error)?.name === 'AbortError') return
         failure.set('recordModal.loadFailed')
@@ -785,12 +791,14 @@ export const createRecordModal =
       tab: string | null,
       how: 'push' | 'replace' | 'none',
       preferredFocus?: () => HTMLElement | null,
+      entryDialog?: string | null,
     ): void => {
       const current = open()
       const sameRecord = current?.id === id
       const nextTab = tab ?? (sameRecord ? current.tab : '')
       if (!sameRecord) {
         tallestRecordHeight = 0
+        pendingEntryDialog = entryDialog ?? null
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
         issues.set([])
         saved.set(false)
@@ -803,8 +811,18 @@ export const createRecordModal =
         envelope.set(null)
         void load(id)
       }
+      if (sameRecord && entryDialog && definition.dialogs?.[entryDialog]) {
+        keepAllDrafts()
+        dialogDrafts.set(emptyDraftState())
+        dialog.set({ name: entryDialog, params: {} })
+      }
       open.set({ id, tab: nextTab })
-      const href = recordModalHref(location.href, { kind: definition.kind, id, tab: nextTab || null })
+      const href = recordModalHref(location.href, {
+        kind: definition.kind,
+        id,
+        tab: nextTab || null,
+        dialog: entryDialog,
+      })
       if (how === 'push') {
         // The shell's own navigation snapshots scroll onto the entry it leaves
         // before pushing (`saveScroll` in packages/ketjs/src/server/http.ts) so
@@ -856,6 +874,13 @@ export const createRecordModal =
         const target = dialogReturnFocus
         dialogReturnFocus = null
         dialog.set(null)
+        const current = open()
+        if (current)
+          history.replaceState(
+            history.state ?? {},
+            '',
+            recordModalHref(location.href, { kind: definition.kind, id: current.id, tab: current.tab }),
+          )
         dialogDrafts.set(emptyDraftState())
         issues.set([])
         outcome.set(null)
@@ -1010,6 +1035,11 @@ export const createRecordModal =
           dialogReturnFocus = null
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
+          history.replaceState(
+            history.state ?? {},
+            '',
+            recordModalHref(location.href, { kind: definition.kind, id: current.id, tab: current.tab }),
+          )
           await load(current.id)
           afterRender(() => (target?.isConnected ? target : null))
         } else if (after === 'refresh') await load(current.id, true)
@@ -1194,15 +1224,16 @@ export const createRecordModal =
                 return
               }
               const stateControl = element?.closest<HTMLElement>(
-                'button[data-record-state], a[data-record-state]',
+                'button[data-record-state], a[data-record-state], [data-record-state-trigger]',
               )
               if (stateControl) {
                 event.preventDefault()
                 keepAllDrafts()
                 viewState.set({
                   ...viewState(),
-                  [stateControl.getAttribute('data-record-state') ?? '']:
-                    stateControl.getAttribute('data-record-value') ?? '',
+                  [stateControl.getAttribute('data-record-state-trigger') ??
+                    stateControl.getAttribute('data-record-state') ??
+                    '']: stateControl.getAttribute('data-record-value') ?? '',
                 })
                 return
               }
@@ -1259,7 +1290,7 @@ export const createRecordModal =
               if (current?.id === target.id) void load(current.id)
             }
             if (current?.id === target.id) {
-              if ((target.tab ?? '') === current.tab) return
+              if ((target.tab ?? '') === current.tab && !target.dialog) return
               // Switching tab is not discarding: what was typed rides along as drafts,
               // which the views read back, so no prompt stands between two tabs.
               keepDrafts(recordLayer(), 'record')
@@ -1275,7 +1306,7 @@ export const createRecordModal =
               )
               return
             }
-            show(target.id, target.tab ?? null, 'push')
+            show(target.id, target.tab ?? null, 'push', undefined, target.dialog)
           },
           // Capture: the navigation layer listens on the document too, and was
           // installed first, so a bubbling listener would see the page fetched.
@@ -1296,7 +1327,7 @@ export const createRecordModal =
             const target = readRecordModalTarget(url)
             if (!target || target.kind !== definition.kind) return
             event.preventDefault()
-            show(target.id, target.tab ?? null, 'push')
+            show(target.id, target.tab ?? null, 'push', undefined, target.dialog)
           },
           { signal: lifetime, capture: true },
         )
@@ -1402,7 +1433,8 @@ export const createRecordModal =
             if (
               control instanceof HTMLInputElement &&
               control.type === 'file' &&
-              control.hasAttribute('data-record-submit') &&
+              (control.hasAttribute('data-record-submit') ||
+                control.form?.hasAttribute('data-record-dropzone')) &&
               control.files?.length
             )
               control.form?.requestSubmit()
@@ -1506,7 +1538,7 @@ export const createRecordModal =
             const mine = target?.kind === definition.kind
             if (!mine && !open()) return
             event.preventDefault()
-            if (mine && target) show(target.id, target.tab ?? null, 'none')
+            if (mine && target) show(target.id, target.tab ?? null, 'none', undefined, target.dialog)
             else hide('none')
           },
           { signal: lifetime },
@@ -1520,13 +1552,15 @@ export const createRecordModal =
           'ket:navigation-complete',
           () => {
             const target = readRecordModalTarget(location.href)
-            if (target?.kind === definition.kind && !open()) show(target.id, target.tab ?? null, 'none')
+            if (target?.kind === definition.kind && !open())
+              show(target.id, target.tab ?? null, 'none', undefined, target.dialog)
           },
           { signal: lifetime },
         )
 
         const initial = readRecordModalTarget(location.href)
-        if (initial?.kind === definition.kind) show(initial.id, initial.tab ?? null, 'none')
+        if (initial?.kind === definition.kind)
+          show(initial.id, initial.tab ?? null, 'none', undefined, initial.dialog)
 
         lifetime.addEventListener('abort', () => {
           request?.abort()
@@ -1562,6 +1596,7 @@ export {
   RecordActionForm,
   RecordCloseTrigger,
   RecordDialogTrigger,
+  RecordStateTrigger,
   RecordCommandForm,
   recordStateSelectControl,
 } from './record-modal-form.tsx'

@@ -10,14 +10,14 @@
     "publicExports": 275,
     "runtimeExports": 138,
     "registeredComponents": 133,
-    "compatibilityExports": 257,
+    "compatibilityExports": 259,
     "compatibilityModules": 43,
     "plannedComponents": 0,
     "publicGaps": 138,
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15735
+    "cssLines": 15554
   },
   "rows": [
     {
@@ -2864,6 +2864,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/backend-ui.test.ts",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -6777,6 +6778,7 @@
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
+        "test/backend-ui.test.ts",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -7156,6 +7158,24 @@
       "target": "Public core",
       "wave": 2,
       "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-015"
+    },
+    {
+      "scope": "compatibility",
+      "name": "RECORD_DIALOG_PARAM",
+      "imported": "RECORD_DIALOG_PARAM",
+      "kind": "runtime",
+      "source": "./record-modal.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7727,6 +7747,24 @@
       "tests": "present",
       "testFiles": ["test/backend-ui.test.ts"],
       "gapTask": "DS-007"
+    },
+    {
+      "scope": "compatibility",
+      "name": "RecordStateTrigger",
+      "imported": "RecordStateTrigger",
+      "kind": "runtime",
+      "source": "./client/record-modal-form.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-015"
     },
     {
       "scope": "compatibility",
@@ -12414,7 +12452,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 1112,
+      "lines": 931,
       "hooks": [
         "action",
         "action-group",
@@ -12468,16 +12506,6 @@
         "media-placeholder",
         "media-primary",
         "media-upload",
-        "modal-backdrop",
-        "modal-body",
-        "modal-close",
-        "modal-description",
-        "modal-head",
-        "modal-heading",
-        "modal-layer",
-        "modal-sheet",
-        "modal-title",
-        "modal-title-row",
         "record-form",
         "record-form-with-image",
         "record-image",
@@ -12491,13 +12519,6 @@
         "relation-dialog-toolbar",
         "relation-menu",
         "relation-options",
-        "section",
-        "section-actions",
-        "section-body",
-        "section-description",
-        "section-eyebrow",
-        "section-head",
-        "section-title",
         "surface"
       ]
     },

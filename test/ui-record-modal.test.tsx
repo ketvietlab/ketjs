@@ -177,7 +177,7 @@ test('record modal: cross-collection navigation opens its target without resetti
       show,
     )
   invoke('product.template', null)
-  assert.deepEqual(calls, [['one', 'variants', 'none']])
+  assert.deepEqual(calls, [['one', 'variants', 'none', undefined, undefined]])
   invoke('product.template', { id: 'one', tab: 'general' })
   invoke('partner.record', null)
   invoke('product.template', null, null)
@@ -598,4 +598,31 @@ test('record modal: a refusal code no source translates never reaches the reader
     'Email này không dùng được.',
   )
   assert.equal(resolveRecordModalIssue('unknown', {}), RECORD_MODAL_LABELS['recordModal.saveFailed'])
+})
+
+test('record modal: public dropzone forms submit selected files through the upload runtime', () => {
+  const source = readFileSync('packages/ketsuite/src/ui/client/record-modal-form.tsx', 'utf8')
+  assert.match(source, /dropzone\?: boolean/u)
+  assert.match(source, /data-record-dropzone=\{props\.dropzone \? '' : null\}/u)
+  assert.match(runtime, /control\.form\?\.hasAttribute\('data-record-dropzone'\)/u)
+  assert.match(runtime, /control\.form\?\.requestSubmit\(\)/u)
+})
+
+test('record modal: a pending dialog deep link is cleared by normal navigation and close', () => {
+  const href = recordModalHref('/admin/crm/tickets?owner=me', {
+    kind: 'customer_care.ticket',
+    id: 't1',
+    tab: 'handle',
+    dialog: 'move-progress',
+  })
+  assert.deepEqual(readRecordModalTarget(href), {
+    kind: 'customer_care.ticket',
+    id: 't1',
+    tab: 'handle',
+    dialog: 'move-progress',
+  })
+  assert.equal(recordModalClosedHref(href), '/admin/crm/tickets?owner=me')
+  assert.doesNotMatch(recordModalHref(href, { kind: 'customer_care.ticket', id: 't2' }), /recordDialog/)
+  assert.match(runtime, /definition\.dialogs\?\.\[pendingEntryDialog\]/u)
+  assert.match(runtime, /pendingEntryDialog = null/u)
 })
