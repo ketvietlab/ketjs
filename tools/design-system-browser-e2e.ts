@@ -237,7 +237,7 @@ try {
             modalTable: size(at('modal-table', '[data-ui="surface-title"]')),
             section: size(at('modal-section', '[data-ui="section-title"]')),
           },
-          forms: { wide: labels('wide-form'), narrow: labels('narrow-form') },
+          forms: { wide: labels('wide-form'), narrow: labels('narrow-form'), panel: labels('narrow-panel') },
           strip: {
             borders: cells.map((cell) => getComputedStyle(cell).borderInlineStartWidth).join(','),
             rows: String(new Set(cells.map((cell) => cell.offsetTop)).size),
@@ -294,8 +294,48 @@ try {
     assert.deepEqual(layering.strip, { borders: '0px,1px,1px', rows: '1' }, `${presentation}: metadata strip`)
     assert.deepEqual(
       layering.forms,
-      { wide: 'beside,beside', narrow: 'above,above' },
-      `${presentation}: a record form in a narrow column puts its labels above their controls`,
+      { wide: 'beside,beside', narrow: 'above,above', panel: 'above,above' },
+      `${presentation}: from tablet width a label sits beside its control, and above it in a narrow column`,
+    )
+  }
+
+  // LAYOUT.md L7 below tablet width: every label goes above its control, the wide
+  // form's included.
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  })
+  {
+    const url = `http://127.0.0.1:${appPort}/layering?presentation=default`
+    await cdp.send('Page.navigate', { url })
+    await waitFor(
+      () =>
+        evaluate<boolean>(
+          cdp!,
+          `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && Boolean(document.querySelector('[data-layering-case="modal-strip"]'))`,
+        ),
+      'Layering did not render (mobile)',
+    )
+    const mobileForms = await evaluate<Record<string, string>>(
+      cdp,
+      `(() => {
+        const labels = (name) =>
+          [...document.querySelectorAll('[data-layering-case="' + name + '"] [data-ui="field"]')]
+            .map((field) => {
+              const label = field.querySelector('[data-ui="field-label"]').getBoundingClientRect()
+              const control = field.querySelector('[data-ui="field-control"]').getBoundingClientRect()
+              return control.top >= label.bottom - 1 ? 'above' : 'beside'
+            })
+            .join(',')
+        return { wide: labels('wide-form'), panel: labels('narrow-panel') }
+      })()`,
+    )
+    assert.deepEqual(
+      mobileForms,
+      { wide: 'above,above', panel: 'above,above' },
+      'mobile: every label sits above its control',
     )
   }
 

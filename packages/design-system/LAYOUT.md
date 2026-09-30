@@ -97,6 +97,12 @@ edge, such as a standalone table. A titled table keeps the 12px inset.
 - **Form.** Fewer than six fields: one flat grid. Several groups: one `Section` per
   group, divided by hairlines. Secondary detail goes in a `Disclosure`, which renders
   unframed inside a white region.
+- **Field layout.** From tablet width (48rem) up, a label sits beside its control.
+  Below it, the label sits above the control. A column narrower than 28rem (a side
+  panel, a record aside) stacks too, at any viewport. The field decides: whatever
+  holds the fields is measured, so every field in one column switches together. A
+  lone checkbox keeps its label beside the box. An application passes no layout
+  prop and does not move `field-label` or `field-control`.
 - **Notice.** As wide as the content it sits in, aligned with the heading. No extra
   margin.
 - **Metadata strip** (due date, SLA, owner). A flat `DescriptionList`, cells divided
