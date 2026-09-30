@@ -20,6 +20,7 @@
 // browser-served /_ket/view/index.js) — the same split mail_backend's own
 // chatter view uses.
 import * as Y from 'yjs'
+import { ensureTrailingParagraph } from './live-doc-tail.ts'
 import type { IslandController, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
 // The shell's markup and the document serializer, which belong to the kit and
 // not to a module — see the header of that file, and tools/ui-audit.ts for the
@@ -39,6 +40,9 @@ export type LiveDocValue = {
     type: string
     checked?: boolean
     align?: string
+    width?: number
+    src?: string
+    alt?: string
     rows?: string[][]
     delta: Delta
   }>
@@ -66,11 +70,14 @@ export type LiveDocProps = {
   /** Renders the document without letting anyone change it. */
   readOnly?: boolean
   onChange?: (value: LiveDocValue) => void
+  /** Host owns the upload dialog and storage; insertion retains the current block anchor. */
+  onImageRequest?: (insert: (image: { src: string; alt: string }) => boolean, trigger: HTMLElement) => void
+  imageDisabled?: boolean
   lang?: string
 }
 
 /** Stored block kinds: the editable vocabulary plus structure the type control never offers. */
-type StoredType = BlockType | 'table' | 'divider'
+type StoredType = BlockType | 'table' | 'divider' | 'image'
 
 type Block = { node: Y.XmlElement | Y.XmlText; text: Y.XmlText; type: StoredType; checked: boolean }
 type Point = { index: number; offset: number }
@@ -276,6 +283,7 @@ export function createLiveDocView(props: LiveDocProps) {
   const doc = new Y.Doc()
   let container: HTMLElement | null = null
   let shell: HTMLElement | null = null
+  let selectedImage = -1
   let composing = false
   /**
    * Where a composition began, and whether a re-render is owed to it.
@@ -318,12 +326,22 @@ export function createLiveDocView(props: LiveDocProps) {
   let heartbeat: ReturnType<typeof setInterval> | null = null
 
   const fragment = doc.getXmlFragment('content')
+  // Embedded drafts have one writer. Never normalize shared remote documents here:
+  // concurrent viewers must not each append their own trailing paragraph.
+  if (props.local && !props.readOnly) {
+    doc.on('beforeObserverCalls', () => {
+      if (!composing) ensureTrailingParagraph(doc)
+    })
+  }
 
   // ---- document model -----------------------------------------------------
 
   const typeOf = (element: Y.XmlElement): StoredType => {
     const value = element.getAttribute('type') as StoredType | undefined
-    return value && (value === 'table' || value === 'divider' || BLOCK_TYPES.includes(value)) ? value : 'p'
+    return value &&
+      (value === 'table' || value === 'divider' || value === 'image' || BLOCK_TYPES.includes(value))
+      ? value
+      : 'p'
   }
 
   /**
@@ -373,6 +391,9 @@ export function createLiveDocView(props: LiveDocProps) {
       delta: block.text.toDelta() as Delta,
       id: attributeOf(block, 'id'),
       align: attributeOf(block, 'align'),
+      width: block.type === 'image' ? Number(attributeOf(block, 'width') || 100) : undefined,
+      src: block.type === 'image' ? attributeOf(block, 'src') : undefined,
+      alt: block.type === 'image' ? attributeOf(block, 'alt') : undefined,
       rows: block.type === 'table' ? rowsOf(block) : undefined,
     }))
 
@@ -546,7 +567,10 @@ export function createLiveDocView(props: LiveDocProps) {
   function render(keep?: Span | null) {
     if (!container) return
     const span = keep === undefined ? selectionSpan() : keep
-    container.innerHTML = documentHtml(modelOf(), props.lang, others())
+    container.innerHTML = documentHtml(modelOf(), props.lang, others(), !props.readOnly && !!props.local)
+    container
+      .querySelector(`[data-block="image"][data-index="${selectedImage}"]`)
+      ?.setAttribute('data-selected', 'true')
     if (props.readOnly) {
       for (const el of Array.from(container.querySelectorAll('[contenteditable]')))
         el.setAttribute('contenteditable', 'false')
@@ -1134,6 +1158,11 @@ export function createLiveDocView(props: LiveDocProps) {
       const name = button.getAttribute('data-flow-editor-mark') ?? ''
       button.addEventListener('mousedown', (event) => event.preventDefault())
       button.addEventListener('click', () => {
+        if (name === 'image') {
+          if (!props.readOnly && !props.imageDisabled && props.local)
+            props.onImageRequest?.(prepareImageInsertion(), button)
+          return
+        }
         if (name === 'table') {
           insertTable()
           return
@@ -1183,6 +1212,9 @@ export function createLiveDocView(props: LiveDocProps) {
         const node = fragment.get(fragment.length - 1) as Y.XmlElement
         if (block.id) node.setAttribute('id', block.id)
         if (block.align) node.setAttribute('align', block.align)
+        if (block.width) node.setAttribute('width', String(block.width))
+        if (block.src) node.setAttribute('src', block.src)
+        if (block.alt) node.setAttribute('alt', block.alt)
         if (block.rows) node.setAttribute('rows', JSON.stringify(block.rows))
         if (block.delta?.length) text.applyDelta(block.delta)
       }
@@ -1191,7 +1223,7 @@ export function createLiveDocView(props: LiveDocProps) {
   }
 
   const typeOfValue = (type: string): StoredType =>
-    type === 'table' || type === 'divider' || BLOCK_TYPES.includes(type as BlockType)
+    type === 'table' || type === 'divider' || type === 'image' || BLOCK_TYPES.includes(type as BlockType)
       ? (type as StoredType)
       : 'p'
 
@@ -1284,6 +1316,7 @@ export function createLiveDocView(props: LiveDocProps) {
     shell = (el.closest('[data-ui="flow-editor"]') as HTMLElement | null) ?? el.parentElement
     if (props.local) loadLocal()
     wireCells(el)
+    wireImages(el)
     if (props.readOnly) {
       el.setAttribute('contenteditable', 'false')
       el.setAttribute('aria-readonly', 'true')
@@ -1321,6 +1354,7 @@ export function createLiveDocView(props: LiveDocProps) {
         )
       } else render(owed ?? undefined)
       composedAt = null
+      if (props.local && !props.readOnly) ensureTrailingParagraph(doc)
     })
     el.addEventListener('beforeinput', (event) => onBeforeInput(event as InputEvent))
     el.addEventListener('input', () => {
@@ -1396,10 +1430,151 @@ export function createLiveDocView(props: LiveDocProps) {
     })
   }
 
+  function updateImage(index: number, patch: { width?: number; align?: string }) {
+    if (props.readOnly || !props.local || disposed) return false
+    const block = blocksOf()[index]
+    if (block?.type !== 'image' || !(block.node instanceof Y.XmlElement)) return false
+    const node = block.node
+    if (patch.width !== undefined && !Number.isFinite(patch.width)) return false
+    if (patch.align !== undefined && !['left', 'center', 'right'].includes(patch.align)) return false
+    selectedImage = index
+    doc.transact(() => {
+      if (patch.width !== undefined)
+        node.setAttribute('width', String(Math.min(100, Math.max(20, patch.width))))
+      if (patch.align !== undefined) node.setAttribute('align', patch.align)
+    })
+    return true
+  }
+
+  function removeImage(index: number) {
+    if (props.readOnly || !props.local || disposed || blocksOf()[index]?.type !== 'image') return false
+    selectedImage = -1
+    structural(caretAt({ index: Math.max(0, index - 1), offset: 0 }), () => {
+      fragment.delete(index, 1)
+      ensureBlocks()
+    })
+    return true
+  }
+
+  function wireImages(el: HTMLElement) {
+    if (props.readOnly || !props.local) return
+    const select = (figure: HTMLElement | null) => {
+      selectedImage = figure ? Number(figure.dataset.index) : -1
+      el.querySelectorAll('[data-block="image"]').forEach(
+        (item) => void item.toggleAttribute('data-selected', item === figure),
+      )
+    }
+    el.addEventListener('focusin', (event) =>
+      select((event.target as HTMLElement).closest('[data-block="image"]')),
+    )
+    el.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement
+      const figure = target.closest<HTMLElement>('[data-block="image"]')
+      select(figure)
+      if (!figure) return
+      const index = Number(figure.dataset.index)
+      if (target.closest('[data-live-image-remove]')) removeImage(index)
+      else if (target.closest<HTMLElement>('[data-live-image-align]')) {
+        updateImage(index, {
+          align: target.closest<HTMLElement>('[data-live-image-align]')!.dataset.liveImageAlign,
+        })
+        el.querySelector<HTMLElement>(`[data-block="image"][data-index="${index}"]`)?.focus()
+      } else if (target.tagName === 'IMG') figure.focus()
+    })
+    el.addEventListener('input', (event) => {
+      const target = event.target as HTMLInputElement
+      if (!target.matches('[data-live-image-width]')) return
+      event.stopImmediatePropagation()
+      const figure = target.closest<HTMLElement>('[data-block="image"]')!
+      figure.querySelector<HTMLElement>('[data-live-image-box]')!.style.width = `${target.value}%`
+    })
+    el.addEventListener('change', (event) => {
+      const target = event.target as HTMLInputElement
+      if (!target.matches('[data-live-image-width]')) return
+      const index = Number(target.closest<HTMLElement>('[data-block="image"]')!.dataset.index)
+      updateImage(index, { width: Number(target.value) })
+      el.querySelector<HTMLElement>(`[data-index="${index}"] [data-live-image-width]`)?.focus()
+    })
+    el.addEventListener('keydown', (event) => {
+      const target = event.target as HTMLElement
+      if (target.matches('[data-block="image"]') && ['Backspace', 'Delete'].includes(event.key)) {
+        event.preventDefault()
+        removeImage(Number(target.dataset.index))
+      }
+    })
+    el.addEventListener('pointerdown', (event) => {
+      const handle = (event.target as HTMLElement).closest<HTMLElement>('[data-live-image-resize]')
+      if (!handle) return
+      event.preventDefault()
+      const figure = handle.closest<HTMLElement>('[data-block="image"]')!
+      const box = figure.querySelector<HTMLElement>('[data-live-image-box]')!
+      const index = Number(figure.dataset.index),
+        start = event.clientX
+      const available = figure.getBoundingClientRect().width
+      if (!available) return
+      const initial = (box.getBoundingClientRect().width / available) * 100
+      const factor =
+        figure.dataset.imageAlign === 'right' ? -1 : figure.dataset.imageAlign === 'center' ? 2 : 1
+      let width = initial
+      handle.setPointerCapture(event.pointerId)
+      const move = (next: PointerEvent) => {
+        width = Math.round(
+          Math.max(20, Math.min(100, initial + ((factor * (next.clientX - start)) / available) * 100)),
+        )
+        box.style.width = `${width}%`
+      }
+      const finish = (next: PointerEvent) => {
+        handle.removeEventListener('pointermove', move)
+        handle.removeEventListener('pointerup', finish)
+        handle.removeEventListener('pointercancel', finish)
+        if (next.type === 'pointercancel') box.style.width = `${initial}%`
+        else {
+          updateImage(index, { width })
+          el.querySelector<HTMLElement>(`[data-block="image"][data-index="${index}"]`)?.focus()
+        }
+      }
+      handle.addEventListener('pointermove', move)
+      handle.addEventListener('pointerup', finish)
+      handle.addEventListener('pointercancel', finish)
+    })
+  }
+
+  let disposed = false
+  /** Capture the insertion anchor before an asynchronous upload moves browser focus. */
+  function prepareImageInsertion() {
+    const index = selectionSpan()?.end.index ?? fragment.length - 1
+    const anchor = blocksOf()[index]?.node
+    return (image: { src: string; alt: string }) => {
+      if (disposed || props.readOnly || !props.local) return false
+      if (!/^\/files\/[a-zA-Z0-9_%.-]+$/.test(image.src)) return false
+      const current = blocksOf().findIndex((block) => block.node === anchor)
+      const at = current < 0 ? fragment.length : current + 1
+      structural(caretAt({ index: at + 1, offset: 0 }), () => {
+        insertBlock(at, 'image')
+        const node = fragment.get(at) as Y.XmlElement
+        node.setAttribute('src', image.src)
+        node.setAttribute('alt', image.alt)
+        insertBlock(at + 1, 'p')
+      })
+      return true
+    }
+  }
+
   return {
-    view: () => liveDocShell({ containerId, lang: props.lang, tables: props.local }) as TemplateResult,
+    prepareImageInsertion,
+    updateImage,
+    removeImage,
+    view: () =>
+      liveDocShell({
+        containerId,
+        lang: props.lang,
+        tables: props.local,
+        images: props.local && !!props.onImageRequest,
+        imageDisabled: props.readOnly || props.imageDisabled,
+      }) as TemplateResult,
     getValue: currentValue,
     dispose() {
+      disposed = true
       source?.close()
       doc.destroy()
       if (heartbeat) clearInterval(heartbeat)
