@@ -99,7 +99,6 @@ export const locationCreateScreen = (
       frame={frame}
       scope="location-create"
       title={_('stock_backend.location.create.title')}
-      description={_('stock_backend.location.create.hint')}
       actions={
         <FormCluster
           label={_('stock_backend.location.create.title')}

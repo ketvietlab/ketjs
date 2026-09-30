@@ -224,7 +224,6 @@ export const crossProjectScreen = (
       variant="operational"
       frame={frame}
       title={title}
-      description={_('flow_backend.issues.subtitle')}
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, title, frame)}
       status={`${title}: ${String(overview?.total ?? rows.length)}`}

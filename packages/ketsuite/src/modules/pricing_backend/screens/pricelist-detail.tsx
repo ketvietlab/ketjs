@@ -49,7 +49,6 @@ export const pricelistDetailScreen = (
       frame={frame}
       scope="pricelist-detail-page"
       title={String(row.name ?? row.id ?? '')}
-      description={String(row.currency ?? '')}
       status={badge(
         pricingSelectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
         row.active === false ? 'neutral' : 'positive',

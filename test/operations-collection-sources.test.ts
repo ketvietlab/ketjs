@@ -78,6 +78,8 @@ for (const [path, filter] of [
         }
         return []
       },
+      // The screen reads its optional lookups only when the caller may.
+      allows: async () => true,
     } as unknown as ServeContext
     const route = (purchaseBackend.routes![path] as (ctx: ServeContext) => Route)(ctx)
     await assert.rejects(

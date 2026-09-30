@@ -79,7 +79,6 @@ export const projectCreateScreen = (
       frame={frame}
       scope="flow-project-create"
       title={title}
-      description={_('flow_backend.projects.subtitle')}
       actions={
         <FormCluster
           label={title}

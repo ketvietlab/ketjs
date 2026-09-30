@@ -300,20 +300,8 @@
     :where([data-kv-design-system]) [data-ui="search-filter-section-toggle"] {
       display: none;
     }
-    :where([data-kv-design-system])
-      [data-ui="search-filter"][data-size]
-      :is(button, summary, select, input, a[data-ui="menu-item"]) {
-      min-block-size: 2.75rem;
-    }
-    :where([data-kv-design-system])
-      [data-ui="search-filter"]
-      :is(
-        [data-ui="search-filter-facet-remove"],
-        [data-ui="search-filter-grouping-action"],
-        [data-ui="favorite-item-default"],
-        [data-ui="favorite-item-remove"]
-      ) {
-      min-inline-size: 2.75rem;
+    :where([data-kv-design-system]) [data-ui="search-filter"][data-size] a[data-ui="menu-item"] {
+      min-block-size: var(--kv-touch-target);
     }
     :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
       padding-block-start: var(--kv-space-3);
