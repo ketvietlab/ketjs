@@ -184,7 +184,6 @@ export const moveDetailScreen = (_: Translator, options: MoveDetailScreenOptions
       frame={options.frame}
       scope="account-move-detail-form-page"
       title={title}
-      description={String(move.ref ?? move.partnerId ?? '') || undefined}
       status={inline([
         badge(labelOf(_, 'moveState', move.state), stateTone(move.state), String(move.state)),
         ...(showsPaymentState
@@ -199,6 +198,8 @@ export const moveDetailScreen = (_: Translator, options: MoveDetailScreenOptions
       ])}
       actions={headerActions}
       meta={inline([
+        // The reference (or partner) the entry was posted under: its identity, in the facts strip.
+        ...(String(move.ref ?? move.partnerId ?? '') ? [String(move.ref ?? move.partnerId)] : []),
         badge(
           `${_('account_backend.field.amountTotal')}: ${formatMoney(_, move.amountTotal, move.currency)}`,
           'info',

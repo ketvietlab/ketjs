@@ -350,7 +350,6 @@ export const orderDetailScreen = (
       frame={frame}
       scope="sale-order-form-page"
       title={String(order.name)}
-      description={`${documentKind} · ${String(order.partnerName ?? order.partnerId)}`}
       status={inline([
         badge(labelOf(_, 'state', order.state), stateTone(state), state),
         ...(order.locked ? [badge(_('sale_backend.order.locked'), 'warning', 'locked')] : []),
@@ -359,6 +358,8 @@ export const orderDetailScreen = (
         forms.length ? <FormCluster forms={forms} label={_('sale_backend.order.actions.label')} /> : undefined
       }
       meta={inline([
+        // The document and its customer: the record's identity, in its facts strip.
+        `${documentKind} · ${String(order.partnerName ?? order.partnerId)}`,
         badge(
           `${_('sale_backend.field.amountUntaxed')}: ${formatMoney(_, order.amountUntaxed, order.currency)}`,
           'neutral',

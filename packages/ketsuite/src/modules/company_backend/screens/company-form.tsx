@@ -235,11 +235,6 @@ export const companyFormScreen = (
       frame={frame}
       scope="company-form-page"
       title={title}
-      description={
-        detail
-          ? `${String(values.code ?? '')} · ${String(values.currency ?? '')}`
-          : _('company_backend.detail.identityHint')
-      }
       status={
         detail
           ? values.active

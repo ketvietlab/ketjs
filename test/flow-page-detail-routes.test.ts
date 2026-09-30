@@ -69,7 +69,7 @@ test('flow page detail route: FormPage preserves Live Doc, modal sub-actions and
   assert.match(html, /data-ui="form-page" data-scope="flow-page-detail-form-page"/)
   assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="form-page-title"[^>]*>Local setup/)
-  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
+  assert.match(textContent, /data-ui="form-page-meta"[\s\S]*?Internal platform/)
   assert.match(html, /data-island="livedoc.editor"/)
   assert.match(html, /id="flow-page-detail-form"/)
   assert.match(html, /action="\/admin\/flow\/pages\/setup\?lang=en"/)

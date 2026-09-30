@@ -48,6 +48,16 @@ const noteForm = (prefix: string): TemplateResult => (
   />
 )
 
+/** Bare fields stacked in a panel, with no record form around them (LAYOUT.md L7). */
+const panelFields = (prefix: string): TemplateResult => (
+  <Stack
+    items={[
+      <Field id={`${prefix}-path`} label="Path" name="path" value="/en/careers" />,
+      <Field id={`${prefix}-note`} label="Note" name="note" type="textarea" value="" />,
+    ]}
+  />
+)
+
 /** Tags a specimen so the browser check can find it; the tag carries no style. */
 const Case = (props: { name: string; body: JSXChild }): TemplateResult => (
   <div data-layering-case={props.name}>{props.body}</div>
@@ -75,6 +85,14 @@ export const LayeringPreview = (props: {
           body={
             <div style="max-inline-size: 20rem">
               <Surface title="A narrow column" body={noteForm('layering-narrow')} />
+            </div>
+          }
+        />,
+        <Case
+          name="narrow-panel"
+          body={
+            <div style="max-inline-size: 20rem">
+              <Surface title="A side panel" body={panelFields('layering-panel')} />
             </div>
           }
         />,

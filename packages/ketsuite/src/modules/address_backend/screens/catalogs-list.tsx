@@ -86,7 +86,6 @@ export const catalogsScreen = (
       frame={frame}
       title={_('address_backend.title')}
       controls={collectionControls(_, _('address_backend.title'), frame)}
-      description={_('address_backend.hint')}
       status={`${_('address_backend.title')}: ${String(options.rows.length)}`}
       body={
         options.rows.length || options.table?.groups?.length

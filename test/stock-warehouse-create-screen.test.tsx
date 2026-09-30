@@ -45,7 +45,7 @@ test('stock warehouse create: preserves all fields, defaults and errors in FormP
 
   assert.equal(html.match(/data-ui="form-page"/g)?.length, 1)
   assert.match(html, /data-ui="form-page-title"[^>]*>[\s\S]*?Tạo kho hàng/)
-  assert.match(html, /data-ui="form-page-description"[^>]*>[\s\S]*?Các vị trí, loại hoạt động/)
+  assert.doesNotMatch(html, /form-page-description/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit"[^>]*form="warehouse-create-form"/)
   assert.match(
     html,

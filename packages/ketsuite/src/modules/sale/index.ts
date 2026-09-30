@@ -1,3 +1,4 @@
+import { lineEditFunctions } from './functions/line-edit.ts'
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
@@ -18,10 +19,17 @@ export default defineModule({
     'account.MoveLine': { saleLineId: 'ref:sale.OrderLine?' },
   },
   relations,
-  functions: { ...functions, ...reportFunctions },
+  functions: { ...functions, ...reportFunctions, ...lineEditFunctions },
   reports,
   messages: {
     vi: {
+      'error.lineMissing': 'Dòng sản phẩm không tồn tại.',
+      'error.lineNotEditable': 'Chỉ sửa dòng trên báo giá chưa khoá do hệ thống này quản lý.',
+      'error.orderChanged': 'Đơn đã thay đổi. Vui lòng tải lại trước khi lưu.',
+      'error.quantityPositive': 'Số lượng phải lớn hơn 0.',
+      'error.pricePositive': 'Đơn giá không được âm.',
+      'error.discountRange': 'Chiết khấu phải từ 0 đến 100.',
+      'error.quoteFailed': 'Không tính được tiền thuế của đơn.',
       'app.title': 'Bán hàng',
       'app.summary': 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
       'app.category': 'Bán hàng',
@@ -46,6 +54,13 @@ export default defineModule({
       'report.notes': 'Ghi chú',
     },
     en: {
+      'error.lineMissing': 'Product line not found.',
+      'error.lineNotEditable': 'Only unlocked locally managed quotation lines can be edited.',
+      'error.orderChanged': 'The order has changed. Reload before saving.',
+      'error.quantityPositive': 'Quantity must be greater than zero.',
+      'error.pricePositive': 'Unit price cannot be negative.',
+      'error.discountRange': 'Discount must be between 0 and 100.',
+      'error.quoteFailed': 'Could not calculate order taxes.',
       'app.title': 'Sales',
       'app.summary': 'Quotations, sales orders, deliveries, and customer invoices.',
       'app.category': 'Sales',

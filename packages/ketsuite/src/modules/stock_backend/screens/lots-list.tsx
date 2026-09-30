@@ -29,7 +29,7 @@ export type LotListRow = {
 export type LotsListScreenOptions = {
   rows: LotListRow[]
   /** Localized `/admin/stock/lots/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<LotListRow>>
 }
@@ -101,9 +101,10 @@ export const lotsListScreen = (
       frame={collection.frame}
       title={_('stock_backend.lot.list.title')}
       controls={collectionControls(_, _('stock_backend.lot.list.title'), collection.frame)}
-      description={_('stock_backend.lot.list.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
       actions={collectionActions(_, collection.frame)}
       footer={`${_('stock_backend.lot.list.summary.total')}: ${String(total)}`}

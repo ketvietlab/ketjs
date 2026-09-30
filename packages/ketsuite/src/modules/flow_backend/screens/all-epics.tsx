@@ -87,7 +87,6 @@ export const allEpicsScreen = (
       variant="operational"
       frame={frame}
       title={options.title}
-      description={_('flow_backend.menu.epics')}
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, options.title, frame)}
       status={`${options.title}: ${String(options.total ?? options.epics.length)}`}
