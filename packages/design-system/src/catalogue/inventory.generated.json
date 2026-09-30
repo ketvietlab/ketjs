@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15795
+    "cssLines": 15772
   },
   "rows": [
     {
@@ -11376,7 +11376,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 358,
+      "lines": 367,
       "hooks": []
     },
     {
@@ -11815,7 +11815,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 156,
+      "lines": 152,
       "hooks": [
         "board-page",
         "board-page-actions",
@@ -11837,7 +11837,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 161,
+      "lines": 157,
       "hooks": [
         "action",
         "dashboard-page",
@@ -11887,7 +11887,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/form-page/styles.css",
-      "lines": 229,
+      "lines": 225,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -11947,7 +11947,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 130,
+      "lines": 129,
       "hooks": [
         "action",
         "cell",
@@ -11970,11 +11970,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 246,
+      "lines": 235,
       "hooks": [
-        "board-page",
-        "dashboard-page",
-        "form-page",
         "list-page",
         "list-page-actions",
         "list-page-body",
@@ -11989,7 +11986,6 @@
         "list-page-title-row",
         "list-page-toolbar",
         "list-page-tools",
-        "record-page",
         "row",
         "table",
         "table-scroll"
@@ -12018,7 +12014,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 123,
+      "lines": 119,
       "hooks": ["form-actions", "record-form"]
     },
     {
@@ -12071,7 +12067,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-page/styles.css",
-      "lines": 220,
+      "lines": 216,
       "hooks": [
         "action-group",
         "form-cluster",
