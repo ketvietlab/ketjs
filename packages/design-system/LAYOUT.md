@@ -60,8 +60,8 @@ A frame is never a way to separate groups.
 
 ## L5. Headings are pinned by level; the application passes words
 
-- Page title: `PageHeader`. Surface title: `--kv-text-xl`. Section title and nested
-  surface title: `--kv-text-md`.
+- Page title: `--kv-page-title-size`: 24px from 48rem up, 17px below that, including compact operational lists. Density does not change title size. Surface title: `--kv-text-xl`. Section title and nested
+  surface title: `--kv-text-lg`. Modal title: `--kv-text-xl`.
 - The position of title, description and actions, and the gap under them, belong
   to the component. An application does not resize a heading or move its actions.
 

@@ -200,10 +200,6 @@
       gap: var(--kv-space-3);
     }
 
-    :where([data-kv-design-system]) [data-ui="form-page-title"] {
-      font-size: var(--kv-text-lg);
-    }
-
     :where([data-kv-design-system]) [data-ui="form-page-actions"] {
       justify-content: flex-start;
     }
