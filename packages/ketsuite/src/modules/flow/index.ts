@@ -1,5 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
-import { functions } from './functions.ts'
+import { functions } from './functions/index.ts'
 import { flowJobs } from './jobs.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
@@ -24,21 +24,14 @@ export default defineModule({
   messages,
 })
 
-export {
-  addComment,
-  addDependency,
-  FIELD_FILTER_MATCHES,
-  assignSprint,
-  closeSprint,
-  commandRecordId,
-  groupIssues,
-  issueDetail,
-  listIssues,
-  moveIssue,
-  saveIssue,
-  startSprint,
-} from './operations.ts'
-export type { FlowIssue, FlowResult, SaveIssueInput } from './operations.ts'
+export { addComment } from './domain/issue-discussion.ts'
+export { addDependency } from './domain/issue-dependency.ts'
+export { FIELD_FILTER_MATCHES, groupIssues, issueDetail, listIssues } from './queries/issue-list.ts'
+export { assignSprint, moveIssue, saveIssue } from './domain/issue-write.ts'
+export { closeSprint, startSprint } from './domain/sprint-lifecycle.ts'
+export { commandRecordId } from './domain/command.ts'
+export type { FlowIssue, FlowResult } from './domain/command.ts'
+export type { SaveIssueInput } from './domain/issue-write.ts'
 export { projectsWithMyWork, projectStats, projectStateOf } from './projects.ts'
 export type { ProjectStats, ProjectState } from './projects.ts'
 export {

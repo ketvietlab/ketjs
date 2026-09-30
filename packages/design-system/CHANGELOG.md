@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Enhance DatePicker and DateRangePicker with accessible draft calendars, seven Vietnamese quick ranges, civil-date arithmetic, keyboard navigation and responsive month layouts. DatePicker retains native validation/fallback; DateRangePicker uses one visible range field with a preset select inside its calendar and two ISO form values. Both calendars fill mobile screens; ranges scroll vertically through multiple months. Add the `/dates` playground.
+
+- Add `/primitives`, a render-pure harness covering every primitive with theme, density, state and content-pressure comparisons.
+- Keep notice icons beside wrapping copy and place actions below it in narrow containers. Preserve icon, spinner, tag-removal and progress-value geometry with long content.
+- Align checkbox/radio controls with field edges and vertical option-group labels with their first option.
+- Give Select a consistent chevron inset and room for long values while retaining its native picker, keyboard and validation semantics.
+
+- Keep explicit Stack gap variants authoritative when legacy KetSuite controls CSS is loaded.
+
+- Backport the integration page-title contract (f6c5f413): shared 24px title token, 17px below tablet width, remove the compact operational list exception so every page uses the same title scale.
+
+- Keep modal titles at the xl type step and section/nested surface headings at lg so headings remain distinct from body content.
+
+- Badge and Tag now use the full pill radius, matching CountBadge across all themes and tones.
+
 ## 0.1.14 — KetSuite application navigation
 
 - Migrated the KetSuite administration shell to the public `AppNavigation` contract.

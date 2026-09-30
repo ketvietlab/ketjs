@@ -77,6 +77,33 @@
     color: var(--kv-input-placeholder);
   }
 
+  /* Keep the native select and its keyboard/picker behaviour; the field owns
+     the chevron so its inset, colour and alignment match the other controls. */
+  :where([data-kv-design-system]) select[data-ui="field-control"] {
+    appearance: none;
+    padding-inline-end: var(--kv-space-8);
+    text-overflow: ellipsis;
+  }
+
+  :where([data-kv-design-system]) [data-ui="field"][data-kind="select"]:has(> select)::after {
+    content: "";
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    width: var(--kv-space-1-5);
+    height: var(--kv-space-1-5);
+    margin-inline-end: var(--kv-space-3);
+    border-right: 1px solid currentcolor;
+    border-bottom: 1px solid currentcolor;
+    color: var(--kv-text-secondary);
+    transform: translateY(-25%) rotate(45deg);
+    pointer-events: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="field"][data-kind="select"]:has(> select:disabled)::after {
+    color: var(--kv-text-disabled);
+  }
+
   :where([data-kv-design-system]) [data-ui="field-control"]:hover:not(:focus-visible, :disabled) {
     border-color: var(--kv-input-border-hover);
     background: var(--kv-input-bg-hover);
@@ -105,6 +132,7 @@
   :where([data-kv-design-system]) input[type="checkbox"][data-ui="field-control"] {
     width: 1rem;
     min-height: 1rem;
+    margin: 0;
     accent-color: var(--kv-color-accent);
   }
 
@@ -113,7 +141,8 @@
     padding: var(--kv-space-1);
   }
 
-  :where([data-kv-design-system]) [data-ui="field"][data-invalid="true"] > [data-ui="field-control"] {
+  :where([data-kv-design-system]) [data-ui="field"][data-invalid="true"] > [data-ui="field-control"],
+  :where([data-kv-design-system]) [data-ui="field-control"][aria-invalid="true"] {
     border-color: var(--kv-color-danger);
   }
 
@@ -131,7 +160,12 @@
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="field"]:has(> [data-ui="field-options"][data-orientation="vertical"]) {
+    align-items: start;
   }
 
   :where([data-kv-design-system]) [data-ui="field-option"] {
@@ -145,6 +179,7 @@
   :where([data-kv-design-system]) [data-ui="field-option-input"] {
     width: 1rem;
     min-height: 1rem;
+    margin: 0;
     flex: 0 0 auto;
     accent-color: var(--kv-color-accent);
   }
@@ -177,6 +212,12 @@
   }
 
   @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="select"]:has(> select)::after,
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="select"] > select[data-ui="field-control"] {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
     :where([data-kv-design-system]) [data-ui="field"]:not([data-kind="checkbox"]) > * {
       grid-column: 1 / -1;
       grid-row: auto;
@@ -188,6 +229,12 @@
   }
 
   @container (max-width: 28rem) {
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="select"]:has(> select)::after,
+    :where([data-kv-design-system]) [data-ui="field"][data-kind="select"] > select[data-ui="field-control"] {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
     :where([data-kv-design-system]) [data-ui="field"]:not([data-kind="checkbox"]) > * {
       grid-column: 1 / -1;
       grid-row: auto;
@@ -196,5 +243,48 @@
     :where([data-kv-design-system]) [data-ui="field"][data-kind="textarea"] > [data-ui="field-label"] {
       padding-top: 0;
     }
+  }
+  :where([data-kv-design-system]) [data-ui="field-control"][data-appearance="embedded"] {
+    min-height: calc(var(--kv-control-height) - 2px);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  :where([data-kv-design-system]) [data-ui="field"][data-label-hidden="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :where([data-kv-design-system]) [data-ui="field"][data-label-hidden="true"] > [data-ui="field-label"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"][data-kind="select"]
+    > select[data-ui="field-control"],
+  :where([data-kv-design-system]) [data-ui="field"][data-label-hidden="true"] > [data-ui="field-control"],
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"][data-kind="select"]:has(> select)::after {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  :where([data-kv-design-system])
+    [data-ui="field"][data-selection-hidden="true"]
+    > select[data-ui="field-control"] {
+    color: transparent;
+    padding-inline: 0;
+    text-overflow: clip;
+  }
+  :where([data-kv-design-system]) [data-ui="field"][data-selection-hidden="true"] > select > option {
+    color: var(--kv-input-text);
+    background: var(--kv-input-bg);
+  }
+  :where([data-kv-design-system])
+    [data-ui="field"][data-selection-hidden="true"][data-kind="select"]:has(> select)::after {
+    justify-self: center;
+    margin-inline-end: 0;
   }
 }
