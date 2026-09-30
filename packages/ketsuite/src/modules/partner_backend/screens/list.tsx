@@ -23,7 +23,6 @@ export const partnersScreen = (
       variant="operational"
       frame={frame}
       title={_('partner_backend.screen.title')}
-      description={_('partner_backend.screen.description')}
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, _('partner_backend.screen.title'), {
         ...frame,

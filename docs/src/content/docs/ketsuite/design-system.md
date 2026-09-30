@@ -89,11 +89,11 @@ Component styles remain aggregated through `styles.css`, but selector-bearing fi
 owning component directory. Density changes the shared control height, row height, and content gap.
 Layer, focus, reduced-motion, and container breakpoints use named tokens rather than local numbers.
 
-In a two-column `form-grid`, full-span fields share the label width of half-span fields, so their controls align. At the single-column breakpoint all fields use the same inline label contract. Modules must not compensate with local margins or label widths.
+In a two-column `form-grid`, full-span fields share the label width of half-span fields, so their controls align. At the single-column breakpoint every field puts its label above its control. Modules must not compensate with local margins or label widths.
 
-Responsive behavior belongs to component and container contracts. Form fields remain inline, with the
-label on the left and the control on the right, including narrow panels; only the number of field pairs in
-a row collapses. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
+Responsive behavior belongs to component and container contracts. From tablet width (48rem) up, a form
+field is inline, with the label on the left and the control on the right. Below tablet width, and in any
+column narrower than 28rem such as a side panel, the label sits above the control. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
 screens.
 
 ### SearchFilter and KetTable
@@ -346,7 +346,7 @@ containing the existing GET search form; local list search remains visible besid
 the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K opens global search and focuses its input when no other dialog is open.
 Escape, the close button and backdrop close search and return focus to its launcher without clearing
 the draft. The modal frame stays in an inert template until opened; its search form remains
-inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher with a 44px target and a full-screen dialog. The optional
+inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher the height of the other topbar controls and a full-screen dialog. The optional
 `search.triggerLabel`, `search.closeLabel` and `search.id` localize the launcher and close action and
 distinguish multiple catalogue shells. A native link and noscript form preserve search without JavaScript. KétSuite retains the `backend.global-topbar` fragment slot for navigation compatibility, now inside
 the main column. KétSuite no longer displays breadcrumbs. A shell with `location` hides

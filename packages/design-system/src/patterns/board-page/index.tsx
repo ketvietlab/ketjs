@@ -11,7 +11,6 @@ export const HOOKS = [
   'board-page-title',
   'board-page-subline',
   'board-page-status',
-  'board-page-description',
   'board-page-actions',
   'board-page-meta',
   'board-page-toolbar',

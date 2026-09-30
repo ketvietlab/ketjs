@@ -86,7 +86,7 @@
     [data-ui="record-page-aside"]
     [data-ui="surface"]
     [data-ui="surface-title"] {
-    font-size: var(--kv-text-md);
+    font-size: var(--kv-text-lg);
   }
 
   [data-kv-design-system]

@@ -83,7 +83,6 @@ export const companiesListScreen = (
       variant="operational"
       frame={frame}
       title={_('company_backend.screen.title')}
-      description={_('company_backend.screen.subtitle')}
       headerActions={
         <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />
       }

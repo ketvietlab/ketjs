@@ -7,7 +7,7 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 275,
+    "publicExports": 278,
     "runtimeExports": 138,
     "registeredComponents": 133,
     "compatibilityExports": 257,
@@ -16,8 +16,8 @@
     "publicGaps": 138,
     "runtimeGaps": 5,
     "typeGaps": 133,
-    "cssFiles": 78,
-    "cssLines": 15850
+    "cssFiles": 79,
+    "cssLines": 16153
   },
   "rows": [
     {
@@ -35,6 +35,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -354,6 +355,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -396,6 +398,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -518,6 +521,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -572,6 +576,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -669,6 +674,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -808,6 +814,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/index.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -994,6 +1001,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1041,6 +1049,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -1268,11 +1277,51 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
-        "packages/design-system/src/catalogue/registry.ts",
-        "packages/design-system/src/catalogue/specimens.tsx"
+        "packages/design-system/src/catalogue/date-pickers.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
       ],
       "tests": "present",
-      "testFiles": ["test/accounting-e2e.test.ts", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/accounting-e2e.test.ts",
+        "test/design-system-dates.test.tsx",
+        "test/design-system.test.tsx"
+      ],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DatePickerLabels",
+      "imported": "DatePickerLabels",
+      "kind": "type",
+      "source": "./forms/date-time/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-dates.test.tsx"],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DatePickerProps",
+      "imported": "DatePickerProps",
+      "kind": "type",
+      "source": "./forms/date-time/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-dates.test.tsx"],
       "gapTask": "DS-022"
     },
     {
@@ -1289,11 +1338,11 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
-        "packages/design-system/src/catalogue/registry.ts",
-        "packages/design-system/src/catalogue/specimens.tsx"
+        "packages/design-system/src/catalogue/date-pickers.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-dates.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-022"
     },
     {
@@ -1312,6 +1361,24 @@
       "specimenFiles": [],
       "tests": "gap",
       "testFiles": [],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DateRangePreset",
+      "imported": "DateRangePreset",
+      "kind": "type",
+      "source": "./forms/date-time/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-dates.test.tsx"],
       "gapTask": "DS-022"
     },
     {
@@ -1414,6 +1481,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/date-pickers.tsx",
         "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
@@ -1458,6 +1526,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1481,6 +1550,7 @@
       "specimenFiles": [
         "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1643,6 +1713,7 @@
         "test/company-company-form-screen.test.tsx",
         "test/company-context-screen.test.tsx",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-epic-detail-routes.test.ts",
         "test/flow-epic-detail-screen.test.tsx",
@@ -1813,6 +1884,8 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-dates.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/product-attribute-ui.test.tsx"
       ],
@@ -1832,6 +1905,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1872,6 +1946,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -2384,6 +2459,7 @@
       "specimenFiles": [
         "packages/design-system/src/catalogue/index.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -2515,6 +2591,7 @@
         "test/company-companies-list-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
         "test/crm-leaderboard-screen.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-all-epics-routes.test.ts",
         "test/flow-all-epics-screen.test.tsx",
@@ -2638,6 +2715,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -2698,6 +2776,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -2939,7 +3018,10 @@
       "wave": 0,
       "consumers": 0,
       "specimen": "present",
-      "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
+      ],
       "tests": "present",
       "testFiles": ["test/design-system.test.tsx"],
       "gapTask": "DS-009"
@@ -2977,6 +3059,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3147,6 +3230,7 @@
       "specimenFiles": [
         "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3239,6 +3323,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-e2e.test.ts",
         "test/flow-membership.test.ts",
@@ -3266,7 +3351,7 @@
       "specimen": "present",
       "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -3500,6 +3585,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3645,7 +3731,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -4375,6 +4461,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4501,8 +4588,10 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/date-pickers.tsx",
         "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4526,6 +4615,7 @@
       "specimenFiles": [
         "packages/design-system/src/catalogue/groups.ts",
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4613,7 +4703,10 @@
       "wave": 0,
       "consumers": 0,
       "specimen": "present",
-      "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
+      ],
       "tests": "present",
       "testFiles": ["test/design-system.test.tsx"],
       "gapTask": "DS-009"
@@ -4649,7 +4742,10 @@
       "wave": 0,
       "consumers": 0,
       "specimen": "present",
-      "specimenFiles": ["packages/design-system/src/catalogue/registry.ts"],
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
+      ],
       "tests": "present",
       "testFiles": ["test/design-system.test.tsx"],
       "gapTask": "DS-009"
@@ -4704,6 +4800,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4798,6 +4895,7 @@
       "specimen": "present",
       "specimenFiles": [
         "packages/design-system/src/catalogue/page-surfaces.tsx",
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4837,6 +4935,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -4902,6 +5001,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/primitives.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -5280,7 +5380,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -5606,7 +5706,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5624,7 +5724,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5703,6 +5803,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -5772,7 +5873,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5826,7 +5927,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5898,7 +5999,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -5959,13 +6060,14 @@
       "decision": "recipe",
       "target": "Public recipes",
       "wave": 1,
-      "consumers": 5,
+      "consumers": 3,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-044"
@@ -5981,7 +6083,7 @@
       "decision": "recipe",
       "target": "Public recipes",
       "wave": 1,
-      "consumers": 5,
+      "consumers": 3,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -5999,7 +6101,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -6021,7 +6123,11 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/accounting-e2e.test.ts", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/accounting-e2e.test.ts",
+        "test/design-system-dates.test.tsx",
+        "test/design-system.test.tsx"
+      ],
       "gapTask": "DS-022"
     },
     {
@@ -6071,7 +6177,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6125,7 +6231,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6277,6 +6383,7 @@
         "test/company-company-form-screen.test.tsx",
         "test/company-context-screen.test.tsx",
         "test/design-system-consumer-admission.test.ts",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-epic-detail-routes.test.ts",
         "test/flow-epic-detail-screen.test.tsx",
@@ -6337,7 +6444,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -6359,7 +6466,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6437,6 +6544,8 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-dates.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/product-attribute-ui.test.tsx"
       ],
@@ -6507,7 +6616,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6548,7 +6657,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 57,
+      "consumers": 58,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -6570,6 +6679,7 @@
         "test/company-companies-list-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
         "test/crm-leaderboard-screen.test.tsx",
+        "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-all-epics-routes.test.ts",
         "test/flow-all-epics-screen.test.tsx",
@@ -6617,7 +6727,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 57,
+      "consumers": 58,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6635,7 +6745,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6802,7 +6912,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -6820,7 +6930,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -6856,7 +6966,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7162,7 +7272,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -7180,7 +7290,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -7198,7 +7308,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7270,7 +7380,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7473,6 +7583,7 @@
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
+        "test/commerce-modal-contract.test.tsx",
         "test/crm-configuration-modal-view.test.tsx",
         "test/product-attribute-ui.test.tsx",
         "test/product-modal-view.test.tsx",
@@ -7497,7 +7608,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/user-access-surfaces-view.test.tsx"],
+      "testFiles": ["test/commerce-modal-contract.test.tsx", "test/user-access-surfaces-view.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -7565,7 +7676,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7605,7 +7716,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-007"
     },
     {
@@ -7709,7 +7820,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -7727,7 +7838,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7745,7 +7856,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7763,7 +7874,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7781,7 +7892,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7799,7 +7910,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8033,7 +8144,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8051,7 +8162,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8307,11 +8418,11 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 0,
+      "consumers": 2,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-007"
     },
     {
@@ -8325,7 +8436,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 0,
+      "consumers": 2,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8343,7 +8454,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -8361,7 +8472,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -8437,7 +8548,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/table.test.ts"],
+      "testFiles": ["test/design-system-primitives.test.tsx", "test/table.test.ts"],
       "gapTask": "DS-010"
     },
     {
@@ -8469,7 +8580,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -8495,6 +8606,8 @@
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-primitives.test.tsx",
+        "test/design-system.test.tsx",
         "test/global-search-launcher.test.ts",
         "test/hospitality-screen-structure.test.tsx",
         "test/hr-attendance-employees-http.test.ts",
@@ -8556,6 +8669,7 @@
         "test/crm-case-detail-screen.test.tsx",
         "test/crm-pipeline-screen.test.tsx",
         "test/design-system-demo.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-board-screen.test.tsx",
         "test/flow-epic-map-routes.test.ts",
@@ -8604,13 +8718,15 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
       "testFiles": [
         "test/accounting.test.ts",
         "test/backend-ui.test.ts",
+        "test/design-system-dates.test.tsx",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/events.test.ts",
         "test/flow-issue-detail-routes.test.ts",
@@ -8789,6 +8905,7 @@
         "test/ci-test-groups.test.ts",
         "test/collaboration-backend-e2e.test.ts",
         "test/collection-navigation.test.ts",
+        "test/commerce-purchase-modal-http.test.ts",
         "test/company-branch-e2e.test.ts",
         "test/company-branch-form-screen.test.tsx",
         "test/company-branch.test.ts",
@@ -8811,9 +8928,11 @@
         "test/crm-reporting-domain.test.ts",
         "test/crm-reporting.test.ts",
         "test/crm-ux.test.ts",
+        "test/current-company-context.test.ts",
         "test/date-scalar.test.ts",
         "test/decimal-exact.test.ts",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/document-sequence.test.ts",
         "test/e2e.test.ts",
@@ -9011,7 +9130,7 @@
       "decision": "recipe",
       "target": "KetSuite",
       "wave": 1,
-      "consumers": 67,
+      "consumers": 68,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9029,7 +9148,7 @@
       "decision": "recipe",
       "target": "KetSuite",
       "wave": 1,
-      "consumers": 67,
+      "consumers": 68,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9065,7 +9184,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9106,6 +9225,7 @@
         "test/crm-leaderboard-screen.test.tsx",
         "test/crm-ux.test.ts",
         "test/decimal-exact.test.ts",
+        "test/design-system-dates.test.tsx",
         "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/experience-collection-controls.test.tsx",
@@ -9236,7 +9356,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9300,7 +9420,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9318,7 +9438,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9378,7 +9498,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9396,7 +9516,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9504,7 +9624,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -9611,7 +9731,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9656,6 +9776,7 @@
         "test/company-company-form-screen.test.tsx",
         "test/crm-e2e.test.ts",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-tables.test.tsx",
         "test/list-bulk-selection.test.tsx",
@@ -9680,7 +9801,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -9698,7 +9819,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9752,7 +9873,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 77,
+      "consumers": 76,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9792,7 +9913,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -9810,7 +9931,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9828,7 +9949,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10015,7 +10136,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 91,
+      "consumers": 93,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10023,6 +10144,7 @@
         "test/account-defaults-screen.test.tsx",
         "test/account-move-detail-http.test.ts",
         "test/backend-ui.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/flow-project-epics-screen.test.tsx",
         "test/flow-project-issues-routes.test.ts",
         "test/hospitality-billing.test.ts",
@@ -10243,7 +10365,7 @@
       "decision": "recipe",
       "target": "KetSuite",
       "wave": 1,
-      "consumers": 67,
+      "consumers": 68,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -10333,7 +10455,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10427,7 +10549,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/backend-ui.test.ts"],
+      "testFiles": ["test/backend-ui.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-019"
     },
     {
@@ -10495,7 +10617,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10513,7 +10635,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10531,7 +10653,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10549,7 +10671,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 2,
-      "consumers": 4,
+      "consumers": 6,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10603,7 +10725,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -10639,7 +10761,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10657,7 +10779,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 5,
-      "consumers": 13,
+      "consumers": 11,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10708,6 +10830,7 @@
         "test/design-system-atlas.test.ts",
         "test/design-system-demo.test.ts",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/events.test.ts",
         "test/flow-board-screen.test.tsx",
@@ -10743,7 +10866,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10968,10 +11091,12 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-modal-contract.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
         "test/crm-cases-routes.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
         "test/crm-configuration-screen.test.tsx",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/flow-my-work-screen.test.tsx",
         "test/flow-projects-screens.test.tsx",
@@ -11016,6 +11141,7 @@
         "test/crm-configuration-modal-view.test.tsx",
         "test/crm-configuration-permissions.test.ts",
         "test/crm-ux.test.ts",
+        "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-controls.test.tsx",
         "test/field-classification.test.ts",
@@ -11113,7 +11239,7 @@
       "decision": "promote",
       "target": "Public core",
       "wave": 4,
-      "consumers": 82,
+      "consumers": 84,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -11131,7 +11257,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -11209,8 +11335,21 @@
     },
     {
       "layer": "public",
+      "file": "packages/design-system/src/catalogue/primitives.css",
+      "lines": 77,
+      "hooks": [
+        "primitive-caption",
+        "primitive-harness",
+        "primitive-row",
+        "primitive-sample",
+        "primitive-section",
+        "primitive-section-head"
+      ]
+    },
+    {
+      "layer": "public",
       "file": "packages/design-system/src/catalogue/styles.css",
-      "lines": 3,
+      "lines": 4,
       "hooks": []
     },
     {
@@ -11335,8 +11474,31 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/date-time/styles.css",
-      "lines": 25,
-      "hooks": ["date-range"]
+      "lines": 264,
+      "hooks": [
+        "date-boundary",
+        "date-calendar",
+        "date-calendar-body",
+        "date-calendar-footer",
+        "date-calendar-head",
+        "date-calendar-months",
+        "date-calendar-status",
+        "date-calendar-title",
+        "date-cell",
+        "date-control-row",
+        "date-day",
+        "date-field-control",
+        "date-grid",
+        "date-inputs",
+        "date-month",
+        "date-month-title",
+        "date-picker",
+        "date-range",
+        "date-range-error",
+        "date-range-preset",
+        "date-tools",
+        "date-weekday"
+      ]
     },
     {
       "layer": "public",
@@ -11365,7 +11527,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 358,
+      "lines": 367,
       "hooks": []
     },
     {
@@ -11458,12 +11620,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/relation-select/styles.css",
-      "lines": 311,
+      "lines": 299,
       "hooks": [
         "action",
         "combobox-toggle",
         "field-control",
-        "modal-layer",
         "relation-caret",
         "relation-chip",
         "relation-chip-clear",
@@ -11505,7 +11666,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 580,
+      "lines": 568,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -11580,7 +11741,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 422,
+      "lines": 419,
       "hooks": [
         "app-navigation",
         "icon",
@@ -11697,7 +11858,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 554,
+      "lines": 556,
       "hooks": [
         "card-actions",
         "card-body",
@@ -11754,7 +11915,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/shell/styles.css",
-      "lines": 436,
+      "lines": 435,
       "hooks": [
         "app-brand",
         "app-location-bar",
@@ -11781,7 +11942,6 @@
         "page-actions",
         "page-body",
         "page-context",
-        "page-description",
         "page-eyebrow",
         "page-header",
         "page-heading",
@@ -11805,14 +11965,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 164,
+      "lines": 152,
       "hooks": [
         "board-page",
         "board-page-actions",
         "board-page-body",
         "board-page-context",
         "board-page-controls",
-        "board-page-description",
         "board-page-eyebrow",
         "board-page-header",
         "board-page-heading",
@@ -11828,14 +11987,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 169,
+      "lines": 156,
       "hooks": [
         "action",
         "dashboard-page",
         "dashboard-page-actions",
         "dashboard-page-body",
         "dashboard-page-context",
-        "dashboard-page-description",
         "dashboard-page-eyebrow",
         "dashboard-page-header",
         "dashboard-page-heading",
@@ -11879,7 +12037,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/form-page/styles.css",
-      "lines": 237,
+      "lines": 225,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -11890,7 +12048,6 @@
         "form-page-body",
         "form-page-context",
         "form-page-controller",
-        "form-page-description",
         "form-page-header",
         "form-page-heading",
         "form-page-layout",
@@ -11940,7 +12097,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 136,
+      "lines": 128,
       "hooks": [
         "action",
         "cell",
@@ -11950,7 +12107,6 @@
         "list-page-body",
         "list-page-context",
         "list-page-controls",
-        "list-page-description",
         "list-page-footer",
         "list-page-header",
         "list-page-heading",
@@ -11964,17 +12120,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 254,
+      "lines": 232,
       "hooks": [
-        "board-page",
-        "dashboard-page",
-        "form-page",
         "list-page",
         "list-page-actions",
         "list-page-body",
         "list-page-context",
         "list-page-controls",
-        "list-page-description",
         "list-page-eyebrow",
         "list-page-footer",
         "list-page-header",
@@ -11984,7 +12136,6 @@
         "list-page-title-row",
         "list-page-toolbar",
         "list-page-tools",
-        "record-page",
         "row",
         "table",
         "table-scroll"
@@ -12013,7 +12164,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 131,
+      "lines": 119,
       "hooks": ["form-actions", "record-form"]
     },
     {
@@ -12038,12 +12189,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 239,
+      "lines": 209,
       "hooks": [
         "bulk-action-list",
         "cell",
         "field",
-        "field-label",
         "form-actions",
         "form-errors",
         "form-grid",
@@ -12066,7 +12216,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-page/styles.css",
-      "lines": 228,
+      "lines": 216,
       "hooks": [
         "action-group",
         "form-cluster",
@@ -12076,7 +12226,6 @@
         "record-page-body",
         "record-page-context",
         "record-page-controller",
-        "record-page-description",
         "record-page-header",
         "record-page-heading",
         "record-page-layout",
@@ -12098,13 +12247,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/actions/styles.css",
-      "lines": 158,
+      "lines": 151,
       "hooks": ["action", "action-group", "action-label", "action-leading", "action-spinner"]
     },
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/feedback/styles.css",
-      "lines": 164,
+      "lines": 166,
       "hooks": [
         "empty",
         "empty-actions",
@@ -12124,7 +12273,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 168,
+      "lines": 290,
       "hooks": [
         "field",
         "field-control",
@@ -12169,13 +12318,13 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/progress/styles.css",
-      "lines": 46,
+      "lines": 49,
       "hooks": ["progress", "progress-bar", "progress-label", "progress-track", "progress-value"]
     },
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/status/styles.css",
-      "lines": 142,
+      "lines": 146,
       "hooks": [
         "avatar",
         "badge",

@@ -107,7 +107,6 @@ export const accessPoliciesScreen = (
       variant="operational"
       frame={frame}
       title={_('user_backend.policy.title')}
-      description={_('user_backend.policy.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton
