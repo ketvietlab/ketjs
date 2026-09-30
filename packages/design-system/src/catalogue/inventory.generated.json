@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 133,
     "cssFiles": 78,
-    "cssLines": 15554
+    "cssLines": 15505
   },
   "rows": [
     {
@@ -12545,12 +12545,11 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/lists.css",
-      "lines": 1498,
+      "lines": 1449,
       "hooks": [
         "app-main",
         "app-shell",
         "avatar",
-        "badge",
         "board-page",
         "bulk-action",
         "bulk-actions",
