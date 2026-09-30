@@ -29,6 +29,7 @@
   }
   :where([data-kv-design-system]) [data-ui="badge"][data-pattern="badge"] {
     display: inline-flex;
+    flex-shrink: 0;
     min-height: 1.4rem;
     align-items: center;
     gap: 0.3125rem;

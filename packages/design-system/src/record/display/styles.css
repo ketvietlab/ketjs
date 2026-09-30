@@ -81,7 +81,7 @@
   }
 
   @container (max-width: 34rem) {
-    :where([data-kv-design-system]) [data-ui="description-list"] {
+    :where([data-kv-design-system]) [data-ui="description-list"][data-columns] {
       --kv-description-columns: 1;
     }
   }

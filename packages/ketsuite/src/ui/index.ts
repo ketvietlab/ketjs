@@ -131,6 +131,7 @@ export {
   RECORD_NEW_ID,
   RECORD_PARAM,
   RECORD_TAB_PARAM,
+  RECORD_DIALOG_PARAM,
   defineRecordModalIsland,
   isRecordKind,
   isRecordModalCreate,
@@ -150,6 +151,7 @@ export {
 } from './client/record-modal.tsx'
 export {
   RecordDialogTrigger,
+  RecordStateTrigger,
   RecordModalForm,
   recordStateSelectControl,
 } from './client/record-modal-form.tsx'
