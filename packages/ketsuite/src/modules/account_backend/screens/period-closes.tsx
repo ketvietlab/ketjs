@@ -94,7 +94,6 @@ export const periodClosesListScreen = (
       frame={collection.frame}
       title={_('account_backend.close.title')}
       controls={collectionControls(_, _('account_backend.close.title'), collection.frame)}
-      description={_('account_backend.close.subtitle')}
       footer={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
       actions={collectionActions(_, collection.frame)}
       body={stack([

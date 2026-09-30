@@ -90,7 +90,6 @@ export const locationsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.location.title')}
-      description={_('stock_backend.location.subtitle')}
       headerActions={
         <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
       }

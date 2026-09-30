@@ -587,7 +587,6 @@ test('design system: headers and page recipes share one identity contract', () =
     <PageHeader
       eyebrow="Sales"
       title="Orders"
-      description="Current order queue"
       status={<Badge label="Live" tone="positive" />}
       actions={<Button label="Create" />}
       meta="Updated now"
@@ -742,11 +741,8 @@ test('design system: canonical page titles share one dense hierarchy', () => {
       ?.groups?.body
     assert.match(heading ?? '', /gap: var\(--kv-space-1\)/, `${kind}-heading`)
 
-    const description = patterns.match(
-      new RegExp(`\\[data-ui="${kind}-description"\\]\\s*\\{(?<body>[^}]+)\\}`),
-    )?.groups?.body
-    assert.match(description ?? '', /margin: 0/, `${kind}-description`)
-    assert.match(description ?? '', /line-height: var\(--kv-leading-normal\)/, `${kind}-description`)
+    // A page header has no description (LAYOUT.md L5), so nothing styles one.
+    assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
   }
   assert.match(patterns, /--kv-page-title-size: 1\.5rem/)
   assert.equal((patterns.match(/font-size: var\(--kv-text-lg\)/g) ?? []).length >= 4, true)
@@ -971,7 +967,6 @@ test('design system: RecordPage renders a record surface rather than the form co
       variant="operational"
       context="Customers / CUS-0042"
       title="Mùa Hạ Riverside"
-      description="Customer record"
       actions={<Button label="Edit" />}
       body="Record fields"
       aside="Record facts"
@@ -1242,7 +1237,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
     <ListPage
       eyebrow="Catalogue"
       title="Products"
-      description="Manage the sellable catalogue."
       actions={<Button label="Create" variant="primary" />}
       controls="Search and filters"
       status="24 products"
@@ -1297,7 +1291,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       context="Sales / Overview"
       eyebrow="Commercial workspace"
       title="Sales overview"
-      description="Demand and confirmed revenue"
       actions={<Button label="Create quotation" variant="primary" />}
       body="Sales metrics"
     />,
@@ -1316,7 +1309,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       context="CRM / Pipeline"
       eyebrow="Pipeline"
       title="Sales opportunities"
-      description="Move active opportunities"
       actions={<Button label="Create opportunity" variant="primary" />}
       controls="Team and owner filters"
       body="Opportunity columns"
@@ -1334,7 +1326,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
   const formPage = renderToString(
     <FormPage
       title="ACME Distribution"
-      description="Supplier · SUP-001"
       status={<Badge label="Active" tone="positive" />}
       actions={<Button label="Save" variant="primary" />}
       body="Partner fields"
@@ -1353,7 +1344,6 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       variant="operational"
       context="Purchasing / Vendor bill / BILL-0042"
       title="BILL-0042"
-      description="Công ty Ánh Dương"
       actions={<Button label="Save" variant="primary" />}
       body="Vendor bill fields"
     />,

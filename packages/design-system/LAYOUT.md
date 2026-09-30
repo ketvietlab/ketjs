@@ -64,6 +64,13 @@ A frame is never a way to separate groups.
   surface title: `--kv-text-md`.
 - The position of title, description and actions, and the gap under them, belong
   to the component. An application does not resize a heading or move its actions.
+- A page header has no description. Every page pattern (`Page`, `PageHeader`,
+  `ListPage`, `FormPage`, `RecordPage`, `WorkspacePage`, `DashboardPage`,
+  `BoardPage`) takes a title and actions only, so the header keeps one height and
+  the controls under it never move between screens. Words that explain a region
+  go in that region's `Surface` or `Section` description, or in its empty state;
+  a record's identity goes in its fields or the record page's `meta` strip; a
+  period goes beside the controls that change it.
 
 ## L6. Spacing by level: deeper is tighter
 
@@ -102,6 +109,10 @@ edge, such as a standalone table. A titled table keeps the 12px inset.
   wrongly, change the component in this package.
 
 ## Enforcement
+
+L5's page header is enforced by the types: no page pattern accepts a
+`description`, so passing one fails the application's type check, and no page
+pattern renders a `*-description` hook for CSS to style.
 
 `ket-design-system-layout-audit` (the `auditLayoutCss` function of
 `@ketvietlab/design-system/contract`) checks a stylesheet for three violations:

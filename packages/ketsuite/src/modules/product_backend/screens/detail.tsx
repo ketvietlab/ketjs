@@ -134,7 +134,8 @@ export const productDetailScreen = (
   const hasRealVariants = variantTotal > 0
   const category = management.categories.find((option) => option.value === row.categoryId)?.label
   const unit = management.uoms.find((option) => option.value === row.uomId)?.label
-  const subtitle = (
+  // The facts that identify this product, in the page's facts strip.
+  const facts = (
     activeTab === 'variants'
       ? [
           `${_('product_backend.field.type')}: ${selectionLabel(_, 'type', row.type)}`,
@@ -404,8 +405,8 @@ export const productDetailScreen = (
       frame={frame}
       scope="product-form-page"
       title={row.name}
-      description={subtitle}
       status={status}
+      meta={facts}
       actions={actions}
       navigation={
         <Tabs

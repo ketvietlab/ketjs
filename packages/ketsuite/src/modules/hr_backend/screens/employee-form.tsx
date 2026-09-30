@@ -149,7 +149,6 @@ export const employeeFormScreen = (
       frame={frame}
       scope="hr-employee-form-page"
       title={title}
-      description={_('hr_backend.employees.formHint')}
       actions={
         <FormCluster
           label={title}

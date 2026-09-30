@@ -81,7 +81,6 @@ export const invoicingPoliciesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.policies.title')}
-      description={_('sale_backend.policy.subtitle')}
       headerActions={
         <LinkButton label={_('sale_backend.action.savePolicy')} href={options.createHref} variant="primary" />
       }
