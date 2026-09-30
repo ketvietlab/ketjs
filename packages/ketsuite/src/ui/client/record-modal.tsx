@@ -187,6 +187,8 @@ export type RecordModalCommandStep<Data> = {
 export type RecordModalCommand<Data> = ({ fn: string; route?: never } | { fn?: never; route: string }) & {
   /** Same-origin destination after a successful command; evaluated by the runtime. */
   navigate?: (value: unknown, context: RecordModalContext<Data>) => string
+  /** Parent fields consumed by a child command; clear only after all steps succeed. */
+  clearRecordDrafts?: readonly string[]
   /** Map server paths to stable native field names using the submitted snapshot. */
   issueField?: (field: string, form: FormData, context: RecordModalContext<Data>) => string
   /** Map the submitted form to the function's input. */
@@ -1001,6 +1003,8 @@ export const createRecordModal =
         }
         if (scope === 'dialog') dialogDrafts.set(emptyDraftState())
         else recordDrafts.set(emptyDraftState())
+        if (command.clearRecordDrafts?.length)
+          recordDrafts.set(resetRecordDraftFields(recordDrafts(), command.clearRecordDrafts))
         // A command that stays in its layer leaves its answer for the view, which is
         // how something the server can only say once — a one-time credential — reaches
         // the reader. Every other `after` replaces the layer, so the answer goes.
