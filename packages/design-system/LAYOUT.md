@@ -60,8 +60,10 @@ A frame is never a way to separate groups.
 
 ## L5. Headings are pinned by level; the application passes words
 
-- Page title: `PageHeader`. Surface title: `--kv-text-xl`. Section title and nested
-  surface title: `--kv-text-md`.
+- Page title: `--kv-page-title-size`, the same for every page pattern: 24px from
+  tablet width (48rem) up, 17px (`--kv-text-lg`) below it, and 17px on an
+  operational `ListPage` at compact density. Surface title: `--kv-text-xl`. Section
+  title and nested surface title: `--kv-text-md`.
 - The position of title, description and actions, and the gap under them, belong
   to the component. An application does not resize a heading or move its actions.
 - A page header has no description. Every page pattern (`Page`, `PageHeader`,
