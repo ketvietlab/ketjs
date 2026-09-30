@@ -149,6 +149,7 @@ test('record modal: a definition may put a footer of actions outside the scrolli
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
   assert.match(dialogLayer, /actions: spec.actions\?\.\(context\)/u)
+  assert.match(dialogLayer, /description: spec.description\?\.\(context\)/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {

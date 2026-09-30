@@ -247,6 +247,8 @@ export type RecordModalTab<Data> = {
 
 export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
+  /** Keep the parent record identity visible while completing a nested action. */
+  description?: (context: RecordModalContext<Data>) => string | null
   size?: 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
   /** Fixed actions for this dialog layer, outside its scrolling body. */
@@ -1169,6 +1171,7 @@ export const createRecordModal =
         presentation: 'dialog',
         size: spec.size ?? 'default',
         title: spec.title(context),
+        description: spec.description?.(context),
         actions: spec.actions?.(context),
         closeLabel: t('recordModal.close'),
         body: (
