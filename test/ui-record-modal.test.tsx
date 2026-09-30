@@ -149,6 +149,7 @@ test('record modal: a definition may put a footer of actions outside the scrolli
     runtime.indexOf('return {', runtime.indexOf('const dialogLayer = ')),
   )
   assert.match(dialogLayer, /actions: spec.actions\?\.\(context\)/u)
+  assert.match(dialogLayer, /description: spec.description\?\.\(context\)/u)
 })
 
 test('record modal: going back over a client-owned entry does not refetch the page', () => {
@@ -177,7 +178,7 @@ test('record modal: cross-collection navigation opens its target without resetti
       show,
     )
   invoke('product.template', null)
-  assert.deepEqual(calls, [['one', 'variants', 'none']])
+  assert.deepEqual(calls, [['one', 'variants', 'none', undefined, undefined]])
   invoke('product.template', { id: 'one', tab: 'general' })
   invoke('partner.record', null)
   invoke('product.template', null, null)
@@ -243,7 +244,10 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     ['another record', /outcome\.set\(null\)\n        dialog\.set/u],
     ['a closed modal', /outcome\.set\(null\)\n      status\.set\('idle'\)/u],
     ['a closed dialog', /outcome\.set\(null\)\n        afterRender\(/u],
-    ['an opened dialog', /outcome\.set\(null\)\n                dialog\.set\(\{ name: opener/u],
+    [
+      'an opened dialog',
+      /outcome\.set\(null\)\n                saved\.set\(false\)\n                dialog\.set\(\{ name: opener/u,
+    ],
     ['another tab', /outcome\.set\(null\)\n              show\(/u],
     ['a refusal', /outcome\.set\(null\)\n          issues\.set\(/u],
   ] as const)
@@ -598,4 +602,77 @@ test('record modal: a refusal code no source translates never reaches the reader
     'Email này không dùng được.',
   )
   assert.equal(resolveRecordModalIssue('unknown', {}), RECORD_MODAL_LABELS['recordModal.saveFailed'])
+})
+
+test('record modal: public dropzone forms submit selected files through the upload runtime', () => {
+  const source = readFileSync('packages/ketsuite/src/ui/client/record-modal-form.tsx', 'utf8')
+  assert.match(source, /dropzone\?: boolean/u)
+  assert.match(source, /data-record-dropzone=\{props\.dropzone \? '' : null\}/u)
+  assert.match(runtime, /control\.form\?\.hasAttribute\('data-record-dropzone'\)/u)
+  assert.match(runtime, /control\.form\?\.requestSubmit\(\)/u)
+})
+
+test('record modal: a pending dialog deep link is cleared by normal navigation and close', () => {
+  const href = recordModalHref('/admin/crm/tickets?owner=me', {
+    kind: 'customer_care.ticket',
+    id: 't1',
+    tab: 'handle',
+    dialog: 'move-progress',
+  })
+  assert.deepEqual(readRecordModalTarget(href), {
+    kind: 'customer_care.ticket',
+    id: 't1',
+    tab: 'handle',
+    dialog: 'move-progress',
+  })
+  assert.equal(recordModalClosedHref(href), '/admin/crm/tickets?owner=me')
+  assert.doesNotMatch(recordModalHref(href, { kind: 'customer_care.ticket', id: 't2' }), /recordDialog/)
+  assert.match(runtime, /definition\.dialogs\?\.\[pendingEntryDialog\]/u)
+  assert.match(runtime, /pendingEntryDialog = null/u)
+})
+
+test('record modal: cancelling one inline editor preserves other drafts and their dirty guard', async () => {
+  const { resetRecordDraftFields, recordDraftHasChanges } = await import(
+    '../packages/ketsuite/src/ui/client/record-modal.tsx'
+  )
+  const record = {
+    values: { milestone: 'discard', call: 'keep' },
+    initialValues: { milestone: 'saved', call: '' },
+    checks: { confirmed: true },
+    initialChecks: { confirmed: false },
+  }
+  const cancelled = resetRecordDraftFields(record, ['milestone'])
+  assert.equal(cancelled.values.milestone, undefined)
+  assert.equal(cancelled.initialValues.milestone, undefined)
+  assert.equal(cancelled.values.call, 'keep')
+  assert.equal(cancelled.checks.confirmed, true)
+  assert.equal(recordDraftHasChanges(cancelled), true)
+  assert.equal(record.values.milestone, 'discard', 'draft snapshots stay immutable')
+  assert.equal(recordDraftHasChanges(resetRecordDraftFields(cancelled, ['call', 'confirmed'])), false)
+})
+
+test('record modal: a section-composed form does not reserve an empty field grid', async () => {
+  const { RecordModalForm } = await import('../packages/ketsuite/src/ui/client/record-modal-form.tsx')
+  const html = renderToString(
+    RecordModalForm({ kind: 'test', fields: [], command: 'save', body: <section>Grouped fields</section> }),
+  )
+  assert.doesNotMatch(html, /data-ui="form-grid"/)
+  assert.match(html, /name="__command" value="save"/)
+  assert.match(html.replace(/<!--.*?-->/g, ''), /<section>Grouped fields<\/section>/)
+  const withFields = renderToString(
+    RecordModalForm({ kind: 'test', fields: [{ id: 'name', name: 'name', label: 'Name' }] }),
+  )
+  assert.match(withFields, /data-ui="form-grid"/)
+})
+
+test('record modal: child view state is isolated and cleared with its draft lifecycle', () => {
+  assert.match(runtime, /scope === 'dialog' \? dialogViewState\(\)\[key\] : undefined/u)
+  assert.equal(
+    (runtime.match(/const stateStore = dialog\(\) \? dialogViewState : viewState/gu) ?? []).length,
+    2,
+  )
+  const resets = [...runtime.matchAll(/dialogDrafts\.set\(emptyDraftState\(\)\)/gu)]
+  assert.ok(resets.length > 0)
+  for (const reset of resets)
+    assert.match(runtime.slice(reset.index, reset.index + 120), /dialogViewState\.set\(\{\}\)/u)
 })
