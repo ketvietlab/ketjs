@@ -761,16 +761,12 @@ test('design system: every page title is 24px from tablet width and 17px below i
     tokens,
     /@media \(max-width: 47\.9375rem\) \{\s*:root \{\s*--kv-page-title-size: var\(--kv-text-lg\);\s*\}/,
   )
-  // Tokens, the tablet step and compact density are the only places that size a title.
+  // Density must not change the page title; only the viewport controls its size.
   assert.deepEqual([...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]).sort(), [
     '1.5rem',
     'var(--kv-text-lg)',
-    'var(--kv-text-lg)',
   ])
-  assert.match(
-    css,
-    /\[data-density="compact"\]\) \[data-ui="list-page"\]\[data-variant="operational"\] \{\s*--kv-page-title-size/,
-  )
+  assert.doesNotMatch(patternCss, /--kv-page-title-size:/)
 
   const identity = css.match(/\[data-kv-page-identity="title"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body
   assert.match(identity ?? '', /font-size: var\(--kv-page-title-size\)/)
@@ -782,6 +778,42 @@ test('design system: every page title is 24px from tablet width and 17px below i
     if (!titleHook.test(selector ?? '')) continue
     for (const [declaration] of (body ?? '').matchAll(/font-size:[^;]+/g)) {
       assert.equal(declaration, 'font-size: var(--kv-page-title-size)', selector?.trim())
+    }
+  }
+})
+
+test('design system: a control is the same size at every viewport width', () => {
+  // Rows the finger scrolls through keep a touch height, as do the mobile-only
+  // navigation bar and page context bars; controls follow density.
+  const touchRow =
+    /navigation-(?:item|branch-trigger|trigger)"\]|menu-item"\]|kt-selection-target"\]|-context"\]|global-search"\]/
+  const control =
+    /\[data-ui="action"\]|\b(?:button|summary|select|input)\b|-(?:trigger|toggle|close|remove|submit|action)"\]/
+  const size = /^(?:min-|max-)?(?:height|width|block-size|inline-size)$/
+  for (const path of globSync('packages/design-system/src/**/*.css')) {
+    if (path.includes('/catalogue/')) continue
+    const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const media of source.matchAll(/@media \(max-width:[^{]+\{/g)) {
+      let depth = 1
+      let end = (media.index ?? 0) + media[0].length
+      const start = end
+      while (depth > 0 && end < source.length) {
+        if (source[end] === '{') depth++
+        else if (source[end] === '}') depth--
+        end++
+      }
+      for (const [, selector = '', body = ''] of source
+        .slice(start, end - 1)
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        for (const declaration of body.split(';')) {
+          const [property = '', value = ''] = declaration.split(':').map((part) => part.trim())
+          if (!size.test(property) || touchRow.test(selector)) continue
+          const where = `${path}: ${selector.replace(/\s+/g, ' ').trim()} { ${property}: ${value} }`
+          assert.ok(!/--kv-touch-target|2\.75rem/.test(value), where)
+          assert.ok(!/\[data-ui="action"\]/.test(selector) || !/height|block-size/.test(property), where)
+          assert.ok(!control.test(selector) || !/rem|px/.test(value), where)
+        }
+      }
     }
   }
 })
@@ -2104,7 +2136,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 275)
+  assert.equal(designSystemInventory.summary.publicExports, 278)
   assert.equal(designSystemInventory.summary.runtimeExports, 138)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
@@ -2212,4 +2244,40 @@ test('design system: indigo information text remains legible on dark surfaces', 
   const text = luminance(color('--kv-ref-info'))
   const surface = luminance(color('--kv-ref-bg-main'))
   assert.ok((text + 0.05) / (surface + 0.05) >= 4.5)
+})
+
+test('design system: badges and tags share the pill radius', () => {
+  const status = readFileSync('packages/design-system/src/primitives/status/styles.css', 'utf8')
+  for (const hook of ['badge', 'tag', 'count-badge']) {
+    const rule = status.split(`[data-ui="${hook}"]`)[1]?.split('}')[0] ?? ''
+    assert.match(rule, /border-radius: var\(--kv-radius-full\)/)
+  }
+})
+
+test('design system: modal and section headings retain distinct type levels', () => {
+  const section = layoutCss.split('[data-ui="section-title"]')[1]?.split('}')[0] ?? ''
+  const nested =
+    readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8')
+      .split('[data-ui="surface-title"] {')[1]
+      ?.split('}')[0] ?? ''
+  const modal =
+    readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+      .split('[data-ui="modal-title"] {')[1]
+      ?.split('}')[0] ?? ''
+  assert.match(section, /font-size: var\(--kv-text-lg\)/)
+  assert.match(nested, /font-size: var\(--kv-text-lg\)/)
+  assert.match(modal, /font-size: var\(--kv-text-xl\)/)
+})
+
+test('design system: Stack gap variants own their gap above legacy backend styles', () => {
+  for (const variant of ['compact', 'loose']) {
+    const selector = `[data-ui="stack"][data-pattern="stack"][data-gap="${variant}"]`
+    const rule = css.slice(css.indexOf(selector)).split('}')[0] ?? ''
+    assert.match(rule, /gap: var\(--kv-stack-gap\);/)
+  }
+})
+
+test('design system: grouped page bodies preserve explicit Stack spacing', () => {
+  const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
+  assert.ok(grouped.includes('> [data-ui="stack"]:not([data-gap="loose"]):not([data-gap="compact"])'))
 })

@@ -8,6 +8,7 @@ export const NativeFieldControl = (props: FieldProps, describedBy: string | null
     return (
       <textarea
         data-ui="field-control"
+        data-appearance={props.appearance === 'embedded' ? 'embedded' : null}
         id={props.id}
         name={props.name}
         placeholder={props.placeholder ?? null}
@@ -24,6 +25,7 @@ export const NativeFieldControl = (props: FieldProps, describedBy: string | null
     return (
       <select
         data-ui="field-control"
+        data-appearance={props.appearance === 'embedded' ? 'embedded' : null}
         id={props.id}
         name={props.name}
         required={props.required === true}
@@ -49,6 +51,7 @@ export const NativeFieldControl = (props: FieldProps, describedBy: string | null
   return (
     <input
       data-ui="field-control"
+      data-appearance={props.appearance === 'embedded' ? 'embedded' : null}
       id={props.id}
       type={props.type === 'decimal' ? 'number' : (props.type ?? 'text')}
       name={props.name}

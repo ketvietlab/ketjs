@@ -7,10 +7,12 @@
 
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"][data-gap="compact"] {
     --kv-stack-gap: var(--kv-space-2);
+    gap: var(--kv-stack-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"][data-gap="loose"] {
     --kv-stack-gap: var(--kv-space-8);
+    gap: var(--kv-stack-gap);
   }
 
   /* A divider sits halfway: the gap above it and the same space below it. */
@@ -212,7 +214,7 @@
 
   :where([data-kv-design-system]) [data-ui="section-title"] {
     margin-bottom: 0;
-    font-size: var(--kv-text-md);
+    font-size: var(--kv-text-lg);
     line-height: var(--kv-leading-tight);
   }
 

@@ -34,7 +34,7 @@
     gap: 0.3125rem;
     padding: 0.125rem 0.4375rem;
     border: 1px solid transparent;
-    border-radius: var(--kv-radius-sm);
+    border-radius: var(--kv-radius-full);
     background: color-mix(in srgb, var(--kv-text-main) 7%, transparent);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
@@ -66,12 +66,15 @@
 
   :where([data-kv-design-system]) [data-ui="tag"] {
     display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     min-height: 1.6rem;
     align-items: center;
     gap: var(--kv-space-1);
     padding-inline: var(--kv-space-2);
     border: 1px solid var(--kv-color-line);
-    border-radius: var(--kv-radius-sm);
+    border-radius: var(--kv-radius-full);
     background: var(--kv-color-surface);
     font-size: var(--kv-text-xs);
     font-weight: 650;
@@ -79,6 +82,7 @@
 
   :where([data-kv-design-system]) [data-ui="tag-remove"] {
     display: grid;
+    flex: none;
     width: 1rem;
     height: 1rem;
     place-items: center;
