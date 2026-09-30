@@ -112,10 +112,6 @@
       gap: var(--kv-space-3);
     }
 
-    :where([data-kv-design-system]) [data-kv-page-identity="title"] {
-      font-size: var(--kv-text-lg);
-    }
-
     :where([data-kv-design-system]) [data-kv-page-identity="actions"] {
       justify-content: flex-start;
     }
