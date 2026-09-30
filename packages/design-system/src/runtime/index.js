@@ -1,4 +1,5 @@
 // @ts-check
+import { attachDatePickers } from '../forms/date-time/runtime.js'
 
 const focusableSelector = [
   'a[href]',
@@ -141,6 +142,7 @@ const attachGlobalSearch = (root) => {
 }
 
 export const attachDesignSystemInteractions = (root = document) => {
+  const cleanupDatePickers = attachDatePickers(root)
   const cleanupGlobalSearch = attachGlobalSearch(root)
   const activeBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const modal = root.querySelector('[data-ui="modal-layer"][data-route-modal="true"] [role="dialog"]')
@@ -600,6 +602,7 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   return () => {
     cleanupGlobalSearch()
+    cleanupDatePickers()
     document.removeEventListener('keydown', onKeydown)
     document.removeEventListener('click', onDocumentClick)
     document.removeEventListener('change', onSelectionChange)

@@ -51,6 +51,11 @@ export type FieldProps = {
     | 'checkbox-group'
     | 'radio'
   value?: string | number | boolean | null
+  /** Embedded controls share the frame of a compound field. */
+  labelHidden?: boolean
+  /** Keep the selected value accessible while showing only the select chevron. */
+  selectionHidden?: boolean
+  appearance?: 'default' | 'embedded'
   placeholder?: string | null
   required?: boolean
   disabled?: boolean
@@ -239,6 +244,8 @@ export const Field = (props: FieldProps): TemplateResult => {
     <label
       data-ui="field"
       data-kind={props.type ?? 'text'}
+      data-label-hidden={props.labelHidden ? 'true' : null}
+      data-selection-hidden={props.selectionHidden ? 'true' : null}
       data-span={props.span ?? 'half'}
       data-invalid={String(!!props.error)}
       for={props.id}

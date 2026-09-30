@@ -2136,7 +2136,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 275)
+  assert.equal(designSystemInventory.summary.publicExports, 278)
   assert.equal(designSystemInventory.summary.runtimeExports, 138)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)

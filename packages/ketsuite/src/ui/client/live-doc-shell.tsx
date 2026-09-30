@@ -305,7 +305,7 @@ const blockHtml = (
     const align = ALIGNMENTS.has(block.align ?? '') ? block.align : 'left'
     const tools = editableImages
       ? `<div data-live-image-tools role="group" aria-label="${labels.image}">
-      <label>${labels.imageSize}<input data-live-image-width type="range" min="20" max="100" step="5" value="${width}" aria-label="${labels.imageSize}"></label>
+      <label>${labels.imageSize}<input data-ui="form-control" autocomplete="off" data-live-image-width type="range" min="20" max="100" step="5" value="${width}" aria-label="${labels.imageSize}"></label>
       ${(['left', 'center', 'right'] as const).map((value, i) => `<button type="button" data-ui="flow-editor-mark" data-control="action" data-variant="secondary" data-size="compact" data-flow-editor-mark="image-${value}" data-live-image-align="${value}" aria-label="${[labels.imageLeft, labels.imageCenter, labels.imageRight][i]}" aria-pressed="${align === value}">${['⇤', '↔', '⇥'][i]}</button>`).join('')}
       <button type="button" data-ui="flow-editor-mark" data-control="action" data-variant="secondary" data-size="compact" data-flow-editor-mark="image-remove" data-live-image-remove>${labels.imageRemove}</button>
     </div>`
