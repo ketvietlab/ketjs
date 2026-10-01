@@ -1644,7 +1644,7 @@ test('design density: controls and fields follow the canonical component dimensi
   assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
   const actions = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
   const fields = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
+  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-action-height\);/)
   assert.match(
     css,
     /\[data-control="action"\]:not\(\[data-ui\]\)[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/,
@@ -2083,5 +2083,5 @@ test('backend compatibility CSS leaves Section and ModalSheet geometry to the de
   const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
   const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
   assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
-  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-lg\)/u)
+  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-sm\)/u)
 })

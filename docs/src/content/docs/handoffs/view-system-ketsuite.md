@@ -13,6 +13,10 @@ thay đổi hành vi của framework mà KetSuite cần biết.
 Phạm vi review: `packages/ketjs-view`, `packages/ketjs/src/theme`, `packages/ketjs/src/server/respond.ts`,
 `packages/ketsuite/src/ui`, `packages/ketsuite/src/modules/*_backend`.
 
+Các nhận xét dưới đây là ảnh chụp kỹ thuật của đợt bàn giao cũ. Quy tắc UI hiện tại
+nằm tại `skills/ket-design-system/SKILL.md`; không dùng đề xuất token/kit cũ ở đây
+để quyết định thiết kế mới.
+
 ## 1. Framework đã đổi những gì
 
 Không có thay đổi phá vỡ nào trong KetSuite (`npm run verify` xanh), nhưng năm điểm dưới đây

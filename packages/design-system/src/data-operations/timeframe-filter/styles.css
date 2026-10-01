@@ -24,6 +24,7 @@
     color: var(--kv-color-ink);
     cursor: pointer;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     list-style: none;
   }
 
@@ -49,6 +50,7 @@
   :where([data-kv-design-system]) [data-ui="timeframe-label"] {
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -82,6 +84,7 @@
     border-radius: var(--kv-radius-sm);
     color: var(--kv-color-ink);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-decoration: none;
   }
 
@@ -97,6 +100,7 @@
   :where([data-kv-design-system]) [data-ui="timeframe-option-detail"] {
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-variant-numeric: tabular-nums;
   }
 
@@ -104,6 +108,7 @@
     :is([data-ui="timeframe-range"], [data-ui="timeframe-asof"], [data-ui="timeframe-note"]) {
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-variant-numeric: tabular-nums;
   }
 }

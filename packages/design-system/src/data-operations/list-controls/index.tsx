@@ -55,7 +55,7 @@ export const SearchBar = (props: SearchBarProps): TemplateResult => (
       placeholder={props.placeholder}
       autocomplete="off"
     />
-    <Button type="submit" label={props.submitLabel ?? 'Search'} size="compact" />
+    <Button type="submit" label={props.submitLabel ?? 'Search'} />
   </form>
 )
 
