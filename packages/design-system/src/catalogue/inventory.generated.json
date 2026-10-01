@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16588
+    "cssLines": 16599
   },
   "rows": [
     {
@@ -12050,7 +12050,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 416,
+      "lines": 420,
       "hooks": []
     },
     {
@@ -12264,7 +12264,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 425,
+      "lines": 432,
       "hooks": [
         "app-navigation",
         "icon",

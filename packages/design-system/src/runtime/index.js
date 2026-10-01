@@ -171,7 +171,7 @@ export const attachDesignSystemInteractions = (root = document) => {
     return () => menu.removeEventListener('toggle', onToggle)
   })
 
-  const navigationMedia = window.matchMedia('(max-width: 48rem)')
+  const navigationMedia = window.matchMedia('(width < 48rem)')
   const navigationRoot = document.documentElement
   const priorNavigationOpen = navigationRoot.dataset.kvNavigationOpen
   const navigations = /** @type {HTMLDetailsElement[]} */ (
