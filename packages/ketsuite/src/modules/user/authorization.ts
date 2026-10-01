@@ -1473,6 +1473,19 @@ export async function addSelectedRoles(ctx: Ctx, args: RoleSelection) {
       userId: args.userId,
       branchId: state.scope.branchId,
     })
+  // A session needs a live branch. Company-level access means the company's root
+  // branch, exactly as grantCompany records it; without it the user can never sign in.
+  const companyId = state.scope.companyId
+  if (companyId && !state.addBranch && ![...state.branches.values()].includes(companyId)) {
+    const B = ctx.table('company.Branch')
+    const root = await ctx.db.one(from(B).where(eq(B.rootKey, companyId), eq(B.active, true)))
+    if (!root) required('companyId', 'user.error.rootBranchMissing')
+    await ctx.db.insertIfAbsent('user.BranchMembership', {
+      id: `root:${args.userId}:${String(root!.id)}`,
+      userId: args.userId,
+      branchId: root!.id,
+    })
+  }
   const added: Row[] = []
   for (const roleId of args.roleIds) {
     const row = { id: randomUUID(), userId: args.userId, roleId, ...state.scope }
