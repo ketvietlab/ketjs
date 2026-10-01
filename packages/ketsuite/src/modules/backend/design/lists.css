@@ -570,8 +570,9 @@
 
   [data-ui="view-switch"] {
     display: inline-flex;
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-sm);
+    /* Existing chrome adapter: the shared control height includes its frame. */
+    box-shadow: inset 0 0 0 1px var(--admin-line-strong);
+    border-radius: var(--kv-control-radius);
     overflow: hidden;
   }
 

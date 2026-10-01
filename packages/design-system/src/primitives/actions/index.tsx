@@ -1,14 +1,32 @@
+import { Spinner } from '../../interactions/spinner/index.tsx'
+import { Icon } from '../icon/index.tsx'
+import type { IconName } from '../icon/index.tsx'
+import { Text } from '../status/index.tsx'
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
-export const HOOKS = ['action', 'action-leading', 'action-label', 'action-spinner', 'action-group'] as const
+export const HOOKS = [
+  'action',
+  'action-leading',
+  'action-label',
+  'action-spinner',
+  'action-group',
+  'link',
+] as const
 
 export type ActionVariant = 'primary' | 'secondary' | 'tertiary' | 'destructive'
+export type ActionTone = 'default' | 'danger' | 'positive'
+
 export type ActionSize = 'compact' | 'default' | 'prominent'
 
 type ActionBase = {
   label: string
+  id?: string
   variant?: ActionVariant
+  tone?: ActionTone
+  icon?: IconName
+  fullWidth?: boolean
+  pressed?: boolean
   size?: ActionSize
   leading?: JSXChild
   disabled?: boolean
@@ -27,26 +45,42 @@ export type ButtonProps = ActionBase & {
   controls?: string | null
 }
 
-export type LinkButtonProps = ActionBase & { href: string }
-export type IconButtonProps = Omit<ButtonProps, 'leading'> & {
+export type LinkButtonProps = Omit<ActionBase, 'pressed'> & { href: string }
+export type IconButtonProps = Omit<ButtonProps, 'leading' | 'icon'> & {
   icon: JSXChild
   pressed?: boolean
 }
 
 const ActionContent = (props: ActionBase & { iconOnly?: boolean }): TemplateResult => (
   <>
-    {props.loading === true && <span data-ui="action-spinner" aria-hidden="true" />}
-    {props.loading !== true && props.leading !== undefined && (
-      <span data-ui="action-leading" aria-hidden="true">
-        {props.leading}
+    {props.loading === true && (
+      <span data-ui="action-spinner" aria-hidden="true">
+        <Spinner label={props.label} size="small" decorative />
       </span>
     )}
-    {!props.iconOnly && <span data-ui="action-label">{props.label}</span>}
+    {(props.leading !== undefined || props.icon !== undefined) && (
+      <span data-ui="action-leading" aria-hidden="true">
+        {props.icon ? <Icon name={props.icon} /> : props.leading}
+      </span>
+    )}
+    {!props.iconOnly && (
+      <span data-ui="action-label">
+        <Text>{props.label}</Text>
+      </span>
+    )}
   </>
 )
 
+const actionAttributes = (props: ActionBase) => ({
+  id: props.id,
+  'data-tone': props.tone ?? (props.variant === 'destructive' ? 'danger' : 'default'),
+  'data-loading': props.loading ? 'true' : null,
+  'data-full-width': props.fullWidth ? 'true' : null,
+})
+
 export const Button = (props: ButtonProps): TemplateResult => (
   <button
+    {...actionAttributes(props)}
     data-ui="action"
     data-variant={props.variant ?? 'secondary'}
     data-size={props.size ?? 'default'}
@@ -55,7 +89,9 @@ export const Button = (props: ButtonProps): TemplateResult => (
     value={props.value ?? null}
     form={props.form ?? null}
     disabled={props.disabled === true || props.loading === true}
+    aria-label={props.loading ? props.label : null}
     aria-busy={props.loading === true ? 'true' : null}
+    aria-pressed={props.pressed === undefined ? null : String(props.pressed)}
     aria-describedby={props.describedBy ?? null}
     aria-expanded={props.expanded === undefined ? null : String(props.expanded)}
     aria-controls={props.controls ?? null}
@@ -64,9 +100,10 @@ export const Button = (props: ButtonProps): TemplateResult => (
   </button>
 )
 
-/** An icon-only action with a visible tooltip and accessible name. */
+/** Named icon action with a native title; compose Tooltip for an enhanced description. */
 export const IconButton = (props: IconButtonProps): TemplateResult => (
   <button
+    {...actionAttributes({ ...props, icon: undefined })}
     data-ui="action"
     data-icon-only="true"
     data-variant={props.variant ?? 'tertiary'}
@@ -84,18 +121,20 @@ export const IconButton = (props: IconButtonProps): TemplateResult => (
     aria-controls={props.controls ?? null}
     title={props.label}
   >
-    <ActionContent {...props} leading={props.icon} iconOnly />
+    <ActionContent {...props} icon={undefined} leading={props.icon} iconOnly />
   </button>
 )
 
 export const LinkButton = (props: LinkButtonProps): TemplateResult =>
   props.disabled || props.loading ? (
     <button
+      {...actionAttributes(props)}
       data-ui="action"
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       type="button"
       disabled
+      aria-label={props.loading ? props.label : null}
       aria-busy={props.loading === true ? 'true' : null}
       aria-describedby={props.describedBy ?? null}
     >
@@ -103,6 +142,7 @@ export const LinkButton = (props: LinkButtonProps): TemplateResult =>
     </button>
   ) : (
     <a
+      {...actionAttributes(props)}
       data-ui="action"
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
@@ -126,4 +166,30 @@ export const ActionGroup = (props: {
       ),
     )}
   </div>
+)
+
+export type LinkProps = {
+  label: string
+  href: string
+  id?: string
+  tone?: 'default' | 'muted' | 'danger' | 'inherit'
+  target?: '_self' | '_blank'
+  download?: string
+  describedBy?: string
+}
+
+/** Inline navigation. Use Button for commands and LinkButton for a navigation action. */
+export const Link = (props: LinkProps): TemplateResult => (
+  <a
+    data-ui="link"
+    data-tone={props.tone ?? 'default'}
+    id={props.id}
+    href={props.href}
+    target={props.target ?? null}
+    rel={props.target === '_blank' ? 'noopener noreferrer' : null}
+    download={props.download ?? null}
+    aria-describedby={props.describedBy ?? null}
+  >
+    {props.label}
+  </a>
 )

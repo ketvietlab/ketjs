@@ -21,7 +21,9 @@
     background: var(--kv-text-main);
     color: var(--kv-panel-bg);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     pointer-events: none;
+    visibility: hidden;
     transform: translate(-50%, var(--kv-space-1));
     transition:
       opacity var(--kv-motion-fast),
@@ -49,17 +51,31 @@
     transform: translate(calc(-1 * var(--kv-space-1)), -50%);
   }
 
-  :where([data-kv-design-system]) [data-ui="tooltip"]:is(:hover, :focus-within) [data-ui="tooltip-content"] {
+  :where([data-kv-design-system])
+    [data-ui="tooltip"]:not([data-dismissed="true"]):is(:hover, :focus-within)
+    [data-ui="tooltip-content"] {
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
     transform: translate(-50%, 0);
   }
 
   :where([data-kv-design-system])
-    [data-ui="tooltip"][data-placement="left"]:is(:hover, :focus-within)
+    [data-ui="tooltip"][data-placement="left"]:not([data-dismissed="true"]):is(:hover, :focus-within)
     [data-ui="tooltip-content"],
   :where([data-kv-design-system])
-    [data-ui="tooltip"][data-placement="right"]:is(:hover, :focus-within)
+    [data-ui="tooltip"][data-placement="right"]:not([data-dismissed="true"]):is(:hover, :focus-within)
     [data-ui="tooltip-content"] {
     transform: translate(0, -50%);
+  }
+}
+
+@layer ket.app {
+  /* The transparent bridge keeps hover active while crossing the placement gap. */
+  :where([data-kv-design-system]) [data-ui="tooltip-content"]::before {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--kv-space-2));
+    z-index: -1;
   }
 }

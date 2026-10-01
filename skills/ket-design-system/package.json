@@ -1,0 +1,38 @@
+{
+  "name": "@ketvietlab/ket-design-system-skill",
+  "version": "0.1.0",
+  "description": "Két Design System agent skill and zero-dependency npx installer.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "ket-design-system": "bin/install.mjs"
+  },
+  "files": [
+    "SKILL.md",
+    "references",
+    "agents",
+    "bin",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "skills/ket-design-system"
+  },
+  "keywords": [
+    "agent-skills",
+    "design-system",
+    "ketjs",
+    "codex",
+    "claude",
+    "cursor"
+  ]
+}

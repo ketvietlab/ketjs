@@ -195,3 +195,16 @@ test('sales demo: rejects cross-origin writes and off-site redirects', async () 
     404,
   )
 })
+
+test('sales demo: create and selection commands stay in the header above filters', () => {
+  const html = String(createDemoRoutes()['/demo'](new URL('http://localhost/demo?view=orders')).body)
+  const header = html.indexOf('data-ui="list-page-header"')
+  const create = html.indexOf('Tạo đơn hàng', header)
+  const bulk = html.indexOf('data-ui="bulk-actions"', header)
+  const filters = html.indexOf('data-ui="list-page-toolbar"', header)
+  const body = html.indexOf('data-ui="list-page-body"', filters)
+  assert.ok(header >= 0 && create > header && create < filters)
+  assert.ok(bulk > header && bulk < filters && filters < body)
+  assert.doesNotMatch(html, /data-ui="bulk-actions"[^>]*data-has-selection="true"/)
+  assert.match(html, /form="bulk-form"/)
+})

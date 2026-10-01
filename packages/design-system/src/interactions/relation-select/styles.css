@@ -23,17 +23,18 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--kv-space-2);
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--kv-border-strong);
-    border-radius: var(--kv-radius-sm);
+    padding: var(--kv-control-padding-block) var(--kv-control-padding-inline);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--kv-border-strong);
+    border-radius: var(--kv-control-radius);
     background: var(--kv-panel-bg);
     color: var(--kv-text-main);
     font: inherit;
     /* The same type metrics as a design-system field control. Without them the
        button inherits the body's larger line box and stands 2px taller than every
        other control on the row. */
-    font-size: 0.875rem;
-    line-height: 1.3;
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
     text-align: start;
     cursor: pointer;
   }
