@@ -15,10 +15,11 @@ export const Progress = (props: {
   label: string
   tone?: ProgressTone
   showValue?: boolean
+  size?: 'small' | 'default' | 'large'
 }): TemplateResult => {
   const value = Number.isFinite(props.value) ? Math.max(0, Math.min(100, props.value)) : 0
   return (
-    <div data-ui="progress" data-tone={props.tone ?? 'primary'}>
+    <div data-ui="progress" data-tone={props.tone ?? 'primary'} data-size={props.size ?? 'default'}>
       {(props.showValue ?? true) && (
         <div data-ui="progress-label">
           <span>{props.label}</span>

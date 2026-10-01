@@ -176,6 +176,9 @@ test('product list: follows the design-system list hierarchy without a duplicate
     return html.slice(start, html.indexOf('</td>', start))
   }
   assert.match(cell('type'), /Hàng hoá/)
+  assert.match(cell('name'), /data-wrap="true"/)
+  assert.match(cell('category'), /data-wrap="true"/)
+  assert.doesNotMatch(cell('listPrice'), /data-wrap=/)
   assert.match(cell('isStorable'), /Có/)
   assert.doesNotMatch(cell('type') + cell('isStorable'), /data-ui="badge"/)
   assert.match(html, /data-col="listPrice"[^>]*data-priority="primary"/)

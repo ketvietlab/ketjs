@@ -6,7 +6,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { NavigationItem } from '@ketvietlab/design-system'
+import { NavigationItem, Checkbox, Tooltip, Button, Avatar } from '@ketvietlab/design-system'
 import { renderToString } from '@ketvietlab/ketjs-view'
 
 type Json = Record<string, unknown>
@@ -178,7 +178,223 @@ try {
   ])
   assert.equal(standaloneAudit.current, 'Profit')
 
-  // LAYOUT.md L1–L2, by computed style: a container is framed on the canvas and
+  const runtimeFixture = `<form id="inserted-choices">${renderToString(Checkbox({ id: 'inserted-mixed', name: 'all', label: 'All', checked: 'indeterminate' }))}</form><span id="existing-help">Existing description</span>${renderToString(Tooltip({ id: 'inserted-tooltip', text: 'More details', trigger: Button({ label: 'Details', describedBy: 'existing-help' }) }))}${renderToString(Avatar({ name: 'Retry image', src: 'data:image/png;base64,broken' }))}`
+
+  // Primitive normalization: compare actual geometry and exercise native behavior.
+  for (const width of [390, 1440]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: width < 768,
+    })
+    const url = `http://127.0.0.1:${appPort}/primitives?theme=light`
+    await cdp.send('Page.navigate', { url })
+    await waitFor(
+      () =>
+        evaluate<boolean>(
+          cdp!,
+          `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && document.documentElement.dataset.kvInteractions === 'attached'`,
+        ),
+      'Primitive runtime did not attach',
+    )
+    await evaluate(cdp, `document.querySelector('[data-ui="avatar-image"]').loading = 'eager'`)
+    await waitFor(
+      () => evaluate<boolean>(cdp!, `document.querySelector('[data-ui="avatar-image"]').hidden`),
+      'Avatar did not fall back after an image error',
+    )
+    const primitives: Json = await evaluate<Json>(
+      cdp,
+      `(() => {
+      const rect = id => { const r = document.getElementById(id).getBoundingClientRect(); return { width: r.width, height: r.height } }
+      const search = document.getElementById('primitive-search')
+      let inputs = 0, changes = 0
+      search.addEventListener('input', () => inputs++)
+      search.addEventListener('change', () => changes++)
+      document.querySelector('[data-ui="field-clear"][aria-controls="primitive-search"]').click()
+      const cleared = { value: search.value, focused: document.activeElement === search, inputs, changes }
+      const mixed = document.getElementById('primitive-mixed')
+      const initiallyMixed = mixed.indeterminate && mixed.getAttribute('aria-checked') === 'mixed'
+      mixed.click()
+      const choice = document.getElementById('primitive-checked-value')
+      const tooltip = document.getElementById('primitive-action-tip').closest('[data-ui="tooltip"]')
+      const trigger = tooltip.querySelector('button')
+      trigger.focus()
+      const tooltipOpen = getComputedStyle(document.getElementById('primitive-action-tip')).visibility
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      const tooltipDismissed = getComputedStyle(document.getElementById('primitive-action-tip')).visibility
+      const hasDescription = trigger.getAttribute('aria-describedby').split(' ').includes('primitive-action-tip')
+      const form = document.getElementById('primitive-tag-form')
+      let submitted = null
+      form.addEventListener('submit', event => { event.preventDefault(); submitted = [...new FormData(form, event.submitter).entries()] })
+      form.querySelector('button').click()
+      const affix = document.getElementById('primitive-affix').closest('[data-ui="field-input"]')
+      const avatar = document.querySelector('[data-ui="avatar-image"]')
+      return {
+        rest: rect('primitive-action-rest'), loading: rect('primitive-action-loading'),
+        inputHeight: search.getBoundingClientRect().height, affixHeight: affix.getBoundingClientRect().height,
+        searchType: search.type, cleared, initiallyMixed, afterMixed: mixed.indeterminate,
+        selectedValue: choice.value, selectedChecked: choice.checked,
+        tooltipOpen, tooltipDismissed, hasDescription, submitted, avatarFallback: avatar.hidden,
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+      }
+    })()`,
+    )
+    assert.deepEqual(primitives.rest, primitives.loading, 'loading preserves action geometry')
+    assert.equal(primitives.inputHeight, width < 768 ? 36 : 32)
+    assert.equal(primitives.affixHeight, width < 768 ? 36 : 32)
+    assert.equal(primitives.searchType, 'search')
+    assert.deepEqual(primitives.cleared, { value: '', focused: true, inputs: 1, changes: 1 })
+    assert.equal(primitives.initiallyMixed, true)
+    assert.equal(primitives.afterMixed, false)
+    assert.equal(primitives.selectedValue, 'warehouse-a')
+    assert.equal(primitives.selectedChecked, true)
+    assert.equal(primitives.tooltipOpen, 'visible')
+    assert.equal(primitives.tooltipDismissed, 'hidden')
+    assert.equal(primitives.hasDescription, true)
+    assert.deepEqual(primitives.submitted, [['remove', 'warehouse-a']])
+    assert.equal(primitives.avatarFallback, true)
+    assert.equal(primitives.horizontalOverflow, false)
+    for (const theme of ['light', 'dark']) {
+      const contrast: number[] = await evaluate<number[]>(
+        cdp,
+        `(async () => {
+        document.querySelector('[data-kv-design-system]').setAttribute('data-theme', '${theme}')
+        // Read the settled theme colors after the action background transition.
+        await new Promise(resolve => setTimeout(resolve, 200))
+        const luminance = color => {
+          const values = color.match(/[0-9.]+/g).slice(0,3).map(Number).map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 })
+          return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722
+        }
+        return [...document.querySelectorAll('[data-ui="action"][data-variant="primary"]:is([data-tone="danger"], [data-tone="positive"])')].map(button => {
+          const style = getComputedStyle(button), foreground = luminance(style.color), background = luminance(style.backgroundColor)
+          return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+        })
+      })()`,
+      )
+      assert.equal(contrast.length, 2)
+      for (const ratio of contrast) assert.ok(ratio >= 4.5, `${theme} status action contrast ${ratio}`)
+    }
+    await evaluate(
+      cdp,
+      `document.querySelector('[data-kv-design-system]').setAttribute('data-theme', 'light')`,
+    )
+    const inserted: Json = await evaluate<Json>(
+      cdp,
+      `(async () => {
+      const host = document.createElement('section')
+      host.innerHTML = ${JSON.stringify(runtimeFixture)}
+      document.querySelector('[data-ui="primitive-harness"]').append(host)
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const input = host.querySelector('input')
+      const initiallyMixed = input.indeterminate
+      input.click()
+      input.click()
+      const ariaMatches = input.getAttribute('aria-checked') === String(input.checked)
+      input.form.reset()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const resetMixed = input.indeterminate && input.getAttribute('aria-checked') === 'mixed'
+      const description = host.querySelector('[data-ui="tooltip"] button').getAttribute('aria-describedby')
+      const image = host.querySelector('img')
+      const loaded = new Promise(resolve => image.addEventListener('load', resolve, { once: true }))
+      image.loading = 'eager'
+      image.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Crect width="32" height="32"/%3E%3C/svg%3E'
+      await loaded
+      const imageRecovered = !image.hidden
+      host.remove()
+      return { initiallyMixed, ariaMatches, resetMixed, description, imageRecovered }
+    })()`,
+    )
+    assert.deepEqual(inserted, {
+      initiallyMixed: true,
+      ariaMatches: true,
+      resetMixed: true,
+      description: 'existing-help inserted-tooltip',
+      imageRecovered: true,
+    })
+    results.push({ kind: 'primitive-normalization', width, primitives, inserted })
+    await evaluate(cdp, `document.getElementById('primitive-fields').scrollIntoView()`)
+    const capture = await cdp.send('Page.captureScreenshot', { format: 'png' })
+    const path = join(evidenceDir, `primitives-fields-${width}.png`)
+    await writeFile(path, Buffer.from(String(capture.data), 'base64'))
+    results.push({ kind: 'primitive-screenshot', width, path })
+  }
+
+  // Pinned upstream dimensions, independent of Két token values. Test actual
+  // border boxes (including icon/loading content), responsive boundary and all
+  // density/presentation/theme combinations so composition cannot silently drift.
+  const reference = JSON.parse(await readFile('test/fixtures/polaris-dimensions.json', 'utf8'))
+  for (const width of [390, 767, 768, 1440]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: width < 768,
+    })
+    for (const presentation of ['default', 'grouped']) {
+      const url = `http://127.0.0.1:${appPort}/layering?presentation=${presentation}`
+      await cdp.send('Page.navigate', { url })
+      await waitFor(
+        () =>
+          evaluate<boolean>(
+            cdp!,
+            `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && Boolean(document.querySelector('[data-layering-case="dimensions"]'))`,
+          ),
+        `Dimension specimens did not render: ${width}/${presentation}`,
+      )
+      for (const theme of ['light', 'dark']) {
+        const measured: Json[] = await evaluate<Json[]>(
+          cdp,
+          `(() => {
+          document.querySelector('[data-kv-design-system]').setAttribute('data-theme', '${theme}');
+          const geometry = el => {
+            const s = getComputedStyle(el);
+            return [el.getBoundingClientRect().height, s.fontSize, s.lineHeight, s.paddingTop, s.paddingRight, s.borderRadius].map(parseFloat);
+          };
+          return [...document.querySelectorAll('[data-dimension-density]')].map(root => ({
+            density: root.getAttribute('data-density'),
+            body: [getComputedStyle(root).fontSize, getComputedStyle(root).lineHeight].map(parseFloat),
+            input: geometry(root.querySelector('[data-ui="field-control"]')),
+            searchInput: geometry(root.querySelector('[data-ui="search-bar"] input[type="search"]')),
+            nativeInputs: [...document.querySelectorAll('[data-layering-case="canvas-surface"] [data-ui="field-control"]')].map(geometry),
+            buttons: [...root.querySelectorAll('[data-ui="action"]:not([data-size="compact"]):not([data-icon-only="true"])')].map(geometry),
+            compact: geometry(root.querySelector('[data-size="compact"]')),
+            iconHeight: root.querySelector('[data-icon-only="true"]').getBoundingClientRect().height,
+            gap: parseFloat(getComputedStyle(root.querySelector('[data-ui="inline"]')).gap),
+            rowHeight: parseFloat(getComputedStyle(root).getPropertyValue('--kv-row-height')) * 16,
+          }));
+        })()`,
+        )
+        const expected = width < 768 ? reference.mobile : reference.desktop
+        for (const actual of measured) {
+          const label: string = `${width}/${presentation}/${theme}/${actual.density}`
+          assert.deepEqual(actual.body, expected.body, `${label}: body type`)
+          assert.deepEqual(actual.input, expected.input, `${label}: input geometry`)
+          assert.deepEqual(actual.searchInput, expected.input, `${label}: SearchBar input/button alignment`)
+          for (const input of actual.nativeInputs as number[][])
+            assert.deepEqual(input, expected.input, `${label}: native text/date input geometry`)
+          for (const button of actual.buttons as number[][])
+            assert.deepEqual(button, expected.button, `${label}: button geometry and input alignment`)
+          assert.deepEqual(actual.compact, expected.compactButton, `${label}: compact button`)
+          assert.equal(actual.iconHeight, expected.button[0], `${label}: icon button height`)
+          assert.equal(actual.gap, reference.spacing.actions, `${label}: action gap`)
+          if (width >= 768) assert.equal(actual.rowHeight, 40, `${label}: ERP desktop rows stay dense`)
+        }
+        results.push({ kind: 'polaris-dimensions', width, presentation, theme, measured })
+        if (presentation === 'default' && theme === 'light' && (width === 390 || width === 1440)) {
+          const capture = await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: false,
+          })
+          const path = join(evidenceDir, `polaris-dimensions-${width}.png`)
+          await writeFile(path, Buffer.from(String(capture.data), 'base64'))
+          results.push({ kind: 'polaris-dimensions-screenshot', width, path })
+        }
+      }
+    }
+  }
+
+  // Két Design System visual contract L1–L2, by computed style: a container is framed on the canvas and
   // flat inside a white region; objects keep their boundary everywhere.
   for (const presentation of ['default', 'grouped'] as const) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -217,6 +433,20 @@ try {
             })
             .join(',')
         return {
+          alignment: {
+            columns: String(new Set([...document.querySelectorAll('[data-layering-case="single-column-form"] [data-ui="field-control"]')].map(el => el.getBoundingClientRect().left)).size),
+          },
+          rhythm: {
+            gutter: getComputedStyle(document.querySelector('[data-kv-design-system]')).paddingLeft,
+            groups: getComputedStyle(document.querySelector('[data-kv-design-system] > [data-ui="stack"]')).rowGap,
+            row: String(at('canvas-table', '[data-ui="row"]').getBoundingClientRect().height),
+            formRows: getComputedStyle(at('single-column-form', '[data-ui="form-grid"]')).rowGap,
+            formColumns: getComputedStyle(at('single-column-form', '[data-ui="form-grid"]')).columnGap,
+            surface: getComputedStyle(at('canvas-surface', '[data-ui="surface"]')).paddingLeft,
+            table: getComputedStyle(at('canvas-table', '[data-ui="surface"]')).paddingLeft,
+            heading: getComputedStyle(at('canvas-surface', '[data-ui="surface-head"]')).marginBottom,
+            modal: getComputedStyle(at('modal', '[data-ui="modal-body"]')).paddingLeft,
+          },
           canvasSurface: frame(at('canvas-surface', '[data-ui="surface"]')),
           canvasTable: frame(at('canvas-table', '[data-ui="surface"]')),
           canvasMetric: frame(at('canvas-metric', '[data-ui="metric"]')),
@@ -244,6 +474,22 @@ try {
           },
         }
       })()`,
+    )
+    assert.equal(layering.alignment?.columns, '1', `${presentation}: single-column controls share one edge`)
+    assert.deepEqual(
+      layering.rhythm,
+      {
+        gutter: '24px',
+        groups: '16px',
+        row: '40',
+        formRows: '16px',
+        formColumns: '12px',
+        surface: '16px',
+        table: '16px',
+        heading: '8px',
+        modal: '16px',
+      },
+      `${presentation}: page, surface, table and modal share the rhythm contract`,
     )
     const transparent = 'rgba(0, 0, 0, 0)'
     for (const name of ['canvasSurface', 'canvasTable', 'canvasMetric', 'outer', 'modalCard']) {
@@ -281,6 +527,8 @@ try {
     assert.equal(layering.dividedFirst?.border, '0px', `${presentation}: no divider above the first group`)
     assert.equal(layering.dividedSecond?.border, '1px', `${presentation}: a divider between groups`)
     const titles = layering.titles ?? {}
+    assert.equal(titles.canvas, '14px', `${presentation}: surface headingMd`)
+    assert.equal(titles.section, '13px', `${presentation}: section headingSm`)
     assert.equal(titles.nested, titles.section, `${presentation}: a nested surface title is a section title`)
     assert.equal(
       titles.modalTable,
@@ -299,7 +547,7 @@ try {
     )
   }
 
-  // LAYOUT.md L7 below tablet width: every label goes above its control, the wide
+  // Két Design System visual contract L7 below tablet width: every label goes above its control, the wide
   // form's included.
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: 390,
@@ -385,7 +633,13 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*206/u)
+    const inventory = JSON.parse(
+      await readFile('packages/design-system/src/catalogue/inventory.generated.json', 'utf8'),
+    )
+    assert.match(
+      String(audit.text),
+      new RegExp(`Public exports[\\s\\S]*${inventory.summary.publicExports}`, 'u'),
+    )
     assert.match(String(audit.text), /Planned catalog[\s\S]*0/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
@@ -617,9 +871,9 @@ try {
           review.key === 'submenu-demo-vi' ? 'Hôm nay' : 'Nguồn khách hàng',
         )
         assert.deepEqual(submenuAudit.topLevelMetrics, {
-          height: 30,
-          fontSize: '13px',
-          lineHeight: '15.6px',
+          height: viewport.mobile ? 44 : 30,
+          fontSize: '14px',
+          lineHeight: '20px',
           gap: '10px',
           padding: '4px 8px',
           iconWidth: 18,
@@ -793,7 +1047,8 @@ try {
       })
     }
   }
-  for (const result of results) assert.ok((await readFile(String(result.path))).length > 10_000)
+  for (const result of results)
+    if (typeof result.path === 'string') assert.ok((await readFile(result.path)).length > 10_000)
   process.stdout.write(`${JSON.stringify({ event: 'design_system_browser_e2e', evidenceDir, results })}\n`)
 } finally {
   cdp?.close()

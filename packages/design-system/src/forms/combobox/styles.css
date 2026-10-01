@@ -11,7 +11,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="combobox-input-row"] [data-ui="field-control"] {
-    border-radius: var(--kv-radius-sm) 0 0 var(--kv-radius-sm);
+    border-radius: var(--kv-control-radius) 0 0 var(--kv-control-radius);
   }
 
   :where([data-kv-design-system]) [data-ui="combobox-toggle"] {
@@ -19,7 +19,7 @@
     place-items: center;
     border: 1px solid var(--kv-field-border);
     border-left: 0;
-    border-radius: 0 var(--kv-radius-sm) var(--kv-radius-sm) 0;
+    border-radius: 0 var(--kv-control-radius) var(--kv-control-radius) 0;
     color: var(--kv-text-secondary);
     text-decoration: none;
   }
@@ -71,6 +71,7 @@
     background: var(--kv-interactive-bg);
     color: inherit;
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     text-decoration: none;
   }
 }

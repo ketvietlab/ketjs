@@ -82,7 +82,7 @@
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-toolbar"] {
-      padding: var(--kv-space-3) var(--kv-space-4);
+      padding: var(--kv-space-3) var(--kv-space-4) 0;
     }
 
     :where([data-kv-design-system])
@@ -95,7 +95,7 @@
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-footer"] {
-      padding: var(--kv-space-2-5) var(--kv-space-3);
+      padding: 0;
     }
 
     :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] [data-ui="table"] {

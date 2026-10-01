@@ -17,5 +17,6 @@
   :where([data-kv-design-system]) [data-ui="upload-status"] {
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
 }

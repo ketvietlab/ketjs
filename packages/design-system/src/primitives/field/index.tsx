@@ -1,6 +1,8 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Disclosure } from '../../layouts/index.tsx'
+import { FieldFrame, FieldMessages, describedBy } from './frame.tsx'
+import { ChoiceControls } from './choices.tsx'
 import { NativeFieldControl } from './native-control.tsx'
 
 export const HOOKS = [
@@ -8,6 +10,9 @@ export const HOOKS = [
   'field-label',
   'field-required',
   'field-control',
+  'field-input',
+  'field-affix',
+  'field-clear',
   'field-options',
   'field-option',
   'field-option-input',
@@ -34,6 +39,8 @@ export type FieldProps = {
   control?: JSXChild
   type?:
     | 'text'
+    | 'search'
+    | 'url'
     | 'email'
     | 'tel'
     | 'number'
@@ -51,6 +58,20 @@ export type FieldProps = {
     | 'checkbox-group'
     | 'radio'
   value?: string | number | boolean | null
+  checked?: boolean | 'indeterminate'
+  /** Legacy checkbox value used checked state; submitValue opts into separate form data. */
+  submitValue?: string
+  prefix?: JSXChild
+  suffix?: JSXChild
+  clearable?: boolean
+  clearLabel?: string
+  inputMode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url'
+  align?: 'start' | 'center' | 'end'
+  rows?: number
+  resize?: 'vertical' | 'none'
+  maxLength?: number
+  minLength?: number
+  pattern?: string
   /** Embedded controls share the frame of a compound field. */
   labelHidden?: boolean
   /** Keep the selected value accessible while showing only the select chevron. */
@@ -77,21 +98,8 @@ export type FieldProps = {
 
 const hasError = (props: FieldProps): boolean => !!props.error || (props.fields?.some(hasError) ?? false)
 
+/** Compatibility dispatcher: all controls share FieldFrame and their own control contract. */
 export const Field = (props: FieldProps): TemplateResult => {
-  const helpId = props.help ? `${props.id}-help` : null
-  const errorId = props.error ? `${props.id}-error` : null
-  const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
-  const label = (
-    <span data-ui="field-label">
-      {props.label}
-      {props.required && (
-        <span data-ui="field-required" aria-hidden="true">
-          {' *'}
-        </span>
-      )}
-    </span>
-  )
-
   if (props.fields)
     return (
       <div data-ui="field" data-kind="group" data-span="full" data-invalid={String(!!props.error)}>
@@ -114,155 +122,22 @@ export const Field = (props: FieldProps): TemplateResult => {
             </div>
           }
         />
-        {!!props.help && (
-          <small data-ui="field-help" id={helpId ?? undefined}>
-            {props.help}
-          </small>
-        )}
-        {!!props.error && (
-          <small data-ui="field-error" id={errorId ?? undefined}>
-            {props.error}
-          </small>
-        )}
+        <FieldMessages {...props} />
       </div>
     )
-
-  if (props.type === 'checkbox-group')
-    return (
-      <div
-        data-ui="field"
-        data-kind="checkbox-group"
-        data-span={props.span ?? 'half'}
-        data-invalid={String(!!props.error)}
-      >
-        <span data-ui="field-label" id={`${props.id}-label`}>
-          {props.label}
-          {props.required && (
-            <span data-ui="field-required" aria-hidden="true">
-              {' *'}
-            </span>
-          )}
-        </span>
-        <div
-          data-ui="field-options"
-          data-orientation={props.optionsOrientation === 'vertical' ? 'vertical' : null}
-          role="group"
-          aria-labelledby={`${props.id}-label`}
-        >
-          {each(
-            props.options ?? [],
-            (option) => option.name ?? option.value,
-            (option) => (
-              <label data-ui="field-option">
-                <input
-                  data-ui="field-option-input"
-                  type="checkbox"
-                  name={option.name ?? `${props.name}[]`}
-                  value={option.value}
-                  checked={option.checked === true}
-                  disabled={props.disabled === true || option.disabled === true}
-                  aria-invalid={props.error ? 'true' : null}
-                  aria-describedby={describedBy}
-                  autocomplete="off"
-                />
-                <span>{option.label}</span>
-              </label>
-            ),
-          )}
-        </div>
-        {!!props.help && (
-          <small data-ui="field-help" id={helpId ?? undefined}>
-            {props.help}
-          </small>
-        )}
-        {!!props.error && (
-          <small data-ui="field-error" id={errorId ?? undefined}>
-            {props.error}
-          </small>
-        )}
-      </div>
-    )
-
-  if (props.type === 'radio')
-    return (
-      <div
-        data-ui="field"
-        data-kind="radio"
-        data-span={props.span ?? 'half'}
-        data-invalid={String(!!props.error)}
-      >
-        <span data-ui="field-label" id={`${props.id}-label`}>
-          {props.label}
-          {props.required && (
-            <span data-ui="field-required" aria-hidden="true">
-              {' *'}
-            </span>
-          )}
-        </span>
-        <div
-          data-ui="field-options"
-          data-orientation={props.optionsOrientation === 'vertical' ? 'vertical' : null}
-          role="radiogroup"
-          aria-labelledby={`${props.id}-label`}
-        >
-          {each(
-            props.options ?? [],
-            (option) => option.value,
-            (option) => (
-              <label data-ui="field-option">
-                <input
-                  data-ui="field-option-input"
-                  type="radio"
-                  name={props.name}
-                  value={option.value}
-                  checked={String(props.value ?? '') === option.value}
-                  required={props.required === true}
-                  disabled={props.disabled === true || option.disabled === true}
-                  aria-invalid={props.error ? 'true' : null}
-                  aria-describedby={describedBy}
-                  autocomplete="off"
-                />
-                <span>{option.label}</span>
-              </label>
-            ),
-          )}
-        </div>
-        {!!props.help && (
-          <small data-ui="field-help" id={helpId ?? undefined}>
-            {props.help}
-          </small>
-        )}
-        {!!props.error && (
-          <small data-ui="field-error" id={errorId ?? undefined}>
-            {props.error}
-          </small>
-        )}
-      </div>
-    )
-
+  const group = props.type === 'radio' || props.type === 'checkbox-group'
   return (
-    <label
-      data-ui="field"
-      data-kind={props.type ?? 'text'}
-      data-label-hidden={props.labelHidden ? 'true' : null}
-      data-selection-hidden={props.selectionHidden ? 'true' : null}
-      data-span={props.span ?? 'half'}
-      data-invalid={String(!!props.error)}
-      for={props.id}
-    >
-      {props.type === 'checkbox' && NativeFieldControl(props, describedBy)}
-      {label}
-      {props.type !== 'checkbox' && NativeFieldControl(props, describedBy)}
-      {!!props.help && (
-        <small data-ui="field-help" id={helpId ?? undefined}>
-          {props.help}
-        </small>
-      )}
-      {!!props.error && (
-        <small data-ui="field-error" id={errorId ?? undefined}>
-          {props.error}
-        </small>
-      )}
-    </label>
+    <FieldFrame
+      {...props}
+      kind={props.type ?? 'text'}
+      group={group}
+      control={
+        group ? (
+          <ChoiceControls {...props} />
+        ) : (
+          NativeFieldControl(props, describedBy(props.id, props.help, props.error))
+        )
+      }
+    />
   )
 }

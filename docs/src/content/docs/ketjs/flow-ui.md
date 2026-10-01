@@ -42,16 +42,9 @@ export function mount(container, openCreate) {
 
 Call `runtime.sync()` after every render so native controls and dialogs pick up new props.
 
-## Styling contract
+## Design authority
 
-- Every selector is scoped under `[data-flow-ui]`; component hooks use `data-flow`.
-- Colours, type, spacing, radius, shadow, focus and motion come from `--kv-*` tokens, directly or
-  through `--flow-*` aliases. Switching the design-system theme restyles Flow UI with it.
-- Density is fixed: 28px small controls, 32px controls, 36px compact rows, and at least 44px on
-  touch.
-
-Supply a logo through `--flow-logo-light` and `--flow-logo-dark` (absolute URLs), or with your own
-`background-image` rule on `[data-flow="logo"]`, and set `--flow-logo-text: hidden`.
+Visual rules and Flow compatibility live in [Két Design System](https://github.com/ketvietlab/ketjs/tree/develop/skills/ket-design-system).
 
 ## Entry points
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Runs the LAYOUT.md audit over an application's stylesheets.
+// Runs the Két Design System visual contract audit over an application's stylesheets.
 //
 //   ket-design-system-layout-audit --config design-system-layout.json
 //   ket-design-system-layout-audit path/to/a.css path/to/b.css
@@ -58,7 +58,7 @@ export const runLayoutAudit = (
     `layout audit: ${files.size} stylesheet(s), ${violations} violation(s), ${problems.length} config problem(s)`,
   )
   if (violations === 0 && problems.length === 0) return { code: 0, lines }
-  lines.push('See LAYOUT.md in @ketvietlab/design-system for the rules and how to fix each one.')
+  lines.push('See SKILL.md in @ketvietlab/ket-design-system-skill for the rules and how to fix each one.')
   return { code: 1, lines }
 }
 

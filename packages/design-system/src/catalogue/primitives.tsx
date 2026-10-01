@@ -11,6 +11,21 @@ import {
   EmptyState,
   Field,
   IconButton,
+  Icon,
+  Link,
+  Checkbox,
+  CheckboxGroup,
+  RadioGroup,
+  Switch,
+  TextField,
+  TextArea,
+  SearchField,
+  NumberField,
+  MoneyField,
+  Tooltip,
+  Spinner,
+  Skeleton,
+  Grid,
   Inline,
   LinkButton,
   LoadingState,
@@ -27,7 +42,12 @@ import {
 } from '../index.ts'
 
 export const primitiveSections = [
-  { id: 'actions', label: 'Actions', components: ['ActionGroup', 'Button', 'IconButton', 'LinkButton'] },
+  { id: 'foundations', label: 'Typography & icons', components: ['Icon'] },
+  {
+    id: 'actions',
+    label: 'Actions',
+    components: ['ActionGroup', 'Button', 'IconButton', 'LinkButton', 'Link'],
+  },
   {
     id: 'status',
     label: 'Status & identity',
@@ -53,20 +73,7 @@ const Row = (props: { label: string; detail: string; children: JSXChild }): Temp
   </div>
 )
 
-const Plus = (): TemplateResult => (
-  <svg
-    viewBox="0 0 16 16"
-    width="16"
-    height="16"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.5"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <path d="M8 3v10M3 8h10" />
-  </svg>
-)
+const Plus = (): TemplateResult => <Icon name="plus" />
 
 export type PrimitiveHarnessProps = {
   theme?: 'light' | 'dark' | 'system'
@@ -80,9 +87,76 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
     `/primitives?theme=${props.theme ?? 'system'}&density=${props.density ?? 'default'}&tab=${tab}#primitive-navigation`
   const tab = props.tab ?? 'overview'
   const specimens: Record<(typeof primitiveSections)[number]['id'], JSXChild> = {
+    foundations: (
+      <>
+        <Row label="Type roles" detail="Body and heading styles are independent of HTML heading level.">
+          <Stack
+            gap="compact"
+            items={[
+              <Text as="h2" variant="headingLg">
+                Inventory overview
+              </Text>,
+              <Text as="h3" variant="headingMd">
+                Stock availability
+              </Text>,
+              <Text as="p" variant="bodyMd">
+                Body · 13 / 20 px
+              </Text>,
+              <Text as="p" variant="bodySm" tone="muted">
+                Supporting text · 12 / 16 px
+              </Text>,
+              <Text numeric variant="bodyMd">
+                1,234,567.89
+              </Text>,
+              <Text truncate>
+                Long operational descriptions stay within their allocated column without changing the
+                surrounding layout.
+              </Text>,
+            ]}
+          />
+        </Row>
+        <Row label="Lucide" detail="One icon contract: geometry, tone and accessible naming.">
+          <Inline
+            gap="column"
+            items={[
+              <Icon name="plus" label="Add" />,
+              <Icon name="search" label="Search" />,
+              <Icon name="circle-check" tone="positive" label="Complete" />,
+              <Icon name="triangle-alert" tone="warning" label="Warning" />,
+              <Icon name="x" label="Close" />,
+            ]}
+          />
+        </Row>
+        <Row
+          label="Layout rhythm"
+          detail="8px actions, 12px columns, 16px groups; responsive gaps are explicit."
+        >
+          <Grid
+            columns={2}
+            mobileColumns={1}
+            gap={{ desktop: 'column', mobile: 'default' }}
+            items={[
+              <Stack
+                gap="compact"
+                items={[
+                  <Text variant="headingSm">Related information</Text>,
+                  <Text tone="muted">8px within a group</Text>,
+                ]}
+              />,
+              <Inline
+                align="between"
+                blockAlign="baseline"
+                gap="column"
+                items={[<Text variant="headingSm">Available</Text>, <Text numeric>1,284</Text>]}
+              />,
+            ]}
+          />
+        </Row>
+      </>
+    ),
     actions: (
       <>
-        <Row label="Hierarchy" detail="One height, four levels of emphasis.">
+        <Row label="Hierarchy" detail="One height; emphasis and semantic tone are independent.">
           <ActionGroup
             label="Action hierarchy"
             actions={[
@@ -90,6 +164,40 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
               <Button label="Save draft" />,
               <Button label="View details" variant="tertiary" />,
               <Button label="Archive" variant="destructive" />,
+            ]}
+          />
+        </Row>
+        <Row label="Tone × emphasis" detail="Critical commands can be primary, secondary or tertiary.">
+          <ActionGroup
+            actions={[
+              <Button label="Delete record" variant="primary" tone="danger" />,
+              <Button label="Remove selection" tone="danger" />,
+              <Button label="Discard" variant="tertiary" tone="danger" />,
+              <Button label="Approve record" variant="primary" tone="positive" />,
+              <Button label="Approved" tone="positive" />,
+              <Button label="Pinned" pressed />,
+              <Link label="View all records" href="#primitive-fields" />,
+            ]}
+          />
+        </Row>
+        <Row label="Stable loading" detail="The same label and icon retain width while progress is shown.">
+          <ActionGroup
+            actions={[
+              <Button id="primitive-action-rest" label="Save record" icon="check" variant="primary" />,
+              <Button
+                id="primitive-action-loading"
+                label="Save record"
+                icon="check"
+                variant="primary"
+                loading
+              />,
+              <Tooltip
+                id="primitive-action-tip"
+                text="Create a new project"
+                trigger={({ describedBy }) => (
+                  <IconButton label="Create project" icon={<Icon name="plus" />} describedBy={describedBy} />
+                )}
+              />,
             ]}
           />
         </Row>
@@ -135,6 +243,26 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
     ),
     status: (
       <>
+        <Row
+          label="Status detail"
+          detail="Progress and icon are alternative badge treatments. Counts announce only when requested."
+        >
+          <Inline
+            items={[
+              <Badge label="Paid" tone="positive" icon="check" />,
+              <Badge label="Fulfilment" progress="partiallyComplete" progressLabel="Partially complete" />,
+              <Badge label="Draft" size="small" />,
+              <CountBadge count={24} label="24 records" />,
+              <Avatar name="Nguyễn Minh Châu" src="data:image/png;base64,broken" decorative={false} />,
+              <Tag label="Disabled selection" removeHref="#primitive-status" disabled />,
+            ]}
+          />
+        </Row>
+        <Row label="Tag command" detail="Removing a form selection submits a named native command.">
+          <form id="primitive-tag-form" action="/primitives" method="get">
+            <Tag label="Warehouse A" removeCommand={{ name: 'remove', value: 'warehouse-a' }} />
+          </form>
+        </Row>
         <Row label="Semantic tones" detail="Quiet surfaces with readable, explicit labels.">
           <Inline
             items={[
@@ -193,6 +321,122 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
     ),
     fields: (
       <>
+        <Row
+          label="Shared field frame"
+          detail="Every control uses the same label, help, error and geometry contract."
+        >
+          <Stack
+            items={[
+              <TextField
+                id="primitive-affix"
+                name="reference"
+                label="Reference"
+                prefix="SO"
+                suffix="/ 2026"
+                value="1042"
+                help="Prefix and suffix belong to the control."
+              />,
+              <SearchField
+                id="primitive-search"
+                name="q"
+                label="Search"
+                value="Regional stock"
+                prefix={<Icon name="search" />}
+                clearable
+              />,
+              <TextField
+                id="primitive-affix-error"
+                name="reference-error"
+                label="Invalid reference"
+                prefix="SO"
+                value="?"
+                error="Enter a valid reference."
+              />,
+              <TextField
+                id="primitive-affix-disabled"
+                name="reference-disabled"
+                label="Unavailable"
+                suffix="kg"
+                disabled
+                value="50"
+              />,
+              <NumberField
+                id="primitive-number"
+                name="quantity"
+                label="Quantity"
+                value="12"
+                min="0"
+                step="1"
+              />,
+              <MoneyField
+                id="primitive-money"
+                name="amount"
+                label="Amount"
+                value="1250000"
+                currency="VND"
+                precision={0}
+              />,
+              <TextArea
+                id="primitive-textarea"
+                name="notes"
+                label="Notes"
+                rows={3}
+                resize="none"
+                value="Delivery instructions"
+              />,
+            ]}
+          />
+        </Row>
+        <Row
+          label="Choices"
+          detail="Selection state and form value are separate; mixed selection is enhanced by the shared runtime."
+        >
+          <Stack
+            gap="compact"
+            items={[
+              <Checkbox
+                id="primitive-mixed"
+                name="selection"
+                label="Partial selection"
+                checked="indeterminate"
+                value="all"
+              />,
+              <Checkbox
+                id="primitive-checked-value"
+                name="warehouse"
+                label="Warehouse A"
+                checked
+                value="warehouse-a"
+              />,
+              <CheckboxGroup
+                id="primitive-checkboxes"
+                name="channels"
+                label="Channels"
+                options={[
+                  { value: 'email', label: 'Email', checked: true },
+                  { value: 'sms', label: 'SMS' },
+                ]}
+              />,
+              <RadioGroup
+                id="primitive-radio"
+                name="delivery"
+                label="Delivery"
+                value="normal"
+                options={[
+                  { value: 'normal', label: 'Normal' },
+                  { value: 'express', label: 'Express' },
+                ]}
+              />,
+              <Switch
+                id="primitive-switch"
+                name="notifications"
+                label="Notifications"
+                checked
+                value="enabled"
+              />,
+            ]}
+          />
+        </Row>
         <Row label="Text & selection" detail="Shared label column and aligned control edges.">
           <Stack
             gap="compact"
@@ -402,6 +646,18 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
             actions={<LinkButton label="Explore actions" href="#primitive-actions" size="compact" />}
           />
         </Row>
+        <Row
+          label="Shared indicators"
+          detail="The same spinner and skeleton serve actions and larger loading states."
+        >
+          <Inline
+            items={[
+              <Spinner label="Loading results" size="small" />,
+              <Spinner label="Preparing report" />,
+              <Skeleton label="Loading summary" lines={2} />,
+            ]}
+          />
+        </Row>
         <Row label="Loading" detail="A named live region and decorative skeletons.">
           <LoadingState label="Loading project activity" lines={3} />
         </Row>
@@ -414,7 +670,7 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
           items={[
             <Progress label="Not started" value={0} />,
             <Progress label="Project completion" value={64} />,
-            <Progress label="Review in progress" value={38} tone="warning" />,
+            <Progress label="Review in progress" value={38} tone="warning" size="large" />,
             <Progress label="Overdue tasks" value={16} tone="danger" />,
             <Progress label="All tasks complete" value={100} tone="positive" />,
             <Progress label="Background preparation" value={72} showValue={false} />,

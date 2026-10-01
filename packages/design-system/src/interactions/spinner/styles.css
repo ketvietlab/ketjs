@@ -1,8 +1,8 @@
 @layer ket.app {
   :where([data-kv-design-system]) [data-ui="spinner"] {
     display: inline-block;
-    width: 1rem;
-    height: 1rem;
+    width: var(--kv-space-4);
+    height: var(--kv-space-4);
     border: 2px solid currentcolor;
     border-right-color: transparent;
     border-radius: 50%;
@@ -10,12 +10,12 @@
   }
 
   :where([data-kv-design-system]) [data-ui="spinner"][data-size="small"] {
-    width: 0.75rem;
-    height: 0.75rem;
+    width: var(--kv-space-3);
+    height: var(--kv-space-3);
   }
   :where([data-kv-design-system]) [data-ui="spinner"][data-size="large"] {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: var(--kv-space-6);
+    height: var(--kv-space-6);
     border-width: 3px;
   }
 
