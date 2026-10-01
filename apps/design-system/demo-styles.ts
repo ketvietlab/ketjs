@@ -1,7 +1,6 @@
 export const demoStyles = `
 body { margin: 0; }
 [data-demo-app] { min-height: 100dvh; background: var(--kv-page-bg); }
-[data-demo-app] [data-ui="icon"] { width: 18px; height: 18px; flex: 0 0 18px; }
 .demo-muted { font-size: var(--kv-text-sm); color: var(--kv-text-muted); }
 .demo-navigation-footer { display: grid; gap: var(--kv-space-4); }
 .demo-navigation-footer [data-ui="inline"] { flex-wrap: nowrap; }

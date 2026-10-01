@@ -86,6 +86,36 @@ the table locally instead of squeezing words into one-character columns. Stacked
 tables release that minimum. Keep identifiers and numeric columns concise.
 The list result footer is metadata on the canvas, not another framed surface.
 
+## Application navigation
+
+AppNavigation owns menu geometry, including NavigationToggle and the mobile drawer.
+These are Két navigation roles, not a requirement to give every component one size.
+
+| Role | Desktop >=768px | Mobile <768px |
+| --- | --- | --- |
+| Root label | 14/20/500, primary text colour | Same |
+| Child label | 13/20/400, secondary text colour | Same |
+| Selected leaf | Its level's size, weight 500, primary text colour | Same |
+| Single-line row minimum: root / child | 30 / 28px | 44 / 44px |
+| Leading icon box | 20px | 20px |
+| Gap between present icon / copy / count | 10px | 10px |
+| Row gap | 2px | 2px |
+| Row padding: root / child | 4px 8px / 2px 8px | Same |
+| Menu opener and close button hit area | Hidden | 44 x 44px |
+
+The sidebar is 228px wide; the mobile drawer is at most 320px and 86vw. First-level
+child rows start 30px after the parent row, aligning plain child text with a parent
+label that has a leading icon. Each deeper level advances 20px. A guide line is included in the indent, never added on top. Labels and
+optional descriptions wrap and rows grow without truncation or font shrinking.
+Optional leading content/counts consume width only when present; copy gets the
+remaining width and counts do not shrink. Icon geometry uses the sidebar icon token,
+never a typography token. Density does not resize menu rows, icons or labels.
+
+CSS and drawer interaction runtime use the same <768px boundary. Opening, closing,
+keyboard focus and native links remain component-owned. Verify long translations,
+labels with/without icons and counts, nested levels, and crossing 767/768px while
+the drawer is open. Do not reduce all labels to one size merely to unify metrics.
+
 ## Surface and border levels
 
 | Level | Component | Treatment |

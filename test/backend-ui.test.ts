@@ -1612,12 +1612,12 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('app navigation: cluster icons own the Demo 2 metric', () => {
+test('app navigation: icon geometry is independent of typography', () => {
   const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   const rule = css.match(/\[data-ui="navigation-item-leading"\]\s*\[data-ui="icon"\] \{[^}]*\}/)?.[0] ?? ''
-  assert.match(rule, /width:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /height:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /flex:\s*0 0 var\(--kv-text-xl\);/)
+  assert.match(rule, /width:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /height:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /flex:\s*0 0 var\(--kv-sidebar-icon-size\);/)
 })
 
 test('list chrome: mobile sort can shrink without widening the page', () => {
@@ -2062,9 +2062,8 @@ test('a browser navigating gets the page; a client calling gets the JSON', () =>
 
 test('backend shell: the phone menu uses the design-system left drawer', () => {
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
-  const mobile = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
-  )?.groups?.body
+  const mobile = navigationCss.match(/@media \(width < 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/)
+    ?.groups?.body
   assert.match(mobile ?? '', /\[data-ui="navigation-trigger"\] \{[\s\S]*?display: flex/)
   assert.match(mobile ?? '', /\[data-ui="navigation-layer"\] \{[\s\S]*?position: fixed/)
   assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)

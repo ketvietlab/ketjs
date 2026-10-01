@@ -74,8 +74,9 @@
 
   :where([data-kv-design-system]) [data-ui="navigation-close"] {
     display: none;
-    width: var(--kv-density-control-height);
-    height: var(--kv-density-control-height);
+    width: var(--kv-touch-target);
+    height: var(--kv-touch-target);
+    flex: 0 0 var(--kv-touch-target);
     place-items: center;
     padding: 0;
     border: 1px solid var(--kv-border-default);
@@ -140,12 +141,11 @@
   }
 
   :where([data-kv-design-system]) :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {
-    display: grid;
+    display: flex;
     width: 100%;
     min-height: var(--kv-sidebar-item-height);
-    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--kv-space-2-5);
+    gap: var(--kv-sidebar-item-gap);
     padding: var(--kv-space-1) var(--kv-space-2);
     border: 1px solid transparent;
     border-radius: var(--kv-radius-sm);
@@ -177,6 +177,7 @@
   :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]):not(
     [data-ui="navigation-children"] *
   ) {
+    color: var(--kv-text-main);
     font-weight: var(--kv-weight-medium);
   }
 
@@ -190,7 +191,9 @@
   :where([data-kv-design-system]) [data-ui="navigation-children"] {
     display: grid;
     gap: var(--kv-space-0-5);
-    padding: var(--kv-space-0-5) 0 var(--kv-space-1) var(--kv-space-5);
+    /* Align the first child label with the parent's label, accounting for the guide. */
+    padding: var(--kv-space-0-5) 0 var(--kv-space-1)
+      calc(var(--kv-sidebar-icon-size) + var(--kv-sidebar-item-gap) - var(--kv-space-3) - 1px);
     margin-left: var(--kv-space-3);
     border-left: 1px solid var(--kv-sidebar-border);
   }
@@ -198,43 +201,44 @@
   :where([data-kv-design-system])
     [data-ui="navigation-children"]
     :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {
-    min-height: var(--kv-control-height-sm);
+    min-height: var(--kv-sidebar-child-height);
     padding: var(--kv-space-0-5) var(--kv-space-2);
     font-size: var(--kv-text-sm);
     line-height: var(--kv-line-sm);
   }
 
-  :where([data-kv-design-system]) [data-ui="navigation-children"][data-level="3"] {
-    padding-left: var(--kv-space-3);
+  :where([data-kv-design-system]) [data-ui="navigation-children"] [data-ui="navigation-children"] {
+    padding-left: calc(var(--kv-sidebar-indent) - var(--kv-space-2) - 1px);
     margin-left: var(--kv-space-2);
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-leading"] {
     display: grid;
-    width: var(--kv-space-5);
+    width: var(--kv-sidebar-icon-size);
+    flex: 0 0 var(--kv-sidebar-icon-size);
     place-items: center;
     color: var(--kv-text-muted);
-    font-size: var(--kv-text-xl);
+    font-size: var(--kv-sidebar-icon-size);
     line-height: 1;
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-leading"] [data-ui="icon"] {
-    width: var(--kv-text-xl);
-    height: var(--kv-text-xl);
-    flex: 0 0 var(--kv-text-xl);
+    width: var(--kv-sidebar-icon-size);
+    height: var(--kv-sidebar-icon-size);
+    flex: 0 0 var(--kv-sidebar-icon-size);
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-copy"] {
     display: grid;
+    flex: 1 1 0%;
     min-width: 0;
     gap: var(--kv-space-0-5);
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-label"],
   :where([data-kv-design-system]) [data-ui="navigation-item-description"] {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-description"] {
@@ -245,6 +249,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="navigation-item-count"] {
+    flex: 0 0 auto;
     min-width: var(--kv-space-5);
     padding: var(--kv-space-0-5) var(--kv-space-1-5);
     border-radius: var(--kv-radius-full);
@@ -264,7 +269,7 @@
     line-height: var(--kv-line-xs);
   }
 
-  @media (max-width: 48rem) {
+  @media (width < 48rem) {
     :where([data-kv-design-system]) [data-ui="app-navigation"] {
       height: auto;
       min-height: 0;
@@ -345,6 +350,7 @@
     :where([data-kv-design-system]) [data-ui="navigation-backdrop"] {
       display: block;
       grid-column: 2;
+      grid-row: 1;
       padding: 0;
       border: 0;
       background: rgb(15 16 18 / 58%);
@@ -353,6 +359,7 @@
 
     :where([data-kv-design-system]) [data-ui="navigation-drawer"] {
       grid-column: 1;
+      grid-row: 1;
       height: 100dvh;
       min-height: 100dvh;
       box-shadow: var(--kv-shadow-float);
@@ -390,13 +397,13 @@
     > [data-ui="navigation-trigger"] {
     display: none;
   }
-  @media (max-width: 48rem) {
+  @media (width < 48rem) {
     :where([data-kv-design-system]) [data-ui="navigation-toggle"] {
       display: grid;
       place-items: center;
-      width: var(--kv-control-height);
-      height: var(--kv-control-height);
-      flex: 0 0 var(--kv-control-height);
+      width: var(--kv-touch-target);
+      height: var(--kv-touch-target);
+      flex: 0 0 var(--kv-touch-target);
       padding: 0;
       border: 0;
       border-radius: var(--kv-radius-sm);
@@ -415,7 +422,7 @@
 }
 
 @layer ket.app {
-  @media (max-width: 48rem) {
+  @media (width < 48rem) {
     :where([data-kv-design-system])
       [data-ui="app-navigation"]
       :is([data-ui="navigation-item"], [data-ui="navigation-branch-trigger"]) {

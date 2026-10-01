@@ -151,8 +151,25 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
             label: 'Reports',
             leading: '▤',
             children: [
-              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table' },
-              { id: `${props.active}-stock-report`, label: 'Inventory', href: '#metric' },
+              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table', count: 7 },
+              {
+                id: `${props.active}-stock-report`,
+                label: 'Inventory',
+                href: '#metric',
+                leading: <Icon name="inbox" />,
+              },
+              {
+                id: `${props.active}-report-settings`,
+                label: 'Cấu hình',
+                children: [
+                  { id: `${props.active}-terms`, label: 'Điều khoản thanh toán', href: '#navigation-terms' },
+                  {
+                    id: `${props.active}-long-label`,
+                    label: 'Phương thức thanh toán dành cho nhà cung cấp quốc tế',
+                    href: '#navigation-long',
+                  },
+                ],
+              },
             ],
           },
         ],

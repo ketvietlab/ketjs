@@ -227,7 +227,7 @@ screens, but new catalogue examples should show one of those practical surfaces
 inside the shell.
 
 `AppNavigation` is the canonical dashboard menu. Supply one grouped item model and
-place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a native
+place it in `AppShell.sidebar`; it is a persistent sidebar at 768px and above and a native
 `details` drawer below that breakpoint. The markup remains usable without JavaScript.
 Items may contain recursive `children`; a parent expands its submenu directly below
 the parent row, and an active descendant opens the complete path on first render.
@@ -235,10 +235,11 @@ Only leaf links expose the active state. Top-level branches form one accordion a
 the complete sidebar, and the interaction adapter keeps the open branch from being
 collapsed without choosing another branch. Use `expanded` when a branch should start
 open without an active descendant.
-Top-level navigation rows use the shared dense metrics: a 30px row, 13px label,
-10px content gap and an 18px leading icon. Icon size belongs to `AppNavigation`, so
-application shells and catalogue demos render the same geometry without local icon
-overrides.
+Sizing, text roles and responsive rules live in the
+[Két Design System navigation contract](../../skills/ket-design-system/references/visual-contract.md#application-navigation).
+Labels and descriptions wrap; rows grow for long translations. Optional leading
+content and counts reserve space only when supplied. Consumers do not override
+navigation geometry or icon size.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 

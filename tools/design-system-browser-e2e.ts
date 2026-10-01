@@ -671,6 +671,142 @@ try {
     }
   }
 
+  // Navigation owns optional slots, readable labels and the exact drawer boundary.
+  for (const width of [390, 767, 768, 1440]) {
+    for (const theme of ['light', 'dark']) {
+      const mobile = width < 768
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width,
+        height: 1000,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      const url = `http://127.0.0.1:${appPort}/components/application-structure?theme=${theme}&density=default`
+      await cdp.send('Page.navigate', { url })
+      await waitFor(
+        () =>
+          evaluate<boolean>(
+            cdp!,
+            `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && document.documentElement.dataset.kvInteractions === 'attached'`,
+          ),
+        'Navigation fixture did not attach',
+      )
+      const menu: Json = await evaluate<Json>(
+        cdp,
+        `(async () => {
+        const example = document.querySelector('#app-navigation')
+        const shell = example.querySelector('[data-ui="app-shell"]')
+        const nav = example.querySelector('[data-ui="app-navigation"]')
+        const toggle = example.querySelector('[data-ui="navigation-toggle"]')
+        const drawer = nav.querySelector('[data-ui="navigation-drawer"]')
+        const close = nav.querySelector('[data-ui="navigation-close"]')
+        const backdrop = nav.querySelector('[data-ui="navigation-backdrop"]')
+        if (${mobile}) { toggle.focus(); toggle.click() }
+        const report = nav.querySelector('[data-ui="navigation-branch"]')
+        report.querySelector('summary').click()
+        report.querySelector('[data-ui="navigation-branch"] summary').click()
+        await new Promise(resolve => setTimeout(resolve, 0))
+        const root = report.querySelector('summary')
+        const child = report.querySelector('[data-ui="navigation-item"]')
+        const plain = report.querySelector('[href="#navigation-terms"]')
+        const long = report.querySelector('[href="#navigation-long"]')
+        const copy = plain.querySelector('[data-ui="navigation-item-copy"]')
+        const plainStyle = getComputedStyle(plain)
+        const icon = report.querySelector('[data-ui="icon"]')
+        const iconBefore = icon.getBoundingClientRect().width
+        nav.style.setProperty('--kv-text-xl', '32px')
+        const iconAfter = icon.getBoundingClientRect().width
+        nav.style.removeProperty('--kv-text-xl')
+        const count = child.querySelector('[data-ui="navigation-item-count"]')
+        const childCopy = child.querySelector('[data-ui="navigation-item-copy"]')
+        const rootLabel = root.querySelector('[data-ui="navigation-item-label"]')
+        const childLabel = child.querySelector('[data-ui="navigation-item-label"]')
+        const childBranchLabel = report.querySelector('[data-ui="navigation-branch"] [data-ui="navigation-item-label"]')
+        const box = e => ({ width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })
+        const text = e => { const s = getComputedStyle(e); return [s.fontSize, s.lineHeight, s.fontWeight] }
+        const audit = {
+          rootType: text(root), childType: text(child), rootHeight: box(root).height, childHeight: box(child).height,
+          primaryRoot: getComputedStyle(root).color === getComputedStyle(shell).color,
+          secondaryChild: getComputedStyle(child).color !== getComputedStyle(root).color,
+          plainUnusedWidth: plain.getBoundingClientRect().right - parseFloat(plainStyle.paddingRight) - parseFloat(plainStyle.borderRightWidth) - copy.getBoundingClientRect().right,
+          countGap: count.getBoundingClientRect().left - childCopy.getBoundingClientRect().right,
+          childAlignment: childLabel.getBoundingClientRect().left - rootLabel.getBoundingClientRect().left,
+          nestedIndent: copy.getBoundingClientRect().left - childBranchLabel.getBoundingClientRect().left,
+          wrapped: long.querySelector('[data-ui="navigation-item-label"]').getBoundingClientRect().height > 20,
+          clipped: [...report.querySelectorAll('[data-ui="navigation-item-label"]')].some(e => e.scrollWidth > e.clientWidth + 1),
+          iconBefore, iconAfter, toggle: box(toggle), close: box(close), backdrop: box(backdrop), viewportHeight: innerHeight, viewportWidth: innerWidth,
+          drawerRole: drawer.getAttribute('role'), mainInert: shell.querySelector('[data-ui="app-main"]').inert,
+        }
+        if (${mobile}) {
+          close.click()
+          audit.closed = !nav.open && !shell.querySelector('[data-ui="app-main"]').inert && document.activeElement === toggle
+          toggle.focus(); toggle.click()
+          await new Promise(resolve => setTimeout(resolve, 0))
+          drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+          audit.escapeClosed = !nav.open && document.activeElement === toggle
+          toggle.focus(); toggle.click()
+          await new Promise(resolve => setTimeout(resolve, 0))
+          backdrop.click()
+          audit.backdropClosed = !nav.open && document.activeElement === toggle
+          if (${width} === 767) { toggle.focus(); toggle.click(); await new Promise(resolve => setTimeout(resolve, 0)) }
+        }
+        return audit
+      })()`,
+      )
+      assert.equal(menu.viewportWidth, width, 'Measure at the requested CSS viewport width')
+      assert.deepEqual(menu.rootType, ['14px', '20px', '500'])
+      assert.deepEqual(menu.childType, ['13px', '20px', '400'])
+      assert.equal(menu.rootHeight, mobile ? 44 : 30)
+      assert.equal(menu.childHeight, mobile ? 44 : 28)
+      assert.equal(menu.primaryRoot, true)
+      assert.equal(menu.secondaryChild, true)
+      assert.ok(Math.abs(Number(menu.plainUnusedWidth)) < 1, 'Absent slots must not consume label width')
+      assert.equal(menu.countGap, 10)
+      assert.equal(menu.childAlignment, 0)
+      assert.equal(menu.nestedIndent, 20)
+      assert.equal(menu.wrapped, true)
+      assert.equal(menu.clipped, false)
+      assert.equal(menu.iconBefore, 20)
+      assert.equal(menu.iconAfter, 20, 'Text tokens must not resize icons')
+      assert.equal(menu.drawerRole, mobile ? 'dialog' : null)
+      assert.equal(menu.mainInert, mobile)
+      if (mobile) {
+        assert.deepEqual(menu.toggle, { width: 44, height: 44 })
+        assert.deepEqual(menu.close, { width: 44, height: 44 })
+        assert.equal(menu.closed, true)
+        assert.equal(menu.escapeClosed, true)
+        assert.equal(menu.backdropClosed, true)
+        assert.ok(Number((menu.backdrop as Json).width) > 0)
+        assert.ok(
+          Math.abs(Number((menu.backdrop as Json).height) - Number(menu.viewportHeight)) <= 1,
+          'Backdrop must cover the actual layout viewport',
+        )
+      }
+      if (width === 767) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: 768,
+          height: 1000,
+          deviceScaleFactor: 1,
+          mobile: false,
+        })
+        await waitFor(
+          () =>
+            evaluate<boolean>(
+              cdp!,
+              `(() => {
+          const example = document.querySelector('#app-navigation')
+          return getComputedStyle(example.querySelector('[data-ui="navigation-toggle"]')).display === 'none' &&
+            example.querySelector('[data-ui="navigation-drawer"]').getAttribute('role') === null &&
+            !example.querySelector('[data-ui="app-main"]').inert && document.documentElement.dataset.kvNavigationOpen !== 'true'
+        })()`,
+            ),
+          'Crossing 768px must release the drawer and background',
+        )
+      }
+      results.push({ route: 'navigation-sizing', width, theme, ...menu })
+    }
+  }
+
   const reviewRoutes = [
     { key: 'catalogue-en', path: '/?theme=light&density=default', selector: '[data-ui="catalogue"]' },
     {
@@ -876,8 +1012,8 @@ try {
           lineHeight: '20px',
           gap: '10px',
           padding: '4px 8px',
-          iconWidth: 18,
-          iconHeight: 18,
+          iconWidth: 20,
+          iconHeight: 20,
         })
         if (viewport.key === 'mobile') await delay(300)
       }

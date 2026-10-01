@@ -263,6 +263,10 @@
     --kv-sidebar-width: 14.25rem;
     --kv-right-rail-width: 21.25rem;
     --kv-sidebar-item-height: 1.875rem;
+    --kv-sidebar-child-height: 1.75rem;
+    --kv-sidebar-icon-size: var(--kv-space-5);
+    --kv-sidebar-item-gap: var(--kv-space-2-5);
+    --kv-sidebar-indent: var(--kv-space-5);
     --kv-table-row-height: 2.5rem;
     --kv-table-header-height: 2.625rem;
     --kv-table-text-max-width: 28rem;

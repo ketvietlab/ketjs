@@ -548,7 +548,7 @@ test('design system: application navigation shares one semantic model across bre
   assert.doesNotMatch(navigation, /role="dialog"/)
 
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
-  assert.match(navigationCss, /@media \(max-width: 48rem\)/)
+  assert.match(navigationCss, /@media \(width < 48rem\)/)
   assert.match(navigationCss, /position: fixed/)
   assert.match(navigationCss, /var\(--kv-layer-dialog\)/)
   const packageJson = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8')) as {
@@ -704,12 +704,12 @@ test('design system: application navigation stays dense enough for operational m
   assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
   const leadingRule =
     navigationCss.match(/\[data-ui="navigation-item-leading"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
-  assert.match(leadingRule, /width: var\(--kv-space-5\)/)
-  assert.match(leadingRule, /font-size: var\(--kv-text-xl\)/)
+  assert.match(leadingRule, /width: var\(--kv-sidebar-icon-size\)/)
+  assert.match(leadingRule, /font-size: var\(--kv-sidebar-icon-size\)/)
   assert.match(leadingRule, /line-height: 1/)
 
   const mobileLayer = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
+    /@media \(width < 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
   )?.groups?.body
   assert.match(mobileLayer ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobileLayer ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
@@ -2227,7 +2227,7 @@ test('design system: root navigation sections read one weight step above their c
   )
   assert.match(
     css,
-    /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\):not\( \[data-ui="navigation-children"\] \* \) \{ font-weight: var\(--kv-weight-medium\); \}/u,
+    /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\):not\( \[data-ui="navigation-children"\] \* \) \{ color: var\(--kv-text-main\); font-weight: var\(--kv-weight-medium\); \}/u,
   )
 })
 
