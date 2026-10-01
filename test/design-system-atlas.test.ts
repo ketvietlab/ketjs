@@ -40,12 +40,14 @@ test('design system: KetAtlas materialization is complete and reproducible', () 
       'calendar runtime remains a valid standalone classic script',
     )
     assert.match(runtime, /const attachDatePickers/)
+    assert.match(runtime, /const attachPrimitives/)
+    assert.match(runtime, /const cleanupPrimitives = attachPrimitives\(root\)/)
     for (const contract of ['list', 'record', 'record-solo', 'flow', 'canvas', 'shell', 'section', 'metric'])
       assert.match(contracts, new RegExp(`"${contract}"`, 'u'))
     assert.equal(lock.schemaVersion, 'ketatlas.design-system-lock.v1')
     assert.equal(lock.adapterSchemaVersion, 'ketatlas.design-system-adapter.v1')
     assert.equal(lock.adapter, '@ketvietlab/design-system')
-    assert.equal(lock.registeredComponents, 133)
+    assert.equal(lock.registeredComponents, 135)
     assert.deepEqual(
       lock.files.map((file) => file.path),
       [

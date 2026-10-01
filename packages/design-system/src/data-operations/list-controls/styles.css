@@ -3,15 +3,19 @@
     display: grid;
     grid-template-columns: auto minmax(10rem, 22rem) auto;
     align-items: center;
+    justify-content: start;
     gap: var(--kv-space-2);
   }
 
   :where([data-kv-design-system]) [data-ui="search-bar"] input {
     min-width: 0;
     min-height: var(--kv-control-height);
-    padding-inline: var(--kv-space-2-5);
-    border: 1px solid var(--kv-field-border);
-    border-radius: var(--kv-radius-sm);
+    padding: var(--kv-control-padding-block) var(--kv-control-padding-inline);
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--kv-field-border);
+    border-radius: var(--kv-control-radius);
     background: var(--kv-input-bg);
     color: var(--kv-input-text);
   }
@@ -31,6 +35,7 @@
     border-radius: 999px;
     color: inherit;
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     text-decoration: none;
   }
 

@@ -1612,12 +1612,12 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('app navigation: cluster icons own the Demo 2 metric', () => {
+test('app navigation: icon geometry is independent of typography', () => {
   const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   const rule = css.match(/\[data-ui="navigation-item-leading"\]\s*\[data-ui="icon"\] \{[^}]*\}/)?.[0] ?? ''
-  assert.match(rule, /width:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /height:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /flex:\s*0 0 var\(--kv-text-xl\);/)
+  assert.match(rule, /width:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /height:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /flex:\s*0 0 var\(--kv-sidebar-icon-size\);/)
 })
 
 test('list chrome: mobile sort can shrink without widening the page', () => {
@@ -1644,7 +1644,7 @@ test('design density: controls and fields follow the canonical component dimensi
   assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
   const actions = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
   const fields = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
+  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-action-height\);/)
   assert.match(
     css,
     /\[data-control="action"\]:not\(\[data-ui\]\)[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/,
@@ -2062,9 +2062,8 @@ test('a browser navigating gets the page; a client calling gets the JSON', () =>
 
 test('backend shell: the phone menu uses the design-system left drawer', () => {
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
-  const mobile = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
-  )?.groups?.body
+  const mobile = navigationCss.match(/@media \(width < 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/)
+    ?.groups?.body
   assert.match(mobile ?? '', /\[data-ui="navigation-trigger"\] \{[\s\S]*?display: flex/)
   assert.match(mobile ?? '', /\[data-ui="navigation-layer"\] \{[\s\S]*?position: fixed/)
   assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
@@ -2083,5 +2082,5 @@ test('backend compatibility CSS leaves Section and ModalSheet geometry to the de
   const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
   const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
   assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
-  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-lg\)/u)
+  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-sm\)/u)
 })

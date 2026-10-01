@@ -11,35 +11,107 @@ type CommonProps = Omit<FieldProps, 'type' | 'fields' | 'control' | 'error'> & {
   error?: string | null
 }
 
+/** Shared field metadata. Each scalar exposes only the options it implements. */
+export type ScalarFieldBase = Pick<
+  CommonProps,
+  'id' | 'name' | 'label' | 'labelHidden' | 'help' | 'error' | 'issues' | 'required' | 'disabled' | 'span'
+>
+export type TextFieldProps = ScalarFieldBase &
+  Pick<
+    CommonProps,
+    | 'value'
+    | 'placeholder'
+    | 'readOnly'
+    | 'autocomplete'
+    | 'appearance'
+    | 'prefix'
+    | 'suffix'
+    | 'inputMode'
+    | 'align'
+    | 'maxLength'
+    | 'minLength'
+    | 'pattern'
+  > & { type?: 'text' | 'email' | 'tel' | 'password' | 'url' }
+export type TextAreaProps = ScalarFieldBase &
+  Pick<
+    CommonProps,
+    'value' | 'placeholder' | 'readOnly' | 'appearance' | 'rows' | 'resize' | 'maxLength' | 'minLength'
+  >
+export type NumberFieldProps = ScalarFieldBase &
+  Pick<
+    CommonProps,
+    | 'value'
+    | 'placeholder'
+    | 'readOnly'
+    | 'appearance'
+    | 'min'
+    | 'max'
+    | 'step'
+    | 'prefix'
+    | 'suffix'
+    | 'align'
+  >
+export type MoneyFieldProps = NumberFieldProps & { currency?: string; precision?: number }
+export type SearchFieldProps = Omit<TextFieldProps, 'type'> & { clearable?: boolean; clearLabel?: string }
+export type CheckboxProps = ScalarFieldBase & {
+  checked?: boolean | 'indeterminate'
+  value?: string | boolean
+  submitValue?: string
+}
+export type ChoiceGroupProps = ScalarFieldBase & Pick<CommonProps, 'options' | 'optionsOrientation' | 'value'>
+export type SelectProps = ScalarFieldBase &
+  Pick<CommonProps, 'value' | 'options' | 'placeholder' | 'selectionHidden' | 'appearance'>
+export type SwitchProps = ScalarFieldBase & { checked?: boolean; value?: string }
+
 const normalize = (props: CommonProps): FieldProps => ({
   ...props,
   error: props.error ?? issueFor(props.issues, props.name),
 })
 
-export const TextField = (props: CommonProps): TemplateResult => <Field {...normalize(props)} type="text" />
-export const TextArea = (props: CommonProps): TemplateResult => (
+export const TextField = (props: TextFieldProps): TemplateResult => (
+  <Field {...normalize(props)} type={props.type ?? 'text'} />
+)
+export const TextArea = (props: TextAreaProps): TemplateResult => (
   <Field {...normalize(props)} type="textarea" />
 )
-export const NumberField = (props: CommonProps): TemplateResult => (
-  <Field {...normalize(props)} type="number" />
+export const NumberField = (props: NumberFieldProps): TemplateResult => (
+  <Field {...normalize(props)} type="number" inputMode="decimal" />
 )
-export const MoneyField = (props: CommonProps): TemplateResult => (
-  <Field {...normalize({ ...props, step: props.step ?? '0.01' })} type="decimal" />
+export const MoneyField = (props: MoneyFieldProps): TemplateResult => {
+  const precision = Math.max(
+    0,
+    Math.min(6, Math.trunc(Number.isFinite(props.precision) ? (props.precision ?? 2) : 2)),
+  )
+  return (
+    <Field
+      {...normalize({ ...props, step: props.step ?? String(10 ** -precision) })}
+      type="decimal"
+      inputMode="decimal"
+      align={props.align ?? 'end'}
+      suffix={props.suffix ?? props.currency}
+    />
+  )
+}
+export const SearchField = (props: SearchFieldProps): TemplateResult => (
+  <Field {...normalize(props)} type="search" inputMode="search" />
 )
-export const SearchField = (props: CommonProps): TemplateResult => <Field {...normalize(props)} type="text" />
-export const Checkbox = (props: CommonProps): TemplateResult => (
-  <Field {...normalize(props)} type="checkbox" />
+export const Checkbox = (props: CheckboxProps): TemplateResult => (
+  <Field
+    {...normalize(props)}
+    type="checkbox"
+    submitValue={
+      props.submitValue ??
+      (props.checked !== undefined && typeof props.value === 'string' ? props.value : undefined)
+    }
+  />
 )
-export const CheckboxGroup = (props: CommonProps): TemplateResult => (
+export const CheckboxGroup = (props: ChoiceGroupProps): TemplateResult => (
   <Field {...normalize(props)} type="checkbox-group" />
 )
-export const RadioGroup = (props: CommonProps): TemplateResult => <Field {...normalize(props)} type="radio" />
-export const Select = (props: CommonProps): TemplateResult => <Field {...normalize(props)} type="select" />
-
-export type SwitchProps = Omit<CommonProps, 'options' | 'placeholder' | 'step' | 'min' | 'max'> & {
-  checked?: boolean
-  value?: string
-}
+export const RadioGroup = (props: ChoiceGroupProps): TemplateResult => (
+  <Field {...normalize(props)} type="radio" />
+)
+export const Select = (props: SelectProps): TemplateResult => <Field {...normalize(props)} type="select" />
 
 export const Switch = (props: SwitchProps): TemplateResult => {
   const error = props.error ?? issueFor(props.issues, props.name)
@@ -51,6 +123,7 @@ export const Switch = (props: SwitchProps): TemplateResult => {
       help={props.help}
       error={error}
       required={props.required}
+      labelHidden={props.labelHidden}
       span={props.span}
       kind="switch"
       control={

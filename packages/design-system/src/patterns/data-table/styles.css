@@ -15,6 +15,7 @@
     border-spacing: 0;
     background: transparent;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"][data-framed="false"] {
@@ -31,6 +32,7 @@
     padding: var(--kv-space-3);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     text-align: left;
   }
 
@@ -41,6 +43,7 @@
     background: var(--kv-table-header-bg);
     color: var(--kv-table-header-text);
     font-size: var(--kv-text-2xs);
+    line-height: var(--kv-line-2xs);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
     text-align: left;
@@ -71,7 +74,7 @@
     [data-ui="select-cell"] {
     min-width: 3.5rem;
     height: var(--kv-row-height);
-    padding: 0.4375rem var(--kv-space-3);
+    padding: var(--kv-space-1-5) var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-row-bg);
     vertical-align: middle;
@@ -103,7 +106,7 @@
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="sort-icon"] {
     color: var(--kv-color-accent);
     font-size: var(--kv-text-xs);
-    line-height: 1;
+    line-height: var(--kv-line-xs);
   }
 
   :where([data-kv-design-system])
@@ -162,6 +165,7 @@
     background: var(--kv-table-header-bg);
     color: var(--kv-text-main);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-semibold);
     text-align: left;
   }
@@ -202,8 +206,8 @@
     background: var(--kv-interactive-disabled);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-variant-numeric: tabular-nums;
-    line-height: 1.5;
     text-align: center;
   }
 
@@ -216,6 +220,7 @@
     background: var(--kv-table-row-bg);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
 
   :where([data-kv-design-system])
@@ -243,7 +248,7 @@
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="cell"] {
     max-width: 24rem;
     height: var(--kv-row-height);
-    padding: 0.4375rem var(--kv-space-3);
+    padding: var(--kv-space-1-5) var(--kv-space-3);
     border-bottom: 1px solid var(--kv-table-border);
     background: var(--kv-table-row-bg);
     color: var(--kv-text-secondary);
@@ -269,7 +274,7 @@
     display: flex;
     min-height: calc(var(--kv-row-height) - 1px);
     align-items: center;
-    padding: 0.4375rem var(--kv-space-3);
+    padding: var(--kv-space-1-5) var(--kv-space-3);
     color: inherit;
     text-decoration: none;
   }
@@ -293,8 +298,8 @@
   :where([data-kv-design-system]) [data-ui="table-scroll"][data-pattern="data-table"] [data-ui="cell"] small {
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-normal);
-    line-height: var(--kv-leading-normal);
   }
 
   :where([data-kv-design-system])
