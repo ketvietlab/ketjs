@@ -203,6 +203,15 @@ try {
         const emitted = join(stageBuild, 'packages', name, 'src')
         const dist = join(stageDist, name)
         const legacyClient = join(PACKAGES, name, 'client')
+        if (name === 'website-client') {
+          // Website Studio is typed source, unlike the legacy Flow client.
+          const compiled = join(stageBuild, 'packages', name)
+          const declarations = join(stageTypes, name)
+          cpSync(compiled, dist, { recursive: true })
+          cpSync(declarations, dist, { recursive: true })
+          copyAssets(legacyClient, [join(compiled, 'client'), join(dist, 'client')])
+          continue
+        }
         if (existsSync(legacyClient)) {
           // Imported Flow application: syntax checked JS, with no source compilation.
           const check = spawnSync(process.execPath, [join(ROOT, 'tools/check-flow-client.mjs')], {
