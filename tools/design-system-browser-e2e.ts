@@ -483,7 +483,7 @@ try {
         groups: '16px',
         row: '40',
         formRows: '16px',
-        formColumns: '12px',
+        formColumns: '24px', // Két form policy; the Polaris reference fixture remains 12px.
         surface: '16px',
         table: '16px',
         heading: '8px',

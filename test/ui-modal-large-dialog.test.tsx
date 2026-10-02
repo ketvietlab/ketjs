@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { ModalSheet } from '@ketvietlab/design-system'
 import { modalSheet } from '@ketvietlab/ketsuite/backend'
 
 const forms = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8').replace(
@@ -83,4 +84,23 @@ test('mobile: all modal sizes and presentations cover the viewport without eleva
   assert.match(mobile, /width: 100%;/u)
   assert.match(mobile, /border-radius: 0;/u)
   assert.match(mobile, /box-shadow: none;/u)
+})
+
+test('small dialog: single-column forms keep the 34rem width with a responsive cap', () => {
+  const html = renderToString(
+    ModalSheet({
+      id: 'short-form',
+      title: 'Edit label',
+      closeLabel: 'Close',
+      presentation: 'dialog',
+      size: 'small',
+      body: 'form',
+    }),
+  )
+  assert.match(html, /data-size="small"/u)
+  assert.match(
+    rule('[data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size="small"]') ??
+      '',
+    /width: min\(34rem, 100%\);/u,
+  )
 })
