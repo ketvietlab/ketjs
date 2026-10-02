@@ -1,9 +1,10 @@
 /**
  * Rendering a spreadsheet file out of values strangers typed.
  *
- * Kept apart from the route so the escaping can be tested for what it is - a
+ * Kept apart from any route so the escaping can be tested for what it is - a
  * security property - rather than inferred from a download nobody opens in a
- * test.
+ * test. The old admin's export route is gone; the Studio's export is not wired
+ * to the server yet, and will hand its rows to this when it is.
  */
 
 /** Characters a spreadsheet reads as the start of a formula rather than text. */

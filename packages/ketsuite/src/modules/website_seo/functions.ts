@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from, isNotNull, ne } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, inArray, isNotNull, ne } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
 import { isReservedPath, reservedPrefixes, safeOgImage, sameSiteCanonical } from './projection.ts'
@@ -52,6 +52,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:website.Entry',
       'read:website.SiteDomain',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website.Entry',
     ],
@@ -107,7 +108,7 @@ export const functions: Record<string, FnSpec> = {
       noindex: 'bool?',
       ogImage: 'text?',
     },
-    effects: ['read:website.Entry', 'read:website.SiteMember'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
@@ -139,7 +140,12 @@ export const functions: Record<string, FnSpec> = {
   sitemapEntries: defineFn({
     input: { siteId: 'id' },
     output: { path: 'text', lastModified: 'datetime?' },
-    effects: ['read:website.Site', 'read:website.Entry'],
+    effects: [
+      'read:website.Site',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.TaxonomyTerm',
+    ],
     exposure: 'internal',
     handler: async (ctx: Ctx, args) => {
       const Site = ctx.table('website.Site')
@@ -166,9 +172,72 @@ export const functions: Record<string, FnSpec> = {
           .limit(MAX_SITEMAP_URLS),
       )
       const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
-      return rows
-        .filter((row) => row.noindex !== true && !isReservedPath(String(row.path), prefixes))
+      const visible = rows.filter((row) => !isReservedPath(String(row.path), prefixes))
+
+      // A Studio page asks not to be indexed inside its published revision, not on the entry,
+      // so the revision is read too: without it a page the editor had hidden was still offered
+      // to crawlers here while its own head said noindex. The same read finds which categories
+      // and tags have a published post, because their pages are only worth listing then.
+      const Revision = ctx.table('website.EntryRevision')
+      const hidden = new Set<unknown>()
+      const named = new Map<string, string | null>()
+      for (let i = 0; i < visible.length; i += 100) {
+        const batch = visible.slice(i, i + 100)
+        const revisions = await ctx.db.all(
+          from(Revision)
+            .select(Revision.id, Revision.entryId, Revision.fields)
+            .where(
+              inArray(
+                Revision.id,
+                batch.map((row) => row.publishedRevisionId),
+              ),
+            ),
+        )
+        for (const row of batch) {
+          const revision = revisions.find((r) => r.id === row.publishedRevisionId && r.entryId === row.id)
+          const fields = (
+            revision?.fields && typeof revision.fields === 'object' ? revision.fields : {}
+          ) as Row
+          const seo = (fields.seo && typeof fields.seo === 'object' ? fields.seo : {}) as Row
+          if (seo.indexing === 'noindex') hidden.add(row.id)
+          if (row.type !== 'website.post') continue
+          const terms = [
+            ...(typeof fields.category === 'string' && fields.category
+              ? [`category:${fields.category}`]
+              : []),
+            ...(Array.isArray(fields.tags) ? fields.tags.map((tag) => `tag:${String(tag)}`) : []),
+          ]
+          for (const key of terms) {
+            const latest = named.get(key)
+            const at = row.publishedAt ? String(row.publishedAt) : null
+            if (!named.has(key) || (at && (!latest || at > latest))) named.set(key, at)
+          }
+        }
+      }
+      const pages = visible
+        .filter((row) => row.noindex !== true && !hidden.has(row.id))
         .map((row) => ({ path: String(row.path), lastModified: row.publishedAt ?? null }))
+
+      // A published entry at a term's path is the page served there, and is listed already.
+      const taken = new Set(rows.map((row) => String(row.path)))
+      const Term = ctx.table('website.TaxonomyTerm')
+      const archives = (await ctx.db.all(from(Term).where(eq(Term.siteId, args.siteId))))
+        .flatMap((term) => {
+          const kind =
+            term.taxonomy === 'website.category' ? 'category' : term.taxonomy === 'website.tag' ? 'tag' : null
+          const seo = (term.seo && typeof term.seo === 'object' ? term.seo : {}) as Row
+          const path = `/${kind}/${String(term.slug)}`
+          return kind &&
+            !term.archivedAt &&
+            seo.indexing !== 'noindex' &&
+            named.has(`${kind}:${String(term.id)}`) &&
+            !taken.has(path) &&
+            !isReservedPath(path, prefixes)
+            ? [{ path, lastModified: named.get(`${kind}:${String(term.id)}`) ?? null }]
+            : []
+        })
+        .sort((a, b) => a.path.localeCompare(b.path))
+      return [...pages, ...archives].slice(0, MAX_SITEMAP_URLS)
     },
   }),
 }

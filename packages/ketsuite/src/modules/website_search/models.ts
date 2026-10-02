@@ -23,7 +23,7 @@ export const models: Record<string, ModelDef> = {
       path: 'text',
       title: 'text',
       excerpt: 'text?',
-      /** Lowercased title and excerpt, so a match is one comparison. */
+      /** Lowercased title, excerpt and body text, so a match is one comparison. */
       haystack: 'text',
       publishedAt: 'datetime?',
     },
@@ -49,6 +49,12 @@ export const models: Record<string, ModelDef> = {
       siteId: 'ref:website.Site',
       /** Null while a site has never published a set; the index then follows entries. */
       publicationId: 'text?',
+      /**
+       * What was public when the build started: how many entries, and the latest change to one.
+       * A site that publishes one entry at a time never moves `publicationId`, so without this an
+       * index built once stayed current through every later publish, unpublish and trash.
+       */
+      signature: 'text?',
       state: 'text',
       cursor: 'text?',
       documentCount: 'int',
