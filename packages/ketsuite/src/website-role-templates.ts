@@ -20,6 +20,13 @@ export const websiteRoleTemplates = {
     labels: { vi: 'Website · Biên tập', en: 'Website · Editor' },
     bundles: author,
   },
+  // Sign-in accounts are a security matter: issuing one hands a customer a password, and finding
+  // the customer to issue it to reads the partner list.
+  'website.customers': {
+    version: 1,
+    labels: { vi: 'Website · Tài khoản khách', en: 'Website · Customer accounts' },
+    bundles: [...read, 'website.security', 'partner.view'],
+  },
   'website.publisher': {
     version: 4,
     labels: { vi: 'Website · Xuất bản', en: 'Website · Publisher' },

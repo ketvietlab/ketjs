@@ -13,6 +13,7 @@ import { createBuilder } from './builder.tsx'
 import { createOverview } from './overview.tsx'
 import { createFormList, createSubmissionList } from './forms.tsx'
 import { createSettings } from './settings.tsx'
+import { createCustomerScreens } from './customers.tsx'
 import type { Screen, StudioContext } from '../types.ts'
 
 export const createCoreScreens = (ctx: StudioContext): Record<string, Screen> => ({
@@ -20,6 +21,7 @@ export const createCoreScreens = (ctx: StudioContext): Record<string, Screen> =>
   ...createTaxonomyScreens(ctx),
   ...createVisitorCommerceScreens(ctx),
   ...createDomainScreens(ctx),
+  ...createCustomerScreens(ctx),
   overview: createOverview(ctx),
   'entry-details': createEntryDetails(ctx),
   preview: createPreview(ctx),

@@ -644,3 +644,36 @@ the request stands, and the Studio shows that beside the copy.
   stores a `WEB-…` receipt, which the review journeys depend on.
 - Real Δ `website_studio.submissionReceipt` `{ siteId, id }` answers `{ receipt, createdAt, state:
   'received' }` for a submission of that site, else `notFound`.
+
+## Customer sign-in accounts and real Settings (2026-10-02)
+
+The Studio now runs on the host BFF for its Settings page and for the customer accounts of a site. The
+Atlas mock is unchanged and does not answer these functions.
+
+- Real Δ `website_studio.siteReadiness` `{ siteId }` answers `{ site: { id, title, code, defaultLocale,
+  revisionId }, publicUrl, bindings, blockers: [], customers }`. `customers` is `{ available, selfSignup,
+  signInUrl, total }`, or null for an actor without `website.listCustomerAccounts`. `bindings` lists
+  `retail | hospitality | crm` for the installed modules.
+- Real Δ `website_studio.saveResource` with `kind: 'sites'` saves `{ title, code, defaultLocale }` through
+  `website.saveSite`, keeping the theme, tokens, group and active state. `expectedRevisionId` is the
+  site's `updatedAt`; a stale one fails `conflict`. Timezone and guest-connection fields were removed from
+  the Settings form.
+- NEW `website.listCustomerAccounts` `{ siteId, search?, status?, limit?, offset? }` (read, bundle
+  `security`) answers `{ realm: { id, selfSignup, signInHost } | null, rows, total }`. Search matches the
+  name, the email and, only when it holds digits, the phone. `status` is `active | disabled`; rows never
+  carry a password or hash. The new role template `website.customers` grants it with `partner.view`.
+- Capabilities: `website.customer.manage` (list, read, close, reopen, reset, sign-up switch) and
+  `website.customer.issue` (`website.issueCustomerAccess` and `partner.listPartners`).
+- NEW `website_studio.customers` `{ siteId, search, status, offset }` pages 50 rows: `{ available,
+  selfSignup, signInUrl, rows, total }`. `website_studio.customer` `{ siteId, partnerId }` reads one account
+  plus `signInUrl`; an account of another realm fails `notFound`.
+- NEW `website_studio.customerCommand` `{ siteId, partnerId, action: disable | enable | reset, password? }`
+  checks the account belongs to the site first, then answers `{ account, password }`. `password` is the
+  generated one when staff left it empty, else null; it is shown once and never stored in the client.
+- NEW `website_studio.customerCandidates` `{ siteId, search }` (2+ characters) answers up to 10 partners
+  with the status of their account on this site. `website_studio.issueCustomer` `{ siteId, partnerId,
+  values: { displayName, phone, email, password } }` refuses a partner who already has an account
+  (`conflict`), because issuing again would silently reset the password.
+- NEW `website_studio.saveCustomerSettings` `{ siteId, selfSignup }` opens or closes self sign-up.
+- Not built: password recovery, and the public "my account" pages. The visitor-account simulation
+  screens above remain mock-only.

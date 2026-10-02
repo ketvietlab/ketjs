@@ -19,6 +19,7 @@ export {
   disableCustomerAccess,
   enableCustomerAccess,
   issueCustomerAccess,
+  listCustomerAccounts,
   resetCustomerPassword,
   setCustomerSelfSignup,
   type IssueCustomerAccessInput,
