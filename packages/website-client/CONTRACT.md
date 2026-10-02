@@ -144,7 +144,7 @@ Additional Core routes now cover post creation; entry metadata, revision history
 draft/frozen previews; public delivery/search; simulated visitor accounts; submission detail and public
 forms; and industry adapter journeys. Resource list/editor pairs cover categories, tags,
 menus, redirects, domains, visitor accounts, forms, SEO, sites, themes and templates.
-`client/routes.mjs` is the exact route/capability registry. The Core Atlas registers 95 screen states
+`client/routes.ts` is the exact route/capability registry. The Core Atlas registers 95 screen states
 across 51 flows; Pro retains 5 screens across 3 flows. See `COMPLETION.md` for coverage and evidence.
 
 Every Studio screen returns one complete DS page pattern. Public visitor journeys use the website theme shell (`publicFrame`) with one h1 and native DS controls; they must not render a Studio WorkspacePage, staff navigation or publication identifiers. Collection lists use the operational `ListPage`:
@@ -163,7 +163,7 @@ Studio launch link.
 
 ## 4. Shell
 
-`client/shell.mjs` composes the KetSuite shell the same way the product list screens in KetSuite do.
+`client/shell.tsx` composes the KetSuite shell the same way the product list screens in KetSuite do.
 
 ```
 AppShell {
@@ -213,6 +213,11 @@ core or extension.
 - A workaround for a DS defect goes in `client/ds-gaps.css`, one rule per gap, each with a
   `GAP <id>:` comment, and a row in §6. Delete the rule when the DS fix lands and the override is bumped.
   Never move app layout into that file.
+- Collections are `ListPage` with `DataTable`, not `KetTable`. The Studio renders in the browser, and
+  the `KetTable` component runs its cell callbacks on the server only and has no empty-state actions.
+  Exception owner: Website; destination: `KetTable` once it renders on the client with empty actions.
+  Every `DataTable` that can be empty passes a Vietnamese `emptyTitle` and `emptyMessage` (the DS
+  defaults are English). A table cell with commands uses `size="compact"` buttons.
 - The visitor theme (`client/theme/`) renders the public site, not the Studio. The audit does not apply.
 - When `design-system-layout.json` exists on integration (ketviet PR #643), add
   `design/website/client/styles.css` to `enforce` in the same change that rebases onto it.
@@ -223,10 +228,10 @@ Report each to ketjs. A fix there, then an override bump, removes the workaround
 
 | Gap | Defect | Workaround here | Proper fix |
 | --- | ------ | --------------- | ---------- |
-| `ds-form-stacked-fields` | Field lacks explicit stacked labels. Form field editor keeps labels above controls at all widths. |
-| `ds-form-reorder-keyboard` | ReorderList lacks drag-first controls. Desktop move buttons remain keyboard-focusable; touch retains visible alternatives. |
-| `ds-reorder-drag-icon` | ReorderList lacks an icon slot. Form drag button uses the canonical `grip-vertical` SVG as a mask and keeps its accessible text. Remove when DS exposes an icon handle. |
-| `ds-form-reorder-width` | ReorderList lacks configuration rows with a leading drag handle and trailing remove action. Website scopes a grid layout to form authoring. |
+| `ds-form-stacked-fields` | `Field` has no explicit stacked-label option. | The form field editor keeps labels above controls at all widths. A select and its chevron are pinned to the row under the label: once the rule releases the DS row placement, auto placement drops the select below its chevron. | A `stacked` layout on `Field` that places the select and its chevron itself. |
+| `ds-form-reorder-keyboard` | `ReorderList` lacks drag-first controls. | Desktop move buttons stay keyboard-focusable; touch keeps visible alternatives. | Keyboard and touch alternatives in `ReorderList`. |
+| `ds-reorder-drag-icon` | `ReorderList` has no icon slot. | The form drag button masks the canonical `grip-vertical` SVG and keeps its accessible text. | An icon handle in `ReorderList`. |
+| `ds-form-reorder-width` | `ReorderList` lacks configuration rows with a leading drag handle and a trailing remove action. | A grid layout scoped to form authoring. | A configuration-row variant of `ReorderList`. |
 | `ds-link-target` | `LinkButton` and `NavItem` have no `target`. | `delegateWebsiteLaunch` opens same-origin links under the Studio base in a new tab. | A `target` prop (with `rel="noopener"`). |
 | `ds-resource-list-meta` | `resource-list-item` always uses `auto 1fr auto`, sized for the selection checkbox; without selection, `meta` sits against the text. | Rule in `ds-gaps.css`. | Two tracks when there is no selection cell. |
 | `ds-layout-audit-grid-tracks` | `auditLayoutCss` allows grid tracks on DS hooks. | `render.test.mjs` refuses any DS selector in app CSS. | Audit rule for grid tracks on owned hooks. |
@@ -245,8 +250,7 @@ Report each to ketjs. A fix there, then an override bump, removes the workaround
 | `ds-list-linked-cell-inset` | At ≤42rem an operational `ListPage` pads every cell 8px; a linked cell's `row-link` keeps its own 12px, so the linked title sits 12px right of its header. | Narrow-screen rule in `ds-gaps.css`: no padding on the linked cell, 8px on the link. | Give `row-link` the list's narrow cell inset. |
 | `ds-menu-trigger-icon` | An icon inside a `Menu` trigger renders unsized. | The site menu's trigger is text only. | Size icons in the trigger like `Button` does. |
 | `ds-builder-compact-identity` | WorkspacePage has no compact editor identity with back navigation and inline draft/publication states. | Builder-only header composition in ds-gaps.css. | Add a native compact editor identity, then remove this gap. |
-| `ds-narrow-workspace-controls` | Narrow builder panels and taxonomy upload fields retain two columns; buttons can overflow. | Container-scoped rules in `ds-gaps.css`; all builder content panels and the block inspector establish the container. | Container-aware field layout and wrapping action labels; remove when the pin includes them. |
-
+| `ds-narrow-workspace-controls` | Narrow builder panels and taxonomy upload fields retain two columns; buttons can overflow. | Container-scoped rules in `ds-gaps.css`; all builder content panels and the block inspector establish the container. A select and its chevron are pinned to the row under the label, as in `ds-form-stacked-fields`. | Container-aware field layout and wrapping action labels; remove when the pin includes them. |
 | `ds-livedoc-controls` | Public LiveDoc relies on legacy host control CSS. | Standalone control styles, hidden read-only toolbar, token mapping and taller article canvas (28–40rem desktop, 22rem mobile). | Ship self-contained toolbar styling with the public editor. |
 
 ## 7. Known limits of the mock

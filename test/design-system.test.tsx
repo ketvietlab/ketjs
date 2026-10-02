@@ -2247,6 +2247,24 @@ test('design system: table selection checkboxes sit at 14px', () => {
   assert.match(rule, /height: 0\.875rem;/u)
 })
 
+test('design system: data table status, date and title cells stay readable', () => {
+  const css = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8').replace(
+    /\s+/gu,
+    ' ',
+  )
+  const rule =
+    css.match(/\[data-ui="cell"\]:is\(\[data-kind="status"\], \[data-kind="date"\]\),[^{]*\{[^}]*\}/u)?.[0] ??
+    ''
+  assert.match(
+    rule,
+    /\[data-ui="cell"\]\[data-kind="status"\] \[data-ui="badge"\] \{ white-space: nowrap; \}/u,
+  )
+  assert.match(
+    css,
+    /\[data-pattern="data-table"\]:not\(\[data-responsive="stack"\]\) \[data-ui="cell"\]\[data-priority="primary"\] \{ min-width: 12rem; \}/u,
+  )
+})
+
 test('design system: indigo information text remains legible on dark surfaces', () => {
   const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const color = (token: string) => css.match(new RegExp(`${token}: #(\\w{6})`))![1]!

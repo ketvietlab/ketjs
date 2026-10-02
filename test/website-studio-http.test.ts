@@ -67,7 +67,10 @@ test('Website Studio foundation crosses ERP sessions, managed roles and active w
     assert.equal(launch.headers.get('location'), '/website')
     const page = await reader.get('/website?site=site-a')
     assert.equal(page.status, 200)
-    assert.match(await page.text(), /id="website-studio"/)
+    const studio = await page.text()
+    assert.match(studio, /id="website-studio"/)
+    // The shell fills the viewport; the browser's default body margin would frame it and scroll the page.
+    assert.match(studio, /<body style="margin:0"><div data-kv-design-system/)
     const blocked = await login('blocked')
     assert.equal((await blocked.get('/website')).status, 403)
     assert.equal((await request(blocked, 'website_studio.bootstrap')).status, 403)

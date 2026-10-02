@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16650
+    "cssLines": 16670
   },
   "rows": [
     {
@@ -11489,7 +11489,8 @@
         "test/ui-record-modal.test.tsx",
         "test/ui-refactor.test.tsx",
         "test/user-users-list-screen.test.tsx",
-        "test/website-lists-search-http.test.ts"
+        "test/website-lists-search-http.test.ts",
+        "test/website-studio-http.test.ts"
       ],
       "gapTask": "DS-007"
     },
@@ -12546,8 +12547,9 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/data-table/styles.css",
-      "lines": 376,
+      "lines": 396,
       "hooks": [
+        "badge",
         "cell",
         "col",
         "group-cell",

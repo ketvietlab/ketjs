@@ -264,6 +264,26 @@
     font-weight: var(--kv-weight-semibold);
   }
 
+  /* A status or a date broken across lines reads as two values, as in KetTable. Badge re-declares
+     `white-space: normal` on itself, so the badge needs the rule as well as its cell. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"]:is([data-kind="status"], [data-kind="date"]),
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]
+    [data-ui="cell"][data-kind="status"]
+    [data-ui="badge"] {
+    white-space: nowrap;
+  }
+
+  /* A scrolling table keeps its title readable instead of breaking it word by word, as KetTable does
+     for descriptive columns; the table scrolls for the rest. */
+  :where([data-kv-design-system])
+    [data-ui="table-scroll"][data-pattern="data-table"]:not([data-responsive="stack"])
+    [data-ui="cell"][data-priority="primary"] {
+    min-width: 12rem;
+  }
+
   :where([data-kv-design-system])
     [data-ui="table-scroll"][data-pattern="data-table"]
     [data-ui="cell"][data-linked="true"] {
