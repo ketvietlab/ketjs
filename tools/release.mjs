@@ -41,7 +41,25 @@ const workspaces = [
   // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
   // 0.1.30 packs 7,249,173 bytes (3,863 files): reviewed chart/LiveDoc and record
   // bundles with source maps; no source, test, node_modules or build-cache directories.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 7_600_000 },
+  // 0.1.32: 7,625,068 bytes / 3,942 files, including Website Studio bundles and maps;
+  // inspected archive contains no test, node_modules, atlas or build-cache directories.
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 8_000_000 },
+  {
+    name: '@ketvietlab/website-client',
+    dir: 'packages/website-client',
+    // Measured typed Website Studio package: 292,248 bytes / 258 files.
+    maxPackedBytes: 350_000,
+    requiredPaths: [
+      'LICENSE',
+      'README.md',
+      'package.json',
+      'dist/client/index.js',
+      'dist/client/index.d.ts',
+      'dist/client/styles.css',
+      'dist/server/extensions.js',
+      'dist/server/extensions.d.ts',
+    ],
+  },
   // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
   {
     name: '@ketvietlab/flow-ui',
@@ -136,7 +154,8 @@ const verifyMetadata = () => {
     if (manifest.scripts?.prepack !== 'npm run build --prefix ../..')
       fail(`${workspace.name} does not build before packing`)
     if (!existsSync(join(directory, 'README.md'))) fail(`${workspace.name} has no package README`)
-    if (readFileSync(join(directory, 'LICENSE'), 'utf8') !== license)
+    // A package may append third-party notices, but must retain the full license.
+    if (!readFileSync(join(directory, 'LICENSE'), 'utf8').startsWith(license))
       fail(`${workspace.name} does not carry the repository license`)
     for (const target of exportedPaths(manifest.exports)) {
       const path = join(directory, target)
@@ -256,7 +275,7 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents'), import('@ketvietlab/flow-client'), import('@ketvietlab/flow-client/server')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents'), import('@ketvietlab/flow-client'), import('@ketvietlab/flow-client/server'), import('@ketvietlab/website-client'), import('@ketvietlab/website-client/server')])`,
     ],
     { cwd: consumer },
   )
