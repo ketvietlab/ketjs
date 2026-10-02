@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16676
+    "cssLines": 16789
   },
   "rows": [
     {
@@ -12549,7 +12549,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/data-table/styles.css",
-      "lines": 396,
+      "lines": 566,
       "hooks": [
         "badge",
         "cell",
@@ -12602,7 +12602,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-chrome/styles.css",
-      "lines": 361,
+      "lines": 397,
       "hooks": [
         "bulk-action-list",
         "bulk-actions",
@@ -12730,28 +12730,19 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 208,
+      "lines": 115,
       "hooks": [
         "bulk-action-list",
-        "cell",
         "field",
         "form-actions",
         "form-errors",
         "form-grid",
-        "group-cell",
-        "group-pager",
-        "group-row",
         "list-actions",
         "list-chrome-row",
         "list-search",
         "pager-actions",
         "pager-pages",
-        "record-form",
-        "row",
-        "row-link",
-        "select-cell",
-        "table",
-        "table-scroll"
+        "record-form"
       ]
     },
     {
