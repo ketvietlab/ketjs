@@ -63,6 +63,10 @@
     "./ui/icons": {
       "types": "./dist/ui/icons.d.ts",
       "default": "./dist/ui/icons.js"
+    },
+    "./record-modal-client": {
+      "types": "./dist/ui/client/record-modal.d.ts",
+      "default": "./dist/ui/client/record-modal.js"
     }
   },
   "dependencies": {

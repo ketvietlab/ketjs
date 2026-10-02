@@ -1774,6 +1774,13 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Stack
             items={[
               createKetTableView({ id: 'demo-ket-table', config: ketTableDemoConfig }).view(),
+              <Surface
+                title="Table inside a working surface"
+                body={createKetTableView({
+                  id: 'demo-ket-table-in-surface',
+                  config: ketTableDemoConfig,
+                }).view()}
+              />,
               <KetTable
                 columns={[
                   {
