@@ -162,7 +162,9 @@ const revokeAccountAccess = async (ctx: Ctx, accountId: unknown, reason: string,
 }
 
 export type IssueCustomerAccessInput = {
-  realmId: string
+  /** The realm the account signs in to; a caller that thinks in sites names the site instead. */
+  realmId?: string | null
+  siteId?: string | null
   partnerId: string
   displayName?: string | null
   phone?: string | null
@@ -177,6 +179,8 @@ export type IssueCustomerAccessResult =
 
 export const customerAccessEffects = [
   'read:website.CustomerRealm',
+  'read:website.CustomerRealmSite',
+  'read:website.SiteDomain',
   'read:website.CustomerAccount',
   'write:website.CustomerAccount',
   'read:website.CustomerCredential',
@@ -186,6 +190,13 @@ export const customerAccessEffects = [
   'read:website.CustomerTokenGrant',
   'write:website.CustomerTokenGrant',
   'read:partner.Partner',
+] as const
+
+/** What {@link setCustomerSelfSignup} touches, beyond reading the site's realm. */
+export const customerSignupEffects = [
+  'read:website.CustomerRealmSite',
+  'read:website.CustomerRealm',
+  'write:website.CustomerRealm',
 ] as const
 
 /**
@@ -198,8 +209,13 @@ export const issueCustomerAccess = async (
   ctx: Ctx,
   input: IssueCustomerAccessInput,
 ): Promise<IssueCustomerAccessResult> => {
-  const realm = (await ctx.db.select('website.CustomerRealm', { id: input.realmId }))[0]
+  const realm = input.realmId
+    ? (await ctx.db.select('website.CustomerRealm', { id: input.realmId }))[0]
+    : input.siteId
+      ? await realmForSite(ctx, input.siteId)
+      : null
   if (realm?.active !== true) return invalid('realm', 'website.customer.error.realmUnavailable')
+  const realmId = String(realm.id)
   const partner = (await ctx.db.select('partner.Partner', { id: input.partnerId }))[0]
   if (!partner) return invalid('partnerId', 'website.customer.error.partnerUnavailable')
   const rawPhone = String(input.phone ?? '').trim()
@@ -222,16 +238,16 @@ export const issueCustomerAccess = async (
   return ctx.tx(async (tx) => {
     const Account = tx.table('website.CustomerAccount')
     const held = await tx.db.one(from(Account).where(eq(Account.partnerId, input.partnerId)))
-    if (held && held.realmId !== input.realmId)
+    if (held && held.realmId !== realmId)
       return invalid('partnerId', 'website.customer.error.partnerInOtherRealm')
-    const byPhone = phone ? await accountByPhone(tx, input.realmId, phone) : null
+    const byPhone = phone ? await accountByPhone(tx, realmId, phone) : null
     if (byPhone && byPhone.id !== held?.id) return invalid('phone', 'website.customer.error.phoneInUse')
-    const byEmail = await accountByEmail(tx, input.realmId, emailKey)
+    const byEmail = await accountByEmail(tx, realmId, emailKey)
     if (byEmail && byEmail.id !== held?.id) return invalid('email', 'website.customer.error.emailInUse')
     const now = new Date().toISOString()
     const accountId = held
       ? String(held.id)
-      : `customer-${digest(`${input.realmId}\n${input.partnerId}`).slice(0, 32)}`
+      : `customer-${digest(`${realmId}\n${input.partnerId}`).slice(0, 32)}`
     const fields = {
       email: email || '',
       emailNormalized: emailKey,
@@ -252,7 +268,7 @@ export const issueCustomerAccess = async (
     } else {
       await tx.db.insert('website.CustomerAccount', {
         id: accountId,
-        realmId: input.realmId,
+        realmId,
         partnerId: input.partnerId,
         ...fields,
         emailVerifiedAt: null,
@@ -284,10 +300,14 @@ export const issueCustomerAccess = async (
   })
 }
 
+const accountForPartner = (ctx: Ctx, partnerId: string): Promise<Row | null> => {
+  const Account = ctx.table('website.CustomerAccount')
+  return ctx.db.one(from(Account).where(eq(Account.partnerId, partnerId)))
+}
+
 /** Stop a customer signing in, and sign out every device they hold. */
 export const disableCustomerAccess = async (ctx: Ctx, partnerId: string) => {
-  const Account = ctx.table('website.CustomerAccount')
-  const account = await ctx.db.one(from(Account).where(eq(Account.partnerId, partnerId)))
+  const account = await accountForPartner(ctx, partnerId)
   if (!account) return invalid('partnerId', 'website.customer.error.accountUnavailable')
   const now = new Date().toISOString()
   await ctx.tx(async (tx) => {
@@ -299,6 +319,105 @@ export const disableCustomerAccess = async (ctx: Ctx, partnerId: string) => {
     await revokeAccountAccess(tx, account.id, 'access-disabled', now)
   })
   return { ok: true as const, account: accountView({ ...account, status: 'disabled' }) }
+}
+
+/**
+ * Let a closed account sign in again. The password is kept: a customer who
+ * should not keep it gets a reset as well. A sign-in lock from failed attempts
+ * is lifted with it.
+ */
+export const enableCustomerAccess = async (ctx: Ctx, partnerId: string) => {
+  const account = await accountForPartner(ctx, partnerId)
+  if (!account) return invalid('partnerId', 'website.customer.error.accountUnavailable')
+  const fields = { status: 'active', failedLoginCount: 0, lockedUntil: null }
+  await ctx.db.update('website.CustomerAccount', { id: account.id }, fields)
+  return { ok: true as const, account: accountView({ ...account, ...fields }) }
+}
+
+/**
+ * Give an existing account a new password and sign out every device, without
+ * opening a closed one. A generated password is returned once.
+ */
+export const resetCustomerPassword = async (
+  ctx: Ctx,
+  input: { partnerId: string; password?: string | null },
+) => {
+  const account = await accountForPartner(ctx, input.partnerId)
+  if (!account) return invalid('partnerId', 'website.customer.error.accountUnavailable')
+  const given = input.password == null || input.password === '' ? null : input.password
+  if (given !== null && !validPassword(given))
+    return invalid('password', 'website.customer.error.invalidPassword')
+  const password = given ?? issuedPassword()
+  const passwordHash = await hashCustomerPassword(password)
+  const now = new Date().toISOString()
+  const securityVersion = Number(account.securityVersion) + 1
+  await ctx.tx(async (tx) => {
+    await tx.db.update(
+      'website.CustomerAccount',
+      { id: account.id },
+      { securityVersion, failedLoginCount: 0, lockedUntil: null },
+    )
+    const credential = (await tx.db.select('website.CustomerCredential', { accountId: account.id }))[0]
+    if (credential)
+      await tx.db.update(
+        'website.CustomerCredential',
+        { id: credential.id },
+        { passwordHash, changedAt: now },
+      )
+    else
+      await tx.db.insert('website.CustomerCredential', {
+        id: account.id,
+        accountId: account.id,
+        passwordHash,
+        changedAt: now,
+      })
+    await revokeAccountAccess(tx, account.id, 'password-reset', now)
+  })
+  return {
+    ok: true as const,
+    account: accountView({ ...account, securityVersion }),
+    password: given === null ? password : null,
+  }
+}
+
+/**
+ * What staff see of a customer's sign-in on a site: whether the site takes
+ * accounts, where the customer signs in, and the account itself — never its
+ * password or sessions. An account in another realm is not this site's.
+ */
+export const customerAccessForSite = async (ctx: Ctx, input: { siteId: string; partnerId: string }) => {
+  const realm = await realmForSite(ctx, input.siteId)
+  const domains = realm ? await ctx.db.select('website.SiteDomain', { siteId: input.siteId }) : []
+  const domain = domains.find((row) => row.primary === true) ?? domains[0]
+  const account = realm ? await accountForPartner(ctx, input.partnerId) : null
+  const held = account && account.realmId === realm?.id ? account : null
+  const lockedUntil =
+    held?.lockedUntil && new Date(String(held.lockedUntil)) > new Date() ? held.lockedUntil : null
+  return {
+    realmId: realm ? String(realm.id) : null,
+    signInHost: domain ? String(domain.host) : null,
+    selfSignup: realm ? realm.selfSignup !== false : false,
+    account: held
+      ? {
+          id: String(held.id),
+          phone: held.phone ?? held.phoneNormalized ?? null,
+          email: held.email ? String(held.email) : null,
+          displayName: String(held.displayName),
+          status: String(held.status),
+          lockedUntil,
+          createdAt: held.createdAt ?? null,
+          lastLoginAt: held.lastLoginAt ?? null,
+        }
+      : null,
+  }
+}
+
+/** Open or close self sign-up on the realm a site's customers sign in to. */
+export const setCustomerSelfSignup = async (ctx: Ctx, input: { siteId: string; open: boolean }) => {
+  const realm = await realmForSite(ctx, input.siteId)
+  if (!realm) return invalid('siteId', 'website.customer.error.realmUnavailable')
+  await ctx.db.update('website.CustomerRealm', { id: realm.id }, { selfSignup: input.open })
+  return { ok: true as const, realmId: String(realm.id), selfSignup: input.open }
 }
 
 const sessionOutput = {
@@ -979,7 +1098,8 @@ export const customerFunctions: Record<string, FnSpec> = {
   /** Staff: hand a customer an account for an existing partner. See {@link issueCustomerAccess}. */
   issueCustomerAccess: defineFn({
     input: {
-      realmId: 'id',
+      realmId: 'id?',
+      siteId: 'id?',
       partnerId: 'id',
       displayName: 'text?',
       phone: 'text?',
@@ -990,7 +1110,8 @@ export const customerFunctions: Record<string, FnSpec> = {
     effects: [...customerAccessEffects],
     handler: (ctx: Ctx, args) =>
       issueCustomerAccess(ctx, {
-        realmId: String(args.realmId),
+        realmId: args.realmId as string | null,
+        siteId: args.siteId as string | null,
         partnerId: String(args.partnerId),
         displayName: args.displayName as string | null,
         phone: args.phone as string | null,
@@ -1005,5 +1126,48 @@ export const customerFunctions: Record<string, FnSpec> = {
     output: { ok: 'bool', account: 'json?', errors: 'json?' },
     effects: [...customerAccessEffects],
     handler: (ctx: Ctx, args) => disableCustomerAccess(ctx, String(args.partnerId)),
+  }),
+
+  /** Staff: let a closed account sign in again, keeping its password. */
+  enableCustomerAccess: defineFn({
+    input: { partnerId: 'id' },
+    output: { ok: 'bool', account: 'json?', errors: 'json?' },
+    effects: [...customerAccessEffects],
+    handler: (ctx: Ctx, args) => enableCustomerAccess(ctx, String(args.partnerId)),
+  }),
+
+  /** Staff: a new password for an existing account; every device is signed out. */
+  resetCustomerPassword: defineFn({
+    input: { partnerId: 'id', password: 'text?' },
+    output: { ok: 'bool', account: 'json?', password: 'text?', errors: 'json?' },
+    effects: [...customerAccessEffects],
+    handler: (ctx: Ctx, args) =>
+      resetCustomerPassword(ctx, {
+        partnerId: String(args.partnerId),
+        password: args.password as string | null,
+      }),
+  }),
+
+  /** Staff: a customer's sign-in on a site, without the password or sessions. */
+  customerAccessForSite: defineFn({
+    input: { siteId: 'id', partnerId: 'id' },
+    output: { realmId: 'text?', signInHost: 'text?', selfSignup: 'bool', account: 'json?' },
+    effects: [
+      'read:website.CustomerRealmSite',
+      'read:website.CustomerRealm',
+      'read:website.SiteDomain',
+      'read:website.CustomerAccount',
+    ],
+    handler: (ctx: Ctx, args) =>
+      customerAccessForSite(ctx, { siteId: String(args.siteId), partnerId: String(args.partnerId) }),
+  }),
+
+  /** Staff: open or close self sign-up for a site's customers. */
+  setCustomerSelfSignup: defineFn({
+    input: { siteId: 'id', open: 'bool' },
+    output: { ok: 'bool', realmId: 'text?', selfSignup: 'bool?', errors: 'json?' },
+    effects: [...customerSignupEffects],
+    handler: (ctx: Ctx, args) =>
+      setCustomerSelfSignup(ctx, { siteId: String(args.siteId), open: args.open === true }),
   }),
 }

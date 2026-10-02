@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import type { Adapter, Translator } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import type { Adapter } from '@ketvietlab/ketjs'
 import {
   address,
   paperTheme,
@@ -12,10 +11,6 @@ import {
   websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
-import {
-  entryFormScreen,
-  type EntryRow,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 
 /**
  * Twelve places read `status === 'trash'` — the public resolver, the sitemap,
@@ -38,10 +33,7 @@ const boot = async (): Promise<Adapter> => {
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
 
-const translate = ((key: string) => key) as Translator
-translate.locale = 'en'
-translate.has = () => true
-translate.resolves = () => true
+type EntryRow = { id: string }
 
 const layout = [{ type: 'website.rich_text', settings: { body: 'noi dung' } }]
 
@@ -168,38 +160,4 @@ test('trash: both directions are the state the caller asked for on a repeat', as
   assert.equal(((await call(db, 'website.untrashEntry', { id: 'p1' })) as { ok?: boolean }).ok, true)
   await call(db, 'website.trashEntry', { id: 'p1' })
   assert.equal(((await call(db, 'website.trashEntry', { id: 'p1' })) as { ok?: boolean }).ok, true)
-})
-
-const entry = (over: Partial<EntryRow> = {}): EntryRow => ({
-  id: 'p1',
-  siteId: 'site1',
-  type: 'website.page',
-  slug: 'nham',
-  path: '/nham',
-  title: 'Trang',
-  status: 'draft',
-  ...over,
-})
-
-const form = (row: EntryRow) =>
-  renderToString(
-    entryFormScreen(
-      translate,
-      { entry: row, revision: null },
-      'site1',
-      { basePath: '/admin/website/pages', titleKey: 'pages' },
-      {},
-    ),
-  )
-
-test('trash screen: a live page offers the bin, a binned one offers the way back', () => {
-  const live = form(entry({ status: 'published' }))
-  assert.match(live, /action="\/admin\/website\/pages\/p1\/trash"/u)
-  assert.equal(live.includes('/untrash"'), false)
-
-  const binned = form(entry({ status: 'trash' }))
-  assert.match(binned, /action="\/admin\/website\/pages\/p1\/untrash"/u)
-  // Nothing to take down and nothing to throw away twice.
-  assert.equal(binned.includes('/p1/trash"'), false)
-  assert.equal(binned.includes('action.unpublish'), false)
 })

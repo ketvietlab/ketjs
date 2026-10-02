@@ -167,7 +167,11 @@ test('logout: a form post clears the cookie and returns to the sign-in page', as
 
 test('storefront: none of this touches the public site', async () => {
   const { b, at } = await setup()
-  assert.equal((await fetch(`${at}/`, { headers: HTML })).status, 200)
+  // No redirect to sign-in: the storefront answers, here that the new site has no home page yet.
+  const home = await fetch(`${at}/`, { headers: HTML })
+  assert.equal(home.redirected, false)
+  assert.equal(home.status, 404)
+  assert.match(await home.text(), /data-ket-slot="website\.page"/)
   await b.close()
 })
 

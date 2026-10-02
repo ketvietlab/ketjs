@@ -145,7 +145,7 @@ const SearchControl = (props: ListSearch): TemplateResult => (
       autocomplete="off"
     />
     <span data-ui="list-search-submit">
-      <Button type="submit" label={props.submitLabel ?? 'Search'} variant="tertiary" size="compact" />
+      <Button type="submit" label={props.submitLabel ?? 'Search'} variant="tertiary" />
     </span>
   </form>
 )
@@ -196,7 +196,7 @@ const SortControl = (props: ListSort): TemplateResult => (
         ),
       )}
     </select>
-    <Button type="submit" label={props.submitLabel ?? 'Apply'} variant="tertiary" size="compact" />
+    <Button type="submit" label={props.submitLabel ?? 'Apply'} variant="tertiary" />
   </form>
 )
 

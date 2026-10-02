@@ -43,15 +43,15 @@
     font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
+    line-height: var(--kv-page-title-line);
   }
 
   :where([data-kv-design-system]) [data-kv-page-identity="eyebrow"] {
     margin: 0;
     color: var(--kv-accent);
     font-size: var(--kv-text-2xs);
+    line-height: var(--kv-line-2xs);
     font-weight: var(--kv-weight-bold);
-    line-height: var(--kv-leading-tight);
     text-transform: uppercase;
   }
 

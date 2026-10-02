@@ -1,5 +1,5 @@
 /*
- * Layering: see LAYOUT.md, rules L1 and L2.
+ * Layering: see Két Design System visual contract, rules L1 and L2.
  *
  * A frame separates a white working region from the canvas behind it, and it is
  * drawn once. Inside a white region (a surface, a modal sheet or dialog, a
@@ -86,7 +86,8 @@
     [data-ui="record-page-aside"]
     [data-ui="surface"]
     [data-ui="surface-title"] {
-    font-size: var(--kv-text-lg);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   [data-kv-design-system]

@@ -47,6 +47,7 @@
   :where([data-kv-design-system]) [data-ui="key-value-label"] {
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-medium);
   }
 

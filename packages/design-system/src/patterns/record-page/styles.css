@@ -6,6 +6,8 @@
     display: grid;
     min-width: 0;
     background: var(--kv-page-content-bg);
+    /* The rail stacks on the page's own width, so a sidebar beside the page counts. */
+    container: record-page / inline-size;
   }
 
   :where([data-kv-design-system]) [data-ui="record-page"][data-variant="operational"] {
@@ -60,7 +62,7 @@
     font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
+    line-height: var(--kv-page-title-line);
   }
 
   :where([data-kv-design-system]) [data-ui="record-page-status"] {
@@ -107,10 +109,12 @@
     background: var(--kv-page-bg);
   }
 
+  /* With a rail, the record column keeps the wide measure and the rail sits outside it at a
+     fixed width: the page grows by the rail instead of squeezing the record. */
   :where([data-kv-design-system]) [data-ui="record-page-layout"] {
     display: grid;
     min-width: 0;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, calc(68.75rem + var(--kv-page-padding-x) * 2)) var(--kv-right-rail-width);
     align-items: start;
   }
 
@@ -129,13 +133,9 @@
   :where([data-kv-design-system]) [data-ui="record-page-body"] {
     display: grid;
     min-width: 0;
-    gap: var(--kv-space-6);
-    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    gap: var(--kv-gap-section);
+    padding: var(--kv-gap-section) var(--kv-page-padding-x);
     background: var(--kv-page-content-bg);
-  }
-
-  :where([data-kv-design-system]) [data-ui="record-page-body"] > [data-ui="stack"] {
-    gap: var(--kv-space-6);
   }
 
   :where([data-kv-design-system]) [data-ui="record-page-aside"] {
@@ -151,7 +151,8 @@
     background: var(--kv-panel-bg-subtle);
   }
 
-  @media (max-width: 63.9375rem) {
+  /* Stack the rail once the record column would fall below 40rem beside it. */
+  @container record-page (max-width: 61.25rem) {
     :where([data-kv-design-system]) [data-ui="record-page-layout"] {
       grid-template-columns: minmax(0, 1fr);
       row-gap: var(--kv-space-5);

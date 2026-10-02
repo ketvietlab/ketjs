@@ -1,6 +1,10 @@
-export { ActionGroup, Button, IconButton, LinkButton } from './primitives/actions/index.tsx'
+export { Icon } from './primitives/icon/index.tsx'
+export type { IconName, IconProps } from './primitives/icon/index.tsx'
+export { ActionGroup, Button, IconButton, LinkButton, Link } from './primitives/actions/index.tsx'
 export type {
   ActionSize,
+  ActionTone,
+  LinkProps,
   ActionVariant,
   ButtonProps,
   IconButtonProps,
@@ -16,7 +20,14 @@ export {
   MediaLabel,
   initials,
 } from './primitives/status/index.tsx'
-export type { Tone } from './primitives/status/index.tsx'
+export type {
+  Tone,
+  TextProps,
+  TextVariant,
+  BadgeProps,
+  TagProps,
+  AvatarProps,
+} from './primitives/status/index.tsx'
 export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.tsx'
 export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
@@ -124,7 +135,20 @@ export {
   TextArea,
   TextField,
 } from './forms/scalar-fields/index.tsx'
-export type { FieldIssue, ScalarFieldProps, SwitchProps } from './forms/scalar-fields/index.tsx'
+export type {
+  FieldIssue,
+  ScalarFieldProps,
+  ScalarFieldBase,
+  TextFieldProps,
+  TextAreaProps,
+  NumberFieldProps,
+  MoneyFieldProps,
+  SearchFieldProps,
+  CheckboxProps,
+  ChoiceGroupProps,
+  SelectProps,
+  SwitchProps,
+} from './forms/scalar-fields/index.tsx'
 export { Combobox, MultiCombobox, TagPicker } from './forms/combobox/index.tsx'
 export type {
   ComboboxOption,
@@ -207,6 +231,8 @@ export {
   Surface,
 } from './layouts/layout/index.tsx'
 export type {
+  LayoutGap,
+  ResponsiveGap,
   CardGridProps,
   ContentCardProps,
   KanbanCardProps,

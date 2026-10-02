@@ -64,6 +64,7 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
     format: { kind: 'custom', field: 'name', renderer: 'thumbnail-label' },
     priority: 'primary',
     width: 'wide',
+    wrap: true,
   },
   {
     key: 'type',
@@ -82,6 +83,7 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
     key: 'category',
     label: _('product_backend.col.category'),
     format: { kind: 'text', field: 'categoryName' },
+    wrap: true,
     priority: 'secondary',
   },
   {

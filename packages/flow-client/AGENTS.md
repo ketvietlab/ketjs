@@ -2,7 +2,7 @@
 
 Public MIT client for KetSuite deployments. `client/` is the existing JavaScript
 application imported from ketviet, retained byte-for-byte except subsequent reviewed
-fixes. It composes flow-ui; do not add component markup or CSS overrides.
+fixes. It composes flow-ui. Design work follows [Két Design System](../../skills/ket-design-system/SKILL.md).
 
 This import is a documented compatibility boundary: the legacy JavaScript application
 is syntax/lint/runtime tested, not included in the repository's strict TypeScript

@@ -1,5 +1,6 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { Text } from '../../primitives/status/index.tsx'
 import type { Tone } from '../../primitives/status.tsx'
 
 export const HOOKS = [
@@ -36,6 +37,7 @@ export const HOOKS = [
   'card-meta',
   'card-actions',
   'kanban',
+  'kanban-empty',
   'kanban-card',
   'kanban-media',
   'kanban-title',
@@ -62,28 +64,49 @@ const Items = (props: { items: readonly JSXChild[] }): TemplateResult => (
   </>
 )
 
+export type LayoutGap = 'none' | 'tight' | 'compact' | 'column' | 'default' | 'loose'
+export type ResponsiveGap = LayoutGap | { desktop: LayoutGap; mobile: LayoutGap }
+const gapAttributes = (gap: ResponsiveGap | undefined, fallback: LayoutGap) => ({
+  'data-gap': typeof gap === 'object' ? gap.desktop : (gap ?? fallback),
+  'data-mobile-gap': typeof gap === 'object' ? gap.mobile : null,
+})
+
 /**
- * `divided` draws a hairline between items, the peer-section divider of LAYOUT.md
+ * `divided` draws a hairline between items, the peer-section divider of Két Design System visual contract
  * L3 (a form with several groups, a list of sections in a modal). It never frames
  * an item.
  */
 export const Stack = (props: {
   items: readonly JSXChild[]
-  gap?: 'compact' | 'default' | 'loose'
+  gap?: ResponsiveGap
+  inlineAlign?: 'start' | 'center' | 'end' | 'stretch'
   divided?: boolean
 }): TemplateResult => (
   <div
     data-ui="stack"
     data-pattern="stack"
-    data-gap={props.gap ?? 'default'}
+    {...gapAttributes(props.gap, 'default')}
+    data-inline-align={props.inlineAlign ?? null}
     data-divided={props.divided === true ? 'true' : null}
   >
     <Items items={props.items} />
   </div>
 )
 
-export const Inline = (props: { items: readonly JSXChild[] }): TemplateResult => (
-  <div data-ui="inline">
+export const Inline = (props: {
+  items: readonly JSXChild[]
+  gap?: ResponsiveGap
+  align?: 'start' | 'center' | 'end' | 'between'
+  blockAlign?: 'start' | 'center' | 'end' | 'baseline' | 'stretch'
+  wrap?: boolean
+}): TemplateResult => (
+  <div
+    data-ui="inline"
+    {...gapAttributes(props.gap, 'compact')}
+    data-align={props.align ?? null}
+    data-block-align={props.blockAlign ?? null}
+    data-wrap={props.wrap === false ? 'false' : null}
+  >
     <Items items={props.items} />
   </div>
 )
@@ -96,12 +119,16 @@ export const Inline = (props: { items: readonly JSXChild[] }): TemplateResult =>
 export const Grid = (props: {
   items: readonly JSXChild[]
   columns?: 2 | 3 | 4
+  mobileColumns?: 1 | 2
+  gap?: ResponsiveGap
   align?: 'start' | 'stretch'
 }): TemplateResult => (
   <div
     data-ui="grid"
     data-columns={String(props.columns ?? 3)}
     data-align={props.align === 'stretch' ? 'stretch' : null}
+    {...gapAttributes(props.gap, 'default')}
+    data-mobile-columns={props.mobileColumns ? String(props.mobileColumns) : null}
   >
     <Items items={props.items} />
   </div>
@@ -140,11 +167,15 @@ export const Surface = (props: {
       <header data-ui="surface-head">
         {props.description ? (
           <div data-ui="surface-heading">
-            <h2 data-ui="surface-title">{props.title}</h2>
+            <h2 data-ui="surface-title">
+              <Text>{props.title}</Text>
+            </h2>
             <p data-ui="surface-description">{props.description}</p>
           </div>
         ) : (
-          <h2 data-ui="surface-title">{props.title}</h2>
+          <h2 data-ui="surface-title">
+            <Text>{props.title}</Text>
+          </h2>
         )}
         {props.actions !== undefined && <div data-ui="surface-actions">{props.actions}</div>}
       </header>
@@ -172,7 +203,9 @@ export const Section = (props: {
     <header data-ui="section-head">
       <div>
         {!!props.eyebrow && <p data-ui="section-eyebrow">{props.eyebrow}</p>}
-        <h2 data-ui="section-title">{props.title}</h2>
+        <h2 data-ui="section-title">
+          <Text>{props.title}</Text>
+        </h2>
         {!!props.description && <p data-ui="section-description">{props.description}</p>}
       </div>
       {props.actions !== undefined && <div data-ui="section-actions">{props.actions}</div>}
@@ -234,12 +267,15 @@ export type KanbanCardProps = {
   note?: string | null
   actions?: JSXChild
   selected?: boolean
+  /** Native drag source; the product runtime validates and handles the move. */
+  draggable?: boolean
 }
 
 export const KanbanCard = (props: KanbanCardProps): TemplateResult => (
   <article
     data-ui="kanban-card"
     data-key={props.id}
+    draggable={props.draggable === true ? 'true' : undefined}
     data-interactive={String(!!props.href)}
     data-selected={String(props.selected === true)}
   >
@@ -255,10 +291,19 @@ export type KanbanGridProps<T> = {
   rows: readonly T[]
   id: (row: T) => unknown
   card: (row: T) => TemplateResult
+  /** A lane remains a usable drop target even when rows is empty. */
+  dropTarget?: string
+  dropLabel?: string
+  emptyLabel?: string
 }
 
 export const KanbanGrid = <T,>(props: KanbanGridProps<T>): TemplateResult => (
-  <div data-ui="kanban">{each(props.rows, props.id, (row) => props.card(row))}</div>
+  <div data-ui="kanban" data-drop-target={props.dropTarget} role="group" aria-label={props.dropLabel}>
+    {each(props.rows, props.id, (row) => props.card(row))}
+    {props.dropTarget && props.rows.length === 0 && (
+      <p data-ui="kanban-empty">{props.emptyLabel ?? props.dropLabel}</p>
+    )}
+  </div>
 )
 
 /**

@@ -189,10 +189,15 @@ const renderRuntime = (): string => {
   const dateRuntime = readFileSync(join(sourceDirectory, 'forms/date-time/runtime.js'), 'utf8')
     .replace(/^import \{[\s\S]*?\} from '\.\/date-math\.js'\n/mu, '')
     .replace('export const attachDatePickers', 'const attachDatePickers')
+  const primitiveRuntime = readFileSync(join(sourceDirectory, 'runtime/primitives.js'), 'utf8').replace(
+    'export const attachPrimitives',
+    'const attachPrimitives',
+  )
   const interactions = moduleSource
+    .replace("import { attachPrimitives } from './primitives.js'\n", '')
     .replace("import { attachDatePickers } from '../forms/date-time/runtime.js'\n", '')
     .replace('export const attachDesignSystemInteractions', 'const attachDesignSystemInteractions')
-  const classicSource = `const attachDatePickers = (() => {\n${dateMath}\n${dateRuntime}\nreturn attachDatePickers;\n})();\n${interactions}`
+  const classicSource = `${primitiveRuntime}\nconst attachDatePickers = (() => {\n${dateMath}\n${dateRuntime}\nreturn attachDatePickers;\n})();\n${interactions}`
   if (/\bexport\s/u.test(classicSource) || /^import\s/mu.test(classicSource))
     throw new Error('Design-system runtime can no longer be converted to a classic KetAtlas script')
   // Built by tools/build-design-system-atlas-runtime.mjs: a self-contained bundle
