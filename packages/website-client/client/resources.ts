@@ -296,6 +296,12 @@ export const resourceSchemas: Record<string, ResourceSchema> = {
         defaultValue: 'rounded',
       },
       {
+        name: 'account',
+        label: 'website.resource.themes.account',
+        kind: 'select:hidden,shown',
+        defaultValue: 'hidden',
+      },
+      {
         name: 'title',
         label: 'website.resource.themes.title',
         kind: 'text',

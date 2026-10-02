@@ -86,7 +86,13 @@ export async function acceptImageFiles(
     root.querySelector<HTMLInputElement>('input[type="file"]')!.value = ''
   }
 }
-export type TaxonomyImageProps = ImageOwner & { value?: string; alt?: string; disabled?: boolean }
+/** `describe: false` drops the alt text field, for an image whose owner already names it - a site logo. */
+export type TaxonomyImageProps = ImageOwner & {
+  value?: string
+  alt?: string
+  disabled?: boolean
+  describe?: boolean
+}
 
 export function TaxonomyImage(
   ctx: StudioContext,
@@ -97,6 +103,7 @@ export function TaxonomyImage(
     alt = '',
     disabled = false,
     resModel = 'website.TaxonomyTerm',
+    describe = true,
   }: TaxonomyImageProps,
 ) {
   const receive = (root: HTMLElement, files: FileList | readonly File[]) =>
@@ -165,13 +172,15 @@ export function TaxonomyImage(
               disabled={disabled}
             />
           </span>,
-          <TextField
-            id={`${id}-${field}-alt`}
-            name={`${field}Alt`}
-            label={ctx.tr('website.taxonomy.imageAlt')}
-            value={alt}
-            disabled={disabled}
-          />,
+          describe ? (
+            <TextField
+              id={`${id}-${field}-alt`}
+              name={`${field}Alt`}
+              label={ctx.tr('website.taxonomy.imageAlt')}
+              value={alt}
+              disabled={disabled}
+            />
+          ) : null,
         ]}
       />
     </div>

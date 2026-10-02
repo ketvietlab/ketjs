@@ -39,8 +39,7 @@ import type {
 
 /** A page or post in the site's list, for the page switcher and the shared-scope notice. */
 type EntryRow = { id: string; title: string }
-type MediaRow = { url: string; visibility: string; scan: string }
-const THEME_KEYS = ['preset', 'accent', 'font', 'spacing', 'buttons'] as const
+const THEME_KEYS = ['preset', 'accent', 'font', 'spacing', 'buttons', 'account'] as const
 
 export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor) {
   const t = (key: string) => ctx.tr(`website.workspace.${key}`)
@@ -56,6 +55,14 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
     compareId: string | null = null
   let presentationNode: string | null = null,
     presentationPoint: Viewport = 'desktop'
+  /** A logo still uploading has no address yet; saving now would quietly drop it. */
+  const logoSettled = (form: FormData) => {
+    if (
+      form.has('logo') &&
+      Number(globalThis.document?.getElementById('workspace-theme')?.dataset.uploading ?? 0)
+    )
+      throw Object.assign(new Error(ctx.tr('website.taxonomy.imageUploading')), { code: 'validation' })
+  }
   const command = (label: string, name: string, args: CommandArgs = {}, form?: string) => (
     <CommandButton
       label={label}
@@ -205,7 +212,15 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
         data-buttons={(themePreview ?? theme)?.buttons ?? 'rounded'}
       >
         <header class="wt-theme-header">
-          <strong>{ctx.site().name}</strong>
+          {(themePreview ?? theme)?.logo ? (
+            <img
+              class="wt-public-logo"
+              src={safeImage((themePreview ?? theme)!.logo!)}
+              alt={ctx.site().name}
+            />
+          ) : (
+            <strong>{ctx.site().name}</strong>
+          )}
           <nav>
             {(sharedMenus.find((m) => m.position === 'header')?.items ?? [])
               .map((item) => <span>{item.label}</span>)
@@ -345,10 +360,12 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
                     value={
                       (themePreview ?? theme)![key] ??
                       (
-                        { preset: 'default', spacing: 'comfortable', buttons: 'rounded' } as Record<
-                          string,
-                          string
-                        >
+                        {
+                          preset: 'default',
+                          spacing: 'comfortable',
+                          buttons: 'rounded',
+                          account: 'hidden',
+                        } as Record<string, string>
                       )[key] ??
                       ''
                     }
@@ -358,9 +375,23 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
                       font: ['sans', 'serif'],
                       spacing: ['compact', 'comfortable', 'spacious'],
                       buttons: ['rounded', 'square'],
+                      account: ['hidden', 'shown'],
                     }[key].map((value) => ({ value, label: ctx.tr(`website.option.${value}`) }))}
                   />
                 )),
+                <fieldset class="website-theme-logo">
+                  <legend>{t('logo')}</legend>
+                  <p>{t('logoHelp')}</p>
+                  {AttachmentImage(ctx, {
+                    id: ctx.site().id,
+                    field: 'logo',
+                    value: (themePreview ?? theme)!.logo ?? '',
+                    alt: ctx.site().name,
+                    resModel: 'website.Site',
+                    disabled: !ctx.can('website.site.manage'),
+                    describe: false,
+                  })}
+                </fieldset>,
                 command(t('previewTheme'), 'workspace.theme.preview', {}, 'workspace-theme'),
                 command(t('resetThemePreview'), 'workspace.theme.reset'),
                 <Checkbox id="theme-confirm" name="confirmed" label={t('themeConfirm')} />,
@@ -602,9 +633,11 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
         await ctx.refresh()
       },
       'workspace.theme.preview': (_, form) => {
+        logoSettled(form!)
         themePreview = {
           ...theme,
           ...Object.fromEntries(THEME_KEYS.map((k) => [k, String(form!.get(k))])),
+          logo: String(form!.get('logo') ?? ''),
         }
         editor.touch()
       },
@@ -616,6 +649,7 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
         form = form!
         if (!ctx.can('website.site.manage') || !theme || !form.has('confirmed'))
           throw Object.assign(new Error(t('themeConfirm')), { code: 'validation' })
+        logoSettled(form)
         theme = await ctx.call<SiteTheme>('website_studio.saveResource', {
           siteId: ctx.site().id,
           kind: 'themes',
@@ -628,6 +662,8 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
             font: String(form.get('font')),
             spacing: String(form.get('spacing')),
             buttons: String(form.get('buttons')),
+            account: String(form.get('account') ?? 'hidden'),
+            logo: String(form.get('logo') ?? ''),
           },
         })
         themePreview = null
@@ -740,16 +776,8 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
         const url = String(form.get('image') ?? ''),
           alt = String(form.get('imageAlt') ?? '')
         if (url && !alt.trim()) throw Object.assign(new Error(t('missingAlt')), { code: 'validation' })
-        const rows = (
-          await ctx.call<{ rows: MediaRow[] }>('website_studio.listResources', {
-            siteId: ctx.site().id,
-            kind: 'media',
-            search: '',
-            publicOnly: true,
-          })
-        ).rows
-        if (url && !rows.some((r) => r.url === url && r.visibility === 'public' && r.scan === 'clean'))
-          throw Object.assign(new Error(t('mediaUnavailable')), { code: 'validation' })
+        // The upload is this page's own; saving the revision is what claims it, and refuses one
+        // that is not this page's, has not finished or has expired.
         const selected = imageNode()?.id
         if (!selected) throw Object.assign(new Error(t('selectBlock')), { code: 'validation' })
         editor.change((layout) =>

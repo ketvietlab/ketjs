@@ -49,6 +49,7 @@ export default defineModule({
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
       'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
+      'error.invalidLogo': 'Logo phải là ảnh tải lên hoặc một đường dẫn https://.',
       'error.invalidTokenValue':
         'Có token mang tên hoặc giá trị không hợp lệ. Giá trị chỉ được chứa chữ, số, khoảng trắng và # . , % ( ) / + * -',
       'error.primaryDomainInUse':
@@ -143,6 +144,7 @@ export default defineModule({
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
       'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
+      'error.invalidLogo': 'The logo has to be an uploaded image or an https:// address.',
       'error.invalidTokenValue':
         'A token name or value is not allowed. A value may hold letters, digits, spaces and # . , % ( ) / + * -',
       'error.primaryDomainInUse':

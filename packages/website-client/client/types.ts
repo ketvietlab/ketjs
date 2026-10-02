@@ -224,6 +224,7 @@ export type SiteTheme = {
   font?: string
   spacing?: string
   buttons?: string
+  account?: string
   footer?: string
   logo?: string
 }

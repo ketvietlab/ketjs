@@ -394,7 +394,9 @@ export const coreMessages = {
     'website.option.spacious': 'Thoáng',
     'website.option.rounded': 'Bo góc',
     'website.option.square': 'Vuông',
-    'website.workspace.mediaUnavailable': 'Ảnh chưa được kiểm hoặc không có quyền công khai.',
+    'website.resource.themes.account': 'Tài khoản khách',
+    'website.option.hidden': 'Ẩn',
+    'website.option.shown': 'Hiện nút Đăng nhập trên đầu trang',
     'website.workspace.minWidth': 'Chiều rộng tối thiểu (px)',
     'website.workspace.maxWidth': 'Chiều rộng tối đa (px)',
     'website.workspace.invalidDimensions': 'Chiều rộng phải từ 0–4096 px; tối thiểu không vượt tối đa.',
@@ -576,6 +578,9 @@ export const coreMessages = {
     'website.workspace.affectedPages':
       'trang và bài viết dùng theme này. Cấu hình mới chỉ công khai sau khi xuất bản.',
     'website.workspace.themeConfirm': 'Tôi đã xem ảnh hưởng tới các trang dùng theme này.',
+    'website.workspace.logo': 'Logo',
+    'website.workspace.logoHelp':
+      'Hiện ở đầu trang thay cho tên site. Ảnh ngang, nền trong suốt trông gọn nhất.',
     'website.workspace.saveTheme': 'Lưu phong cách vào bản nháp',
     'website.workspace.themePermission': 'Cần quyền quản trị website để thay đổi phong cách dùng chung.',
     'website.resource.noParent': 'Không có chủ đề cha',

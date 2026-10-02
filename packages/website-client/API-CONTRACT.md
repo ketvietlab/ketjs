@@ -395,6 +395,10 @@ there is no Website client command for those writes. They are not a proposed Web
 Bind image selection to the deployment's Object Storage API before production; no live storage
 connection, credential, provider or upload implementation is delivered by this mock change.
 
+Update 2026-10-02: the builder no longer reads `kind: 'media'` when an image is chosen. The
+deployment has no such resource, so choosing an image failed there. An uploaded image is the page's
+own lease (`/website/images/{entryId}/{field}`), and the revision save claims it or refuses it.
+
 
 ### Taxonomy description, SEO and storage upload — 2026-09-30
 
