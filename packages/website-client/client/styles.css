@@ -575,21 +575,9 @@
   }
 }
 
-/* Article writing uses LiveDoc with a compact document-settings column. */
-.website-post-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 19rem;
-  gap: var(--kv-space-4);
-  align-items: start;
-}
-.website-post-content,
-.website-post-settings {
-  min-width: 0;
-}
-@media (max-width: 64rem) {
-  .website-post-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* Article writing: the form wraps the record page, whose rail holds the document settings. */
+.website-post-form {
+  display: contents;
 }
 
 /* Overview names and metadata follow the shared typography scale. */

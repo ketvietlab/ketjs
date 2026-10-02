@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16671
+    "cssLines": 16676
   },
   "rows": [
     {
@@ -12755,7 +12755,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-page/styles.css",
-      "lines": 212,
+      "lines": 217,
       "hooks": [
         "action-group",
         "form-cluster",

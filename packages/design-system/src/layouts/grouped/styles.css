@@ -52,7 +52,7 @@
     background: var(--kv-panel-bg);
   }
 
-  @media (max-width: 63.9375rem) {
+  @container record-page (max-width: 61.25rem) {
     [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
       margin: 0 var(--kv-page-padding-x) var(--kv-gap-section);
     }

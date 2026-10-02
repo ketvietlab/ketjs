@@ -2276,6 +2276,34 @@ test('design system: pages keep one 16px gutter on every side of a record body',
   }
 })
 
+test('design system: a record rail sits beside the wide record column and stacks on the page width', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-page/styles.css', 'utf8').replace(
+    /\s+/gu,
+    ' ',
+  )
+  const rule = (selector: string) => css.match(new RegExp(`${selector} \\{[^}]*\\}`, 'u'))?.[0] ?? ''
+  assert.match(rule('\\[data-ui="record-page"\\]'), /container: record-page \/ inline-size;/u)
+  assert.match(
+    rule('\\[data-ui="record-page-layout"\\]'),
+    /grid-template-columns: minmax\(0, calc\(68\.75rem \+ var\(--kv-page-padding-x\) \* 2\)\) var\(--kv-right-rail-width\);/u,
+  )
+  // The page's own width decides, so a navigation sidebar beside it counts.
+  const stack = css.slice(css.indexOf('@container record-page (max-width: 61.25rem)'))
+  assert.match(
+    stack,
+    /^@container record-page \(max-width: 61\.25rem\) \{ :where\(\[data-kv-design-system\]\) \[data-ui="record-page-layout"\] \{ grid-template-columns: minmax\(0, 1fr\);/u,
+  )
+  assert.doesNotMatch(css, /@media \(max-width: 63\.9375rem\)/u)
+  const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8').replace(
+    /\s+/gu,
+    ' ',
+  )
+  assert.match(
+    grouped,
+    /@container record-page \(max-width: 61\.25rem\) \{ \[data-kv-design-system\]\[data-presentation="grouped"\] \[data-ui="record-page-aside"\]/u,
+  )
+})
+
 test('design system: indigo information text remains legible on dark surfaces', () => {
   const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const color = (token: string) => css.match(new RegExp(`${token}: #(\\w{6})`))![1]!
