@@ -2265,6 +2265,17 @@ test('design system: data table status, date and title cells stay readable', () 
   )
 })
 
+test('design system: pages keep one 16px gutter on every side of a record body', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const root = tokens.match(/:root \{[^}]*\}/u)?.[0] ?? ''
+  assert.match(root, /--kv-page-padding-x: var\(--kv-space-4\);/u)
+  for (const pattern of ['record-page', 'form-page']) {
+    const css = readFileSync(`packages/design-system/src/patterns/${pattern}/styles.css`, 'utf8')
+    const body = css.match(new RegExp(`\\[data-ui="${pattern}-body"\\] \\{[^}]*\\}`, 'u'))?.[0] ?? ''
+    assert.match(body, /padding: var\(--kv-gap-section\) var\(--kv-page-padding-x\);/u, pattern)
+  }
+})
+
 test('design system: indigo information text remains legible on dark surfaces', () => {
   const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const color = (token: string) => css.match(new RegExp(`${token}: #(\\w{6})`))![1]!

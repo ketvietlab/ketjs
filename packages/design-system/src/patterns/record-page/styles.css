@@ -130,7 +130,7 @@
     display: grid;
     min-width: 0;
     gap: var(--kv-gap-section);
-    padding: var(--kv-gap-section) var(--kv-page-padding-x) var(--kv-space-10);
+    padding: var(--kv-gap-section) var(--kv-page-padding-x);
     background: var(--kv-page-content-bg);
   }
 
