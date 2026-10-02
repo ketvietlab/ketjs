@@ -7,6 +7,7 @@ export const cosmeticsPreset = Object.freeze({
   font: 'sans',
   spacing: 'comfortable',
   buttons: 'square',
+  account: 'shown',
 })
 
 export function cosmeticsStarter(tr: Translate) {

@@ -25,11 +25,6 @@
   display: block;
   padding-inline-start: 1rem;
 }
-.wt-public-logo {
-  max-width: 12rem;
-  max-height: 3rem;
-  object-fit: contain;
-}
 .wt-public-post {
   max-width: 56rem;
   margin-inline: auto;
@@ -129,4 +124,254 @@
 }
 .wt-public-search-box input {
   inline-size: 12rem;
+}
+/* The header's way to a customer account, and the sign-in it leads to. */
+.wt-public .wt-theme-header .wt-public-account {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+}
+/* The sign-in: the site's welcome beside the form; on a phone the form comes first. */
+.wt-public-signin {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 70vh;
+}
+/* The script swaps the form for the signed-in panel; a layout rule must not bring either back. */
+.wt-public-signin [hidden] {
+  display: none !important;
+}
+.wt-public-signin__story {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 4rem clamp(1.5rem, 6vw, 6rem);
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.wt-public-signin__mark {
+  position: absolute;
+  inset-inline-end: -6rem;
+  inset-block-end: -6rem;
+  inline-size: 24rem;
+  opacity: 0.08;
+  pointer-events: none;
+}
+.wt-public-signin__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.wt-public-signin__headline {
+  max-width: 15em;
+  margin: 0;
+  font-size: clamp(1.75rem, 3.4vw, 3rem);
+  line-height: 1.15;
+}
+.wt-public-signin__benefits {
+  display: grid;
+  gap: 1rem;
+  max-width: 30em;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wt-public-signin__benefits li {
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+.wt-public-signin__benefits strong {
+  display: block;
+  margin-bottom: 0.125rem;
+}
+.wt-public-signin__icon {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.wt-public-signin__benefits .wt-public-signin__icon {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.wt-public-signin__panel {
+  display: grid;
+  place-items: center;
+  padding: 3.5rem 1.5rem;
+}
+.wt-public-signin__card {
+  inline-size: min(100%, 27.5rem);
+  padding: 2.5rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.wt-public-signin__card h1 {
+  margin: 0 0 0.5rem;
+}
+.wt-public-signin__lead {
+  margin: 0 0 1.5rem;
+  opacity: 0.8;
+}
+.wt-public-signin__notice {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0 0 1.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+.wt-public-signin__notice[data-tone="danger"] {
+  border-color: #ecc9c3;
+  background: #f8e9e6;
+  color: #6f2a22;
+}
+.wt-public-signin__notice[data-tone="warning"] {
+  border-color: #ead6ad;
+  background: #f8eedb;
+  color: #5f4312;
+}
+.wt-public-signin__notice[data-tone="info"] {
+  border-color: #c9dbd1;
+  background: #e5eee9;
+  color: #1a352d;
+}
+.wt-public-signin__form {
+  display: grid;
+  gap: 1.25rem;
+}
+.wt-public-signin__field {
+  display: grid;
+  gap: 0.5rem;
+}
+.wt-public-signin__field > span:first-child {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.wt-public-signin__field input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.wt-public-signin__field input[aria-invalid="true"] {
+  border-color: #a3443a;
+}
+.wt-public-signin__error {
+  color: #a3443a;
+  font-size: 0.875rem;
+}
+.wt-public-signin__password {
+  position: relative;
+  display: block;
+}
+.wt-public-signin__password input {
+  padding-inline-end: 3.25rem;
+}
+.wt-public-signin__reveal {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0.375rem;
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.wt-public-signin__reveal[aria-pressed="true"] {
+  opacity: 1;
+}
+.wt-public-signin__form button.wt-button {
+  inline-size: 100%;
+  min-height: 3rem;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wt-public-signin__form button.wt-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+.wt-public-signin__help {
+  display: grid;
+  gap: 0.625rem;
+  margin: 1.75rem 0 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 0.875rem;
+}
+.wt-public-signin__help p {
+  margin: 0;
+  opacity: 0.85;
+}
+.wt-public-signin__secure {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0;
+  font-size: 0.8125rem;
+  opacity: 0.75;
+}
+.wt-public-signin__secure .wt-public-signin__icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+.wt-public-signin__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.wt-public-signin__signout {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+@media (max-width: 54rem) {
+  .wt-public-signin {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .wt-public-signin__story {
+    padding: 2.5rem 1.5rem;
+  }
+  /* On a phone the visitor came to sign in: the form leads, the welcome follows. */
+  .wt-public-signin__panel {
+    order: -1;
+    padding: 1.5rem 1rem 2.5rem;
+  }
+  .wt-public-signin__card {
+    padding: 1.75rem 1.25rem;
+  }
 }

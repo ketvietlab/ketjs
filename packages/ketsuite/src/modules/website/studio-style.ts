@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { canAdministerSite } from './access.ts'
+import { claimSiteImages, imageClaimEffects } from './image-assets.ts'
 
 export const styleKeys = [
   'title',
@@ -10,6 +11,7 @@ export const styleKeys = [
   'font',
   'spacing',
   'buttons',
+  'account',
   'logo',
   'footer',
 ] as const
@@ -19,6 +21,9 @@ const choices: Record<string, string[]> = {
   font: ['sans', 'serif'],
   spacing: ['compact', 'comfortable', 'spacious'],
   buttons: ['rounded', 'square'],
+  // Whether the header offers a customer sign-in. Every site has a realm, but not every site wants
+  // its visitors to see an account they have no use for.
+  account: ['hidden', 'shown'],
 }
 /** What the Builder draws for a site that has saved no style of its own. */
 export const studioStyleDefaults = {
@@ -27,6 +32,7 @@ export const studioStyleDefaults = {
   font: 'sans',
   spacing: 'comfortable',
   buttons: 'rounded',
+  account: 'hidden',
 } as const
 
 /**
@@ -49,7 +55,7 @@ const issue = (field: string, message: string) => ({ ok: false, errors: [{ field
 export const saveStudioStyle = defineFn({
   input: { siteId: 'id', expectedRevisionId: 'text', values: 'json' },
   output: { ok: 'bool', revisionId: 'text?', errors: 'json?' },
-  effects: ['read:website.Site', 'read:website.SiteMember', 'write:website.Site'],
+  effects: ['read:website.Site', 'read:website.SiteMember', 'write:website.Site', ...imageClaimEffects],
   idempotent: true,
   handler: async (ctx, args) => {
     const site = (await ctx.db.select('website.Site', { id: args.siteId }))[0]
@@ -71,20 +77,25 @@ export const saveStudioStyle = defineFn({
       )
         return issue(key, 'website.error.invalidTokens')
       if (key === 'logo' && value && !/^(?:https:\/\/|\/(?!\/))/.test(value))
-        return issue(key, 'website.error.invalidTokens')
+        return issue(key, 'website.error.invalidLogo')
       if (key === 'title' && !value.trim()) return issue(key, 'website.error.invalidTitle')
     }
     if (args.expectedRevisionId !== (site.styleRevision ?? 'initial'))
       return issue('expectedRevisionId', 'website.error.editConflict')
     const revisionId = randomUUID()
-    const changed = await ctx.db.compareAndSet(
-      'website.Site',
-      { id: args.siteId },
-      { styleRevision: site.styleRevision ?? null },
-      { studioStyle: { ...((site.studioStyle as Row) ?? {}), ...values }, styleRevision: revisionId },
-    )
-    if (!('dryRun' in changed) && !changed.matched)
-      return issue('expectedRevisionId', 'website.error.editConflict')
+    // An uploaded logo is the site's to keep from the moment the style names it, or neither is saved.
+    const saved = await ctx.tx(async (tx) => {
+      const changed = await tx.db.compareAndSet(
+        'website.Site',
+        { id: args.siteId },
+        { styleRevision: site.styleRevision ?? null },
+        { studioStyle: { ...((site.studioStyle as Row) ?? {}), ...values }, styleRevision: revisionId },
+      )
+      if (!('dryRun' in changed) && !changed.matched) return false
+      await claimSiteImages(tx, args.siteId, values.logo)
+      return true
+    })
+    if (!saved) return issue('expectedRevisionId', 'website.error.editConflict')
     return { ok: true, revisionId }
   },
 })

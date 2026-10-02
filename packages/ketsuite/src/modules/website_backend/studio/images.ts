@@ -15,12 +15,16 @@ export const imageRoutes: Record<string, RouteEntry> = {
         return json({ ok: false }, { status: 403 })
       }
     }
-    if (!['image', 'cover'].includes(params.field) || !(await ctx.allows('website.saveEntry', url, req)))
-      return json({ ok: false }, { status: 403 })
+    const siteId = url.searchParams.get('site')
+    // The site's logo belongs to the site, so it is uploaded against the site id by whoever may style it.
+    const allowed =
+      params.field === 'logo'
+        ? params.entryId === siteId && (await ctx.allows('website.saveStudioStyle', url, req))
+        : ['image', 'cover'].includes(params.field) && (await ctx.allows('website.saveEntry', url, req))
+    if (!allowed) return json({ ok: false }, { status: 403 })
     const found = (await ctx.call('website.getEntry', { id: params.entryId }, url, req)) as {
       entry: Row | null
     }
-    const siteId = url.searchParams.get('site')
     if (!siteId || (found?.entry && (found.entry.status === 'trash' || found.entry.siteId !== siteId)))
       return json({ ok: false }, { status: 404 })
     if (!found?.entry) {

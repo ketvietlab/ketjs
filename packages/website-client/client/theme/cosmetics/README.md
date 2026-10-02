@@ -1,8 +1,10 @@
 # Lành — Core cosmetics theme
 
-A bundled MIT preset, separate from the Studio shell. Warm ivory, forest green, clay accents,
-serif display headings and local vector product artwork. Public branding stays light when the Studio
-is dark, so the storefront is consistent with its published theme. No external font/image request.
+A bundled MIT preset, separate from the Studio shell. Warm ivory, forest green and brass, serif
+display headings over a quiet sans body, a forest call-to-action band and footer, and local vector
+product artwork. Public branding stays light when the Studio is dark, so the storefront is consistent
+with its published theme. Fonts are named, never fetched: without Cormorant Garamond / Be Vietnam Pro
+installed it falls back to the system serif and sans. No external font/image request.
 
 ## Files and reuse
 

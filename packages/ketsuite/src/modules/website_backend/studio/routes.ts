@@ -4,6 +4,7 @@ import { websiteStudioDocument } from '../../../ui/website-public.ts'
 import { imageRoutes } from './images.ts'
 import { searchRoutes } from './search.ts'
 import { formRoutes } from './forms.ts'
+import { accountRoutes } from './account.ts'
 import { studioPaths } from './paths.ts'
 import { studioTransport } from './transport.ts'
 const redirect = (location: string) => withHeaders(text('', { status: 303 }), { location })
@@ -88,4 +89,4 @@ studioRoutes['/website/api/{operation}'] = api
 studioRoutes['/website-client/theme/{file}'] = () => async (url) =>
   redirect(`/_ket/asset/website_backend/theme/${encodeURIComponent(url.pathname.split('/').at(-1)!)}`)
 
-Object.assign(studioRoutes, imageRoutes, searchRoutes, formRoutes)
+Object.assign(studioRoutes, imageRoutes, searchRoutes, formRoutes, accountRoutes)

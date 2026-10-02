@@ -36,6 +36,23 @@ const remainingLayout = (layout: Row[]): Row[] =>
         : {}),
     }))
 
+/** Where a visitor signs in to their customer account on a Studio site. */
+export const CUSTOMER_SIGNIN_PATH = '/account/login'
+
+/**
+ * A path on this site to come back to, or the home page.
+ *
+ * It ends up in a link and in `location`, so anything that could leave the site - another origin,
+ * a protocol-relative `//host`, a backslash a browser reads as a slash - is refused, and so is the
+ * sign-in itself, which would only send a visitor round in a circle.
+ */
+export const customerReturnPath = (value: unknown): string => {
+  const path = typeof value === 'string' ? value.trim() : ''
+  const control = [...path].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)
+  if (!/^\/(?![/\\])/.test(path) || /[\\\s]/.test(path) || control || path.length > 512) return '/'
+  return path === CUSTOMER_SIGNIN_PATH || path.startsWith(`${CUSTOMER_SIGNIN_PATH}?`) ? '/' : path
+}
+
 /** Application-owned presenter, never executable uploaded theme code. Legacy domains keep KTL. */
 export function renderStudioPublic(scope: Record<string, unknown>) {
   if (!scope.appearance || !object(scope.page).id || !supported(placements(scope.sections))) return null
@@ -93,6 +110,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   const search = record.type === 'website.search' ? object(fields.search) : null
   // A form's receipt, after the visitor posted: the form's own thanks, the code and the time.
   const receipt = record.type === 'website.formReceipt' ? object(fields.receipt) : null
+  const signin = record.type === 'website.customerSignin' ? object(fields.signin) : null
   const listing: WebsitePublicListing | null = archive
     ? {
         kind: 'archive',
@@ -122,7 +140,20 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
             createdAt: receipt.createdAt,
             createdLabel: receipt.createdLabel,
           }
-        : null
+        : signin
+          ? { kind: 'signin', title: record.title, returnTo: customerReturnPath(signin.returnTo) }
+          : null
+  // The header offers the sign-in only where the site chose to; the sign-in page needs no link to itself.
+  const here = customerReturnPath(record.path)
+  const account =
+    appearance.account === 'shown' && !signin
+      ? {
+          href:
+            here === '/'
+              ? CUSTOMER_SIGNIN_PATH
+              : `${CUSTOMER_SIGNIN_PATH}?${new URLSearchParams({ returnTo: here })}`,
+        }
+      : null
   const image = meta.ogImage && safeHref(meta.ogImage) !== '#' ? safeHref(meta.ogImage) : ''
   const options = {
     mode: 'public' as const,
@@ -169,6 +200,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
         },
         brand: { title: site.title, logo: appearance.logo ? safeImage(appearance.logo) : null },
         navigation: navigation(null),
+        account,
         listing,
         article: blocks ? { title: record.title, bodyHtml: documentHtml(blocks, locale) } : null,
         sections: renderLayout(blocks ? remainingLayout(layout) : layout, options),

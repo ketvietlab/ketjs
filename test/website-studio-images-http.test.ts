@@ -222,3 +222,104 @@ test('a new unsaved post can stage an image and claim it only when its first rev
     assert.equal((await adapter.all('SELECT id FROM website_image_reference')).length, 1)
   })
 })
+
+test('a site logo is uploaded against the site, kept by the style that names it and public while drawn', async (t) => {
+  const { app, fixture } = await bootWebsiteStudio(undefined, { worker: true })
+  t.after(() => app.close())
+  const designer = app.client.anonymous()
+  await designer.login({ login: 'studio-designer', password: 'studio-local' })
+  const editor = app.client.anonymous()
+  await editor.login({ login: 'studio-editor', password: 'studio-local' })
+  const bytes = await sharp({ create: { width: 240, height: 60, channels: 4, background: '#00000000' } })
+    .png()
+    .toBuffer()
+  const form = () => {
+    const data = new FormData()
+    data.append('file', new Blob([new Uint8Array(bytes)], { type: 'image/png' }), 'logo.png')
+    return data
+  }
+  const upload = async (client: typeof designer, path: string) => {
+    const response = await client.post(path, form())
+    assert.equal(response.status, 201, await response.clone().text())
+    return String(((await response.json()) as Row).url)
+  }
+  let revision = 'initial',
+    answer = ''
+  // The Studio saves the style through its theme resource, as the Kiểu dáng panel does.
+  const style = async (logo: string) => {
+    const response = await designer.post(
+      '/website/api/website_studio.saveResource',
+      JSON.stringify({
+        siteId: 'site-a',
+        kind: 'themes',
+        id: 'site-a',
+        expectedRevisionId: revision,
+        values: { logo },
+      }),
+      { headers: { 'content-type': 'application/json' } },
+    )
+    answer = await response.clone().text()
+    if (response.status !== 200) return false
+    revision = String(((await response.json()) as { value: Row }).value.revisionId)
+    return true
+  }
+  const anonymous = app.client.anonymous()
+
+  assert.equal((await editor.post('/website/images/site-a/logo?site=site-a', form())).status, 403)
+  assert.equal(
+    (await designer.post('/website/images/page-site-a/logo?site=site-a', form())).status,
+    403,
+    'a logo belongs to the site, not to a page',
+  )
+  const pageImage = await upload(editor, '/website/images/page-site-a/image?site=site-a')
+  assert.equal(await style(pageImage), false, "a page's image cannot become the logo")
+  assert.match(answer, /Ảnh không hợp lệ/)
+  assert.equal(await style('http://example.com/logo.png'), false, 'a plain-http logo is refused, not dropped')
+  assert.match(answer, /Logo phải là ảnh tải lên/)
+
+  const logo = await upload(designer, '/website/images/site-a/logo?site=site-a')
+  assert.equal((await anonymous.get(logo)).status, 404, 'an unsaved logo is private')
+  assert.equal(await style(logo), true, answer)
+  assert.equal((await anonymous.get(logo)).status, 200, 'the saved style draws it')
+
+  await fixture('website.saveDomain', {
+    id: 'logo-domain',
+    siteId: 'site-a',
+    host: '127.0.0.1',
+    primary: true,
+  })
+  const entry = (await fixture('website.getEntry', { id: 'page-site-a' })).entry as Row
+  await fixture('website.publishEntry', { id: 'page-site-a', expectedRevisionId: entry.revisionId })
+  assert.match(
+    await (await anonymous.get('/')).text(),
+    new RegExp(`<img class="wt-public-logo" src="${logo}" alt="[^"]*">`),
+  )
+
+  const replaced = await upload(designer, '/website/images/site-a/logo?site=site-a')
+  assert.equal(await style(replaced), true, answer)
+  assert.equal(await style(''), true, answer)
+  const sweep = async () => {
+    await app.fixture.withTenant('', async ({ adapter }) => {
+      await adapter.run(
+        `UPDATE website_image_asset SET "expiresAt" = '2000-01-01T00:00:00Z' WHERE state = 'pending'`,
+      )
+      await adapter.run(
+        `UPDATE website_image_asset SET "unreferencedAt" = '2000-01-01T00:00:00Z' WHERE "unreferencedAt" IS NOT NULL`,
+      )
+      // The minute schedule does not tick in a test; run the sweep again as it would.
+      await adapter.run(
+        `UPDATE ket_job SET state = 'available', scheduled_at = '2000-01-01T00:00:00Z' WHERE job = 'website.collectImages'`,
+      )
+    })
+    await app.drainJobs()
+  }
+  // The first sweep notices the replaced logo is drawn by nothing; the next one, a day on, removes it.
+  await sweep()
+  await sweep()
+  assert.equal((await designer.get(replaced)).status, 404, 'a logo nothing draws any more is collected')
+  assert.equal(
+    (await anonymous.get(logo)).status,
+    200,
+    'the published page still draws the first logo after the style dropped it',
+  )
+})

@@ -593,3 +593,29 @@
   color: var(--kv-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+.website-theme-logo {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.website-theme-logo legend {
+  padding: 0;
+  font-weight: 600;
+}
+.website-theme-logo > p {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--kv-text-muted);
+}
+/* A logo is a short wide mark, not a photo: keep it at header size, on a checker so white logos show. */
+.website-theme-logo .website-attachment-preview {
+  width: auto;
+  max-width: 12rem;
+  height: auto;
+  max-height: 4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--kv-border-default);
+  border-radius: 0.375rem;
+  background: repeating-conic-gradient(#f1f1ec 0 25%, #fff 0 50%) 0 0 / 1rem 1rem;
+}

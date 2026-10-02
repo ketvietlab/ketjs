@@ -400,6 +400,13 @@
   padding: 1.25rem;
   color: var(--wt-ink);
 }
+/* The public header and the Studio frame draw the same logo. */
+.wt-public-logo {
+  display: block;
+  max-width: 12rem;
+  max-height: 3rem;
+  object-fit: contain;
+}
 .wt-site .wt-theme-header nav {
   display: flex;
   gap: 1rem;

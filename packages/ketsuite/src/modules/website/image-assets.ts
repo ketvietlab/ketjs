@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { defineFn, KetError, from, eq, deleteFrom, asc, gt } from '@ketvietlab/ketjs'
+import { defineFn, KetError, from, eq, ne, deleteFrom, asc, gt } from '@ketvietlab/ketjs'
 import type { Ctx, JobContext, Row, ModelDef, FnSpec, JobSpec } from '@ketvietlab/ketjs'
-import { canEditEntry, canAccessSite } from './access.ts'
+import { canEditEntry, canAccessSite, canAdministerSite } from './access.ts'
 
 export const IMAGE_TTL = 24 * 60 * 60 * 1000
 const invalid = (): never => {
@@ -57,6 +57,60 @@ export const imageClaimEffects = [
   'write:website.ImageAsset',
   'write:website.ImageReference',
 ]
+/**
+ * A site's logo is an image the site owns rather than a page: its `entryId` is the site id, which no
+ * entry carries, so no page can claim it and no page's image can become the logo.
+ */
+const isSiteImage = (asset: Row) => asset.entryId === asset.siteId
+
+/**
+ * Whether a site image is still drawn: by the saved style, which a page with nothing published
+ * falls back to, or by the appearance a page went live with. `scheduled` also counts what is yet to go live.
+ */
+async function siteImageInUse(ctx: Ctx, asset: Row, scheduled: boolean) {
+  const id = String(asset.id)
+  const site = (await ctx.db.select('website.Site', { id: asset.siteId }))[0]
+  if (!site) return false
+  if (imageIds(site.studioStyle).has(id)) return true
+  const Entry = ctx.table('website.Entry')
+  const entries = await ctx.db.all(
+    from(Entry).where(eq(Entry.siteId, asset.siteId), ne(Entry.status, 'trash')),
+  )
+  return entries.some(
+    (entry) =>
+      imageIds(entry.publishedAppearance).has(id) ||
+      (scheduled && imageIds(entry.scheduledAppearance).has(id)),
+  )
+}
+
+/** Moves an uploaded image to attached, or refuses one that is not this owner's to take. */
+async function claimAsset(ctx: Ctx, id: string, entryId: unknown, siteId: unknown) {
+  const asset = (await ctx.db.select('website.ImageAsset', { id }))[0]
+  if (
+    !asset ||
+    asset.entryId !== entryId ||
+    asset.siteId !== siteId ||
+    !asset.ready ||
+    !['pending', 'attached'].includes(String(asset.state)) ||
+    (asset.state === 'pending' &&
+      ((ctx.actor && asset.ownerId !== ctx.actor) ||
+        new Date(String(asset.expiresAt)).getTime() <= Date.now()))
+  )
+    invalid()
+  const changed = await ctx.db.compareAndSet(
+    'website.ImageAsset',
+    { id },
+    { state: asset!.state, claim: asset!.claim },
+    { state: 'attached', expiresAt: null, unreferencedAt: null, claim: randomUUID() },
+  )
+  if (!('dryRun' in changed) && !changed.matched) invalid()
+}
+
+/** Called inside the transaction that saves the site style; the style itself is the reference. */
+export async function claimSiteImages(ctx: Ctx, siteId: unknown, value: unknown) {
+  for (const id of imageIds(value)) await claimAsset(ctx, id, siteId, siteId)
+}
+
 /** Called inside the same transaction that inserts an immutable revision. */
 export async function claimImages(
   ctx: Ctx,
@@ -66,25 +120,7 @@ export async function claimImages(
   value: unknown,
 ) {
   for (const id of imageIds(value)) {
-    const asset = (await ctx.db.select('website.ImageAsset', { id }))[0]
-    if (
-      !asset ||
-      asset.entryId !== entryId ||
-      asset.siteId !== siteId ||
-      !asset.ready ||
-      !['pending', 'attached'].includes(String(asset.state)) ||
-      (asset.state === 'pending' &&
-        ((ctx.actor && asset.ownerId !== ctx.actor) ||
-          new Date(String(asset.expiresAt)).getTime() <= Date.now()))
-    )
-      invalid()
-    const changed = await ctx.db.compareAndSet(
-      'website.ImageAsset',
-      { id },
-      { state: asset.state, claim: asset.claim },
-      { state: 'attached', expiresAt: null, unreferencedAt: null, claim: randomUUID() },
-    )
-    if (!('dryRun' in changed) && !changed.matched) invalid()
+    await claimAsset(ctx, id, entryId, siteId)
     await ctx.db.insertIfAbsent('website.ImageReference', {
       id: `${revisionId}:${id}`,
       imageId: id,
@@ -113,7 +149,8 @@ export const imageFunctions: Record<string, FnSpec> = {
       if (
         !ctx.actor ||
         !(await canAccessSite(ctx, args.siteId)) ||
-        (entry && (!(await canEditEntry(ctx, entry)) || entry.status === 'trash'))
+        (entry && (!(await canEditEntry(ctx, entry)) || entry.status === 'trash')) ||
+        (args.entryId === args.siteId && !(await canAdministerSite(ctx, args.siteId)))
       )
         invalid()
       if (
@@ -201,6 +238,8 @@ export const imageFunctions: Record<string, FnSpec> = {
       if (!asset?.ready || asset.state === 'deleting') return { image: null }
       const publicEntry = (await ctx.db.select('website.Entry', { id: asset.entryId }))[0]
       const site = (await ctx.db.select('website.Site', { id: asset.siteId }))[0]
+      if (isSiteImage(asset) && site?.active && (await siteImageInUse(ctx, asset, false)))
+        return { image: { ...asset, public: true } }
       const published = publicEntry?.publishedRevisionId
         ? (await ctx.db.select('website.EntryRevision', { id: publicEntry.publishedRevisionId }))[0]
         : null
@@ -222,6 +261,7 @@ export const imageFunctions: Record<string, FnSpec> = {
   }),
 }
 async function referenced(ctx: Ctx, asset: Row) {
+  if (isSiteImage(asset) && (await siteImageInUse(ctx, asset, true))) return true
   for (const ref of await ctx.db.select('website.ImageReference', { imageId: asset.id }))
     if ((await ctx.db.select('website.EntryRevision', { id: ref.revisionId }))[0]) return true
   // Legacy publication snapshots may outlive a revision-retention job.
@@ -291,6 +331,8 @@ export const imageJobs: Record<string, JobSpec> = {
       'write:website.ImageAsset',
       'read:website.ImageReference',
       'write:website.ImageReference',
+      'read:website.Site',
+      'read:website.Entry',
       'read:website.EntryRevision',
       'read:website.Publication',
       'storage:remove',
