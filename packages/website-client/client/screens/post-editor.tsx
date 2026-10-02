@@ -115,236 +115,227 @@ export function createPostEditor(ctx: StudioContext, isNew = false) {
           disabled={disabled}
         />
       )
+      // The form wraps the page so the settings rail, outside the body, still submits with it.
       return (
-        <RecordPage
-          width="wide"
-          title={isNew ? tr('website.route.postNew') : entry.title}
-          actions={fragments([
-            <LinkButton label={tr('website.resource.back')} href={ctx.href('posts')} />,
-            !entry.trashed ? button('website.builder.preview', `${prefix}.preview`) : null,
-            !entry.trashed
-              ? button(
-                  'website.builder.save',
-                  `${prefix}.save`,
-                  ctx.can('website.publish') ? 'secondary' : 'primary',
-                )
-              : null,
-            !entry.trashed && ctx.can('website.publish')
-              ? button('website.entryPublish.now', `${prefix}.publish`, 'primary')
-              : null,
-            entry.revisionId
-              ? ArchiveActions(ctx, {
-                  id: 'post-archive',
-                  title: entry.title,
-                  command: `${prefix}.archive`,
-                  disabled: ctx.busy() || !ctx.can('website.content.write'),
-                  restore: entry.trashed,
-                  extraItems: [
-                    {
-                      id: 'history',
-                      label: tr('website.tools.history'),
-                      href: ctx.href('entry-details', { id: entry.id }),
-                    },
-                  ],
-                })
-              : null,
-          ])}
-          body={
-            <form id="post-editor" novalidate>
-              <div class="website-post-workspace">
-                <div class="website-post-content">
-                  <Stack
-                    items={[
-                      <Surface
-                        title={tr('website.postEditor.content')}
-                        body={
-                          <Stack
-                            items={[
-                              <div class="website-form-field">
-                                <TextField
-                                  id="post-title"
-                                  name="title"
-                                  label={tr('website.entry.title')}
-                                  value={entry.title}
-                                  required
-                                  disabled={!writable()}
-                                />
-                              </div>,
-                              <LiveDescription
-                                id={`post-${entry.id}`}
-                                revision={entry.revisionId}
-                                value={postDocument(entry)}
-                                label={tr('website.postEditor.body')}
-                                readOnly={!writable()}
-                                field
-                                images={{
-                                  ctx,
-                                  ownerId: entry.id,
-                                  disabled: !entry.revisionId || !writable(),
-                                }}
-                              />,
-                            ]}
-                          />
-                        }
-                      />,
-                      <Surface
-                        title={tr('website.post.excerpt')}
-                        body={
-                          <div class="website-form-field">
-                            {input('excerpt', tr('website.postEditor.excerptHelp'), entry.excerpt, true)}
-                          </div>
-                        }
-                      />,
-                      <Surface
-                        title={tr('website.route.seo')}
-                        body={
-                          <div class="website-form-field">
-                            <Stack
-                              items={[
-                                input('seoTitle', tr('website.resource.seo.title'), entry.seo?.title),
-                                input(
-                                  'seoDescription',
-                                  tr('website.resource.seo.description'),
-                                  entry.seo?.description,
-                                  true,
-                                ),
-                                input(
-                                  'canonical',
-                                  tr('website.resource.seo.canonical'),
-                                  entry.seo?.canonical,
-                                ),
-                                <Select
-                                  id="post-indexing"
-                                  name="indexing"
-                                  label={tr('website.resource.seo.indexing')}
-                                  value={entry.seo?.indexing ?? 'index'}
-                                  disabled={!writable()}
-                                  options={[
-                                    { value: 'index', label: tr('website.option.index') },
-                                    { value: 'noindex', label: tr('website.option.noindex') },
-                                  ]}
-                                />,
-                              ]}
-                            />
-                          </div>
-                        }
-                      />,
-                      postLegacyLayout(entry.layout).length ? (
-                        <Surface
-                          title={tr('website.postEditor.legacy')}
-                          description={tr('website.postEditor.legacyHelp')}
-                          body={renderEntryBody({ ...entry, bodyDoc: '' })}
-                        />
-                      ) : null,
-                    ]}
-                  />
-                </div>
-                <aside
-                  class="website-post-settings website-form-field"
-                  aria-label={tr('website.postEditor.settings')}
-                >
+        <form id="post-editor" class="website-post-form" novalidate>
+          <RecordPage
+            width="wide"
+            title={isNew ? tr('website.route.postNew') : entry.title}
+            actions={fragments([
+              <LinkButton label={tr('website.resource.back')} href={ctx.href('posts')} />,
+              !entry.trashed ? button('website.builder.preview', `${prefix}.preview`) : null,
+              !entry.trashed
+                ? button(
+                    'website.builder.save',
+                    `${prefix}.save`,
+                    ctx.can('website.publish') ? 'secondary' : 'primary',
+                  )
+                : null,
+              !entry.trashed && ctx.can('website.publish')
+                ? button('website.entryPublish.now', `${prefix}.publish`, 'primary')
+                : null,
+              entry.revisionId
+                ? ArchiveActions(ctx, {
+                    id: 'post-archive',
+                    title: entry.title,
+                    command: `${prefix}.archive`,
+                    disabled: ctx.busy() || !ctx.can('website.content.write'),
+                    restore: entry.trashed,
+                    extraItems: [
+                      {
+                        id: 'history',
+                        label: tr('website.tools.history'),
+                        href: ctx.href('entry-details', { id: entry.id }),
+                      },
+                    ],
+                  })
+                : null,
+            ])}
+            body={
+              <Stack
+                items={[
                   <Surface
-                    title={tr('website.postEditor.settings')}
+                    title={tr('website.postEditor.content')}
                     body={
                       <Stack
                         items={[
-                          <Status {...entryStatus(tr, entry.state ?? 'draft')} />,
-                          input('path', tr('website.entry.path'), entry.path),
-                          input('author', tr('website.post.author'), entry.author),
-                          <Select
-                            id="post-locale"
-                            name="locale"
-                            label={tr('website.entry.locale')}
-                            value={entry.locale}
-                            disabled={!writable()}
-                            options={ctx
-                              .site()
-                              .locales.map((value) => ({ value, label: value.toUpperCase() }))}
-                          />,
-                          <Section
-                            title={tr('website.post.category')}
-                            body={
-                              <Select
-                                id="post-category"
-                                name="category"
-                                label={tr('website.post.category')}
-                                value={entry.category ?? ''}
-                                disabled={!writable()}
-                                options={[
-                                  { value: '', label: tr('website.post.noCategory') },
-                                  ...terms
-                                    .filter((r) => r.taxonomyType === 'category')
-                                    .map((r) => ({ value: r.id, label: r.title ?? '' })),
-                                ]}
-                              />
-                            }
-                          />,
-                          <Section
-                            title={tr('website.post.tags')}
-                            body={
-                              <CheckboxGroup
-                                id="post-tags"
-                                name="tags"
-                                label={tr('website.postEditor.selectTags')}
-                                disabled={!writable()}
-                                optionsOrientation="vertical"
-                                options={terms
-                                  .filter((r) => r.taxonomyType === 'tag')
-                                  .map((r) => ({
-                                    name: 'tags',
-                                    value: r.id,
-                                    label: r.title ?? '',
-                                    checked: (entry.tags ?? []).includes(r.id),
-                                  }))}
-                              />
-                            }
-                          />,
-                          <Section
-                            title={tr('website.post.cover')}
-                            body={
-                              entry.revisionId ? (
-                                AttachmentImage(ctx, {
-                                  id: entry.id,
-                                  field: 'cover',
-                                  value: entry.cover,
-                                  alt: entry.coverAlt,
-                                  disabled: !writable(),
-                                  resModel: 'website.Entry',
-                                })
-                              ) : (
-                                <>
-                                  <input type="hidden" name="cover" value="" />
-                                  <input type="hidden" name="coverAlt" value="" />
-                                  <Notice
-                                    title={tr('website.post.cover')}
-                                    message={tr('website.postEditor.saveForImage')}
-                                    tone="info"
-                                  />
-                                </>
-                              )
-                            }
-                          />,
-                          <Disclosure
-                            summary={tr('website.postEditor.date')}
-                            body={input('publishedAt', tr('website.postEditor.dateHelp'), entry.publishedAt)}
-                          />,
-                          <Section
-                            title={tr('website.schedule.title')}
-                            body={EntrySchedule(ctx, entry, {
-                              command: `${prefix}.schedule`,
-                              cancel: `${prefix}.cancelSchedule`,
-                              form: 'post-editor',
-                            })}
+                          <div class="website-form-field">
+                            <TextField
+                              id="post-title"
+                              name="title"
+                              label={tr('website.entry.title')}
+                              value={entry.title}
+                              required
+                              disabled={!writable()}
+                            />
+                          </div>,
+                          <LiveDescription
+                            id={`post-${entry.id}`}
+                            revision={entry.revisionId}
+                            value={postDocument(entry)}
+                            label={tr('website.postEditor.body')}
+                            readOnly={!writable()}
+                            field
+                            images={{
+                              ctx,
+                              ownerId: entry.id,
+                              disabled: !entry.revisionId || !writable(),
+                            }}
                           />,
                         ]}
                       />
                     }
-                  />
-                </aside>
+                  />,
+                  <Surface
+                    title={tr('website.post.excerpt')}
+                    body={
+                      <div class="website-form-field">
+                        {input('excerpt', tr('website.postEditor.excerptHelp'), entry.excerpt, true)}
+                      </div>
+                    }
+                  />,
+                  <Surface
+                    title={tr('website.route.seo')}
+                    body={
+                      <div class="website-form-field">
+                        <Stack
+                          items={[
+                            input('seoTitle', tr('website.resource.seo.title'), entry.seo?.title),
+                            input(
+                              'seoDescription',
+                              tr('website.resource.seo.description'),
+                              entry.seo?.description,
+                              true,
+                            ),
+                            input('canonical', tr('website.resource.seo.canonical'), entry.seo?.canonical),
+                            <Select
+                              id="post-indexing"
+                              name="indexing"
+                              label={tr('website.resource.seo.indexing')}
+                              value={entry.seo?.indexing ?? 'index'}
+                              disabled={!writable()}
+                              options={[
+                                { value: 'index', label: tr('website.option.index') },
+                                { value: 'noindex', label: tr('website.option.noindex') },
+                              ]}
+                            />,
+                          ]}
+                        />
+                      </div>
+                    }
+                  />,
+                  postLegacyLayout(entry.layout).length ? (
+                    <Surface
+                      title={tr('website.postEditor.legacy')}
+                      description={tr('website.postEditor.legacyHelp')}
+                      body={renderEntryBody({ ...entry, bodyDoc: '' })}
+                    />
+                  ) : null,
+                ]}
+              />
+            }
+            asideLabel={tr('website.postEditor.settings')}
+            aside={
+              <div class="website-post-settings website-form-field">
+                <Surface
+                  title={tr('website.postEditor.settings')}
+                  body={
+                    <Stack
+                      items={[
+                        <Status {...entryStatus(tr, entry.state ?? 'draft')} />,
+                        input('path', tr('website.entry.path'), entry.path),
+                        input('author', tr('website.post.author'), entry.author),
+                        <Select
+                          id="post-locale"
+                          name="locale"
+                          label={tr('website.entry.locale')}
+                          value={entry.locale}
+                          disabled={!writable()}
+                          options={ctx.site().locales.map((value) => ({ value, label: value.toUpperCase() }))}
+                        />,
+                        <Section
+                          title={tr('website.post.category')}
+                          body={
+                            <Select
+                              id="post-category"
+                              name="category"
+                              label={tr('website.post.category')}
+                              value={entry.category ?? ''}
+                              disabled={!writable()}
+                              options={[
+                                { value: '', label: tr('website.post.noCategory') },
+                                ...terms
+                                  .filter((r) => r.taxonomyType === 'category')
+                                  .map((r) => ({ value: r.id, label: r.title ?? '' })),
+                              ]}
+                            />
+                          }
+                        />,
+                        <Section
+                          title={tr('website.post.tags')}
+                          body={
+                            <CheckboxGroup
+                              id="post-tags"
+                              name="tags"
+                              label={tr('website.postEditor.selectTags')}
+                              disabled={!writable()}
+                              optionsOrientation="vertical"
+                              options={terms
+                                .filter((r) => r.taxonomyType === 'tag')
+                                .map((r) => ({
+                                  name: 'tags',
+                                  value: r.id,
+                                  label: r.title ?? '',
+                                  checked: (entry.tags ?? []).includes(r.id),
+                                }))}
+                            />
+                          }
+                        />,
+                        <Section
+                          title={tr('website.post.cover')}
+                          body={
+                            entry.revisionId ? (
+                              AttachmentImage(ctx, {
+                                id: entry.id,
+                                field: 'cover',
+                                value: entry.cover,
+                                alt: entry.coverAlt,
+                                disabled: !writable(),
+                                resModel: 'website.Entry',
+                              })
+                            ) : (
+                              <>
+                                <input type="hidden" name="cover" value="" />
+                                <input type="hidden" name="coverAlt" value="" />
+                                <Notice
+                                  title={tr('website.post.cover')}
+                                  message={tr('website.postEditor.saveForImage')}
+                                  tone="info"
+                                />
+                              </>
+                            )
+                          }
+                        />,
+                        <Disclosure
+                          summary={tr('website.postEditor.date')}
+                          body={input('publishedAt', tr('website.postEditor.dateHelp'), entry.publishedAt)}
+                        />,
+                        <Section
+                          title={tr('website.schedule.title')}
+                          body={EntrySchedule(ctx, entry, {
+                            command: `${prefix}.schedule`,
+                            cancel: `${prefix}.cancelSchedule`,
+                            form: 'post-editor',
+                          })}
+                        />,
+                      ]}
+                    />
+                  }
+                />
               </div>
-            </form>
-          }
-        />
+            }
+          />
+        </form>
       )
     },
     commands: {

@@ -330,11 +330,15 @@
   display: none;
 }
 
-[data-kv-design-system] .website-post-content [data-ui="flow-editor-content"] {
+[data-kv-design-system] .website-post-form [data-ui="flow-editor-content"] {
   min-height: clamp(28rem, 55vh, 40rem);
 }
+/* The article column is already capped by RecordPage; the editor fills it like the title above. */
+[data-kv-design-system] .website-post-form [data-ui="flow-editor"] {
+  max-inline-size: none;
+}
 @media (max-width: 48rem) {
-  [data-kv-design-system] .website-post-content [data-ui="flow-editor-content"] {
+  [data-kv-design-system] .website-post-form [data-ui="flow-editor-content"] {
     min-height: 22rem;
   }
 }

@@ -251,7 +251,7 @@ Report each to ketjs. A fix there, then an override bump, removes the workaround
 | `ds-menu-trigger-icon` | An icon inside a `Menu` trigger renders unsized. | The site menu's trigger is text only. | Size icons in the trigger like `Button` does. |
 | `ds-builder-compact-identity` | WorkspacePage has no compact editor identity with back navigation and inline draft/publication states. | Builder-only header composition in ds-gaps.css. | Add a native compact editor identity, then remove this gap. |
 | `ds-narrow-workspace-controls` | Narrow builder panels and taxonomy upload fields retain two columns; buttons can overflow. | Container-scoped rules in `ds-gaps.css`; all builder content panels and the block inspector establish the container. A select and its chevron are pinned to the row under the label, as in `ds-form-stacked-fields`. | Container-aware field layout and wrapping action labels; remove when the pin includes them. |
-| `ds-livedoc-controls` | Public LiveDoc relies on legacy host control CSS. | Standalone control styles, hidden read-only toolbar, token mapping and taller article canvas (28–40rem desktop, 22rem mobile). | Ship self-contained toolbar styling with the public editor. |
+| `ds-livedoc-controls` | Public LiveDoc relies on legacy host control CSS. | Standalone control styles, hidden read-only toolbar, token mapping, taller article canvas (28–40rem desktop, 22rem mobile) and an article editor that fills the record column instead of stopping at 52rem. | Ship self-contained toolbar styling with the public editor. |
 
 ## 7. Known limits of the mock
 
