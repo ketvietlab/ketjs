@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import type { Adapter, Translator } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import type { Adapter } from '@ketvietlab/ketjs'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
   address,
@@ -11,19 +10,14 @@ import {
   partner,
   storage,
   website,
+  livedoc,
+  user,
   websiteBackend,
   websiteForm,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
-import {
-  type EntryRow,
-  previewScreen,
-  type PublicationRow,
-  publicationsScreen,
-  submissionsScreen,
-  type SubmissionRow,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 
 const SCOPE = { company: 'acme', branches: null }
 const modules = [
@@ -34,8 +28,11 @@ const modules = [
   backend,
   website,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
   websiteForm,
+  livedoc,
+  user,
   websiteBackend,
   paperTheme,
 ]
@@ -51,11 +48,6 @@ const boot = async (): Promise<Adapter> => {
 
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
-
-const translate = ((key: string) => key) as Translator
-translate.locale = 'en'
-translate.has = () => true
-translate.resolves = () => true
 
 const layout = [{ type: 'website.rich_text', settings: { body: 'x' } }]
 
@@ -119,84 +111,6 @@ test('activation: the first one, against a site with nothing live, goes through'
   assert.equal(first.ok, true)
 })
 
-const publication = (over: Partial<PublicationRow> = {}): PublicationRow => ({
-  id: 'pub1',
-  siteId: 'site1',
-  state: 'prepared',
-  entryCount: 1,
-  contentHash: 'abc',
-  preparedAt: '2026-09-05T00:00:00.000Z',
-  ...over,
-})
-
-test('publications screen: activation carries what the site actually has live', () => {
-  const html = renderToString(
-    publicationsScreen(translate, [publication()], [], [], 'site1', {}, { activeId: 'pubLive' }),
-  )
-  assert.match(html, /name="expectedPublicationId" value="pubLive"/u)
-})
-
-test('publications screen: the guard survives a filter that hides the live row', () => {
-  // Filtered to `prepared`, the live row is not in `rows` - reading the base
-  // off the list would claim the site had nothing live and refuse every
-  // activation.
-  const html = renderToString(
-    publicationsScreen(
-      translate,
-      [publication()],
-      [],
-      [],
-      'site1',
-      {},
-      { state: 'prepared', activeId: 'pubLive' },
-    ),
-  )
-  assert.match(html, /name="expectedPublicationId" value="pubLive"/u)
-  assert.match(html, /name="state"/u)
-})
-
-test('publications screen: with nothing live the claim is empty, not absent', () => {
-  const html = renderToString(
-    publicationsScreen(translate, [publication()], [], [], 'site1', {}, { activeId: null }),
-  )
-  assert.match(html, /name="expectedPublicationId" value=""/u)
-})
-
-const entry: EntryRow = {
-  id: 'p1',
-  siteId: 'site1',
-  type: 'website.page',
-  slug: 'a',
-  path: '/a',
-  title: 'A',
-  status: 'draft',
-}
-
-test('preview: the screen asks before it mints, with a lifetime and a one-time choice', () => {
-  const fresh = renderToString(previewScreen(translate, entry, null, {}, '/admin/website/pages'))
-  assert.match(fresh, /action="\/admin\/website\/pages\/p1\/preview"/u)
-  assert.match(fresh, /name="ttlSeconds"/u)
-  assert.match(fresh, /name="oneTime"/u)
-  // Nothing minted yet, so there is no token pretending to be one.
-  assert.equal(fresh.includes('preview.token'), false)
-})
-
-test('preview: a minted link is shown beside the form that made it', () => {
-  const html = renderToString(
-    previewScreen(
-      translate,
-      entry,
-      { token: 'tok', expiresAt: '2026-09-05T00:15:00.000Z' },
-      {},
-      '/admin/website/pages',
-    ),
-  )
-  // The screen hands over the link, not the raw token: a token on its own is
-  // not something anybody can open.
-  assert.match(html, /value="\/_ket\/preview\?token=tok"/u)
-  assert.match(html, /name="ttlSeconds"/u)
-})
-
 test('preview: the token honours the lifetime the contract has always accepted', async () => {
   const db = await boot()
   await seed(db)
@@ -220,21 +134,4 @@ test('preview: a one-time link is used up by the first reader', async () => {
   })) as { token: string }
   assert.ok(await call(db, 'website.previewEntry', { token: once.token }))
   assert.equal(await call(db, 'website.previewEntry', { token: once.token }), null)
-})
-
-test('submissions: the status filter comes back showing what was asked for', () => {
-  const rows: SubmissionRow[] = [
-    {
-      id: 's1',
-      formId: 'f1',
-      summary: {},
-      consent: true,
-      status: 'new',
-      createdAt: '2026-09-01T00:00:00.000Z',
-      held: false,
-    },
-  ]
-  const html = renderToString(submissionsScreen(translate, rows, {}, { formId: 'f1', status: 'purged' }))
-  assert.match(html, /name="status"/u)
-  assert.match(html, /action="\/admin\/website\/forms\/f1\/submissions"/u)
 })

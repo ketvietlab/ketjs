@@ -33,7 +33,15 @@ const originOf = (req: Req): string => {
  * so it does not count as a site here.
  */
 const siteFor = async (ctx: ServeContext, url: URL, req: Req): Promise<{ id: string } | null> => {
-  const site = (await ctx.call('website.resolveSite', { host: String(req.headers.host ?? '') }, url, req)) as
+  // The site is named by host alone, as the storefront names it. Passed with its port, a host
+  // such as `shop.local:8080` matched no domain and the sitemap answered 404 there.
+  let host = ''
+  try {
+    host = new URL(`http://${String(req.headers.host ?? url.host).trim()}`).hostname.replace(/^\[|\]$/g, '')
+  } catch {
+    return null
+  }
+  const site = (await ctx.call('website.resolveSite', { host }, url, req)) as
     | { id?: string }
     | null
     | undefined
@@ -61,10 +69,15 @@ export const routes: Record<string, RouteEntry> = {
         if (req.method !== 'GET' && req.method !== 'HEAD') return notAllowed()
         const site = await siteFor(ctx, url, req)
         if (!site) return text('', { status: 404 })
-        const entries = (await ctx.call('website_seo.sitemapEntries', { siteId: site.id }, url, req)) as
-          | Array<{ path: string; lastModified?: string | null }>
-          | null
-          | undefined
+        // sitemapEntries is internal on purpose (it takes any siteId), so a visitor's session may
+        // not call it; through ctx.call every anonymous request was refused and the file was
+        // never served. The site here is the one this host resolved to, not one the caller named.
+        const entries = (await ctx.callUnchecked(
+          'website_seo.sitemapEntries',
+          { siteId: site.id },
+          url,
+          req,
+        )) as Array<{ path: string; lastModified?: string | null }> | null | undefined
         // Every value in here went through escapeXml in the projection.
         return cached(
           raw(sitemapXml(originOf(req), entries ?? []), { type: 'application/xml; charset=utf-8' }),

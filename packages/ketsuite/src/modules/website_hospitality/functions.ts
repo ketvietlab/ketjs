@@ -310,7 +310,7 @@ export const functions: Record<string, FnSpec> = {
       status: 'text',
       createdAt: 'datetime',
     },
-    effects: ['read:website.SiteMember', 'read:website_hospitality.BookingLead'],
+    effects: ['read:website.Site', 'read:website.SiteMember', 'read:website_hospitality.BookingLead'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canManageStructure(ctx, args.siteId))) return []

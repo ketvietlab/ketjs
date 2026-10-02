@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from '@ketvietlab/ketjs'
-import type { MultipartPart, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import type { MultipartPart, Route, RouteEntry, ServeContext, Row } from '@ketvietlab/ketjs'
 import { inlineTypes, isRenditionSize, renderableTypes, renditionKey } from './policy.ts'
 
 export type Attachment = {
@@ -24,6 +24,14 @@ export type UploadDefaults = {
   resId?: string
   resField?: string
   public?: boolean
+  maxBytes?: number
+  /** Trusted domain bridge: persists a durable lease before writing object bytes. */
+  staged?: {
+    key(company: string, id: string, checksum: string): string
+    validate(body: AsyncIterable<Uint8Array>, type: string, size: number): Promise<void>
+    prepare(input: Row): Promise<unknown>
+    complete(id: string): Promise<Attachment>
+  }
 }
 
 const field = async (part: MultipartPart): Promise<string> => {
@@ -70,7 +78,10 @@ export const receiveAttachment = async (
   try {
     let uploadPart: { filename: string; type: string; size: number; checksum: string } | null = null
     const fields: Record<string, string> = {}
-    for await (const part of multipart(req, type, { maxBytes: ctx.config.uploadMax, maxParts: 64 })) {
+    for await (const part of multipart(req, type, {
+      maxBytes: Math.min(ctx.config.uploadMax, defaults.maxBytes ?? ctx.config.uploadMax),
+      maxParts: 64,
+    })) {
       if (part.filename !== undefined) {
         if (uploadPart)
           throw new KetError({
@@ -95,15 +106,31 @@ export const receiveAttachment = async (
     if (!uploadPart) throw new KetError({ code: 'E_UPLOAD_FILE', message: 'multipart request has no file' })
     const scope = await ctx.scopeOf(url, req)
     if (!scope.company) throw new KetError({ code: 'E_UPLOAD_SCOPE', message: 'upload requires a company' })
-    const key = `blobs/${scope.company}/${uploadPart.checksum.slice(0, 2)}/${uploadPart.checksum}`
+    const id = randomUUID()
+    const key =
+      defaults.staged?.key(scope.company, id, uploadPart.checksum) ??
+      `blobs/${scope.company}/${uploadPart.checksum.slice(0, 2)}/${uploadPart.checksum}`
     const storage = await ctx.storageOf(url, req)
+    if (defaults.staged) {
+      const stagedSource = await spool.get('body')
+      if (!stagedSource) throw new Error('temporary upload disappeared')
+      await defaults.staged.validate(stagedSource.body, uploadPart.type, uploadPart.size)
+      await defaults.staged.prepare({
+        id,
+        name: uploadPart.filename,
+        storeKey: key,
+        mimetype: uploadPart.type,
+        size: uploadPart.size,
+        checksum: uploadPart.checksum,
+      })
+    }
     // Write even when the key is already present. Trusting head() lets the sweep
     // collect the object between the probe and the row insert, leaving an
     // attachment whose bytes are gone for good; re-writing also refreshes mtime.
     const source = await spool.get('body')
     if (!source) throw new Error('temporary upload disappeared')
     await storage.put(key, source.body, { type: uploadPart.type, size: uploadPart.size })
-    const id = randomUUID()
+    if (defaults.staged) return defaults.staged.complete(id)
     const isPublic = defaults.public ?? (fields.public === 'true' || fields.public === '1')
     return (await ctx.call(
       'storage.createAttachment',

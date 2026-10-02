@@ -3,7 +3,7 @@ import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 
 type Req = Parameters<Route>[1]
 
-const bodyOf = async (req: Req): Promise<unknown> => {
+export const bodyOf = async (req: Req): Promise<unknown> => {
   const declared = Number(req.headers['content-length'] ?? 0)
   if (Number.isFinite(declared) && declared > 64 * 1024) throw new Error('payload_too_large')
   const chunks: Buffer[] = []
@@ -21,7 +21,7 @@ const bodyOf = async (req: Req): Promise<unknown> => {
   throw new Error('unsupported_media_type')
 }
 
-const sameOrigin = (req: Req): boolean => {
+export const sameOrigin = (req: Req): boolean => {
   const origin = String(req.headers.origin ?? '')
   if (!origin) return true
   try {
@@ -32,7 +32,7 @@ const sameOrigin = (req: Req): boolean => {
 }
 
 /** Every encoding a browser or client may use for a ticked consent box. */
-const CONSENT_GIVEN = new Set(['true', 'on', 'yes', '1'])
+export const CONSENT_GIVEN = new Set(['true', 'on', 'yes', '1'])
 
 export const routes: Record<string, RouteEntry> = {
   '/website/forms/{id}/submit': {

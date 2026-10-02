@@ -16,6 +16,8 @@ export const models: Record<string, ModelDef> = {
       defaultLocale: 'text',
       theme: 'text',
       tokens: 'json?',
+      studioStyle: 'json?',
+      styleRevision: 'text?',
       siteGroup: 'text?',
       /**
        * Which publication a visitor is currently reading.
@@ -120,6 +122,8 @@ export const models: Record<string, ModelDef> = {
       currentRevisionId: 'ref:website.EntryRevision?',
       publishedRevisionId: 'ref:website.EntryRevision?',
       scheduledRevisionId: 'ref:website.EntryRevision?',
+      publishedAppearance: 'json?',
+      scheduledAppearance: 'json?',
       authorId: 'text?',
       publishAt: 'datetime?',
       publishedAt: 'datetime?',
@@ -159,6 +163,14 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       description: 'text?',
       parentId: 'ref:website.TaxonomyTerm?',
+      /** LiveDoc blocks; `description` holds their plain text for lists and search. */
+      descriptionDoc: 'text?',
+      /** Title, description, canonical and indexing for the term's public page. */
+      seo: 'json?',
+      /** Changes on every save, so two editors cannot overwrite each other unseen. */
+      revisionId: 'text?',
+      /** Hidden from editors' pickers and from visitors; kept so old revisions still resolve. */
+      archivedAt: 'datetime?',
     },
     indexes: {
       site_taxonomy_slug: { fields: ['companyId', 'siteId', 'taxonomy', 'slug'], unique: true },
@@ -204,6 +216,8 @@ export const models: Record<string, ModelDef> = {
       expiresAt: 'datetime',
       createdBy: 'text?',
       oneTime: 'bool',
+      // `staff` opens only for someone who can open the site; null is the older shareable link.
+      audience: 'text?',
       usedAt: 'datetime?',
       revokedAt: 'datetime?',
     },

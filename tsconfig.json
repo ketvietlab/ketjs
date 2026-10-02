@@ -7,6 +7,8 @@
   },
   "include": [
     "packages/*/src/**/*",
+    "packages/website-client/client/**/*",
+    "packages/website-client/server/**/*",
     "apps/**/*",
     "ket.workspace.ts",
     "examples/**/*",
