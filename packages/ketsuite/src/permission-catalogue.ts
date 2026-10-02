@@ -1614,6 +1614,10 @@ const sources = {
       removeSiteMember: ['security', 'security', 'website.security-audit'],
       issueCustomerAccess: ['security', 'security', 'website.security-audit'],
       disableCustomerAccess: ['security', 'security', 'website.security-audit'],
+      enableCustomerAccess: ['security', 'security', 'website.security-audit'],
+      resetCustomerPassword: ['security', 'security', 'website.security-audit'],
+      setCustomerSelfSignup: ['security', 'security', 'website.security-audit'],
+      customerAccessForSite: ['read', 'security'],
       restoreRevision: ['operate', ['operate', 'author']],
       unpublishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       // Whoever can share a draft can take the link back.
