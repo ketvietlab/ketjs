@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16670
+    "cssLines": 16671
   },
   "rows": [
     {
@@ -12086,7 +12086,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 420,
+      "lines": 421,
       "hooks": []
     },
     {
