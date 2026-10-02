@@ -249,13 +249,13 @@
     [data-ui="chrome-create"],
     [data-ui="pager-step"],
     [data-ui="view-kind"] {
-      min-block-size: 2.75rem;
+      min-block-size: var(--admin-control-height);
     }
 
     [data-ui="pager-step"],
     [data-ui="view-kind"] {
-      inline-size: 2.75rem;
-      block-size: 2.75rem;
+      inline-size: var(--admin-control-height);
+      block-size: var(--admin-control-height);
     }
 
     [data-ui="content"] {

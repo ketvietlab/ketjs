@@ -181,11 +181,24 @@ const renderContracts = (): string => {
 
 const renderRuntime = (): string => {
   const moduleSource = readFileSync(join(sourceDirectory, 'runtime/index.js'), 'utf8')
-  const classicSource = moduleSource.replace(
-    'export const attachDesignSystemInteractions',
-    'const attachDesignSystemInteractions',
+  // Keep the calendar dependency inside one closure when materializing a classic script.
+  const dateMath = readFileSync(join(sourceDirectory, 'forms/date-time/date-math.js'), 'utf8').replaceAll(
+    'export const ',
+    'const ',
   )
-  if (classicSource === moduleSource || /\bexport\s/u.test(classicSource))
+  const dateRuntime = readFileSync(join(sourceDirectory, 'forms/date-time/runtime.js'), 'utf8')
+    .replace(/^import \{[\s\S]*?\} from '\.\/date-math\.js'\n/mu, '')
+    .replace('export const attachDatePickers', 'const attachDatePickers')
+  const primitiveRuntime = readFileSync(join(sourceDirectory, 'runtime/primitives.js'), 'utf8').replace(
+    'export const attachPrimitives',
+    'const attachPrimitives',
+  )
+  const interactions = moduleSource
+    .replace("import { attachPrimitives } from './primitives.js'\n", '')
+    .replace("import { attachDatePickers } from '../forms/date-time/runtime.js'\n", '')
+    .replace('export const attachDesignSystemInteractions', 'const attachDesignSystemInteractions')
+  const classicSource = `${primitiveRuntime}\nconst attachDatePickers = (() => {\n${dateMath}\n${dateRuntime}\nreturn attachDatePickers;\n})();\n${interactions}`
+  if (/\bexport\s/u.test(classicSource) || /^import\s/mu.test(classicSource))
     throw new Error('Design-system runtime can no longer be converted to a classic KetAtlas script')
   // Built by tools/build-design-system-atlas-runtime.mjs: a self-contained bundle
   // (no imports, no exports — checked below the same way) that hydrates the one

@@ -101,6 +101,7 @@ const css = globSync('packages/design-system/src/**/*.css')
   .map((path) => readFileSync(path, 'utf8'))
   .join('\n')
 const primitiveCss = [
+  'packages/design-system/src/primitives/icon/styles.css',
   'packages/design-system/src/primitives/actions/styles.css',
   'packages/design-system/src/primitives/status/styles.css',
   'packages/design-system/src/primitives/feedback/styles.css',
@@ -397,7 +398,7 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
 })
 
 test('design system: a label sits beside its control from tablet width and above it below', () => {
-  // LAYOUT.md L7. The browser check measures this on /layering at 1440 and 390 px;
+  // Két Design System visual contract L7. The browser check measures this on /layering at 1440 and 390 px;
   // this keeps the rule from being dropped where CI does not run a browser.
   const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
   assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
@@ -411,9 +412,9 @@ test('design system: a label sits beside its control from tablet width and above
       query,
     )
   }
-  // One rule for every form: no pattern keeps a narrow-column copy of its own.
+  // Label stacking belongs to Field; form columns may align their label tracks.
   const recordForm = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
-  assert.doesNotMatch(recordForm, /@container record-form/u)
+  assert.doesNotMatch(recordForm, /\[data-ui="field-label"\]/u)
 })
 
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
@@ -431,16 +432,12 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /--kv-panel-border: light-dark\(#e2e4e8,/)
   assert.match(grouped, /background: var\(--kv-page-bg\)/)
   assert.match(grouped, /--kv-page-chrome-bg: var\(--kv-page-bg\)/)
-  assert.match(grouped, /--kv-page-padding-x: var\(--kv-space-3\)/)
-  assert.match(grouped, /gap: var\(--kv-space-2\)/)
-  // One 12px inset for a working group's heading and body, through the surface role tokens.
-  assert.match(grouped, /--kv-surface-inset: var\(--kv-space-3\)/)
-  assert.match(grouped, /--kv-surface-head-gap: var\(--kv-space-3\)/)
+  // Presentation may change colour, never the shared geometry roles.
+  assert.doesNotMatch(grouped, /--kv-(?:page-padding-x|surface-inset|surface-head-gap):/)
   assert.match(
     grouped,
     /\[data-ui="table-scroll"\]\[data-framed="false"\] \{\s*width: auto;\s*margin-inline: 0/,
   )
-  assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
   // The rail's contents render flat through the layering rules, like any white region's.
   assert.match(
     readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8'),
@@ -448,22 +445,22 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   )
   assert.match(
     grouped,
-    /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
+    /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-gap-section\) var\(--kv-page-padding-x\) var\(--kv-gap-section\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
   )
   assert.doesNotMatch(grouped, /\[data-ui="app-sidebar"\]/)
   assert.match(readFileSync('packages/design-system/src/styles.css', 'utf8'), /layouts\/grouped\/styles\.css/)
 })
 
-test('design system: titled tables use the demo card inset', () => {
+test('design system: titled tables use the shared surface inset', () => {
   const layouts = layoutCss
   const patterns = patternCss
   assert.match(
     layouts,
-    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: var\(--kv-space-3\)/,
+    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: var\(--kv-surface-inset\)/,
   )
   assert.match(
     layouts,
-    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-space-3\)/,
+    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-surface-head-gap\)/,
   )
   assert.match(
     patterns,
@@ -551,7 +548,7 @@ test('design system: application navigation shares one semantic model across bre
   assert.doesNotMatch(navigation, /role="dialog"/)
 
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
-  assert.match(navigationCss, /@media \(max-width: 48rem\)/)
+  assert.match(navigationCss, /@media \(width < 48rem\)/)
   assert.match(navigationCss, /position: fixed/)
   assert.match(navigationCss, /var\(--kv-layer-dialog\)/)
   const packageJson = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8')) as {
@@ -707,12 +704,12 @@ test('design system: application navigation stays dense enough for operational m
   assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
   const leadingRule =
     navigationCss.match(/\[data-ui="navigation-item-leading"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
-  assert.match(leadingRule, /width: var\(--kv-space-5\)/)
-  assert.match(leadingRule, /font-size: var\(--kv-text-xl\)/)
+  assert.match(leadingRule, /width: var\(--kv-sidebar-icon-size\)/)
+  assert.match(leadingRule, /font-size: var\(--kv-sidebar-icon-size\)/)
   assert.match(leadingRule, /line-height: 1/)
 
   const mobileLayer = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
+    /@media \(width < 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
   )?.groups?.body
   assert.match(mobileLayer ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobileLayer ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
@@ -726,13 +723,27 @@ test('design system: a stacked FormPage rail keeps space above its content', () 
   )
 })
 
-test('design system: an operational ListPage body keeps a dense header gap', () => {
+test('design system: operational ListPage owns one toolbar-to-result gap and an unframed result count', () => {
   const patterns = patternCss
   const rule =
     patterns.match(
       /\[data-ui="list-page"\]\[data-variant="operational"\]\s*\[data-ui="list-page-body"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
-  assert.match(rule, /padding-top: var\(--kv-space-2\)/)
+  assert.match(rule, /padding-top: var\(--kv-gap-section\)/)
+  const toolbar =
+    patterns.match(
+      /\[data-ui="list-page"\]\[data-variant="operational"\]\s*\[data-ui="list-page-toolbar"\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(toolbar, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\) 0/)
+  const footer =
+    patterns.match(
+      /\[data-ui="list-page"\]\[data-variant="operational"\]\s*\[data-ui="list-page-footer"\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(footer, /border: 0/)
+  assert.match(footer, /background: transparent/)
+  const mobile = readFileSync('packages/design-system/src/patterns/list-page/responsive.css', 'utf8')
+  assert.match(mobile, /padding: var\(--kv-space-3\) var\(--kv-space-4\) 0/)
+  assert.match(mobile, /\[data-ui="list-page-footer"\]\s*\{\s*padding: 0/)
 })
 
 test('design system: canonical page titles share one dense hierarchy', () => {
@@ -743,29 +754,30 @@ test('design system: canonical page titles share one dense hierarchy', () => {
     const rule = patterns.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{(?<body>[^}]+)\\}`))?.groups?.body
     assert.match(rule ?? '', /font-size: var\(--kv-page-title-size\)/, hook)
     assert.match(rule ?? '', /margin: 0/, hook)
-    assert.match(rule ?? '', /line-height: var\(--kv-leading-tight\)/, hook)
+    assert.match(rule ?? '', /line-height: var\(--kv-page-title-line\)/, hook)
 
     const heading = patterns.match(new RegExp(`\\[data-ui="${kind}-heading"\\]\\s*\\{(?<body>[^}]+)\\}`))
       ?.groups?.body
     assert.match(heading ?? '', /gap: var\(--kv-space-1\)/, `${kind}-heading`)
 
-    // A page header has no description (LAYOUT.md L5), so nothing styles one.
-    assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    // Operational list pages may carry one muted guidance line below the title;
+    // other page identities stay compact and do not expose that hook.
+    if (kind === 'list-page') {
+      assert.match(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    } else {
+      assert.doesNotMatch(patterns, new RegExp(`data-ui="${kind}-description"`), `${kind}-description`)
+    }
   }
 })
 
-test('design system: every page title is 24px from tablet width and 17px below it', () => {
+test('design system: page titles use Polaris headingLg at every viewport', () => {
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
-  assert.match(tokens, /:root \{[^}]*--kv-page-title-size: 1\.5rem;/)
-  assert.match(
-    tokens,
-    /@media \(max-width: 47\.9375rem\) \{\s*:root \{\s*--kv-page-title-size: var\(--kv-text-lg\);\s*\}/,
+  assert.match(tokens, /--kv-text-xl: 1\.25rem;/)
+  assert.match(tokens, /--kv-line-xl: 1\.5rem;/)
+  assert.deepEqual(
+    [...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]),
+    ['var(--kv-text-xl)'],
   )
-  // Density must not change the page title; only the viewport controls its size.
-  assert.deepEqual([...css.matchAll(/--kv-page-title-size: ([^;]+);/g)].map((match) => match[1]).sort(), [
-    '1.5rem',
-    'var(--kv-text-lg)',
-  ])
   assert.doesNotMatch(patternCss, /--kv-page-title-size:/)
 
   const identity = css.match(/\[data-kv-page-identity="title"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body
@@ -782,9 +794,9 @@ test('design system: every page title is 24px from tablet width and 17px below i
   }
 })
 
-test('design system: a control is the same size at every viewport width', () => {
-  // Rows the finger scrolls through keep a touch height, as do the mobile-only
-  // navigation bar and page context bars; controls follow density.
+test('design system: responsive control dimensions are owned by tokens', () => {
+  // Components consume responsive size tokens; module-local media rules must not
+  // invent button/input heights. Navigation touch targets remain separate.
   const touchRow =
     /navigation-(?:item|branch-trigger|trigger)"\]|menu-item"\]|kt-selection-target"\]|-context"\]|global-search"\]/
   const control =
@@ -939,7 +951,7 @@ test('design system: operational tables expose sort, selection, grouping and row
       .map((match) => match.groups?.body ?? '')
       .find((body) => body.includes('padding:')) ?? ''
   assert.match(selectRule, /min-width: 3\.5rem/)
-  assert.match(selectRule, /padding: 0\.4375rem var\(--kv-space-3\)/)
+  assert.match(selectRule, /padding: var\(--kv-space-1-5\) var\(--kv-space-3\)/)
 })
 
 test('design system: grouped KetTable pages each leaf without dropping later rows', () => {
@@ -1073,7 +1085,7 @@ test('design system: form rows collapse while field pairs remain inline', () => 
     assert.match(source, /@media \(max-width: 47\.9375rem\)/)
     assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/)
   }
-  assert.match(patterns, /min\(9rem, calc\(\(100% - var\(--kv-gap-field-group\)\) \* 0\.175\)\)/)
+  assert.match(patterns, /min\(9rem, calc\(\(100% - var\(--kv-gap-form-column\)\) \* 0\.175\)\)/)
   assert.doesNotMatch(patterns, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(compatibility, /minmax\(5\.25rem, 6\.25rem\)/)
   assert.doesNotMatch(partner, /\[data-ui="form-field"\]/)
@@ -1262,11 +1274,10 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-height="fixed"\]\s*\{(?<body>[^}]+)\}/,
     )?.groups?.body ?? ''
-  assert.match(fixedDialog, /height: calc\(100dvh - var\(--kv-space-12\)\)/)
+  assert.match(fixedDialog, /height: var\(--kv-modal-fixed-height, calc\(100dvh - var\(--kv-space-12\)\)\)/)
 
   // A module whose own content is shorter than the viewport caps the fixed height instead.
-  // Set inline with `!important`, not a plain CSS rule: a legacy admin stylesheet targets
-  // these same hooks at equal specificity and would otherwise win by loading later.
+  // The custom property caps desktop only; the mobile full-screen rule still owns height.
   const capped = renderToString(
     <ModalSheet
       id="edit-template"
@@ -1278,7 +1289,7 @@ test('design system: modal sheets expose route metadata and become fullscreen on
       body="Template tabs"
     />,
   )
-  assert.match(capped, /style="height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\) !important"/)
+  assert.match(capped, /style="--kv-modal-fixed-height: min\(48rem, calc\(100dvh - var\(--kv-space-12\)\)\)"/)
   // Ignored outside `height: 'fixed'` — a content-sized dialog has nothing to cap.
   const contentSized = renderToString(
     <ModalSheet
@@ -1298,7 +1309,7 @@ test('design system: action labels leave room for Vietnamese diacritics while tr
   const rule = primitives.match(/\[data-ui="action-label"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
   assert.match(rule, /min-width: 0/)
   assert.match(rule, /overflow: hidden/)
-  assert.match(rule, /line-height: var\(--kv-leading-normal\)/)
+  assert.match(rule, /line-height: inherit;/)
   assert.match(rule, /text-overflow: ellipsis/)
 })
 
@@ -2099,7 +2110,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 133)
+  assert.equal(names.length, 135)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2136,8 +2147,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 275)
-  assert.equal(designSystemInventory.summary.runtimeExports, 138)
+  assert.equal(designSystemInventory.summary.publicExports, 300)
+  assert.equal(designSystemInventory.summary.runtimeExports, 140)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
@@ -2216,7 +2227,7 @@ test('design system: root navigation sections read one weight step above their c
   )
   assert.match(
     css,
-    /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\):not\( \[data-ui="navigation-children"\] \* \) \{ font-weight: var\(--kv-weight-medium\); \}/u,
+    /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\):not\( \[data-ui="navigation-children"\] \* \) \{ color: var\(--kv-text-main\); font-weight: var\(--kv-weight-medium\); \}/u,
   )
 })
 
@@ -2264,8 +2275,8 @@ test('design system: modal and section headings retain distinct type levels', ()
     readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
       .split('[data-ui="modal-title"] {')[1]
       ?.split('}')[0] ?? ''
-  assert.match(section, /font-size: var\(--kv-text-lg\)/)
-  assert.match(nested, /font-size: var\(--kv-text-lg\)/)
+  assert.match(section, /font-size: var\(--kv-text-sm\)/)
+  assert.match(nested, /font-size: var\(--kv-text-sm\)/)
   assert.match(modal, /font-size: var\(--kv-text-xl\)/)
 })
 
@@ -2279,5 +2290,17 @@ test('design system: Stack gap variants own their gap above legacy backend style
 
 test('design system: grouped page bodies preserve explicit Stack spacing', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
-  assert.ok(grouped.includes('> [data-ui="stack"]:not([data-gap="loose"]):not([data-gap="compact"])'))
+  assert.doesNotMatch(grouped, /\[data-ui="(?:stack|grid)"\]/)
+  for (const kind of ['record', 'form', 'dashboard', 'board']) {
+    const styles = readFileSync(`packages/design-system/src/patterns/${kind}-page/styles.css`, 'utf8')
+    assert.doesNotMatch(styles, /> \[data-ui="stack"\]/)
+  }
+})
+
+test('design system: bulk action visibility belongs to the component outside ListChrome too', () => {
+  const styles = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  assert.match(
+    styles,
+    /:where\(\[data-kv-design-system\]\) \[data-ui="bulk-actions"\]:not\(\[data-has-selection="true"\]\) \{\s*display: none/,
+  )
 })

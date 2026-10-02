@@ -34,9 +34,9 @@
     margin: 0;
     color: var(--kv-accent);
     font-size: var(--kv-text-2xs);
+    line-height: var(--kv-line-2xs);
     font-weight: var(--kv-weight-bold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
     text-transform: uppercase;
   }
 
@@ -46,7 +46,14 @@
     font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
+    line-height: var(--kv-page-title-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-description"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-base);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) :is([data-ui="list-page-actions"], [data-ui="list-page-tools"]) {
@@ -81,6 +88,7 @@
     padding-inline: var(--kv-space-2);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-variant-numeric: tabular-nums;
   }
 
@@ -94,6 +102,7 @@
     border-top: 1px solid var(--kv-panel-divider);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
 
   /* Application collections opt into the full operational workspace. This keeps
@@ -147,7 +156,7 @@
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-toolbar"] {
-    padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
+    padding: var(--kv-space-3) var(--kv-page-padding-x) 0;
     border: 0;
     border-radius: 0;
     background: var(--kv-page-bg);
@@ -163,7 +172,7 @@
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-body"] {
-    padding-top: var(--kv-space-2);
+    padding-top: var(--kv-gap-section);
     padding-inline: var(--kv-page-padding-x);
     background: var(--kv-page-content-bg);
   }
@@ -171,27 +180,12 @@
   :where([data-kv-design-system])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-footer"] {
-    margin: var(--kv-space-3) var(--kv-page-padding-x) 0;
-    padding: var(--kv-space-2-5) var(--kv-space-3);
-    border: 1px solid var(--kv-panel-border);
-    border-radius: var(--kv-radius-md);
-    background: var(--kv-panel-bg);
+    margin: var(--kv-space-2) var(--kv-page-padding-x) 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     font-variant-numeric: tabular-nums;
-  }
-
-  :where([data-kv-design-system])
-    [data-ui="list-page"][data-variant="operational"]
-    [data-ui="list-page-body"]:has(+ [data-ui="list-page-footer"])
-    > [data-ui="table-scroll"] {
-    border-radius: var(--kv-radius-md) var(--kv-radius-md) 0 0;
-  }
-
-  :where([data-kv-design-system])
-    [data-ui="list-page"][data-variant="operational"]
-    [data-ui="list-page-body"]:has(> [data-ui="table-scroll"])
-    + [data-ui="list-page-footer"] {
-    margin-top: -1px;
-    border-radius: 0 0 var(--kv-radius-md) var(--kv-radius-md);
   }
 
   /* Lists are page regions, not cards. More capable application tables may add
@@ -227,6 +221,6 @@
   :where([data-kv-design-system][data-density="compact"])
     [data-ui="list-page"][data-variant="operational"]
     [data-ui="list-page-toolbar"] {
-    padding-block: var(--kv-space-2);
+    padding-top: var(--kv-space-2);
   }
 }
