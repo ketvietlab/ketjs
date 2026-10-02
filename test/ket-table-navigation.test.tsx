@@ -1,8 +1,44 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
-import { createKetTableView } from '@ketvietlab/design-system'
+import { createKetTableView, KetTable } from '@ketvietlab/design-system'
 import { ketTableDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
+
+test('KetTable: descriptive wrapping preserves the complete value and native record link in both renderers', () => {
+  const name = 'A long product description with meaningful detail that must remain readable'
+  const rows = [{ id: 'item', name, price: 12000 }]
+  const island = createKetTableView({
+    id: 'wrapped-table',
+    config: {
+      ...ketTableDemoConfig,
+      columns: [
+        { key: 'name', label: 'Product', wrap: true, format: { kind: 'text', field: 'name' } },
+        { key: 'price', label: 'Price', format: { kind: 'number', field: 'price' } },
+      ],
+      rows,
+      rowHrefTemplate: '/products/{id}',
+    },
+  }).view()
+  const server = (
+    <KetTable
+      columns={[
+        { key: 'name', label: 'Product', wrap: true, cell: (row: (typeof rows)[number]) => row.name },
+        { key: 'price', label: 'Price', cell: (row: (typeof rows)[number]) => String(row.price) },
+      ]}
+      rows={rows}
+      id={(row) => row.id}
+      rowHref={(row) => `/products/${row.id}`}
+      labels={ketTableDemoConfig.labels}
+    />
+  )
+  for (const view of [island, server]) {
+    const output = renderToString(view)
+    assert.match(output, /data-ui="kt-cell" data-col="name"[^>]*data-wrap="true"/)
+    assert.doesNotMatch(output, /data-ui="kt-cell" data-col="price"[^>]*data-wrap=/)
+    assert.match(output, /href="\/products\/item"/)
+    assert.ok(output.includes(name))
+  }
+})
 
 test('KetTable: URL-driven pagination and sorting preserve the server state', () => {
   const html = renderToString(

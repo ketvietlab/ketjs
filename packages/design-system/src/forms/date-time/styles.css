@@ -14,16 +14,19 @@
     min-width: 0;
     grid-column: 2;
     grid-row: 1;
-    border: 1px solid var(--kv-field-border);
-    border-radius: var(--kv-radius-sm);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--kv-date-stroke, var(--kv-field-border));
+    border-radius: var(--kv-control-radius);
     background: var(--kv-input-bg);
   }
   :where([data-kv-design-system]) [data-ui="date-field-control"]:focus-within {
-    border-color: var(--kv-input-border-focus);
-    box-shadow: var(--kv-input-ring);
+    --kv-date-stroke: var(--kv-input-border-focus);
+    box-shadow:
+      inset 0 0 0 1px var(--kv-date-stroke),
+      var(--kv-input-ring);
   }
   :where([data-kv-design-system]) [data-ui="date-field-control"]:has([aria-invalid="true"]) {
-    border-color: var(--kv-color-danger);
+    --kv-date-stroke: var(--kv-color-danger);
   }
   :where([data-kv-design-system]) [data-ui="date-range-preset"] {
     width: var(--kv-space-32, 8rem);
@@ -61,6 +64,7 @@
     margin: 0;
     color: var(--kv-color-danger);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
   :where([data-kv-design-system]) [data-ui="date-calendar"] {
     --kv-date-left: var(--kv-space-3);
@@ -102,6 +106,7 @@
   :where([data-kv-design-system]) [data-ui="date-calendar-title"] {
     margin: 0;
     font-size: var(--kv-text-md);
+    line-height: var(--kv-line-md);
     font-weight: var(--kv-weight-semibold);
   }
   :where([data-kv-design-system]) [data-ui="date-calendar-body"] {
@@ -125,6 +130,7 @@
   :where([data-kv-design-system]) [data-ui="date-month-title"] {
     margin: 0 0 var(--kv-space-3);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-semibold);
     text-align: center;
   }
@@ -138,6 +144,7 @@
     padding: var(--kv-space-2) 0;
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-normal);
     text-align: center;
   }
@@ -162,6 +169,7 @@
     background: transparent;
     color: inherit;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
   }
@@ -201,6 +209,7 @@
     margin: 0;
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-variant-numeric: tabular-nums;
   }
   @media (max-width: 47.9375rem) {

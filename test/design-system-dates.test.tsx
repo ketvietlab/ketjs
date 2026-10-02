@@ -95,7 +95,7 @@ test('DatePicker retains native field semantics with a separately labelled dialo
     today: '2026-09-30',
   }
   const html = render(<DatePicker {...props} />)
-  assert.match(html, /<label[^>]*for="day">Ngày giao hàng/)
+  assert.match(html, /<label[^>]*for="day">(?:<span[^>]*>)*Ngày giao hàng/)
   assert.match(
     html,
     /<input[^>]*id="day"[^>]*type="date"[^>]*name="delivery"[^>]*value="2026-09-15"[^>]*required[^>]*min="2026-09-01"[^>]*max="2026-09-30"/,
@@ -128,7 +128,7 @@ test('DateRangePicker exposes seven Vietnamese presets without extra submitted v
   assert.equal((html.match(/type="hidden"/g) ?? []).length, 2)
   assert.equal((html.match(/type="text"/g) ?? []).length, 1)
   assert.match(html, /<div data-ui="date-range" id="range"/)
-  assert.match(html, /for="range-input">Báo cáo<\/label>/)
+  assert.match(html, /for="range-input">(?:<span[^>]*>)*Báo cáo(?:<\/span>)*<\/label>/)
   assert.match(html, /id="range-range-error" role="alert" hidden/)
   assert.doesNotMatch(html, /type="submit"/)
   assert.doesNotMatch(render(<DateRangePicker {...range} presets={false} />), /data-ui="date-range-preset"/)

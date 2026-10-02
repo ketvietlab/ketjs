@@ -24,7 +24,7 @@ export const KeyValue = (props: KeyValueProps): TemplateResult => (
 
 /**
  * `layout="strip"` lays the pairs out in one row divided by hairlines, the
- * metadata strip of LAYOUT.md L7 (due date, SLA, owner under a record title).
+ * metadata strip of Két Design System visual contract L7 (due date, SLA, owner under a record title).
  * It has no box around it; `columns` applies to the grid layout only.
  */
 export const DescriptionList = (props: {
