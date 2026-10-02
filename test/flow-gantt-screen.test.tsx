@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -46,5 +47,5 @@ test('project Gantt remains specialized and uses server-owned locale-safe issue 
   assert.match(html, /data-ui="board-page-toolbar"/)
   assert.match(html, /data-ui="gantt-row" href="\/admin\/flow\/issues\/issue%2Fa\?lang=en"/)
   assert.match(html, /201-201 \/ 201/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
 })

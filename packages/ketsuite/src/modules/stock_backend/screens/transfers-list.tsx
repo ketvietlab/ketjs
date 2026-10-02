@@ -1,16 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -30,7 +29,7 @@ export type TransferListRow = {
 export type TransfersListScreenOptions = {
   rows: TransferListRow[]
   /** Localized `/admin/stock/transfers/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<TransferListRow>>
 }
@@ -114,34 +113,13 @@ export const transfersListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.transfer.list.title')}
-      description={_('stock_backend.transfer.list.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : undefined
       }
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('stock_backend.transfer.list.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('stock_backend.transfer.list.title'), collection.frame)}
       footer={`${_('stock_backend.transfer.list.records.title')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length

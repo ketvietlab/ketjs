@@ -3,6 +3,7 @@ import { functions } from './functions.ts'
 import { islands } from './islands.ts'
 import { messages } from './messages.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'flow_backend',
@@ -17,7 +18,7 @@ export default defineModule({
   // stylesheet is livedoc's and loads with that module.
   assets: new URL('../../ui/client/', import.meta.url),
   styles: ['flow-app.css'],
-  functions,
+  functions: { ...functions, ...searchFilterFunctions },
   routes,
   islands,
   messages,

@@ -1,17 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
   pageTrailFromFrame,
+  recordModalHref,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame, TableGroup } from '../../../ui/index.ts'
@@ -24,6 +24,7 @@ export type CasesListScreenOptions = {
   groups?: TableGroup<CaseListRow>[]
   /** Omitted when the reader may list records but may not create one. */
   createHref?: string
+  recordBase?: string
   locale?: string
   total?: number
   table?: Partial<DataTable<CaseListRow>>
@@ -95,7 +96,7 @@ export const casesListScreen = (
   const groups = options.groups ?? []
   const total = options.total ?? options.rows.length
   const selection = options.table?.selection ?? frame.chrome?.selection
-  const hasActions = selection || frame.extras?.['topbar.end'] !== undefined
+  const _hasActions = selection || frame.extras?.['topbar.end'] !== undefined
 
   const prepared = prepareCollectionTable(
     _,
@@ -106,7 +107,11 @@ export const casesListScreen = (
       groups,
       responsive: 'stack',
       id: (row) => String(row.id),
-      rowHref: (row) => localized(`/admin/crm/cases/${String(row.id)}`, options.locale ?? ''),
+      rowHref: (row) =>
+        recordModalHref(options.recordBase ?? localized('/admin/crm/cases', options.locale ?? ''), {
+          kind: 'crm.case',
+          id: String(row.id),
+        }),
       ...options.table,
     },
     { paginate: false },
@@ -120,7 +125,6 @@ export const casesListScreen = (
       frame={frame}
       context={pageTrailFromFrame(_('crm_backend.cases.title'), frame)}
       title={_('crm_backend.cases.title')}
-      description={_('crm_backend.cases.subtitle')}
       headerActions={
         options.createHref ? (
           <LinkButton label={_('crm_backend.action.create')} href={options.createHref} variant="primary" />
@@ -128,27 +132,8 @@ export const casesListScreen = (
           ''
         )
       }
-      actions={
-        hasActions
-          ? inline([selection ? bulkActions(_, selection) : '', frame.extras?.['topbar.end'] ?? ''])
-          : undefined
-      }
-      controls={
-        frame.chrome
-          ? listChrome(
-              _,
-              _('crm_backend.cases.title'),
-              {
-                ...frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, frame, undefined, selection)}
+      controls={collectionControls(_, _('crm_backend.cases.title'), frame)}
       status={`${_('crm_backend.cases.title')}: ${String(total)}`}
       body={
         options.rows.length || groups.length

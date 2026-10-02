@@ -1,4 +1,4 @@
-import { defineFn, deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, gt, inArray } from '@ketvietlab/ketjs'
 import type { FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   activeStage,
@@ -6,7 +6,9 @@ import {
   addTimeline,
   assignCase,
   canEditCase,
+  closingValues,
   caseDetail,
+  dialled,
   duplicateCases,
   firstStage,
   invalid,
@@ -27,6 +29,31 @@ import { CASE_KINDS } from '../types.ts'
 import { caseReadEffects, command, ensureCase, moveToTerminal, caseWriteEffects } from './shared.ts'
 
 export const caseFunctions: Record<string, FnSpec> = {
+  /**
+   * Recompute the duplicate-matching phone key for cases saved before it was
+   * E.164-based, one page at a time. Rerunnable.
+   */
+  'case.normalizePhoneDigits': defineFn({
+    input: { after: 'text?', limit: 'int?' },
+    output: { scanned: 'int', changed: 'int', next: 'text?' },
+    effects: ['read:crm.Case', 'write:crm.Case'],
+    idempotent: true,
+    handler: async (ctx, a) => {
+      const C = ctx.table('crm.Case')
+      const limit = Math.max(1, Math.min(5_000, Number(a.limit ?? 1_000)))
+      let query = from(C).select(C.id, C.phone, C.phoneDigits).orderBy(asc(C.id)).limit(limit)
+      if (a.after) query = query.where(gt(C.id, String(a.after)))
+      const rows = await ctx.db.all(query)
+      let changed = 0
+      for (const row of rows) {
+        const phoneDigits = dialled(row.phone) || null
+        if (phoneDigits === (row.phoneDigits ?? null)) continue
+        await ctx.db.update('crm.Case', { id: row.id }, { phoneDigits })
+        changed++
+      }
+      return { scanned: rows.length, changed, next: rows.length === limit ? String(rows.at(-1)!.id) : null }
+    },
+  }),
   'case.list': defineFn({
     input: {
       kind: 'text?',
@@ -203,6 +230,8 @@ export const caseFunctions: Record<string, FnSpec> = {
     input: { id: 'id', stageId: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', terminalState: 'text?', errors: 'json?' },
     effects: [
+      'read:crm.SalesDetail',
+      'write:crm.SalesDetail',
       'read:crm.Case',
       'write:crm.Case',
       'read:crm.AccessGrant',
@@ -336,6 +365,8 @@ export const caseFunctions: Record<string, FnSpec> = {
           { version: args.expectedVersion },
           {
             kind: 'opportunity',
+            originKind: held.originKind ?? 'lead',
+            ...closingValues(held, stage.terminalState, timestamp),
             stageId: stage.id,
             terminalState: stage.terminalState,
             convertedAt: timestamp,
@@ -527,6 +558,7 @@ export const caseFunctions: Record<string, FnSpec> = {
       id: 'id',
       expectedVersion: 'int',
       lostReason: 'text',
+      lostReasonCode: 'text?',
       closeReason: 'text?',
       idempotencyKey: 'text',
     },
@@ -551,6 +583,7 @@ export const caseFunctions: Record<string, FnSpec> = {
         id: String(args.id),
         expectedVersion: Number(args.expectedVersion),
         lostReason: String(args.lostReason),
+        lostReasonCode: args.lostReasonCode ? String(args.lostReasonCode) : undefined,
         closeReason: args.closeReason ? String(args.closeReason) : undefined,
         idempotencyKey: String(args.idempotencyKey),
         terminal: 'lost',

@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { billingJobFunctions, billingJobs } from './jobs.ts'
 import { menus } from './menus.ts'
 import { messages } from './messages.ts'
@@ -17,7 +18,7 @@ export default defineModule({
   summary: 'Xuất hoá đơn cho hồ sơ dịch vụ đã đóng và ghi nhận tiền khách đã trả.',
   category: 'Khách sạn',
   models,
-  functions: { ...functions, ...billingJobFunctions },
+  functions: { ...functions, ...billingJobFunctions, ...searchFilterFunctions },
   jobs: billingJobs,
   routes,
   menus,

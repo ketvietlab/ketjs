@@ -12,6 +12,14 @@ const ROLES = new Set<SiteRole>(['administrator', 'editor', 'author', 'contribut
  */
 export const roleForSite = async (ctx: Ctx, siteId: unknown): Promise<SiteRole | null> => {
   if (!ctx.actor) return 'administrator'
+  // Studio deployments use ERP function grants and the live company scope.
+  // Legacy standalone storefront deployments retain their membership contract.
+  if (ctx.manifest.modules.website_backend) {
+    if (!ctx.scope.company) return null
+    return (await ctx.db.select('website.Site', { id: siteId, companyId: ctx.scope.company }))[0]
+      ? 'administrator'
+      : null
+  }
   const Member = ctx.table('website.SiteMember')
   const row = await ctx.db.one(from(Member).where(eq(Member.siteId, siteId), eq(Member.userId, ctx.actor)))
   const role = String(row?.role ?? '') as SiteRole

@@ -1,8 +1,12 @@
+import { loadCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
 import {
-  collectionSearchFrame,
-  searchCollectionRows,
-  loadCollectionRows,
-} from '../backend/collection-search.ts'
+  amenityListSearch,
+  folioListSearch,
+  policyListSearch,
+  propertyListSearch,
+  stayListSearch,
+} from './search.ts'
 import { randomUUID } from 'node:crypto'
 import { dateTimeFormatter, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
@@ -88,6 +92,30 @@ import type {
 import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { CLEANING_TASK_STATES, ROOM_STATUSES, STAY_NOTICE_STATES } from './types.ts'
 import { adminPage } from '../backend/screen.ts'
+
+/** Which message family names a group's value, when the column reads it as one. */
+const GROUP_MESSAGES: Record<string, string> = {
+  state: 'stayState',
+  accommodationType: 'accommodation',
+  scope: 'amenityScope',
+  type: 'policy',
+}
+
+const hospitalityGroupLabel = (_: Translator, key: string, value: unknown, states = 'stayState'): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const family = key === 'state' ? states : (GROUP_MESSAGES[key] ?? key)
+  const message = `hospitality_core.${family}.${raw}`
+  return _.resolves(message) ? _(message) : raw
+}
+
+/** Every hospitality list shares one set of functions; see `search-functions.ts`. */
+const hospitalitySearchFunctions = {
+  apply: 'hospitality_core.applySearchFilter',
+  saveFavorite: 'hospitality_core.saveSearchFavorite',
+  deleteFavorite: 'hospitality_core.deleteSearchFavorite',
+  setDefaultFavorite: 'hospitality_core.setDefaultSearchFavorite',
+}
 
 type OperationResult = {
   ok?: boolean
@@ -1460,27 +1488,30 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const rows = (await ctx.call(
-        'hospitality_core.listStays',
-        { propertyId, state: url.searchParams.get('state') || undefined },
-        url,
-        req,
-      )) as StayRow[]
+      // The bar owns the state now, so the list is read whole and narrowed here.
+      const rows = (await ctx.call('hospitality_core.listStays', { propertyId }, url, req)) as StayRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.stays.title',
-        body: (_, frame) =>
-          staysScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: stayListSearch,
+            rows,
+            frame,
+            name: 'hospitality-stay-filter',
+            bodyId: 'hospitality-stay-list',
+            functions: hospitalitySearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_core.screen.stays.title') },
+            groupLabel: (key, value) => hospitalityGroupLabel(_, key, value),
+          })
+          return staysScreen(
             _,
-            searchCollectionRows(
-              url,
-              rows,
-              (row) =>
-                `${row.code} ${row.partner?.name ?? ''} ${row.currentRoom?.name ?? ''} ${row.currentRoom?.code ?? ''}`,
-            ),
+            search.rows,
             lang,
             timezone,
-            collectionSearchFrame(url, frame, _('hospitality_core.screen.stays.title')),
-          ),
+            search.frame,
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
 
@@ -1565,22 +1596,29 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const rows = (await ctx.call(
-        'hospitality_core.listFolios',
-        { propertyId, state: url.searchParams.get('state') || undefined },
-        url,
-        req,
-      )) as FolioRow[]
+      const rows = (await ctx.call('hospitality_core.listFolios', { propertyId }, url, req)) as FolioRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.folios.title',
-        body: (_, frame) =>
-          foliosScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: folioListSearch,
+            rows,
+            frame,
+            name: 'hospitality-folio-filter',
+            bodyId: 'hospitality-folio-list',
+            functions: hospitalitySearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_core.screen.folios.title') },
+            groupLabel: (key, value) => hospitalityGroupLabel(_, key, value, 'folioState'),
+          })
+          return foliosScreen(
             _,
-            searchCollectionRows(url, rows, (row) => `${row.code} ${row.partner?.name ?? ''}`),
+            search.rows,
             lang,
             timezone,
-            collectionSearchFrame(url, frame, _('hospitality_core.screen.folios.title')),
-          ),
+            search.frame,
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
 
@@ -1666,18 +1704,31 @@ export const routes: Record<string, RouteEntry> = {
       const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.properties.title',
-        body: (_, frame) =>
-          propertiesScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: propertyListSearch,
+            rows: properties,
+            frame,
+            name: 'hospitality-property-filter',
+            bodyId: 'hospitality-property-list',
+            functions: hospitalitySearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_core.screen.properties.title') },
+            groupLabel: (key, value) => hospitalityGroupLabel(_, key, value),
+          })
+          return propertiesScreen(
             _,
-            searchCollectionRows(url, properties, (row) => `${row.name} ${row.code} ${row.city ?? ''}`),
+            search.rows,
+            // The totals are about the estate, not about what the bar kept.
             {
               rooms: properties.reduce((sum, property) => sum + property.rooms, 0),
               available: properties.reduce((sum, property) => sum + property.availableRooms, 0),
               attention: properties.reduce((sum, property) => sum + property.attentionRooms, 0),
             },
             lang,
-            collectionSearchFrame(url, frame, _('hospitality_core.screen.properties.title')),
-          ),
+            search.frame,
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
 
@@ -2908,12 +2959,22 @@ export const routes: Record<string, RouteEntry> = {
       ])) as [AmenityRow[], Array<{ id: string; name: string }>]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.amenities.title',
-        body: (_, frame) =>
-          amenitiesScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: amenityListSearch,
+            rows,
+            frame,
+            name: 'hospitality-amenity-filter',
+            bodyId: 'hospitality-amenity-list',
+            functions: hospitalitySearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_core.screen.amenities.title') },
+            groupLabel: (key, value) => hospitalityGroupLabel(_, key, value),
+          })
+          return amenitiesScreen(
             _,
-            searchCollectionRows(url, rows, (row) => `${row.code} ${row.name}`),
+            search.rows,
             categories,
-            collectionSearchFrame(url, frame, _('hospitality_core.screen.amenities.title')),
+            search.frame,
             url.searchParams.get('status'),
             {
               open: url.searchParams.get('create') === '1',
@@ -2923,7 +2984,9 @@ export const routes: Record<string, RouteEntry> = {
               errors: modalErrors(url, _),
               values: modalValues(url, ['code', 'name', 'scope', 'categoryId', 'sequence']),
             },
-          ),
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
 
@@ -2961,11 +3024,21 @@ export const routes: Record<string, RouteEntry> = {
       const rows = (await ctx.call('hospitality_core.listCancellationPolicies', {}, url, req)) as PolicyRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.policies.title',
-        body: (_, frame) =>
-          policiesScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: policyListSearch,
+            rows,
+            frame,
+            name: 'hospitality-policy-filter',
+            bodyId: 'hospitality-policy-list',
+            functions: hospitalitySearchFunctions,
+            labels: { searchPlaceholder: _('hospitality_core.screen.policies.title') },
+            groupLabel: (key, value) => hospitalityGroupLabel(_, key, value),
+          })
+          return policiesScreen(
             _,
-            searchCollectionRows(url, rows, (row) => `${row.code} ${row.name}`),
-            collectionSearchFrame(url, frame, _('hospitality_core.screen.policies.title')),
+            search.rows,
+            search.frame,
             url.searchParams.get('status'),
             {
               open: url.searchParams.get('create') === '1',
@@ -2996,7 +3069,9 @@ export const routes: Record<string, RouteEntry> = {
                 'penaltyPercent',
               ]),
             },
-          ),
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
 }

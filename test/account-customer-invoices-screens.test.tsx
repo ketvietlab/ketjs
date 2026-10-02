@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -139,5 +140,8 @@ test('customer invoice FormPage keeps every document field, relations, errors an
   assert.match(html, /data-ui="form-errors" role="alert"/)
   assert.match(html, /form="customer-invoice-create-form"[\s\S]*?Tạo/)
   assert.match(html, /href="\/admin\/accounting\/customer-invoices\?lang=vi"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 })

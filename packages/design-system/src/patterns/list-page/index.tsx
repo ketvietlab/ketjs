@@ -33,7 +33,8 @@ export type ListPageProps = {
    */
   variant?: 'operational'
   eyebrow?: string | null
-  description?: string | null
+  /** Short operational guidance shown below the title and above controls. */
+  description?: JSXChild
   /** Primary actions beside the title of an operational page, above its query controls. */
   headerActions?: JSXChild
   /** Tool actions follow query controls by default, or join primary actions in the header. */
@@ -75,7 +76,12 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
   const footer = props.footer ?? (operational ? props.status : undefined)
 
   return (
-    <section data-ui="list-page" data-variant={props.variant ?? null} data-pattern="list">
+    <section
+      data-ui="list-page"
+      data-variant={props.variant ?? null}
+      data-pattern="list"
+      data-ket-preserve-context=""
+    >
       {pageIdentity('list-page', {
         context: props.context,
         eyebrow: props.eyebrow,

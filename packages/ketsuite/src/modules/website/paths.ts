@@ -17,7 +17,7 @@ const ALWAYS_RESERVED = ['/api', '/internal/v1', '/_ket'] as const
  * The reserved namespaces, derived from what the deployment actually serves.
  *
  * Only the first segment of each registered route matters: a module owning
- * `/admin/website/pages` owns `/admin`, and a CMS page published anywhere under
+ * `/website/api/{operation}` owns `/website`, and a CMS page published anywhere under
  * it can never be reached, because module routes are matched before the
  * storefront fallback. Publishing one there is a composition error, not a page
  * that merely fails to rank.

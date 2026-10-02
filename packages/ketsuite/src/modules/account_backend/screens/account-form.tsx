@@ -68,9 +68,8 @@ export const accountFormScreen = (_: Translator, options: AccountFormScreenOptio
       frame={options.frame}
       scope="account-chart-form-page"
       title={title}
-      description={
-        editing ? `${String(editing.code)} · ${name(editing)}` : _('account_backend.account.create.hint')
-      }
+      // The account being edited, in the page's facts strip.
+      meta={editing ? `${String(editing.code)} · ${name(editing)}` : undefined}
       status={
         editing
           ? badge(

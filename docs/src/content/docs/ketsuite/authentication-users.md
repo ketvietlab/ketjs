@@ -20,6 +20,15 @@ Source chính:
 - `packages/ketjs/src/server/boot.ts` — live identity/permission resolution;
 - `packages/ketsuite/src/ui/auth.tsx` — màn hình nhận invitation/reset trung lập.
 
+## Administrative change reasons
+
+User, role, workplace and emergency-access mutations accept an omitted `reason`.
+Their forms do not ask the operator to write an explanation. The server still records
+actor, target, scope, source, outcome and before/after digests automatically. Existing
+API clients may send a reason as optional historical metadata; the absence of that
+text must not bypass permission, expiry, revision or idempotency checks. This policy
+does not apply to business reasons in other domains such as cancelling an invoice.
+
 ## Phạm vi
 
 Cụm này cung cấp:
@@ -339,6 +348,11 @@ UI nói rõ integration chưa tồn tại và chỉ cho admin sao chép link m�
 
 Module `user_backend` cung cấp:
 
+Các route gán và gỡ vai trò theo phạm vi kiểm tra cấu trúc form trước khi gọi workflow phân quyền. Khi submit
+bị từ chối, form giữ nguyên lý do mà quản trị viên đã nhập, đánh dấu đúng control chịu trách nhiệm và không
+đưa các thao tác chỉ dùng để điều hướng vào schema. Vai trò vẫn do hệ thống định nghĩa; UI chỉ hiển thị các
+gói quyền thay vì function key.
+
 - `/admin/users` và form create/detail;
 - company/branch/role membership management;
 - invitation/reset action và one-time link state;
@@ -373,7 +387,7 @@ kiểm tra stdin secret hygiene, exit code và tenant selection. Engine/session
 regressions nằm trong `engine-primitives.test.ts` và `session.test.ts`.
 
 Theo `AGENT.md`, local chỉ chạy test đúng phạm vi thay đổi. Full suite chạy trên CI
-khi PR target `develop`.
+khi PR release target `master`.
 
 ## Benchmark PostgreSQL
 
@@ -402,3 +416,46 @@ Baseline dùng `KET_BENCH_KETSUITE_MODULE` trỏ tới bản build sạch của
 `origin/develop`, nên hai phía dùng cùng benchmark, Node.js, engine, PostgreSQL và
 máy chạy. Benchmark phải chạy lại ngay trước commit; tăng quá 15% p95 hoặc giảm quá
 10% throughput phải được tối ưu hoặc giải trình trong PR.
+
+### Automatic access policies
+
+`user.AccessPolicy` matches trusted `user.DirectoryFact` values for a directory group, department or job title and grants healthy managed roles at a tenant, company or branch scope. The directory adapter calls the internal `user.replaceDirectoryFacts` as `system:user-directory`; browsers cannot submit directory facts. The policy editor offers existing directory values and retains an existing condition when its directory value disappears.
+
+`user.PolicyAssignment` owns each policy's edges separately from manual `user.Assignment` rows. Pausing, changing or removing a match removes only the affected policy's grants. Memberships are never created by a policy. Matches without a valid workplace appear as blocked. Effective permission resolution unions policy and manual grants and still checks active user, company, branch, membership and managed-role health.
+
+Preview performs no writes. Save/pause use an actor-bound idempotency record and authorization-revision compare-and-set in the same transaction as assignments and security audit. The UI includes the preview digest so a changed rule or changed preview result is refused. Interactive changes to the actor's own authority and security-role changes by non-superusers are refused on the server. Optional audit reasons are never required.
+
+Directory replacement reconciles synchronously. The scheduled `user.reconcileAccessPolicies` job reconciles changes to memberships and role health every minute, with a revision change only when edges differ. Revocation takes effect at permission resolution even before a stale edge is removed. Workers must run for new matching memberships to acquire grants without another directory update. Inactive or unhealthy roles stop granting; policies do not silently repair or upgrade them.
+
+
+### Administration language
+
+The user interface describes work, workplaces and the source of an assigned role in both Vietnamese and English. Managed-role versions, function keys and grant-source internals are not primary navigation. Added/removed access is the primary preview; counts and technical coverage remain an optional disclosure. Account delivery copy distinguishes an email request from delivery and activation, and distinguishes an external temporary password from a local verification code. System audit records remain intact when optional reason inputs are removed.
+
+### Reading a standard role
+
+The managed-role record shows two navigation items: allowed actions and people. Its title and health appear once in the modal header. It presents named business actions rather than template versions, grant provenance or a separate screen-diagnostics tab. A stale role gives a support-oriented notice. The diagnostic model remains available to trusted tooling; the product-facing managed catalogue is read-only.
+
+### User record navigation
+
+A user's record has Overview, Access, Sign-in and Log navigation. The Access panel groups assignments by workplace and distinguishes direct assignments from automatic rules. “Check access” opens a nested diagnostic dialog rather than another primary tab. The shared record runtime owns its inert parent, close flow, scroll and return focus. The actor's own authority and non-editable policy assignments do not expose direct grant/removal controls.
+
+### Reviewing an access change
+
+Assignment and removal previews lead with the named work that becomes available or is taken away. Technical bundle counts and per-screen coverage are inside an optional disclosure. Workplace edits preview assignments that will be removed before saving. The runtime invalidates a preview when its form changes; saves still use the server's authorization-revision check, preserving inputs on refusal.
+
+### Emergency access
+
+Emergency access is inside the Access panel's advanced disclosure. Only a fully authorized administrator may grant or revoke it, never for their own account. Granting requires an expiry and confirmation; the server owns these guards and writes the audit. The overview can show an active expiry without exposing emergency controls to a read-only viewer.
+
+### Sign-in assistance
+
+The Sign-in panel distinguishes invitations for a person who has not activated their account from password recovery. Deployment adapters can offer email, a one-time credential or both. A pending or failed external account shows its preparation status and an explicit status/retry action. Email acknowledgement is shown separately from activation; it never sets `passwordReady`. External adapters must supply verified identity state instead of inferring it from the local password hash. Temporary passwords are only displayed from the one-time claim response and disappear on leaving that layer.
+
+### Choosing an automatic rule
+
+The automatic-role collection uses the shared list/search composition and a URL-owned record modal. Rule conditions choose from directory-provided group, department and job-title options. Switching condition type clears an incompatible draft value; an existing saved value remains visible even when it has disappeared from the latest directory snapshot. An empty directory explains what is missing rather than asking an administrator to invent an identifier. Changes are previewed before the save action appears.
+
+### Managed catalogue boundary
+
+`/admin/roles` lists managed roles and has no create or clone action. Its modal reads `user.managedRoleModalContext`, which refuses custom records and strips authoring permissions on the server. The older role-context and migration APIs remain available as explicit compatibility boundaries; they do not create a parallel product workflow. Assignment still validates managed-role health and security/self-edit restrictions independently of disabled UI controls. User-list create actions are also omitted when the actor cannot create an account.

@@ -23,6 +23,7 @@ import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import { nextSequenceNumber } from './sequence.ts'
 import { streamsOf } from './stream.ts'
+import { checkNotification, notificationHub } from './notify.ts'
 import type { Writer } from './stream.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
@@ -60,8 +61,16 @@ export function createContext(o: {
    * to, and inventing one would be worse than dropping them.
    */
   log?: Logger
+  /** The adapter a transaction was opened on; listeners hang off the root, never a transaction. */
+  root?: Adapter
+  /**
+   * In-process notifications held until the transaction commits. PostgreSQL does
+   * this for NOTIFY itself; without a database bus it is this list's job.
+   */
+  notices?: Array<[channel: string, payload: string]>
 }): Ctx {
   const { adapter, manifest, fnKey } = o
+  const root = o.root ?? adapter
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
   const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
@@ -260,6 +269,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'json')
       .map(([n]) => n)
 
+  const intsOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'int')
+      .map(([n]) => n)
+
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     const stamps = datetimesOf(model)
@@ -293,7 +307,15 @@ export function createContext(o: {
   const decodeRows = (model: string, rows: Row[]): Row[] => {
     const bools = booleansOf(model)
     const json = dialect === 'sqlite' ? jsonOf(model) : []
+    // An int is a BIGINT column on Postgres, which the driver hands back as the string
+    // "3" so it cannot lose digits; SQLite hands the same field back as 3. A client
+    // that decodes an integer broke on Postgres alone. Only a value a number holds
+    // exactly is converted: a larger one stays text rather than being rounded.
+    const ints = dialect === 'postgres' ? intsOf(model) : []
     for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
+    for (const row of rows)
+      for (const c of ints)
+        if (typeof row[c] === 'string' && Number.isSafeInteger(Number(row[c]))) row[c] = Number(row[c])
     for (const row of rows)
       for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)
     return rows
@@ -747,11 +769,30 @@ export function createContext(o: {
     // will hand back the session that issued BEGIN.
     tx: async <T>(body: (inner: Ctx) => Promise<T>): Promise<T> => {
       const transactionWrites: WriteRecord[] = []
+      const notices: Array<[string, string]> = []
       const value = await adapter.tx((txAdapter) =>
-        body(createContext({ ...o, adapter: txAdapter, writes: transactionWrites })),
+        body(createContext({ ...o, adapter: txAdapter, root, writes: transactionWrites, notices })),
       )
       writes.push(...transactionWrites)
+      for (const [channel, payload] of notices) {
+        if (o.notices) o.notices.push([channel, payload])
+        else notificationHub(root).deliverLocally(channel, payload)
+      }
       return value
+    },
+    notify: async (channel: string, payload: string): Promise<void> => {
+      checkNotification(channel, payload)
+      if (dryRun) return
+      const hub = notificationHub(root)
+      if (!hub.shared) {
+        if (o.notices) o.notices.push([channel, payload])
+        else hub.deliverLocally(channel, payload)
+        return
+      }
+      await (adapter.notifications ?? (root.notifications as NonNullable<Adapter['notifications']>)).publish(
+        channel,
+        payload,
+      )
     },
     streams: {
       // A dry run says what would happen; it does not tell anyone it happened.

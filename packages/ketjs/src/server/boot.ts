@@ -46,6 +46,7 @@ import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
 import { randomBytes } from 'node:crypto'
+import { notificationHub } from './notify.ts'
 import type { Streams, StreamStore } from './stream.ts'
 
 export type { Html, RouteResult } from './respond.ts'
@@ -80,6 +81,29 @@ export type ServeContext = {
   clientCompatibility: ClientCompatibilityPolicy | null
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
+  /**
+   * Listen for `ctx.notify` on a channel — what a websocket route waits on.
+   *
+   * One database listener per channel per process, however many connections
+   * share it. `onReady` runs when listening starts and after every reconnect,
+   * because notifications sent during the gap were lost and whatever they would
+   * have said needs re-reading.
+   *
+   * A deployment with a database per tenant listens to one tenant at a time: pass
+   * the request whose tenant it is. Until the returned stop runs, that tenant's
+   * database stays open in the pool, so stop when its last listener goes.
+   */
+  subscribe: (
+    channel: string,
+    onMessage: (payload: string) => void,
+    onReady?: () => void,
+    request?: { url: URL; req: IncomingMessage },
+  ) => Promise<() => Promise<void>>
+  /**
+   * Which tenant a request belongs to; empty for a deployment with one datastore.
+   * What a route keys per-tenant state by, such as the listeners of `subscribe`.
+   */
+  tenantKeyOf: (url: URL, req: IncomingMessage) => string
   config: RuntimeConfig
   /**
    * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
@@ -200,6 +224,8 @@ export type ServeContext = {
  * `layout` (the sections, as an array or as the JSON the database gave back).
  */
 export type PagesSpec = {
+  /** Trusted deployment presenter. Return null to use the configured KTL theme. */
+  render?: (scope: Record<string, unknown>) => RouteResult | null
   resolve: string
   /** Optional function taking `{ host }` and returning site id, title, locale and theme. */
   siteResolve?: string
@@ -329,6 +355,15 @@ export type ServeSpec = {
   /** Verify and resolve identity asserted by a trusted gateway for this request. */
   resolveIdentity?: (ctx: RequestIdentityResolveContext) => Promise<RequestIdentity | null>
   /**
+   * The scope a request with no identity gets, read from this request's tenant.
+   *
+   * `sessions.anonymous` is one scope for the whole deployment, which is right for a
+   * single datastore and wrong for a fleet: each tenant database names its own
+   * company, so a public page on one tenant's host has to read as that tenant's
+   * company. Return null to fall back to `sessions.anonymous`.
+   */
+  resolveAnonymousScope?: (ctx: RequestIdentityResolveContext) => Promise<Scope | null>
+  /**
    * Where a viewer signs out when `resolveIdentity` asserted their identity. `POST /logout` only
    * ends a KetJS cookie session, so a gateway login needs the gateway's own sign-out, which also
    * ends the upstream login. Absent, the backend shows the viewer without a sign-out control.
@@ -356,6 +391,13 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => Promise<readonly string[] | null>
+  /** Server-observed authorization refusal. Receives no submitted inputs or secrets. */
+  onFunctionDenied?: (
+    ctx: ServeContext,
+    event: { fn: string; actor: string; scope: Scope },
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<void>
   defaults?: Partial<RuntimeConfig>
 }
 
@@ -668,6 +710,13 @@ export async function bootDeployment(
     }
     const record = await sessionRecordOf(url, req)
     if (!record) {
+      const resolveAnonymous = serve.resolveAnonymousScope
+      const tenantScope = resolveAnonymous
+        ? await tenants.ofRequest(url, req, (tenant) =>
+            resolveAnonymous({ adapter: tenant.adapter, manifest: tenant.live, url, req }),
+          )
+        : null
+      if (tenantScope) return scopeForSession(null, { anonymous: tenantScope }) ?? { company: null }
       const s = await sessionsOf(url, req)
       return s?.scopeOf(null) ?? { company: null }
     }
@@ -782,9 +831,6 @@ export async function bootDeployment(
     menu: async (url, req) => {
       const allow = await allowFor(url, req)
       const _ = translate(localeOf(url, req))
-      // The sidebar's search is in the URL like every other list's, so a filtered
-      // menu is a link and the back button walks out of it.
-      const q = url.searchParams.get('menu')?.trim() || undefined
       // Someone who may call an inspection capability is looking, not working, and
       // `for` describes work. Narrowing their sidebar would hide the very thing
       // they were let in to see.
@@ -795,13 +841,9 @@ export async function bootDeployment(
           translate: (k) => _(k),
           locale: _.locale,
           active: url.pathname,
-          q,
           groups: spec.navigation?.groups,
           demote: spec.navigation?.demote,
-          // Searching is how someone reaches a surface that is not their daily
-          // work, so the search results are the permitted tree, not the narrowed
-          // one. Hiding what a person typed the name of would be a bug.
-          intent: !inspecting && !q,
+          intent: !inspecting,
         }),
       )
     },
@@ -822,6 +864,16 @@ export async function bootDeployment(
       return allow === null || allow.includes(name)
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
+    subscribe: async (channel, onMessage, onReady, request) => {
+      if (adapter) return notificationHub(adapter).subscribe(channel, onMessage, onReady)
+      if (!request)
+        throw new KetError({
+          code: 'E_NOT_SUPPORTED',
+          message: 'this deployment has a database per tenant; subscribe with the request whose tenant it is',
+        })
+      return tenants.listen(tenants.keyOf(request.url, request.req), channel, onMessage, onReady)
+    },
+    tenantKeyOf: (url, req) => tenants.keyOf(url, req),
     callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
@@ -882,26 +934,43 @@ export async function bootDeployment(
       const scope = await scopeOf(url, req)
       const allow = await allowFor(url, req)
       const actor = await actorOf(url, req)
-      return tenants.ofRequest(
-        url,
-        req,
-        async (t) =>
-          (
-            await callFn(name, input, {
-              adapter: t.adapter,
-              manifest: t.live,
-              scope,
-              allow,
-              actor,
-              idempotencyKey: options?.idempotencyKey,
-              idempotencyNamespace: options?.idempotencyNamespace,
-              idempotencyDigest: options?.idempotencyDigest,
-              correlationId: options?.correlationId,
-              queueNotify: config.queueNotify,
-              log: callLog(t.key, scope, actor, options?.correlationId),
-            })
-          ).value,
-      )
+      try {
+        return await tenants.ofRequest(
+          url,
+          req,
+          async (t) =>
+            (
+              await callFn(name, input, {
+                adapter: t.adapter,
+                manifest: t.live,
+                scope,
+                allow,
+                actor,
+                idempotencyKey: options?.idempotencyKey,
+                idempotencyNamespace: options?.idempotencyNamespace,
+                idempotencyDigest: options?.idempotencyDigest,
+                correlationId: options?.correlationId,
+                queueNotify: config.queueNotify,
+                log: callLog(t.key, scope, actor, options?.correlationId),
+              })
+            ).value,
+        )
+      } catch (error) {
+        if (
+          error instanceof KetError &&
+          error.code === 'E_FN_NOT_PERMITTED' &&
+          actor &&
+          serve.onFunctionDenied
+        ) {
+          // The lease has ended. Telemetry must never change the original refusal.
+          try {
+            await serve.onFunctionDenied(ctx, { fn: name, actor, scope }, url, req)
+          } catch {
+            /* best effort */
+          }
+        }
+        throw error
+      }
     },
   }
 
@@ -1035,6 +1104,38 @@ export async function bootDeployment(
         hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
       })
     }
+
+  /**
+   * What each placement of a section that declares `resolve` needs to be drawn, keyed by
+   * placement id. A presenter is a pure function of its scope, so the data a section cannot carry
+   * in its settings — a form's fields, say — is looked up here, before it runs. Capped per page:
+   * a layout is data, and data must not decide how many calls one request makes.
+   */
+  const SECTION_RESOLVE_LIMIT = 20
+  const resolveSectionData = async (
+    layout: unknown,
+    siteId: string | null,
+    url: URL,
+    req: IncomingMessage,
+  ): Promise<Record<string, unknown>> => {
+    const data: Record<string, unknown> = {}
+    const pending: Array<{ id: string; resolve: string; settings: unknown }> = []
+    const visit = (nodes: unknown): void => {
+      if (!Array.isArray(nodes)) return
+      for (const node of nodes as Array<Record<string, unknown>>) {
+        if (!node || typeof node !== 'object') continue
+        const resolve = manifest.sections[String(node.type)]?.resolve
+        if (resolve && typeof node.id === 'string' && pending.length < SECTION_RESOLVE_LIMIT)
+          pending.push({ id: node.id, resolve, settings: node.settings ?? {} })
+        const slots = node.slots
+        if (slots && typeof slots === 'object') for (const children of Object.values(slots)) visit(children)
+      }
+    }
+    visit(layout)
+    for (const item of pending)
+      data[item.id] = (await ctx.call(item.resolve, { siteId, settings: item.settings }, url, req)) ?? null
+    return data
+  }
 
   type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
   const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
@@ -1199,6 +1300,9 @@ export async function bootDeployment(
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     resolveActor: actorOf,
+    onFunctionDenied: serve.onFunctionDenied
+      ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)
+      : undefined,
     queueNotify: config.queueNotify,
     islandClients: (url: URL, req: IncomingMessage) =>
       tenants.ofRequest(url, req, async (tenant) =>
@@ -1259,6 +1363,7 @@ export async function bootDeployment(
     ...(pages
       ? {
           ...(pages.region ? { pageRegion: pages.region } : {}),
+          pageRender: pages.render,
           pagePrivate: (url: URL) => isPreviewRequest(url),
           siteTokens: async (url: URL, req: IncomingMessage) => {
             const resolved = await siteOf(url, req)
@@ -1300,6 +1405,9 @@ export async function bootDeployment(
               path?: string
               layout: unknown
               meta?: Record<string, unknown> | null
+              type?: string
+              fields?: Record<string, unknown> | null
+              appearance?: Record<string, unknown> | null
             } | null
             if (!row) {
               const _ = translate(locale)
@@ -1308,6 +1416,8 @@ export async function bootDeployment(
                 locale,
                 page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' },
                 sections: [],
+                // Answered as a page, but a crawler must not index it as one.
+                missing: true,
               }
             }
             // Navigation belongs to the site, not to the page, so it is resolved
@@ -1318,16 +1428,26 @@ export async function bootDeployment(
               pages.menuResolve && resolvedSite?.id
                 ? ((await ctx.call(pages.menuResolve, { siteId: resolvedSite.id }, url, req)) ?? [])
                 : []
+            const sections = typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout
+            const sectionData = await resolveSectionData(
+              sections,
+              resolvedSite?.id ?? (row as { siteId?: string }).siteId ?? null,
+              url,
+              req,
+            )
             return {
               site,
               locale,
               menu,
-              page: { id: row.id, path: row.path ?? url.pathname, title: row.title },
+              page: { id: row.id, path: row.path ?? url.pathname, title: row.title, type: row.type },
+              fields: row.fields ?? {},
+              appearance: row.appearance ?? null,
               // Whatever the resolver says describes this page. The framework
               // does not name the fields — a module owns them and decides what
               // is public; this only stops hardcoding the answer to "nothing".
               meta: row.meta ?? {},
-              sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+              sections,
+              sectionData,
             }
           },
         }

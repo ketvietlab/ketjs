@@ -47,3 +47,23 @@ export class Diagnostics {
     throw err
   }
 }
+
+/**
+ * Codes that mean the application broke its own contract: an undeclared effect,
+ * a write to a field or model that does not exist, an output of the wrong shape.
+ * The caller did nothing wrong and cannot fix it, and the message names the
+ * functions, models and effects inside the deployment, so the response says only
+ * that something failed and the detail stays in the server log.
+ */
+const DEFECT_CODES: ReadonlySet<string> = new Set([
+  'E_EFFECT_NOT_DECLARED',
+  'E_SCOPE_FIELD_WRITTEN',
+  'E_UPDATE_NEEDS_WHERE',
+  'E_UNKNOWN_MODEL',
+  'E_UNKNOWN_RELATION',
+  'E_OUTPUT_NOT_SHAPED',
+  'E_OUTPUT_FIELD_MISSING',
+])
+
+/** True when a failure is the deployment's defect rather than the caller's mistake. */
+export const isDefectError = (code: string): boolean => DEFECT_CODES.has(code)

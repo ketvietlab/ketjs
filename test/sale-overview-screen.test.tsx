@@ -6,6 +6,8 @@ import { overviewScreen } from '../packages/ketsuite/src/modules/sale_backend/sc
 
 const messages: Record<string, string> = {
   'sale_backend.action.create': 'Tạo báo giá',
+  'sale_backend.dashboard.awaiting': 'Báo giá đang chờ phản hồi',
+  'sale_backend.dashboard.queueEmpty': 'Không có báo giá đang chờ phản hồi.',
   'sale_backend.dashboard.draft': 'Báo giá',
   'sale_backend.dashboard.draftToday': '{count} mới hôm nay',
   'sale_backend.dashboard.flow.hint': 'Tiến độ từ báo giá đến lập hoá đơn',
@@ -52,6 +54,20 @@ test('sales overview: remains a specialized KPI, pipeline and recent-work dashbo
     overviewScreen(translate, {
       frame: {},
       localeQuery: '?lang=vi',
+      createHref: '/admin/sales/quotations?lang=vi&record=sale.order%3Anew',
+      rowHref: (row) => `/admin/sales?lang=vi&record=sale.order%3A${String(row.id)}`,
+      awaiting: [
+        {
+          id: 'so-awaiting',
+          name: 'S00031',
+          partnerName: 'Công ty Hoà Bình',
+          dateOrder: '2026-08-28T02:00:00.000Z',
+          invoiceStatus: 'no',
+          locked: false,
+          amountTotal: 4800000,
+          currency: 'VND',
+        },
+      ],
       counts: {
         draft: 7,
         sent: 4,
@@ -82,18 +98,21 @@ test('sales overview: remains a specialized KPI, pipeline and recent-work dashbo
   assert.match(html, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="record-workspace"/)
   assert.match(html, /Tổng quan bán hàng/)
-  assert.match(html, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
-  assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=draft"/)
-  assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=sent"/)
+  // The primary action opens the quotation create modal over the quotation list.
+  assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;record=sale\.order%3Anew"/)
+  assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;preset=draft"/)
+  assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;preset=sent"/)
   assert.match(html, /data-ui="metric-value"[^>]*>[\s\S]*?7/)
   assert.match(html, /data-ui="metric-value"[^>]*>[\s\S]*?4/)
   assert.match(html, /data-ui="metric-value"[^>]*>[\s\S]*?12/)
   assert.match(html, /data-ui="metric-value"[^>]*>[\s\S]*?3/)
   assert.match(html, /2 mới hôm nay/)
-  assert.match(html, /data-ui="pipeline"/)
-  assert.equal(html.match(/data-ui="pipeline-step"/g)?.length, 4)
+  // Sent quotations are the queue to work, ahead of the recent orders.
+  assert.match(html, /Báo giá đang chờ phản hồi[\s\S]*?S00031[\s\S]*?Công ty Hoà Bình[\s\S]*?Đơn gần đây/)
   assert.match(html, /Đơn gần đây[\s\S]*?S00027[\s\S]*?Khách hàng Minh Anh/)
-  assert.match(html, /href="\/admin\/sales\/orders\/so-recent\?lang=vi"/)
+  // A row opens its order in the record modal.
+  assert.match(html, /href="\/admin\/sales\?lang=vi&amp;record=sale\.order%3Aso-awaiting"/)
+  assert.match(html, /href="\/admin\/sales\?lang=vi&amp;record=sale\.order%3Aso-recent"/)
   assert.match(html, /href="\/admin\/sales\/orders\?lang=vi"/)
   assert.doesNotMatch(html, /data-island="mail\.chatter"|data-ui="form-page-aside"/)
 })
@@ -119,9 +138,11 @@ test('sales overview: preserves KPI shortcuts and the empty recent-orders state'
   )
 
   assert.equal(html.match(/data-ui="metric"/g)?.length, 4)
+  assert.match(html, /Không có báo giá đang chờ phản hồi\./)
   assert.match(html, /data-ui="empty"[\s\S]*?Chưa có đơn bán hàng/)
   assert.match(html, /Xác nhận báo giá để tạo đơn bán đầu tiên/)
-  assert.match(html, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
+  // Without sale.createOrder the route passes no createHref, so there is no create action.
+  assert.doesNotMatch(html, /record=sale\.order|quotations\/new|Tạo báo giá/)
   assert.match(html, /href="\/admin\/sales\/orders\?lang=vi"/)
   assert.doesNotMatch(html, /data-island="mail\.chatter"/)
 })

@@ -189,7 +189,7 @@ export const advanceAuthorizationRevision = async (ctx: Ctx): Promise<number> =>
   })
 }
 
-const bumpRevision = async (ctx: Ctx, expected: number): Promise<number | null> => {
+export const bumpRevision = async (ctx: Ctx, expected: number): Promise<number | null> => {
   const R = ctx.table('user.AuthorizationRevision')
   const row = await ctx.db.one(from(R).where(eq(R.id, 'tenant')))
   if (!row) {
@@ -249,7 +249,7 @@ export const recordAuthorizationAudit = async (
   })
 }
 
-const operationReplay = async (
+export const operationReplay = async (
   ctx: Ctx,
   id: string,
   input: unknown,
@@ -270,7 +270,7 @@ const operationReplay = async (
   return 'dryRun' in inserted || inserted.inserted ? { replay: false, digest } : { conflict: true }
 }
 
-const completeOperation = async (ctx: Ctx, id: string, result: unknown) => {
+export const completeOperation = async (ctx: Ctx, id: string, result: unknown) => {
   await ctx.db.update('user.AuthorizationOperation', { id }, { result, completedAt: nowIso() })
 }
 
@@ -377,9 +377,12 @@ export async function resolveEffectivePermissions(
   if (branchId && branches.get(branchId) !== companyId) return empty([{ code: 'invalid-branch-context' }])
 
   const A = ctx.table('user.Assignment')
-  const assignments = (
-    projection.assignments ?? (await ctx.db.all(from(A).where(eq(A.userId, userId))))
-  ).filter((assignment) => roleApplies(assignment, companyId, branchId))
+  const P = ctx.table('user.PolicyAssignment')
+  const policyAssignments = await ctx.db.all(from(P).where(eq(P.userId, userId)))
+  const assignments = [
+    ...(projection.assignments ?? (await ctx.db.all(from(A).where(eq(A.userId, userId))))),
+    ...policyAssignments,
+  ].filter((assignment) => roleApplies(assignment, companyId, branchId))
   if (!assignments.length) return empty()
   const roleIds = [...new Set(assignments.map((assignment) => String(assignment.roleId)))]
   const R = ctx.table('user.Role')
@@ -552,6 +555,7 @@ export const AUTHORIZATION_EFFECTS = [
   'read:user.GrantSource',
   'write:user.GrantSource',
   'read:user.Assignment',
+  'read:user.PolicyAssignment',
   'write:user.Assignment',
   'read:user.Membership',
   'read:user.BranchMembership',
@@ -636,7 +640,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       expectedRoleRevision: 'int',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -652,9 +656,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       const templateKey = String(args.templateKey)
       const template = ctx.manifest.permissions.roleTemplates[templateKey]
       if (!template) return invalid([issue('templateKey', 'E_PERMISSION_BUNDLE_UNKNOWN')])
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `role-template:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -807,6 +811,85 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Bring every role template this deployment declares into the tenant as a
+   * managed role, and bring stale ones up to date.
+   *
+   * Without this a template is a declaration nobody can use: assignment accepts
+   * only managed roles, a managed role exists only once a template is applied, and
+   * nothing applied one. A fresh install therefore had no role to give, and every
+   * template change silently stripped its holders (`stale-managed-role`) until an
+   * operator re-applied it by hand. `ketsuite serve` runs this before it listens,
+   * so both a new and an upgraded install are complete.
+   *
+   * A role a template already backs is kept at its id; a new one takes the
+   * template key as its id. A role at a newer version than the code is left
+   * alone, and so is a custom role, whatever its id.
+   */
+  syncRoleTemplates: defineFn({
+    exposure: 'internal',
+    input: {},
+    output: { ok: 'bool', applied: 'json?', errors: 'json?' },
+    effects: AUTHORIZATION_EFFECTS,
+    handler: async (ctx: Ctx) => {
+      if (!String(ctx.actor ?? '').startsWith('system:'))
+        return invalid([issue('actor', 'user.error.provisionActor')])
+      const applied: string[] = []
+      const skipped: Array<{ roleId: string; errors: unknown }> = []
+      const R = ctx.table('user.Role')
+      const templates = Object.values(ctx.manifest.permissions.roleTemplates).sort((a, b) =>
+        a.key.localeCompare(b.key),
+      )
+      for (const template of templates) {
+        const backing = (await ctx.db.all(from(R).where(eq(R.templateKey, template.key)))).filter(
+          (role) => String(role.mode ?? 'custom') === 'managed',
+        )
+        const targets = backing.length ? backing : [null]
+        for (const role of targets) {
+          const roleId = role ? String(role.id) : template.key
+          if (!role) {
+            const taken = await ctx.db.one(from(R).where(eq(R.id, roleId)))
+            // A custom role already holds the key as its id: never overwrite a local decision.
+            if (taken) continue
+          } else {
+            if (Number(role.templateVersion ?? 0) > template.version) continue
+            const G = ctx.table('user.Grant')
+            const S = ctx.table('user.GrantSource')
+            const current =
+              Number(role.templateVersion) === template.version &&
+              role.templateDigest === template.digest &&
+              managedRoleHealthIssues(
+                ctx.manifest,
+                role,
+                await ctx.db.all(from(G).where(eq(G.roleId, roleId))),
+                await ctx.db.all(from(S).where(eq(S.roleId, roleId))),
+              ).length === 0
+            if (current) continue
+          }
+          const expectedRoleRevision = Number(role?.revision ?? 0)
+          const expectedAuthorizationRevision = await authorizationRevisionOf(ctx)
+          const result = (await authorizationFunctions.applyRoleTemplate!.handler(ctx, {
+            roleId,
+            templateKey: template.key,
+            expectedRoleRevision,
+            expectedAuthorizationRevision,
+            // Keyed on the state being repaired, not only the template: a role that
+            // drifts again after a sync must be applied again, not answered with the
+            // earlier replay. The authorization revision moves with every write.
+            idempotencyKey: `sync:${roleId}:${template.version}:${template.digest}:${expectedRoleRevision}:${expectedAuthorizationRevision}`,
+            reason: 'Áp dụng mẫu vai trò của hệ thống',
+          })) as { ok?: boolean; errors?: unknown }
+          // One template that cannot land — a local role already carries its name, say —
+          // must not keep every other job out of the tenant, nor keep the server down.
+          // It is reported, and the rest are applied.
+          if (result?.ok !== true) skipped.push({ roleId, errors: result?.errors ?? result })
+          else applied.push(roleId)
+        }
+      }
+      return skipped.length ? { ok: true, applied, errors: skipped } : { ok: true, applied }
+    },
+  }),
+
   assignScopedRole: defineFn({
     input: {
       id: 'id',
@@ -817,7 +900,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       branchId: 'id?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -832,9 +915,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const normalized = await normalizeAssignmentScope(ctx, String(args.userId), args)
       if (!normalized.ok) return normalized
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `assignment:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const liveScope = await normalizeAssignmentScope(tx, String(args.userId), args)
         const scope = liveScope.ok ? liveScope.scope : abortAuthorization(liveScope)
@@ -919,7 +1002,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       scopeKey: 'text',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -931,9 +1014,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `unassignment:${String(args.idempotencyKey).trim()}`
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -1002,7 +1085,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       name: 'text',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -1014,11 +1097,10 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const name = String(args.name).trim()
       const operationId = `role-clone:${String(args.idempotencyKey).trim()}`
-      if (!reason || !name || operationId.endsWith(':'))
-        return invalid([issue('name', 'user.error.required')])
+      if (!name || operationId.endsWith(':')) return invalid([issue('name', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
@@ -1096,7 +1178,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       expiresAt: 'datetime?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
-      reason: 'text',
+      reason: 'text?',
     },
     output: {
       ok: 'bool',
@@ -1110,12 +1192,12 @@ export const authorizationFunctions: Record<string, FnSpec> = {
     effects: AUTHORIZATION_EFFECTS,
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
-      const reason = String(args.reason).trim()
+      const reason = String(args.reason ?? '').trim()
       const operationId = `break-glass:${String(args.idempotencyKey).trim()}`
       const enabled = args.enabled === true
       const expiresAt = args.expiresAt ? new Date(String(args.expiresAt)) : null
       const expiryMs = expiresAt?.getTime() ?? Number.NaN
-      if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
+      if (operationId.endsWith(':')) return invalid([issue('idempotencyKey', 'user.error.required')])
       if (enabled && (!expiresAt || !Number.isFinite(expiryMs) || expiryMs <= Date.now()))
         return invalid([issue('expiresAt', 'E_BREAK_GLASS_EXPIRY_REQUIRED')])
       if (!(await liveSuperuser(ctx, ctx.actor)))
@@ -1391,6 +1473,19 @@ export async function addSelectedRoles(ctx: Ctx, args: RoleSelection) {
       userId: args.userId,
       branchId: state.scope.branchId,
     })
+  // A session needs a live branch. Company-level access means the company's root
+  // branch, exactly as grantCompany records it; without it the user can never sign in.
+  const companyId = state.scope.companyId
+  if (companyId && !state.addBranch && ![...state.branches.values()].includes(companyId)) {
+    const B = ctx.table('company.Branch')
+    const root = await ctx.db.one(from(B).where(eq(B.rootKey, companyId), eq(B.active, true)))
+    if (!root) required('companyId', 'user.error.rootBranchMissing')
+    await ctx.db.insertIfAbsent('user.BranchMembership', {
+      id: `root:${args.userId}:${String(root!.id)}`,
+      userId: args.userId,
+      branchId: root!.id,
+    })
+  }
   const added: Row[] = []
   for (const roleId of args.roleIds) {
     const row = { id: randomUUID(), userId: args.userId, roleId, ...state.scope }
@@ -1460,7 +1555,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
   assignRoles: defineFn({
     input: {
       ...selectionInput,
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1470,7 +1565,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
     handler: (ctx, args) =>
       authorizationTransaction(ctx, async (tx) => {
         const op = `role-batch:${String(args.idempotencyKey).trim()}`
-        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -1489,7 +1584,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           userId: selection.userId,
           scopeKey: added.scope.scopeKey,
           source: 'system-roles',
-          reason: String(args.reason).trim(),
+          reason: String(args.reason ?? '').trim(),
           before: null,
           after: added.assignments,
           revision,
@@ -1521,7 +1616,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
       scopeKind: 'text',
       companyId: 'id?',
       branchId: 'id?',
-      reason: 'text',
+      reason: 'text?',
       expectedAuthorizationRevision: 'int',
       idempotencyKey: 'text',
     },
@@ -1537,7 +1632,7 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
     handler: (ctx, args) =>
       authorizationTransaction(ctx, async (tx) => {
         const op = `provision-user:${String(args.idempotencyKey).trim()}`
-        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
         const replay = await operationReplay(tx, op, args)
         if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
         if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
@@ -1577,20 +1672,23 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
         })
         if (!('dryRun' in inserted) && !inserted.inserted) required('login', 'user.error.loginUnique')
 
+        // A person may be created before any role exists for them. They hold their
+        // workplace and nothing else — no role means no function — until one is
+        // assigned on the access tab. Requiring a role here made hiring impossible
+        // wherever no role template had been applied yet.
         const selection = parseSelection({ ...args, userId, addMembership: true })
-        if (!selection.roleIds.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
         const added = await addSelectedRoles(tx, selection)
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
           required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
         await recordAuthorizationAudit(tx, {
-          event: 'authorization.assignment.created',
+          event: selection.roleIds.length ? 'authorization.assignment.created' : 'authorization.user.created',
           targetKind: 'user',
           targetId: userId,
           userId,
           scopeKey: added.scope.scopeKey,
           source: 'system-roles',
-          reason: String(args.reason).trim(),
+          reason: String(args.reason ?? '').trim(),
           before: null,
           after: added.assignments,
           revision,
@@ -1601,6 +1699,229 @@ export const accessWorkflowFunctions: Record<string, FnSpec> = {
           },
         })
         const result = { ok: true, id: userId, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  /**
+   * Where a person works, decided in one go.
+   *
+   * The screen asks for the whole answer — which companies, which branches, and
+   * which of them is the one they land in — so this settles it in one commit. The
+   * older path granted and revoked one workplace per call from a route loop, which
+   * could fail halfway and leave a person holding half a decision.
+   *
+   * Holding a company implies holding its root branch: that is what makes a company
+   * membership usable, and every grant has always written it.
+   */
+  setWorkplaces: defineFn({
+    input: {
+      userId: 'id',
+      companyIds: 'json',
+      branchIds: 'json',
+      defaultCompanyId: 'id',
+      defaultBranchId: 'id',
+      reason: 'text?',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.User',
+      'write:user.User',
+      'read:company.Company',
+      'read:company.Branch',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-workplaces:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const userId = String(args.userId)
+        const U = tx.table('user.User')
+        const person = await tx.db.one(from(U).where(eq(U.id, userId)))
+        if (!person) required('userId', 'user.error.userMissing')
+
+        const companyIds = [...new Set((args.companyIds as string[]).map(String))]
+        if (!companyIds.length) required('companyIds', 'user.error.companyRequired')
+        const C = tx.table('company.Company')
+        const B = tx.table('company.Branch')
+        const roots = new Map<string, string>()
+        for (const companyId of companyIds) {
+          if (!(await tx.db.one(from(C).where(eq(C.id, companyId), eq(C.active, true)))))
+            required('companyIds', 'user.error.companyMissing')
+          const root = await tx.db.one(from(B).where(eq(B.rootKey, companyId), eq(B.active, true)))
+          if (!root) required('companyIds', 'user.error.rootBranchMissing')
+          roots.set(companyId, String(root!.id))
+        }
+
+        // A branch is only a workplace if its company is one too.
+        const held = new Set(companyIds)
+        const branchIds = new Set<string>(roots.values())
+        for (const branchId of new Set((args.branchIds as string[]).map(String))) {
+          const branch = await tx.db.one(from(B).where(eq(B.id, branchId), eq(B.active, true)))
+          if (!branch) required('branchIds', 'user.error.branchMissing')
+          if (!held.has(String(branch!.companyId)))
+            required('branchIds', 'user.error.branchCompanyMembership')
+          branchIds.add(branchId)
+        }
+
+        // Where they land has to be somewhere they work.
+        const defaultCompanyId = String(args.defaultCompanyId)
+        const defaultBranchId = String(args.defaultBranchId)
+        if (!held.has(defaultCompanyId)) required('defaultCompanyId', 'user.error.defaultCompanyRevoke')
+        if (!branchIds.has(defaultBranchId)) required('defaultBranchId', 'user.error.branchMissing')
+        const defaultBranch = await tx.db.one(from(B).where(eq(B.id, defaultBranchId)))
+        if (String(defaultBranch?.companyId ?? '') !== defaultCompanyId)
+          required('defaultBranchId', 'user.error.branchCompanyMembership')
+
+        const M = tx.table('user.Membership')
+        const BM = tx.table('user.BranchMembership')
+        const beforeCompanies = (await tx.db.all(from(M).where(eq(M.userId, userId)))).map((row) =>
+          String(row.companyId),
+        )
+        const beforeBranches = (await tx.db.all(from(BM).where(eq(BM.userId, userId)))).map((row) =>
+          String(row.branchId),
+        )
+
+        for (const companyId of companyIds)
+          await tx.db.insertIfAbsent('user.Membership', {
+            id: `membership:${userId}:${companyId}`,
+            userId,
+            companyId,
+          })
+        for (const branchId of branchIds)
+          await tx.db.insertIfAbsent('user.BranchMembership', {
+            id: `branch:${userId}:${branchId}`,
+            userId,
+            branchId,
+          })
+        const goneCompanies = beforeCompanies.filter((id) => !held.has(id))
+        if (goneCompanies.length)
+          await tx.db.del(deleteFrom(M).where(eq(M.userId, userId), inArray(M.companyId, goneCompanies)))
+        const goneBranches = beforeBranches.filter((id) => !branchIds.has(id))
+        if (goneBranches.length)
+          await tx.db.del(deleteFrom(BM).where(eq(BM.userId, userId), inArray(BM.branchId, goneBranches)))
+
+        await tx.db.update('user.User', { id: userId }, { defaultCompanyId, defaultBranchId })
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.updated',
+          targetKind: 'user',
+          targetId: userId,
+          scopeKey: `company:${defaultCompanyId}`,
+          source: 'membership',
+          reason,
+          userId,
+          before: { companies: beforeCompanies, branches: beforeBranches },
+          after: { companies: companyIds, branches: [...branchIds], defaultCompanyId, defaultBranchId },
+          revision: revision!,
+          metadata: { companyIds, branchIds: [...branchIds], defaultCompanyId, defaultBranchId },
+        })
+        const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  /**
+   * What a custom role is allowed to do, decided by area rather than by key.
+   *
+   * The screen offers the catalogue's bundles, because that is the vocabulary a
+   * business has; this turns the chosen bundles into the function keys they stand
+   * for and makes the role hold exactly those. Areas dropped from the selection go
+   * with their grants, so the form is the whole answer rather than an addition.
+   *
+   * A managed role is refused: its authority comes from a template this deployment
+   * ships, and editing it here would put a local decision where everyone reads the
+   * shipped one. Copy it first.
+   */
+  setRoleBundles: defineFn({
+    input: {
+      roleId: 'id',
+      bundleKeys: 'json',
+      reason: 'text?',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: [
+      ...USER_ACCESS_EFFECTS,
+      'read:user.Role',
+      'read:user.Grant',
+      'write:user.Grant',
+      'read:user.GrantSource',
+      'write:user.GrantSource',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `set-role-bundles:${String(args.idempotencyKey).trim()}`
+        const reason = String(args.reason ?? '').trim()
+        if (op.endsWith(':')) required('idempotencyKey', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+
+        const roleId = String(args.roleId)
+        const R = tx.table('user.Role')
+        const role = await tx.db.one(from(R).where(eq(R.id, roleId)))
+        if (!role) required('roleId', 'user.error.roleMissing')
+        if (String(role!.mode ?? '') === 'managed') required('roleId', 'E_ROLE_NOT_ASSIGNABLE')
+
+        const catalogue = tx.manifest.permissions.bundles ?? {}
+        const wanted = new Set<string>()
+        for (const key of new Set((args.bundleKeys as string[]).map(String))) {
+          const bundle = catalogue[key] as { functions?: string[] } | undefined
+          if (!bundle) required('bundleKeys', 'user.error.bundleMissing')
+          for (const fnKey of bundle!.functions ?? []) if (tx.manifest.functions[fnKey]) wanted.add(fnKey)
+        }
+
+        const G = tx.table('user.Grant')
+        const S = tx.table('user.GrantSource')
+        const before = (await tx.db.all(from(G).where(eq(G.roleId, roleId)))).map((row) => String(row.fnKey))
+        const gone = before.filter((fnKey) => !wanted.has(fnKey))
+        for (const fnKey of wanted) {
+          await tx.db.insertIfAbsent('user.GrantSource', {
+            id: `custom:${roleId}:${fnKey}`,
+            roleId,
+            fnKey,
+            sourceKind: 'custom',
+            sourceKey: 'direct',
+            sourceVersion: null,
+          })
+          await tx.db.insertIfAbsent('user.Grant', { id: `grant:${roleId}:${fnKey}`, roleId, fnKey })
+        }
+        if (gone.length) {
+          await tx.db.del(deleteFrom(G).where(eq(G.roleId, roleId), inArray(G.fnKey, gone)))
+          await tx.db.del(deleteFrom(S).where(eq(S.roleId, roleId), inArray(S.fnKey, gone)))
+        }
+
+        const revision = await bumpRevision(tx, Number(args.expectedAuthorizationRevision))
+        if (revision == null) required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.role.updated',
+          targetKind: 'role',
+          targetId: roleId,
+          source: 'bundles',
+          reason,
+          before: { functions: before },
+          after: { functions: [...wanted] },
+          revision: revision!,
+          metadata: { bundleKeys: [...new Set((args.bundleKeys as string[]).map(String))] },
+        })
+        const result = { ok: true, revision }
         await completeOperation(tx, op, result)
         return result
       }),
@@ -1735,7 +2056,7 @@ export type InternalUserInput = {
   companyId: string
   branchId?: string | null
   roleIds: string[]
-  reason: string
+  reason?: string
 }
 /** Caller owns the identity adapter; this primitive owns the atomic local account/access boundary. */
 export async function createInternalUserWithAccess<T extends Record<string, unknown>>(
@@ -1747,7 +2068,7 @@ export async function createInternalUserWithAccess<T extends Record<string, unkn
     const name = input.name.trim(),
       login = input.login.normalize('NFKC').trim().toLowerCase(),
       email = input.email.trim().toLowerCase()
-    if (!name || !login || !input.reason.trim()) required('name', 'user.error.required')
+    if (!name || !login) required('name', 'user.error.required')
     const U = tx.table('user.User')
     if (await tx.db.one(from(U).where(eq(U.login, login)))) required('login', 'user.error.loginUnique')
     if (!(await checkUserEmail(tx, email)).available) required('email', 'E_EMAIL_UNAVAILABLE')
@@ -1786,7 +2107,7 @@ export async function createInternalUserWithAccess<T extends Record<string, unkn
       userId: input.id,
       scopeKey: added.scope.scopeKey,
       source: 'system-roles',
-      reason: input.reason.trim(),
+      reason: (input.reason ?? '').trim(),
       before: null,
       after: added.assignments,
       revision,

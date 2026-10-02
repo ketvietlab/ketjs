@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -56,7 +57,7 @@ test('manufacturing work centers HTTP: modal CRUD keeps locale, numeric semantic
   assert.match(list, /Đóng gói/)
   assert.match(list, />88</)
   assert.match(list, />125000</)
-  assert.doesNotMatch(list, /manufacturing-work-center-form|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(list), /manufacturing-work-center-form|data-ui="modal-layer"/)
 
   const create = await (await e2e.client.get('/admin/manufacturing/work-centers?create=1&lang=vi')).text()
   assert.match(create, /data-ui="list-page"/)
@@ -117,7 +118,12 @@ test('manufacturing work centers HTTP: modal CRUD keeps locale, numeric semantic
   )
   assert.equal(archived.status, 303)
   assert.equal(archived.headers.get('location'), '/admin/manufacturing/work-centers?lang=vi')
-  const archivedList = await (await e2e.client.get('/admin/manufacturing/work-centers?lang=vi')).text()
+  // An archived work center is out of the way until the bar is asked for it.
+  const activeOnly = await (await e2e.client.get('/admin/manufacturing/work-centers?lang=vi')).text()
+  assert.doesNotMatch(activeOnly, /PACK/)
+  const archivedList = await (
+    await e2e.client.get('/admin/manufacturing/work-centers?lang=vi&archived=1')
+  ).text()
   assert.match(archivedList, /PACK/)
   assert.match(archivedList, /data-ui="badge" data-tone="neutral"[\s\S]*?Đã lưu trữ/)
   assert.match(archivedList, /name="action" value="restore"/)

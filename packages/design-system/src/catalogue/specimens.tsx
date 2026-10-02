@@ -1,7 +1,8 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { Icon } from '../primitives/icon/index.tsx'
 import { ReorderList } from '../interactions/reorder-list/index.tsx'
-import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
-import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
+import { ActionGroup, Button, IconButton, LinkButton, Link } from '../primitives/actions.tsx'
+import { Avatar, Badge, Code, CountBadge, Tag, Text, MediaLabel } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
 import { Breadcrumbs, NavList, TabbedView, Tabs } from '../primitives/navigation.tsx'
@@ -19,8 +20,8 @@ import {
   Stack,
   Surface,
 } from '../layouts/index.tsx'
-import { AppShell, Page } from '../layouts/shell.tsx'
-import { AppNavigation } from '../layouts/app-navigation.tsx'
+import { AppBrand, AppShell, AppTopbar, Page } from '../layouts/shell.tsx'
+import { NavigationToggle, AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { BulkActions, ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
@@ -56,7 +57,8 @@ import {
   TextField,
 } from '../forms/scalar-fields/index.tsx'
 import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
-import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
+import { DatePickerExamples } from './date-pickers.tsx'
+import { DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
 import { DropZone, FileUpload } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
 import {
@@ -127,7 +129,7 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
   <AppNavigation
     id={`demo-navigation-${props.active}`}
     label="KétSuite workspace"
-    identity="KétSuite"
+    identity={<AppBrand label="KétSuite" href="#app-shell" />}
     context="Operations workspace"
     menuLabel="Workspace menu"
     groups={[
@@ -149,8 +151,25 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
             label: 'Reports',
             leading: '▤',
             children: [
-              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table' },
-              { id: `${props.active}-stock-report`, label: 'Inventory', href: '#metric' },
+              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table', count: 7 },
+              {
+                id: `${props.active}-stock-report`,
+                label: 'Inventory',
+                href: '#metric',
+                leading: <Icon name="inbox" />,
+              },
+              {
+                id: `${props.active}-report-settings`,
+                label: 'Cấu hình',
+                children: [
+                  { id: `${props.active}-terms`, label: 'Điều khoản thanh toán', href: '#navigation-terms' },
+                  {
+                    id: `${props.active}-long-label`,
+                    label: 'Phương thức thanh toán dành cho nhà cung cấp quốc tế',
+                    href: '#navigation-long',
+                  },
+                ],
+              },
             ],
           },
         ],
@@ -185,6 +204,23 @@ const DemoShell = (props: {
 }): TemplateResult => (
   <AppShell
     mode="embedded"
+    location={
+      <AppTopbar
+        location={<span>Acme · Main branch</span>}
+        navigation={
+          <NavigationToggle controls={`demo-navigation-${props.active}-drawer`} label="Open navigation" />
+        }
+        search={{
+          id: `demo-global-search-${props.active}`,
+          action: '#app-shell',
+          triggerLabel: 'Search everywhere',
+          closeLabel: 'Close',
+          label: 'Global search',
+          placeholder: 'Search…',
+          submitLabel: 'Search',
+        }}
+      />
+    }
     sidebar={<DemoSidebar active={props.active} />}
     main={props.main}
     rightRail={
@@ -306,14 +342,16 @@ export const componentGroups: readonly ComponentGroup[] = [
           <ActionGroup
             label="Button variants"
             actions={[
-              <Button label="Create order" variant="primary" leading="+" />,
+              <Button label="Create order" variant="primary" icon="plus" />,
               <Button label="Save draft" variant="secondary" />,
               <Button label="More details" variant="tertiary" />,
-              <Button label="Terminate" variant="destructive" />,
+              <Button label="Terminate" variant="secondary" tone="danger" />,
+              <Link label="Read the action rules" href="/primitives#primitive-actions" />,
               <Button label="Saving" loading />,
               <Button label="Unavailable" disabled />,
               <LinkButton label="Opening record" href="#record-page" loading />,
               <IconButton label="Toggle theme" icon="☾" />,
+              <Button label="Collapse details" variant="tertiary" expanded controls="button-details" />,
             ]}
           />
         ),
@@ -321,7 +359,7 @@ export const componentGroups: readonly ComponentGroup[] = [
       {
         id: 'action-sizes',
         name: 'Action sizes',
-        description: 'Density changes target size without changing hierarchy.',
+        description: 'Default matches input height; compact is explicit. Prominent is a compatibility alias.',
         render: () => (
           <ActionGroup
             label="Action sizes"
@@ -344,6 +382,30 @@ export const componentGroups: readonly ComponentGroup[] = [
     description: 'Compact objects for operational scanning.',
     examples: [
       {
+        id: 'typography-icons',
+        name: 'Text and Lucide icons',
+        description: 'Typography role, document semantics and shared icon geometry.',
+        render: () => (
+          <Stack
+            items={[
+              <Text as="h3" variant="headingLg">
+                Operations
+              </Text>,
+              <Text as="p" variant="bodyMd">
+                One typography contract for every component.
+              </Text>,
+              <Inline
+                items={[
+                  <Icon name="info" label="Information" />,
+                  <Icon name="circle-check" tone="positive" label="Complete" />,
+                  <Text numeric>1,284.00</Text>,
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
         id: 'badges',
         name: 'Badge and tag',
         description: 'Tones carry meaning; tags represent categories and active filters.',
@@ -351,6 +413,7 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Inline
             items={[
               <Badge label="Neutral" />,
+              <Text tone="muted">No stock tracking</Text>,
               <Badge label="Synchronized" tone="info" />,
               <Badge label="Ready" tone="positive" />,
               <Badge label="Needs review" tone="warning" />,
@@ -369,6 +432,7 @@ export const componentGroups: readonly ComponentGroup[] = [
           <Inline
             items={[
               <Avatar name="Nguyễn Minh Châu" size="small" />,
+              <MediaLabel label="Product without an image" />,
               <Avatar name="Nguyễn Minh Châu" />,
               <Avatar name="Nguyễn Minh Châu" size="large" />,
               <Code value="tenant-vn-hn-0042" context="tenant" />,
@@ -559,7 +623,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                     name: 'color',
                     label: 'Calendar colour',
                     type: 'color',
-                    value: '#5167c4',
+                    value: '#5968df',
                   },
                   {
                     id: 'settings-billing',
@@ -775,7 +839,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             main={
               <Page
                 title="Operations overview"
-                description="Resize below 768 px to review the mobile trigger and drawer."
                 body={
                   <Grid
                     columns={2}
@@ -803,7 +866,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 variant="operational"
                 context="Sales / Sales orders"
                 title="Sales orders"
-                description="Review demand, fulfillment and payment state from one operational list."
                 headerActions={<Button label="Create order" variant="primary" />}
                 actionsPlacement="header"
                 actionsHidden
@@ -837,7 +899,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 variant="operational"
                 context="Customers / Mùa Hạ Riverside"
                 title="Mùa Hạ Riverside"
-                description="Customer · CUS-0042"
                 status={<Badge label="Active" tone="positive" />}
                 actions={
                   <ActionGroup
@@ -929,7 +990,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 layout="flow"
                 context="Sales / Overview"
                 title="Revenue operations"
-                description="Follow confirmed demand, open work and handoffs across the team."
                 actions={<Button label="Create quotation" variant="primary" />}
                 controls={
                   <ActionGroup
@@ -998,7 +1058,6 @@ export const componentGroups: readonly ComponentGroup[] = [
                 layout="canvas"
                 context="CRM / Pipeline"
                 title="Opportunities board"
-                description="Move active opportunities through a spatial workflow."
                 actions={<Button label="Create opportunity" variant="primary" />}
                 controls={
                   <Inline
@@ -1208,7 +1267,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="Sales / Sales orders"
             eyebrow="Sales"
             title="Sales orders"
-            description="Review demand, fulfillment and payment state from one operational list."
             headerActions={<Button label="Create order" variant="primary" />}
             actions={<Button label="Export orders" variant="secondary" />}
             controls={
@@ -1301,7 +1359,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="Sales / Overview"
             eyebrow="Commercial workspace"
             title="Sales overview"
-            description="Follow demand, confirmed revenue and the work waiting for the team."
             actions={<Button label="Create quotation" variant="primary" />}
             body={
               <Stack
@@ -1347,7 +1404,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             context="CRM / Pipeline"
             eyebrow="Pipeline"
             title="Sales opportunities"
-            description="Move active opportunities through the sales process."
             actions={<Button label="Create opportunity" variant="primary" />}
             controls={
               <ActionGroup
@@ -1449,7 +1505,6 @@ export const componentGroups: readonly ComponentGroup[] = [
             variant="operational"
             context="Customers / Mùa Hạ Riverside"
             title="Mùa Hạ Riverside"
-            description="Customer · CUS-0042"
             status={<Badge label="Active" tone="positive" />}
             actions={<Button label="Save partner" variant="primary" />}
             body={
@@ -1724,11 +1779,17 @@ export const componentGroups: readonly ComponentGroup[] = [
                   {
                     key: 'name',
                     label: 'Server collection',
+                    wrap: true,
                     cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
                     sortHref: '#ket-table',
                   },
                 ]}
-                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                rows={[
+                  {
+                    id: 'server-row',
+                    name: 'Semantic server cell with a descriptive product name that wraps while the row grows to keep all of its content readable',
+                  },
+                ]}
                 id={(row) => row.id}
                 rowHref={() => '#ket-table'}
                 caption="URL-driven server collection"
@@ -1758,8 +1819,32 @@ export const componentGroups: readonly ComponentGroup[] = [
         name: 'Relation select',
         description:
           'Unlike its neighbors above, this is a ketjs-view island — it owns state and fetches its own results client-side, so it keeps working after this static snapshot only once the page hydrates it. Shown in its default (closed) state with one value already chosen; distinct from RelationPicker below, which is href-driven and receives results pre-fetched by the server.',
-        render: () =>
-          createRelationSelectView({ id: 'demo-relation-select', config: relationSelectDemoConfig }).view(),
+        render: () => (
+          <Stack
+            items={[
+              createRelationSelectView({
+                id: 'demo-relation-select',
+                config: relationSelectDemoConfig,
+              }).view(),
+              createRelationSelectView(
+                {
+                  id: 'demo-relation-add',
+                  config: {
+                    ...relationSelectDemoConfig,
+                    value: null,
+                    ariaLabel: 'Add a partner',
+                    labels: { ...relationSelectDemoConfig.labels, choose: 'Add a partner' },
+                  },
+                },
+                {
+                  options: () => relationSelectDemoConfig.options,
+                  resetAfterSelect: true,
+                  onCreate: () => {},
+                },
+              ).view(),
+            ]}
+          />
+        ),
       },
       {
         id: 'lightbox',
@@ -1894,20 +1979,13 @@ export const componentGroups: readonly ComponentGroup[] = [
       },
       {
         id: 'date-time',
-        name: 'Civil date and local time',
-        description: 'Civil dates and local times submit their source text without implicit UTC conversion.',
+        name: 'Date pickers and local time',
+        description:
+          'Interactive calendars, seven quick ranges, draft selection and native civil-date submission. Open /dates for the focused playground.',
         render: () => (
           <Stack
             items={[
-              <DatePicker id="date" name="date" label="Delivery date" value="2026-09-08" />,
-              <DateRangePicker
-                id="range"
-                label="Reporting period"
-                start={{ id: 'from', name: 'from', value: '2026-09-01' }}
-                end={{ id: 'to', name: 'to', value: '2026-09-30' }}
-                startLabel="From"
-                endLabel="To"
-              />,
+              <DatePickerExamples />,
               <DateTimePicker
                 id="appointment"
                 name="appointment"

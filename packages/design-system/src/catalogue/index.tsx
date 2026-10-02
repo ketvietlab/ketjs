@@ -5,8 +5,15 @@ import { Code } from '../primitives/status/index.tsx'
 import { componentGroups } from './groups.ts'
 import { designSystemInventory } from './inventory.generated.ts'
 import { componentRegistry } from './registry.ts'
+import { PrimitiveHarness, primitiveSections } from './primitives.tsx'
+
+export { DatePickerExamples } from './date-pickers.tsx'
+
+export { PrimitiveHarness, primitiveSections } from './primitives.tsx'
+export type { PrimitiveHarnessProps } from './primitives.tsx'
 
 export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
+export { LayeringPreview, layeringPresentations } from './layering.tsx'
 export {
   InventoryPage,
   inventoryDecisions,
@@ -55,6 +62,12 @@ export const CATALOGUE_HOOKS = [
   'catalogue-specimen-description',
   'catalogue-specimen-components',
   'catalogue-stage',
+  'primitive-harness',
+  'primitive-section',
+  'primitive-section-head',
+  'primitive-row',
+  'primitive-caption',
+  'primitive-sample',
 ] as const
 
 export const CatalogueHead = (): TemplateResult =>
@@ -63,7 +76,8 @@ export const CatalogueHead = (): TemplateResult =>
 type CataloguePageProps = {
   theme?: 'light' | 'dark' | 'system'
   density?: 'compact' | 'default' | 'comfortable'
-  mode?: 'overview' | 'components' | 'all'
+  mode?: 'overview' | 'components' | 'all' | 'primitives'
+  primitiveTab?: 'overview' | 'activity'
   groupId?: string | null
   path?: string
 }
@@ -75,7 +89,7 @@ const pathWithPreferences = (
   path: string,
   theme: NonNullable<CataloguePageProps['theme']>,
   density: NonNullable<CataloguePageProps['density']>,
-): string => `${path}?theme=${theme}&density=${density}`
+): string => `${path}${path.includes('?') ? '&' : '?'}theme=${theme}&density=${density}`
 
 const CatalogueRail = (props: {
   active: string
@@ -87,7 +101,7 @@ const CatalogueRail = (props: {
       <span aria-hidden="true">K</span>
       <strong>Két Việt</strong>
     </a>
-    <p data-ui="catalogue-kicker">Design system · 0.1.23</p>
+    <p data-ui="catalogue-kicker">Design system · 0.1.31</p>
     <nav data-ui="catalogue-nav" aria-label="Design system documentation">
       <span data-ui="catalogue-nav-section">Get started</span>
       <a
@@ -107,6 +121,16 @@ const CatalogueRail = (props: {
       </a>
       <a data-ui="catalogue-nav-group" href={`/demo?theme=${props.theme}`}>
         <span>Application demo</span>
+      </a>
+      <a
+        data-ui="catalogue-nav-group"
+        href={pathWithPreferences('/primitives', props.theme, props.density)}
+        aria-current={props.active === 'primitives' ? 'page' : null}
+      >
+        <span>Primitive harness</span>
+        <span data-ui="catalogue-nav-count">
+          {String(primitiveSections.flatMap((section) => section.components).length)}
+        </span>
       </a>
       <a data-ui="catalogue-nav-group" href={`/demo2?theme=${props.theme}`}>
         <span>Application submenu demo</span>
@@ -411,7 +435,13 @@ export const CataloguePage = (props: CataloguePageProps = {}): TemplateResult =>
   const selectedGroup = componentGroups.find((group) => group.id === props.groupId)
   const path =
     props.path ??
-    (selectedGroup ? `/components/${selectedGroup.id}` : mode === 'components' ? '/components' : '/')
+    (selectedGroup
+      ? `/components/${selectedGroup.id}`
+      : mode === 'components'
+        ? '/components'
+        : mode === 'primitives'
+          ? '/primitives'
+          : '/')
   const active = selectedGroup?.id ?? mode
   return (
     <main
@@ -426,6 +456,30 @@ export const CataloguePage = (props: CataloguePageProps = {}): TemplateResult =>
           <ComponentGroup group={selectedGroup} theme={theme} density={density} path={path} />
         ) : mode === 'components' ? (
           <ComponentIndex theme={theme} density={density} path={path} />
+        ) : mode === 'primitives' ? (
+          <>
+            <header data-ui="catalogue-hero">
+              <div>
+                <p data-ui="catalogue-kicker">
+                  {String(primitiveSections.flatMap((section) => section.components).length)} primitives ·{' '}
+                  {String(primitiveSections.length)} families
+                </p>
+                <h1 data-ui="catalogue-title">
+                  Small details.
+                  <br />A coherent whole.
+                </h1>
+                <p data-ui="catalogue-intro">
+                  Compare alignment, hierarchy and interaction states. The same components, at every density.
+                </p>
+              </div>
+              <CataloguePreferences
+                path={`${path}?tab=${props.primitiveTab ?? 'overview'}`}
+                theme={theme}
+                density={density}
+              />
+            </header>
+            <PrimitiveHarness theme={theme} density={density} tab={props.primitiveTab} />
+          </>
         ) : mode === 'all' ? (
           <>
             <Overview theme={theme} density={density} />

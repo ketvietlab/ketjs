@@ -9,6 +9,21 @@ export {
   ketsuitePermissionModuleNames,
   ketsuitePermissionModules,
 } from './permission-catalogue.ts'
+export { ketsuiteRoleTemplates } from './role-templates.ts'
+export { websiteRoleTemplates } from './website-role-templates.ts'
+export { DEFAULT_PHONE_REGION, normalizePhone, phoneKey, phoneSearchFragment } from './phone.ts'
+export {
+  customerAccessEffects,
+  customerAccessForSite,
+  customerSignupEffects,
+  disableCustomerAccess,
+  enableCustomerAccess,
+  issueCustomerAccess,
+  resetCustomerPassword,
+  setCustomerSelfSignup,
+  type IssueCustomerAccessInput,
+  type IssueCustomerAccessResult,
+} from './modules/website/customer.ts'
 
 // website vertical
 export { default as channelApi } from './modules/channel_api/index.ts'
@@ -479,3 +494,5 @@ export { default as catalog } from './modules/catalog/index.ts'
 export { default as inventory } from './modules/inventory/index.ts'
 export { default as checkout } from './modules/checkout/index.ts'
 export { default as defaultTheme } from './themes/default/index.ts'
+
+export { renderStudioPublic, websiteAnonymousScope } from './modules/website_backend/studio/public.ts'

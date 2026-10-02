@@ -1,8 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
+import {
+  badge,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  icon,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, collectionTable, emptyState, icon, LinkButton, ListPage, shell } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type LotListRow = {
@@ -20,7 +29,7 @@ export type LotListRow = {
 export type LotsListScreenOptions = {
   rows: LotListRow[]
   /** Localized `/admin/stock/lots/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<LotListRow>>
 }
@@ -92,11 +101,12 @@ export const lotsListScreen = (
       frame={collection.frame}
       title={_('stock_backend.lot.list.title')}
       controls={collectionControls(_, _('stock_backend.lot.list.title'), collection.frame)}
-      description={_('stock_backend.lot.list.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       footer={`${_('stock_backend.lot.list.summary.total')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length

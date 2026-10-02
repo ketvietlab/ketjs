@@ -117,11 +117,15 @@
                     "type": "string",
                     "format": "email"
                   },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
                   "password": {
                     "type": "string"
                   }
                 },
-                "required": ["email", "password"]
+                "required": ["password"]
               }
             }
           }
@@ -220,11 +224,15 @@
                     "type": "string",
                     "format": "email"
                   },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
                   "password": {
                     "type": "string"
                   }
                 },
-                "required": ["email", "password"]
+                "required": ["password"]
               }
             }
           }

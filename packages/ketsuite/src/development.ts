@@ -8,6 +8,47 @@ type ProvisionResult = {
 }
 
 /**
+ * Apply the deployment's role templates to the database `serve` is about to use.
+ *
+ * Runs on every serve, not only with `--dev-admin`: an install whose templates
+ * changed would otherwise keep roles that grant nothing (`stale-managed-role`)
+ * until an operator re-applied them, and one provisioned before templates
+ * shipped would have no role to give. Roles already current are left untouched,
+ * so a restart writes nothing.
+ */
+export async function syncRoleTemplates(
+  spec: DeploymentSpec = ketsuite,
+  env: Record<string, string | undefined> = process.env,
+): Promise<{ applied: string[]; skipped: Array<{ roleId: string; errors: unknown }> }> {
+  if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
+  const runtime = await bootRuntime(spec, { env })
+  const adapter = await (spec.serve.openStore ?? sqliteStore)(runtime.config)
+  try {
+    await migrateOne(adapter, runtime.manifest)
+    const result = await callFn(
+      'user.syncRoleTemplates',
+      {},
+      {
+        adapter,
+        manifest: runtime.manifest,
+        actor: 'system:role-templates',
+        scope: { company: null, branch: null },
+      },
+    )
+    const value = result.value as {
+      ok: boolean
+      applied?: string[]
+      errors?: Array<{ roleId: string; errors: unknown }>
+    }
+    if (value.ok !== true)
+      throw new Error(`could not apply role templates: ${JSON.stringify(value.errors ?? value)}`)
+    return { applied: value.applied ?? [], skipped: value.errors ?? [] }
+  } finally {
+    await adapter.close()
+  }
+}
+
+/**
  * Seed the intentionally insecure local scaffold account. This is reachable
  * only from the explicit `ketsuite serve --dev-admin` process path; normal
  * provisioning keeps the production password policy.

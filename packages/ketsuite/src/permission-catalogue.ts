@@ -129,8 +129,13 @@ const sources = {
   },
   account_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   account_staff_channel: {
@@ -175,6 +180,17 @@ const sources = {
     exemptions: {
       installCatalog: ['internal-route', 'address.trusted-route-worker-or-service'],
     },
+  },
+  address_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
   },
   attendance: {
     posture: 'permission-bearing',
@@ -254,6 +270,19 @@ const sources = {
       contextLabels: ['internal-route', 'company.trusted-route-worker-or-service'],
     },
   },
+  company_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      // The bar reads what the reader may already read, and writes only their
+      // own saved searches.
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   crm: {
     posture: 'permission-bearing',
     bundles: ['agent-operate', 'analytics', 'approve', 'assignment', 'configure', 'merge', 'report', 'view'],
@@ -267,8 +296,11 @@ const sources = {
       'assignmentRule.modalContext': ['read', 'view'],
       'assignmentRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'bootstrap.defaults': ['configure', 'configure', 'crm.configuration-audit'],
+      'case.normalizePhoneDigits': ['configure', 'configure', 'crm.configuration-audit'],
       'calendar.list': ['read', 'view'],
       'case.addMessage': ['operate', 'agent-operate'],
+      'case.logInteraction': ['operate', 'agent-operate'],
+      'report.sales': ['read', 'report'],
       'case.assign': ['approve', 'assignment', 'crm.assignment-policy'],
       'case.convertLead': ['operate', 'agent-operate'],
       'case.count': ['read', 'view'],
@@ -280,6 +312,7 @@ const sources = {
       'case.markWon': ['approve', 'approve', 'crm.domain-policy'],
       'case.merge': ['approve', 'merge', 'crm.merge-policy'],
       'case.move': ['operate', 'agent-operate'],
+      'case.modalContext': ['read', 'view'],
       'case.options': ['read', 'view'],
       'case.reassign': ['approve', 'assignment', 'crm.assignment-policy'],
       'case.refreshScore': ['operate', 'analytics'],
@@ -442,8 +475,13 @@ const sources = {
 
   flow_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {
       // `exposure: 'internal'`: the generic /_ket/fn/ path refuses these outright.
       // Live Doc calls them through the route that has already run its own record
@@ -458,12 +496,16 @@ const sources = {
     posture: 'permission-bearing',
     bundles: ['approve', 'configure', 'operate', 'view'],
     functions: {
+      applySearchFilter: ['read', 'view'],
+      deleteSearchFavorite: ['operate', 'operate'],
       getFolioBilling: ['read', 'view'],
       invoiceFolio: ['approve', 'approve', 'hospitality_billing.domain-policy'],
       listChargeRules: ['read', 'view'],
       queueClosedFolios: ['operate', 'operate'],
       recordFolioPayment: ['operate', 'operate'],
       saveChargeRule: ['configure', 'configure', 'hospitality_billing.configuration-audit'],
+      saveSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
     },
     exemptions: {},
   },
@@ -523,6 +565,10 @@ const sources = {
       getStay: ['read', ['view', 'night-audit']],
       getTapeChart: ['read', ['view', 'reservation-input', 'revenue-operate']],
       listAmenities: ['read', 'view'],
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
       listAmenityCategories: ['read', 'view'],
       listBuildings: ['read', 'view'],
       listCancellationPolicies: ['read', ['view', 'reservation-input', 'revenue-operate']],
@@ -647,6 +693,17 @@ const sources = {
     },
     exemptions: {},
   },
+  hr_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   inventory_staff_channel: {
     posture: 'projection/bridge',
     bundles: [],
@@ -727,8 +784,13 @@ const sources = {
   },
   loyalty_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   loyalty_pos: {
@@ -827,8 +889,13 @@ const sources = {
   },
   manufacturing_backend: {
     posture: 'permission-bearing',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   oauth: {
@@ -855,8 +922,13 @@ const sources = {
   },
   oauth_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   partner: {
@@ -865,6 +937,7 @@ const sources = {
     functions: {
       archivePartner: ['configure', 'configure', 'partner.configuration-audit'],
       archivePartners: ['configure', 'configure', 'partner.configuration-audit'],
+      normalizePartnerPhones: ['configure', 'configure', 'partner.configuration-audit'],
       countPartners: ['read', 'view'],
       getPartner: ['read', 'view'],
       getTerms: ['read', 'view'],
@@ -964,8 +1037,13 @@ const sources = {
   },
   pos_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   pos_channel: {
@@ -979,6 +1057,17 @@ const sources = {
       listDeviceSyncCommands: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
       priceBook: ['internal-route', 'pos_channel.trusted-route-worker-or-service'],
     },
+  },
+  pricing_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
   },
   pricing: {
     posture: 'permission-bearing',
@@ -1099,8 +1188,13 @@ const sources = {
   },
   purchase_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   purchase_staff_channel: {
@@ -1141,6 +1235,7 @@ const sources = {
     ],
     functions: {
       addLine: ['operate', 'quote-operate'],
+      updateLine: ['operate', 'quote-operate'],
       cancelOrder: ['approve', 'cancel', 'sale.domain-policy'],
       confirmOrder: ['approve', 'confirm', 'sale.domain-policy'],
       countOrders: ['read', 'view'],
@@ -1164,8 +1259,13 @@ const sources = {
   },
   sale_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   sale_staff_channel: {
@@ -1180,6 +1280,7 @@ const sources = {
     functions: {
       addMove: ['operate', 'operate'],
       adjustInventory: ['operate', 'operate'],
+      previewInventoryCount: ['read', 'operate'],
       assignCategoryRoute: ['configure', 'configure', 'stock.configuration-audit'],
       assignPicking: ['operate', 'operate'],
       assignProductRoute: ['configure', 'configure', 'stock.configuration-audit'],
@@ -1237,8 +1338,13 @@ const sources = {
   },
   stock_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
     exemptions: {},
   },
   stock_mail_backend: {
@@ -1336,6 +1442,10 @@ const sources = {
       previewRoleTemplate: ['sensitive', 'sensitive', 'user.sensitive-data'],
       provisionUser: ['security', 'security', 'user.security-audit'],
       revokeBranch: ['security', 'security', 'user.security-audit'],
+      managedRoleModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      roleModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      setRoleBundles: ['security', 'security', 'user.security-audit'],
+      setWorkplaces: ['security', 'security', 'user.security-audit'],
       revokeCompany: ['security', 'security', 'user.security-audit'],
       revokeFunction: ['security', 'security', 'user.security-audit'],
       saveRole: ['security', 'security', 'user.security-audit'],
@@ -1345,14 +1455,27 @@ const sources = {
       unassignRole: ['security', 'security', 'user.security-audit'],
       unassignScopedRole: ['security', 'security', 'user.security-audit'],
       userModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      accessPolicyModalContext: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      listAccessPolicies: ['sensitive', 'sensitive', 'user.sensitive-data'],
+      previewAccessPolicy: ['security', 'security', 'user.security-audit'],
+      saveAccessPolicy: ['security', 'security', 'user.security-audit'],
+      setAccessPolicyActive: ['security', 'security', 'user.security-audit'],
     },
     exemptions: {
       authenticate: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       consumeAuthToken: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       contextOptions: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       issueAuthToken: ['internal-route', 'user.trusted-route-worker-or-service'],
+      // Only a tenant-bound directory adapter, with the system actor checked in the handler.
+      replaceDirectoryFacts: ['internal-route', 'user.trusted-directory-adapter'],
+      // Best-effort server denial callback; the handler binds target to actor and stores no input.
+      recordAccessDenial: ['internal-route', 'user.server-denial-telemetry'],
       prepareContext: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       provisionAdmin: ['bootstrap-only', 'operator-provisioning-boundary'],
+      // Run by `ketsuite serve` as `system:role-templates` before any request, and
+      // refused for any other actor: it brings the deployment's own role templates
+      // into the tenant, so there is no user to hold a permission for it yet.
+      syncRoleTemplates: ['bootstrap-only', 'operator-provisioning-boundary'],
       recordSecurityEvent: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       resolveSessionContext: ['internal-route', 'user.trusted-route-worker-or-service'],
       setPassword: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
@@ -1361,27 +1484,49 @@ const sources = {
   },
   user_backend: {
     posture: 'projection/bridge',
-    bundles: [],
-    functions: {},
+    bundles: ['view', 'operate'],
+    functions: {
+      applySearchFilter: ['read', 'view'],
+      saveSearchFavorite: ['operate', 'operate'],
+      deleteSearchFavorite: ['operate', 'operate'],
+      setDefaultSearchFavorite: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
+  website_backend: {
+    posture: 'projection/bridge',
+    bundles: ['view'],
+    functions: {
+      studioContext: ['read', 'view'],
+    },
     exemptions: {},
   },
   website_form: {
     posture: 'permission-bearing',
     bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],
     functions: {
+      archiveForm: ['configure', 'configure', 'website.configuration-audit'],
       countSubmissions: ['read', 'view'],
       exportSubmissions: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      formHistory: ['read', 'view'],
       holdSubmission: ['operate', 'operate'],
+      listDestinations: ['read', 'view'],
       listForms: ['read', 'view'],
       listSubmissionAudit: ['sensitive', 'sensitive', 'website.sensitive-data'],
       listSubmissions: ['read', 'view'],
       purgeSubmissions: ['security', 'security', 'website.security-audit'],
       readSubmission: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      retryDelivery: ['operate', 'operate'],
       saveForm: ['configure', 'configure', 'website.configuration-audit'],
+      validateSubmission: ['read', 'view'],
     },
     exemptions: {
       getForm: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      // What a public page draws for a form section: the fields of an active form of that site.
+      publicForm: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       submitForm: ['internal-route', 'website_form.public-submit-route'],
+      // Form name and time only, read by the public receipt page and the Studio receipt screen.
+      submissionReceipt: ['internal-route', 'website_form.public-submit-route'],
     },
   },
   website_form_mail: {
@@ -1398,9 +1543,11 @@ const sources = {
     functions: {
       addMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       listMenu: ['read', 'view'],
+      menuState: ['read', 'view'],
       preflightMenu: ['read', 'view'],
       moveMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       removeMenuItem: ['configure', 'configure', 'website.configuration-audit'],
+      saveMenu: ['configure', 'configure', 'website.configuration-audit'],
       snapshotMenu: ['configure', 'configure', 'website.configuration-audit'],
     },
     exemptions: {
@@ -1431,17 +1578,18 @@ const sources = {
   },
   website: {
     posture: 'permission-bearing',
-    bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],
+    bundles: ['author', 'publish', 'configure', 'operate', 'security', 'sensitive', 'view'],
     functions: {
       assignTerm: ['configure', 'configure', 'website.configuration-audit'],
       countEntries: ['read', 'view'],
       countPages: ['read', 'view'],
-      createPreviewToken: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      createPreviewToken: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       deleteMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       deleteDomain: ['configure', 'configure', 'website.configuration-audit'],
       deleteTerm: ['configure', 'configure', 'website.configuration-audit'],
       diffRevisions: ['read', 'view'],
       getEntry: ['read', 'view'],
+      previewLink: ['read', 'view'],
       getMediaMetadata: ['read', 'view'],
       getTaxonomyTerm: ['read', 'view'],
       listDomains: ['read', 'view'],
@@ -1459,26 +1607,42 @@ const sources = {
       listPublications: ['read', 'view'],
       preflightPublication: ['read', 'view'],
       preparePublication: ['configure', 'configure', 'website.configuration-audit'],
-      publishEntry: ['configure', 'configure', 'website.configuration-audit'],
+      publishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
+      cancelScheduledEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       rollbackPublication: ['configure', 'configure', 'website.configuration-audit'],
-      publishPage: ['configure', 'configure', 'website.configuration-audit'],
+      publishPage: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       removeSiteMember: ['security', 'security', 'website.security-audit'],
-      restoreRevision: ['operate', 'operate'],
-      unpublishEntry: ['configure', 'configure', 'website.configuration-audit'],
-      revokePreviewTokens: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      issueCustomerAccess: ['security', 'security', 'website.security-audit'],
+      disableCustomerAccess: ['security', 'security', 'website.security-audit'],
+      enableCustomerAccess: ['security', 'security', 'website.security-audit'],
+      resetCustomerPassword: ['security', 'security', 'website.security-audit'],
+      setCustomerSelfSignup: ['security', 'security', 'website.security-audit'],
+      customerAccessForSite: ['read', 'security'],
+      restoreRevision: ['operate', ['operate', 'author']],
+      unpublishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
+      // Whoever can share a draft can take the link back.
+      revokePreviewTokens: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
-      saveEntry: ['configure', 'configure', 'website.configuration-audit'],
+      saveEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
-      savePage: ['configure', 'configure', 'website.configuration-audit'],
+      savePage: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveRedirect: ['configure', 'configure', 'website.configuration-audit'],
       saveSite: ['configure', 'configure', 'website.configuration-audit'],
+      saveStudioStyle: ['configure', 'configure', 'website.configuration-audit'],
       saveSiteMember: ['configure', 'configure', 'website.configuration-audit'],
-      saveTerm: ['configure', 'configure', 'website.configuration-audit'],
-      trashEntry: ['configure', 'configure', 'website.configuration-audit'],
+      // Editors file their own posts, as in the Studio design: categories and tags are content.
+      saveTerm: ['configure', ['configure', 'author'], 'website.configuration-audit'],
+      archiveTerm: ['configure', ['configure', 'author'], 'website.configuration-audit'],
+      trashEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       unassignTerm: ['configure', 'configure', 'website.configuration-audit'],
-      untrashEntry: ['configure', 'configure', 'website.configuration-audit'],
+      untrashEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
     },
     exemptions: {
+      // Only the Studio upload route, after it has checked `website.saveEntry` and the entry's site.
+      stageImage: ['internal-route', 'website_backend.image-upload'],
+      completeImage: ['internal-route', 'website_backend.image-upload'],
+      // Only the image file route; the handler serves published images and otherwise needs site access.
+      imageForReader: ['internal-route', 'website_backend.image-download'],
       authenticateCustomer: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       changeCustomerPassword: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       claimChannelRateSlot: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
@@ -1510,6 +1674,7 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'agent-operate': { en: 'Agent operations', vi: 'Nghiệp vụ nhân viên' },
   analytics: { en: 'Analytics', vi: 'Phân tích' },
   approve: { en: 'Approve', vi: 'Phê duyệt' },
+  publish: { en: 'Publish content', vi: 'Xuất bản nội dung' },
   author: { en: 'Write documents', vi: 'Soạn nội dung' },
   assignment: { en: 'Assign records', vi: 'Phân công hồ sơ' },
   cancel: { en: 'Cancel', vi: 'Hủy' },

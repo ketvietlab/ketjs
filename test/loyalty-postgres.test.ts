@@ -5,26 +5,8 @@ import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import { company, loyalty, partner, pricing, product, stock, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import { adminUrl, live } from './postgres-live.ts'
 
-const configured =
-  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
-const adminUrl = new URL(configured)
-adminUrl.pathname = '/postgres'
-
-const reachable = await (async () => {
-  const adapter = postgresAdapter(adminUrl.toString())
-  try {
-    await adapter.open()
-    const role = (await adapter.all('SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user'))[0]
-    await adapter.close()
-    return Boolean(role?.rolcreatedb)
-  } catch {
-    await adapter.close().catch(() => {})
-    return false
-  }
-})()
-
-const live = { skip: reachable ? false : `no PostgreSQL CREATE DATABASE role at ${adminUrl.host}` }
 const modules = [address, partner, company, uom, product, pricing, stock, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
@@ -43,8 +25,8 @@ test(
     const first = postgresAdapter(databaseUrl.toString(), { max: 2 })
     const second = postgresAdapter(databaseUrl.toString(), { max: 2 })
     await admin.open()
-    await admin.exec(`CREATE DATABASE "${database}"`)
     try {
+      await admin.exec(`CREATE DATABASE "${database}"`)
       await Promise.all([first.open(), second.open()])
       await migrateOne(first, manifest)
       registerFunctions(modules)

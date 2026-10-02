@@ -24,7 +24,6 @@ export const hierarchyScreen = (
   <ListScreen
     translator={_}
     title={_('company_backend.hierarchy.title')}
-    subtitle={`${_('company_backend.screen.title')}: ${String(options.rows.length)}`}
     frame={frame}
     headerActions={
       <LinkButton label={_('company_backend.action.create')} href={options.createHref} variant="primary" />

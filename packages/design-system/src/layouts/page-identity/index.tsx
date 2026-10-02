@@ -13,7 +13,7 @@ export type PageIdentityProps = {
   context?: JSXChild
   eyebrow?: string | null
   title: string
-  description?: string | null
+  description?: JSXChild
   status?: JSXChild
   actions?: JSXChild
   /** Retain action content while removing an empty or conditional identity slot from layout. */
@@ -21,15 +21,10 @@ export type PageIdentityProps = {
   meta?: JSXChild
 }
 
-type PageIdentityContentProps = PageIdentityProps & {
-  groupDescription?: boolean
-}
-
-/** The single identity band shared by every full-page component and recipe. */
-export const pageIdentityContent = (
-  kind: PageIdentityKind,
-  props: PageIdentityContentProps,
-): TemplateResult => (
+/**
+ * The single identity band shared by every full-page component and recipe.
+ */
+export const pageIdentityContent = (kind: PageIdentityKind, props: PageIdentityProps): TemplateResult => (
   <>
     <div data-ui={`${kind}-heading`} data-kv-page-identity="heading">
       {!!props.eyebrow && (
@@ -51,26 +46,17 @@ export const pageIdentityContent = (
           </div>
         )}
       </div>
-      {(props.groupDescription || props.status !== undefined) &&
-      (!!props.description || props.status !== undefined) ? (
+      {props.description !== undefined && props.description !== null && props.description !== '' && (
+        <p data-ui={`${kind}-description`} data-kv-page-identity="description">
+          {props.description}
+        </p>
+      )}
+      {props.status !== undefined && (
         <div data-ui={`${kind}-subline`} data-kv-page-identity="subline">
-          {!!props.description && (
-            <p data-ui={`${kind}-description`} data-kv-page-identity="description">
-              {props.description}
-            </p>
-          )}
-          {props.status !== undefined && (
-            <span data-ui={`${kind}-status`} data-kv-page-identity="status">
-              {props.status}
-            </span>
-          )}
+          <span data-ui={`${kind}-status`} data-kv-page-identity="status">
+            {props.status}
+          </span>
         </div>
-      ) : (
-        !!props.description && (
-          <p data-ui={`${kind}-description`} data-kv-page-identity="description">
-            {props.description}
-          </p>
-        )
       )}
     </div>
     {props.meta !== undefined && (
@@ -83,7 +69,7 @@ export const pageIdentityContent = (
 
 export const pageIdentity = (kind: PageIdentityKind, props: PageIdentityProps): TemplateResult => (
   <>
-    {props.context !== undefined && (
+    {props.context != null && (
       <div data-ui={`${kind}-context`} data-kv-page-identity="context">
         {props.context}
       </div>

@@ -62,7 +62,6 @@ export const journalEntryCreateScreen = (
       frame={options.frame}
       scope="account-journal-entry-form-page"
       title={title}
-      description={_('account_backend.entry.create.hint')}
       actions={
         <FormCluster
           label={title}

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { identityListSearch, providerListSearch } from './search.ts'
 import type { RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
@@ -103,6 +104,14 @@ const providerInput = (form: Record<string, string>, id: string, url: URL) => {
   }
 }
 
+/** Both provider lists share one set of functions; see `search-functions.ts`. */
+const oauthSearchFunctions = {
+  apply: 'oauth_backend.applySearchFilter',
+  saveFavorite: 'oauth_backend.saveSearchFavorite',
+  deleteFavorite: 'oauth_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'oauth_backend.setDefaultSearchFavorite',
+}
+
 const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: string[] = []) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   const providerId = url.searchParams.get('provider') ?? undefined
@@ -111,19 +120,25 @@ const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: s
   return adminPage(ctx, url, req, {
     title: 'oauth_backend.identities.title',
     active: '/admin/oauth/identities',
-    body: (_, frame) =>
-      identitiesScreen(
+    body: async (_, frame) => {
+      const search = await rowListSearch(ctx, url, req, {
+        spec: identityListSearch,
+        rows,
+        frame,
+        name: 'oauth-identity-filter',
+        bodyId: 'oauth-identity-list',
+        functions: oauthSearchFunctions,
+        labels: { searchPlaceholder: _('oauth_backend.identities.title') },
+      })
+      return identitiesScreen(
         _,
-        searchCollectionRows(
-          url,
-          rows,
-          (row) =>
-            `${row.user?.name ?? ''} ${row.user?.login ?? ''} ${row.provider?.name ?? ''} ${row.email ?? ''} ${row.subject}`,
-        ),
-        collectionSearchFrame(url, frame, _('oauth_backend.identities.title')),
+        search.rows,
+        search.frame,
         localeQuery(url),
         errors,
-      ),
+        search.groups ? { groups: search.groups } : undefined,
+      )
+    },
   })
 }
 
@@ -136,18 +151,25 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'oauth_backend.providers.title',
         active: '/admin/oauth/providers',
-        body: async (_, frame) =>
-          providersScreen(
+        body: async (_, frame) => {
+          const search = await rowListSearch(ctx, url, req, {
+            spec: providerListSearch,
+            rows: await providersOf(ctx, url, req, includeArchived),
+            frame,
+            name: 'oauth-provider-filter',
+            bodyId: 'oauth-provider-list',
+            functions: oauthSearchFunctions,
+            labels: { searchPlaceholder: _('oauth_backend.providers.title') },
+          })
+          return providersScreen(
             _,
-            searchCollectionRows(
-              url,
-              await providersOf(ctx, url, req, includeArchived),
-              (row) => `${row.name} ${row.code} ${row.protocol} ${row.issuer}`,
-            ),
-            collectionSearchFrame(url, frame, _('oauth_backend.providers.title')),
+            search.rows,
+            search.frame,
             localeQuery(url),
             includeArchived,
-          ),
+            search.groups ? { groups: search.groups } : undefined,
+          )
+        },
       })
     },
   },

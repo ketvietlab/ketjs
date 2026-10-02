@@ -111,8 +111,29 @@ test('crm cases list: keeps filtered ListPage chrome, columns and localized row 
   assert.match(rendered, /data-col="assignee"[\s\S]*?Nguyễn Minh/)
   assert.match(rendered, /data-col="revenue"/)
   assert.match(rendered, /data-col="state"[\s\S]*?Đang mở/)
-  assert.match(rendered, /href="\/admin\/crm\/cases\/case-denim\?lang=vi"/)
+  assert.match(rendered, /href="\/admin\/crm\/cases\?lang=vi&amp;record=crm.case%3Acase-denim"/)
   assert.doesNotMatch(rendered, /crm-case-create-form|data-ui="chatter"/)
+})
+
+test('crm cases list: KetTable record links preserve the filtered collection URL', () => {
+  const rendered = renderToString(
+    casesListScreen(
+      translate,
+      {},
+      {
+        rows: [
+          { id: 'case-filtered', name: 'Filtered opportunity', kind: 'opportunity', terminalState: 'open' },
+        ],
+        recordBase: '/admin/crm/cases?lang=vi&kind=opportunity&mine=1&page=2',
+      },
+    ),
+  )
+  assert.match(rendered, /data-ui="ket-table"/)
+  assert.match(
+    rendered,
+    /href="\/admin\/crm\/cases\?lang=vi&amp;kind=opportunity&amp;mine=1&amp;page=2&amp;record=crm.case%3Acase-filtered"/,
+  )
+  assert.doesNotMatch(rendered, /href="\/admin\/crm\/cases\/case-filtered/)
 })
 
 test('crm cases list: hides create without permission and keeps the empty state', () => {

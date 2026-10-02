@@ -96,6 +96,15 @@ const app = defineDeployment({
         throw new TypeError('route exploded')
       },
       '/fine/{id}': async (_url, _req, params) => text(params.id ?? ''),
+      '/defect': async () => {
+        throw new KetError({
+          code: 'E_EFFECT_NOT_DECLARED',
+          message: '"observed.ok" attempted write on observed.Note but declares effects []',
+        })
+      },
+      '/named': async () => {
+        throw new KetError({ code: 'E_EXPECTED', message: 'a contract this system named' })
+      },
     }),
   },
 })
@@ -239,6 +248,33 @@ test('a 500 is no longer discarded: the stack stays on the server', async (t) =>
   assert.match(unhandled.error?.message ?? '', /route exploded/)
   assert.match(unhandled.error?.stack ?? '', /route exploded/)
   assert.equal(unhandled.fields?.route, '/boom/{id}')
+  assert.deepEqual(await response.json(), { code: 'E_INTERNAL', message: 'internal error' })
+})
+
+test('a broken contract is a 500 that names nothing inside the deployment', async (t) => {
+  const deployment = await boot(t)
+  deployment.records.clear()
+
+  const response = await deployment.client.request('/defect')
+  assert.equal(response.status, 500)
+  const body = await response.text()
+  assert.deepEqual(JSON.parse(body), { code: 'E_INTERNAL', message: 'internal error' })
+  assert.doesNotMatch(body, /observed|effects/)
+
+  const unhandled = deployment.records.first('unhandled')
+  assert.ok(unhandled, 'the defect must stay on the server')
+  assert.equal(unhandled.level, 'error')
+  assert.equal(unhandled.error?.code, 'E_EFFECT_NOT_DECLARED')
+  assert.match(unhandled.error?.message ?? '', /observed\.Note/)
+})
+
+test('a named contract failure still tells the caller what went wrong', async (t) => {
+  const deployment = await boot(t)
+  const response = await deployment.client.request('/named')
+  assert.equal(response.status, 400)
+  const body = (await response.json()) as { code: string; message: string }
+  assert.equal(body.code, 'E_EXPECTED')
+  assert.equal(body.message, 'a contract this system named')
 })
 
 test('a call records its duration, and a denial is counted as a denial', async (t) => {

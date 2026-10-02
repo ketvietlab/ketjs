@@ -28,7 +28,6 @@ export const newPartnerScreen = (
       variant="operational"
       frame={frame}
       title={_('partner_backend.create.title')}
-      description={_('partner_backend.create.subtitle')}
       actions={
         <FormCluster
           label={_('partner_backend.create.actions')}

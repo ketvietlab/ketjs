@@ -8,6 +8,7 @@
 
 import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
+import { globalSearch } from './global-search.tsx'
 
 const firstPath = (nodes: MenuNode[]): string | null => {
   for (const node of nodes) {
@@ -49,4 +50,5 @@ const admin =
 
 export const routes: Record<string, (ctx: ServeContext) => Route> = {
   '/admin': admin,
+  '/admin/search': globalSearch,
 }

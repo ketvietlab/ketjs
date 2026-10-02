@@ -4,7 +4,8 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
-test('roles HTTP list preserves locale, encoded identity and GET-only semantics', async (t: TestContext) => {
+// Product navigation exposes the managed catalogue without custom-role creation.
+test('the roles screen serves managed roles without authoring controls', async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
@@ -20,14 +21,15 @@ test('roles HTTP list preserves locale, encoded identity and GET-only semantics'
     superuser: true,
   })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
-  await fixture('user.saveRole', { id: 'manager/a', name: 'Manager', description: 'Operational manager' })
   await app.client.login({ login: 'admin', password: 'correct horse' })
 
-  const response = await app.client.get('/admin/roles?lang=en')
-  const html = await response.text()
-  assert.equal(response.status, 200)
-  assert.match(html, /data-ui="list-page"/)
-  assert.match(html, /data-row-href="\/admin\/roles\/manager%2Fa\?lang=en"/)
-  assert.match(html, /href="\/admin\/roles\/new\?lang=en"/)
-  assert.equal((await app.client.request('/admin/roles?lang=en', { method: 'POST' })).status, 405)
+  const roles = await (await app.client.get('/admin/roles?lang=en')).text()
+  assert.match(roles, /data-ui="list-page"/)
+  assert.doesNotMatch(roles, /href="\/admin\/roles\/new/)
+  const users = await (await app.client.get('/admin/users?lang=en')).text()
+  assert.match(users, /data-ui="list-page"/)
+  assert.match(users, /href="\/admin\/roles/)
+  // The shared host is present, but its context rejects legacy/custom records.
+  assert.match(users, /data-record-kind="user\.role"/)
+  assert.match(users, /data-record-kind="user\.user"/)
 })

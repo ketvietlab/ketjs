@@ -1,18 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   formatMoney,
   icon,
-  inline,
+  linkButton,
   LinkButton,
   ListPage,
-  linkButton,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -23,7 +22,7 @@ export type QuotationListRow = Record<string, unknown>
 export type QuotationsListScreenOptions = {
   rows: QuotationListRow[]
   /** Localized `/admin/sales/quotations/new` URL, including retained list state. */
-  createHref: string
+  createHref: string | null
   /** Locale-only suffix used by record and report links. */
   detailSuffix: string
   /** The quotation document, when it is installed and published. */
@@ -132,34 +131,13 @@ export const quotationsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.quotation.title')}
-      description={_('sale_backend.quotation.subtitle')}
       headerActions={
-        <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('sale_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('sale_backend.quotation.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('sale_backend.quotation.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length

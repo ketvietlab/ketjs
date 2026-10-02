@@ -10,6 +10,7 @@ import {
   abortAuthorization,
 } from './authorization.ts'
 import { roleFunctions } from './roles.ts'
+import { roleModalContextFunctions } from './role-modal-context.ts'
 import { userModalContextFunctions } from './user-modal-context.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -233,6 +234,7 @@ const contextFor = (
 export const functions: Record<string, FnSpec> = {
   ...roleFunctions,
   ...userModalContextFunctions,
+  ...roleModalContextFunctions,
 
   listUsers: defineFn({
     // `search` and `limit` are what a relational picker sends on every
@@ -242,7 +244,17 @@ export const functions: Record<string, FnSpec> = {
     // wants the names behind its handful of assigneeIds, and the search-and-limit
     // shape a picker sends cannot answer that: it caps at five hundred, so the
     // five hundred and first user comes back as a raw id where a name belongs.
-    input: { includeArchived: 'bool?', search: 'text?', ids: 'json?', limit: 'int?' },
+    // `companyId` and `roleId` are the two questions the users screen narrows by —
+    // where somebody works and what they hold. Both live in other tables, so a
+    // caller holding a row of this one cannot answer them.
+    input: {
+      includeArchived: 'bool?',
+      search: 'text?',
+      ids: 'json?',
+      limit: 'int?',
+      companyId: 'id?',
+      roleId: 'id?',
+    },
     output: {
       id: 'id',
       login: 'text',
@@ -259,11 +271,31 @@ export const functions: Record<string, FnSpec> = {
       active: 'bool',
       superuser: 'bool',
     },
-    effects: ['read:user.User'],
+    effects: ['read:user.User', 'read:user.Membership', 'read:user.Assignment'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
-      const wanted = Array.isArray(a.ids) ? [...new Set(a.ids.map(String))] : null
+      const asked = Array.isArray(a.ids) ? [...new Set(a.ids.map(String))] : null
+      const narrowed: string[][] = []
+      if (a.companyId) {
+        const M = ctx.table('user.Membership')
+        narrowed.push(
+          (await ctx.db.all(from(M).where(eq(M.companyId, String(a.companyId))))).map((row) =>
+            String(row.userId),
+          ),
+        )
+      }
+      if (a.roleId) {
+        const A = ctx.table('user.Assignment')
+        narrowed.push(
+          (await ctx.db.all(from(A).where(eq(A.roleId, String(a.roleId))))).map((row) => String(row.userId)),
+        )
+      }
+      // Every filter narrows the same set, so a person must satisfy all of them.
+      const wanted = narrowed.reduce(
+        (kept: string[] | null, ids) => (kept === null ? ids : kept.filter((id) => ids.includes(id))),
+        asked,
+      )
       if (wanted && !wanted.length) return []
       let q = from(U).orderBy(asc(U.login))
       if (wanted) q = q.where(inArray(U.id, wanted))

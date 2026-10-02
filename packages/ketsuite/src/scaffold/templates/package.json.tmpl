@@ -4,8 +4,8 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "ketsuite serve --dev-admin",
-    "start": "ketsuite serve",
+    "dev": "ketsuite serve --deployment __DEPLOYMENT__ --dev-admin",
+    "start": "ketsuite serve --deployment __DEPLOYMENT__",
     "provision": "ket provision user.provisionAdmin --workspace ket.workspace.mjs --input -"
   },
   "dependencies": {

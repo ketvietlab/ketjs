@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -96,9 +97,9 @@ test('flow epic detail route: FormPage preserves Live Doc, project context, loca
 
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="form-page"/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="form-page-title"[^>]*>First release/)
-  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
+  assert.match(textContent, /data-ui="form-page-meta"[\s\S]*?Internal platform/)
   assert.match(html, /data-island="livedoc.editor"/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/epics\?lang=en"/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/epics\/release\/map\?lang=en"/)
@@ -136,7 +137,7 @@ test('flow epic detail route: FormPage preserves Live Doc, project context, loca
   assert.equal(readOnly.status, 200)
   assert.match(readOnlyHtml, /data-ui="form-page"/)
   assert.match(readOnlyHtml, /data-island="livedoc.editor"/)
-  assert.match(readOnlyHtml.replace(/<!--k\[?-->/g, ''), /data-ui="form-page-description"[^>]*>platform/)
+  assert.match(readOnlyHtml.replace(/<!--k\[?-->/g, ''), /data-ui="form-page-meta"[\s\S]*?platform/)
   assert.equal((await app.client.get('/admin/flow/epics/release/content?lang=en')).status, 200)
   const deniedWrite = await app.client.request('/admin/flow/epics/release/push?lang=en', {
     method: 'POST',

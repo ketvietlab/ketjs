@@ -6,14 +6,16 @@ import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } fro
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import {
   AppShell,
+  AppTopbar,
+  NavigationToggle,
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
-import { sidebarMain, sidebarNavigationContent } from './nav.tsx'
+import { sidebarMain, sidebarNavigationContent, sidebarFoot } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { pageContextFromFrame } from './navigation.tsx'
+import { pageContextFromFrame, viewerContext } from './navigation.tsx'
 import { ListPage } from './list-page.tsx'
 import { collectionActions, collectionControls } from './collection.tsx'
 
@@ -36,11 +38,11 @@ export type Extras = {
 }
 
 export type Frame = {
+  globalSearchQuery?: string
   /** Server request URL for native collection controls; never browser state. */
   collectionUrl?: string
   viewer?: Viewer | null
   indicators?: Indicator[]
-  menuFilter?: string | null
   /** How the shell offers the root sections; the deployment decides. */
   rootList?: 'auto' | 'always' | 'never'
   extras?: Extras
@@ -89,6 +91,33 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
 const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
   frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
 
+const locationBar = (_: Translator, frame: Frame): TemplateResult => (
+  <AppTopbar
+    location={frame.viewer ? viewerContext(frame.viewer) : null}
+    navigation={<NavigationToggle controls="backend-navigation-drawer" label={_('backend.nav.open')} />}
+    search={{
+      action: '/admin/search',
+      label: _('backend.globalSearch.label'),
+      triggerLabel: _('backend.globalSearch.trigger'),
+      closeLabel: _('backend.globalSearch.close'),
+      placeholder: _('backend.globalSearch.placeholder'),
+      submitLabel: _('backend.globalSearch.submit'),
+      query: frame.globalSearchQuery,
+      locale: _.locale,
+    }}
+    tools={sidebarFoot(
+      _,
+      {
+        menu: frame.menu ?? [],
+        viewer: frame.viewer,
+        indicators: frame.indicators,
+        footItems: frame.extras?.['sidebar.foot'],
+      },
+      'header',
+    )}
+  />
+)
+
 export const shell = (
   _: Translator,
   title: string,
@@ -100,7 +129,6 @@ export const shell = (
     menu,
     viewer,
     indicators,
-    menuFilter: frame.menuFilter,
     rootList: frame.rootList,
     navItems: extras['nav.items'],
     footItems: extras['sidebar.foot'],
@@ -112,18 +140,20 @@ export const shell = (
           {sidebarNavigationContent(_, sidebarOptions)}
         </template>
         <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
+        <template data-ket-slot="backend.global-topbar">{locationBar(_, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
   // The design-system application shell. The theme scope sits above it, as the
   // shell's own styles expect, in the grouped presentation the product mocks use:
   // one page gutter token (`--kv-page-padding-x`) for context, header, toolbar and
-  // body. The island runtime stays outside the swapped slots, and the three slots
+  // body. The island runtime stays outside the swapped slots, and the four slots
   // keep the names fragment navigation reconciles.
   return (
-    <div data-kv-design-system data-presentation="grouped">
+    <div data-kv-design-system data-presentation="grouped" data-density="compact">
       {AppShell({
         mode: 'viewport',
+        location: <div data-ket-slot="backend.global-topbar">{locationBar(_, frame)}</div>,
         sidebar: sidebarMain(_, sidebarOptions),
         main: (
           <>
@@ -177,8 +207,6 @@ export type OperationalScreenOptions = {
   body: TemplateResult
   /** The section above the title. Defaults to the active root's name. */
   kicker?: string | null
-  /** One line on what this screen is for. Worth writing; there is no sensible default. */
-  subtitle?: string | null
   /** A semantic glyph. Defaults to the active root's. */
   icon?: string | null
   /**
@@ -196,6 +224,8 @@ export type OperationalScreenOptions = {
   actions?: JSXChild
   /** Design-system location strip. CRM and customer-care pass breadcrumbs only. */
   context?: JSXChild
+  /** A record or workspace's identifying facts, in the page's facts strip. Lists have none. */
+  meta?: JSXChild
 }
 
 const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
@@ -218,7 +248,6 @@ export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
-      description={options.subtitle}
       headerActions={options.headerActions}
       actions={collectionActions(options.translator, options.frame, options.actions)}
       controls={collectionControls(options.translator, options.title, options.frame)}
@@ -233,8 +262,8 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
       variant="operational"
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       title={options.title}
-      description={options.subtitle}
       actions={operationalActions(options)}
+      meta={options.meta}
       controller={
         options.frame.chrome
           ? listChrome(options.translator, options.title, options.frame.chrome, false)
@@ -265,8 +294,8 @@ export const workspaceScreen = (
       context={options.context ?? pageContextFromFrame(options.title, options.frame)}
       eyebrow={options.kicker}
       title={options.title}
-      description={options.subtitle}
       actions={operationalActions(options)}
+      meta={options.meta}
       controls={
         options.controls ??
         (options.frame.chrome

@@ -1,9 +1,17 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
-import { collectionControls } from '../../../ui/index.ts'
+import {
+  code,
+  collectionActions,
+  collectionControls,
+  collectionTable,
+  emptyState,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { code, collectionTable, emptyState, LinkButton, ListPage, shell } from '../../../ui/index.ts'
-import type { Column, Frame } from '../../../ui/index.ts'
+import type { Column, DataTable, Frame } from '../../../ui/index.ts'
 
 export type BomListRow = {
   id: string
@@ -13,6 +21,8 @@ export type BomListRow = {
 }
 
 export type BomsListScreenOptions = {
+  /** Grouped rows the search-filter bar decided on, when the reader grouped. */
+  table?: Partial<DataTable<BomListRow>>
   rows: BomListRow[]
   /** Locale-aware URL that opens the create modal over this collection. */
   createHref: string
@@ -54,8 +64,9 @@ export const bomsListScreen = (
       rows: options.rows,
       id: (row) => row.id,
       columns: bomListColumns(_),
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   return shell(
     _,
@@ -72,10 +83,10 @@ export const bomsListScreen = (
           variant="primary"
         />
       }
-      actions={collection.frame.extras?.['topbar.end']}
+      actions={collectionActions(_, collection.frame)}
       footer={`${_('manufacturing_backend.boms.title')}: ${String(collection.total)}`}
       body={
-        options.rows.length
+        options.rows.length || options.table?.groups?.length
           ? collectionTable(_, collection.table)
           : emptyState(_('manufacturing_backend.empty.boms'), _('manufacturing_backend.empty.bomsHint'))
       }

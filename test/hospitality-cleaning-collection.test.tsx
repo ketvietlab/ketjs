@@ -155,7 +155,8 @@ test('cleaning search uses translated visible values and clamps an out-of-range 
     taskRows,
     '/admin/hospitality/housekeeping?property=hotel-authorized&state=todo&q=No%20match&lang=en',
   )
-  assert.match(empty, /data-ui="pager-range">(?:<!--.*?-->)*0</)
+  // Nothing found means nothing to page through, so the pager goes away.
+  assert.doesNotMatch(empty, /data-ui="pager"/)
   assert.doesNotMatch(empty, /data-ui="ket-table"/)
   assert.match(empty, /hospitality_core.screen.cleaningTasks.empty/)
 })

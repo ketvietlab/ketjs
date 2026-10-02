@@ -1,6 +1,7 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { menus } from './menus.ts'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'company_backend',
@@ -12,6 +13,7 @@ export default defineModule({
   category: 'Hệ thống',
   routes,
   menus,
+  functions: searchFilterFunctions,
   messages: {
     vi: {
       'app.title': 'Công ty và chi nhánh',
@@ -73,8 +75,6 @@ export default defineModule({
       'hierarchy.title': 'Cây pháp nhân',
       'context.title': 'Ngữ cảnh làm việc',
       'context.writeTitle': 'Công ty và chi nhánh đang ghi',
-      'context.writeHint':
-        'Một thao tác chỉ ghi vào đúng một công ty và một chi nhánh; các checkbox quyết định tập được đọc.',
       'context.activeCompany': 'Công ty đang hoạt động',
       'context.activeBranch': 'Chi nhánh đang hoạt động',
       'context.readCompany': 'Đọc công ty',
@@ -145,8 +145,6 @@ export default defineModule({
       'hierarchy.title': 'Legal-entity tree',
       'context.title': 'Working context',
       'context.writeTitle': 'Active write company and branch',
-      'context.writeHint':
-        'An operation writes to exactly one company and branch; the checkboxes define the readable sets.',
       'context.activeCompany': 'Active company',
       'context.activeBranch': 'Active branch',
       'context.readCompany': 'Read company',

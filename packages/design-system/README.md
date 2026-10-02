@@ -25,21 +25,115 @@ Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on t
 application root. Components own their markup and `data-ui` hooks; applications
 provide business data and translated labels.
 
-Compose content with unframed `Section`, `Stack` and `Grid`. `DataTable`, `Metric`
-and `ContentCard` already own their surfaces; do not wrap them in `Surface` or
-another card. Reserve `Surface` for unframed content that needs a working panel,
-such as a form group or a standalone process tool.
+### Primitive harness
 
-Section headings have no bottom border or divider padding in any page pattern.
-Separate sections with layout gaps; add a divider only when the content explicitly
-requires one, never through a page-specific section override.
+Run `npm run design:system` and open `/primitives` for a comparison surface of every
+registered primitive. The catalogue rail links to it. `theme=light|dark|system`,
+`density=compact|default|comfortable`, and `tab=overview|activity` are URL-backed;
+theme and density changes retain the navigation specimen's active tab.
 
-For titled working blocks, use `Surface title="..." body={form}` or
-`DataTable title="..."`. The title sits inside the panel at 18px (`--kv-text-xl`),
-with optional `actions` beside it. A titled table owns one panel, with a borderless,
-transparent scrolling viewport inside; never wrap it in another `Surface`.
-The title is retained in its empty state, with optional `emptyActions` for recovery.
-Omitting `title` preserves the existing unheaded form surface or standalone table.
+The seven families cover action hierarchy and sizes, loading/disabled states,
+semantic tones, long labels and identifiers, field validation/access states,
+native choices, route navigation, feedback, and progress boundaries. Use keyboard
+Tab/Shift+Tab for focus, Space for checkboxes, arrow keys for radio/select controls,
+and Enter for the breadcrumb disclosure and route links. Compare at 390px, 768px
+and 1440px in both themes and all three densities. A text action and an icon action
+of the same size must share a height; fields must align and content must stay inside
+its sample at narrow widths. The harness deliberately leaves actions as specimens;
+it does not simulate saving or creating records.
+
+`PrimitiveHarness` and `primitiveSections` are available from the `/catalogue`
+entry. Its `primitive-harness`, `primitive-section`, `primitive-section-head`,
+`primitive-row`, `primitive-caption`, and `primitive-sample` hooks own only the
+comparison layout. Component internals use the same production CSS as consumers.
+Notices keep their icon beside the copy and move actions beneath it when the
+notice itself is narrow. Action icons, spinners and tag remove links do not shrink;
+long tags wrap and progress percentages remain intact.
+Select keeps the native picker and keyboard behaviour. Its field-owned chevron
+has a token-based inset, reserves space for long values, follows disabled colour,
+and moves with the control when labels stack. Vertical option groups align their
+label with the first option; checkbox/radio controls have no browser margin.
+
+### Normalized primitive contract
+
+Design rules and the numeric Polaris reference matrix are maintained in
+[Két Design System](../../skills/ket-design-system/SKILL.md).
+Install the agent skill with `npx @ketvietlab/ket-design-system-skill@latest`.
+The component APIs and compatibility notes below describe the implementation.
+
+| Family | Public component API | Verification |
+| --- | --- | --- |
+| Typography | Text: visual variant independent of semantic element, tone, weight and numeric treatment | Render + browser dimensions |
+| Icon | Icon: shared Lucide names and informative/decorative semantics | Render + catalogue |
+| Inline links | Link: native navigation, target and disabled treatment | Render |
+| Actions | Button / LinkButton / IconButton: independent variant and tone, loading, pressed and width | Render + browser loading geometry |
+| Action composition | ActionGroup: shared alignment and sibling spacing | Catalogue + CSS |
+| Field shell | FieldFrame: label, help, error and associations | Render |
+| Text inputs | TextField / Field: native value, validation, access and affixes | Render + browser |
+| Search | SearchField: native search and optional clear control | Render + browser clear/focus/events |
+| Numeric inputs | NumberField / MoneyField: numeric constraints, currency and precision | Render + browser dimensions |
+| Multiline input | TextArea: rows, resize and native validation/access | Render + catalogue |
+| Selection | Select: native choices, disabled state and label association | Render + browser |
+| Choices | Checkbox / RadioGroup / CheckboxGroup / Switch: checked state separate from submitted value | Render + browser mixed/reset/submission |
+| Status | Badge / CountBadge / Tag: tone, icons, progress and optional announcements/removal | Render + catalogue |
+| Identity | Avatar / MediaLabel: optional image, fallback and text content | Render + browser image failure |
+| Feedback | Notice / Tooltip: announcements, associations and shared interaction runtime | Render + browser keyboard/Escape |
+| Progress | Progress / Spinner / Skeleton / LoadingState: determinate or loading semantics | Render + catalogue |
+
+### Date pickers
+
+Open `/dates` for the focused Vietnamese playground (`states=1` expands validation/access examples), or the `date-time` specimen
+under `/components/form-controls`. `DatePicker` keeps its native date input. `DateRangePicker` combines one read-only range display with a calendar icon inside the same frame as DatePicker. Two hidden boundaries retain the existing names and ISO values. The runtime enforces required, min/max and step; read-only, disabled, help and field errors remain supported. Submission stays `YYYY-MM-DD`.
+`DateTimePicker` and `TimePicker` retain their native local-time controls.
+
+Load `/runtime/auto.js` alongside the stylesheet, or call
+`attachDesignSystemInteractions(root)` from `/runtime` and dispose its returned
+cleanup when the root is removed. The runtime also enhances fields inserted later.
+Without JavaScript or the native Popover API, DatePicker retains its native input; DateRangePicker displays and submits its saved boundaries but cannot edit them.
+Server views never read the clock or access the DOM.
+
+```tsx
+<DatePicker id="delivery" name="delivery" label="Ngày giao hàng" />
+<DateRangePicker
+  id="period" label="Thời gian báo cáo"
+  start={{ id: 'from', name: 'from' }} startLabel="Từ ngày"
+  end={{ id: 'to', name: 'to' }} endLabel="Đến ngày"
+/>
+```
+
+The range calendar header select offers **Hôm nay**, **Hôm qua**, **7 ngày qua**, **Tháng này**,
+**Tháng trước**, **30 ngày qua**, and **90 ngày qua**. Rolling ranges include today;
+month presets cover the entire calendar month. `today="2026-09-30"` supplies a
+business-timezone civil date; otherwise the browser reads local today on opening.
+`presets={false}` hides quick ranges, or pass an ordered subset of `DateRangePreset`
+IDs: `today`, `yesterday`, `last7`, `thisMonth`, `lastMonth`, `last30`, `last90`.
+Presets outside either input's bounds or step are disabled, never silently clamped.
+
+Click two dates to form an inclusive range; reverse selection is ordered. Both
+calendars hold a draft until **Áp dụng** updates the fields and emits bubbling
+`input` and `change` events. **Hủy**, Escape and outside dismissal discard that draft.
+Choosing a preset commits immediately. Activating the range display opens the calendar. Invalid or incomplete required ranges show a field error and block form submission. Reset restores the original values.
+
+Arrow keys move by day/week; Home/End move to week edges; PageUp/PageDown move by
+month (Shift changes year). Enter/Space selects. Tab can leave the non-modal popup;
+Escape, Cancel and Apply return focus to its opener. Range calendars show two months
+on desktop. Below 768px, a vertical list renders twelve consecutive months around the
+selection; scrolling preserves the draft and month navigation recenters that window. Both pickers become fullscreen modal dialogs on mobile,
+with fixed commands, a scrolling month list, safe-area insets, contained focus,
+and an inert, scroll-locked background. Desktop calendars remain anchored non-modal
+popups. The native top-layer popup avoids ancestor clipping.
+`locale="vi"` is the default (`en` is also supported); `weekStartsOn` accepts 0 or 1
+(Monday by default). `calendarLabels` overrides commands, status and preset labels;
+it does not change the browser's native date-input formatting.
+
+The `date-picker` / `date-range` hooks own composition; `date-inputs`,
+`date-control-row`, `date-tools`, `date-field-control`, `date-range-preset`, `date-boundary` and `date-range-error` own the control area. The shared Field supports `labelHidden`, `selectionHidden` (select chevron only, options remain readable) and `appearance="embedded"` for accessible compound controls.
+`date-calendar`, `date-calendar-head`, `date-calendar-title`, `date-calendar-body`,
+`date-calendar-months`, `date-month`, `date-month-title`, `date-grid`,
+`date-weekday`, `date-cell`, `date-day`, `date-calendar-footer` and
+`date-calendar-status` own the popup. `data-selected`, `data-in-range`,
+`aria-current="date"` and native disabled states define calendar styling; consumers
+compose the public components rather than targeting their descendants.
 
 ### Popups close on an outside click and on Escape
 
@@ -84,8 +178,9 @@ returns them exactly where they were.
 ### Option groups
 
 `checkbox-group` and `radio` fields (`CheckboxGroup`, `RadioGroup`, or `RecordForm`
-fields with those types) keep one label on the left and the options on the right,
-each option's text after its control. `optionsOrientation` sets how the options flow:
+fields with those types) keep one label on the left and the options on the right
+from tablet width up (above them below it, as every field does), each option's text
+after its control. `optionsOrientation` sets how the options flow:
 
 - `horizontal` (default): options wrap on one line. Use for a few short choices.
 - `vertical`: one option per line, rendered as `data-orientation="vertical"` on
@@ -132,7 +227,7 @@ screens, but new catalogue examples should show one of those practical surfaces
 inside the shell.
 
 `AppNavigation` is the canonical dashboard menu. Supply one grouped item model and
-place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a native
+place it in `AppShell.sidebar`; it is a persistent sidebar at 768px and above and a native
 `details` drawer below that breakpoint. The markup remains usable without JavaScript.
 Items may contain recursive `children`; a parent expands its submenu directly below
 the parent row, and an active descendant opens the complete path on first render.
@@ -140,10 +235,11 @@ Only leaf links expose the active state. Top-level branches form one accordion a
 the complete sidebar, and the interaction adapter keeps the open branch from being
 collapsed without choosing another branch. Use `expanded` when a branch should start
 open without an active descendant.
-Top-level navigation rows use the shared dense metrics: a 30px row, 13px label,
-10px content gap and an 18px leading icon. Icon size belongs to `AppNavigation`, so
-application shells and catalogue demos render the same geometry without local icon
-overrides.
+Sizing, text roles and responsive rules live in the
+[Két Design System navigation contract](../../skills/ket-design-system/references/visual-contract.md#application-navigation).
+Labels and descriptions wrap; rows grow for long translations. Optional leading
+content and counts reserve space only when supplied. Consumers do not override
+navigation geometry or icon size.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 
@@ -227,42 +323,8 @@ selection, native form submission, validation, modal focus management and CSV ex
 Synthetic orders live in the server process only and reset when it restarts;
 the demo has no connection to production records, email or delivery services.
 
-The demo uses `data-presentation="grouped"` on its design-system root: a light grey
-canvas, grey page chrome and white working groups, with a grey KetSuite sidebar in
-light mode.
-The default light palette uses a neutral `#F6F6F7` canvas and a `#F7F5F5`
-sidebar, with a `#E9E7E8` sidebar border and a pale indigo
-`#EEF0FB` selected item. Header and context use the page grey; cards stay white, with
-`#E2E4E8` content dividers. The dark sidebar remains optional.
-Forms and titled tables own one boundary with an 18px heading inside;
-table viewports have no second frame. Titled tables use 12px inset on every side,
-matching the sales demo card, without extra viewport margins or an inner frame.
-The record context column is a continuous
-white region with unframed subsections and metric. Disclosures inside a working
-group are unframed. Kanban cards retain individual boundaries because each is a
-separate navigable record. Do not wrap a whole page or arbitrary sections in cards.
-Grouped layouts use 8px between cards and 12px padding around each entire card,
-including its heading and body. Page gutters and heading-to-body spacing are 12px.
-Field and table-row density is unchanged.
-Collection paging lives in `ListChrome.pager` above the table, alongside search and bulk controls.
-The demo shows the visible record range and previous/next links, with no page-number strip or
-separate `ListPage.footer` pagination panel. Paging, search and status filters preserve the
-current query and sort order.
-ListChrome is one command bar: a bounded search field on the leading side, with
-filters and the result range clustered at the trailing edge. On compact widths
-search and paging stay on the first row; filters wrap on the row below.
-Bulk actions occupy space only when a selection exists.
-The earlier `data-presentation="flat"` experiment remains opt-in; the catalogue
-and other consumers retain the default presentation.
-
-The contract is intentionally strict:
-
-- Inter is the only UI typeface;
-- sidebar, main application region, and context right rail use `--kv-radius-app-region` (`0`);
-- independent objects such as KPI cards use the shared 3–12px radius scale;
-- a page is never wrapped in one large card;
-- record sections and rail sections use low-contrast separators instead of nested cards;
-- component CSS consumes semantic/component roles, not numbered palette swatches.
+The demo supports grouped and flat presentations. Visual hierarchy, spacing and
+surface rules are defined only by the skill; API behavior is documented below.
 
 The public entry exports actions, status and feedback objects, fields, navigation,
 `Tab`, `Tabs`, `TabPanel` and `TabbedView`, progress, layout primitives, the responsive application navigation, the
@@ -281,14 +343,19 @@ controls, custom controls, checkbox/radio groups and nested field groups. Route-
 mobile breakpoint. The catalogue includes common component states; the page preview
 also covers loading, empty, error, validation and read-only states in English and Vietnamese.
 
+`KetTableColumn.wrap` opts a descriptive column into wrapping within the shared
+text-width token; rows grow with content. It works in server and island tables.
+Identifiers and numeric columns keep the default single-line behavior.
+
 `rowHref` provides one keyboard link per row, including the full row pointer target.
 Linked cells are display-only. Associate `selection.form` and `bulk.form` with the
 same native form to submit selected IDs and the bulk command. Selection syncing
 and select-all remain application runtime responsibilities.
 
-Forms keep labels on the left and controls on the right, including on mobile.
-Help and errors align below the control. Narrow panels reduce the number of field
-pairs per row without stacking labels above inputs. Native inputs support `readOnly`,
+From tablet width (48rem) up, a form keeps each label on the left of its control,
+with help and errors below the control. Below tablet width, and in any column
+narrower than 28rem such as a side panel, each label sits above its control
+(see the skill visual contract). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
 `min` and `max`; choices can be disabled individually, and invalid nested groups
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.
@@ -319,3 +386,5 @@ within `ListPage`, `RecordPage`, and `WorkspacePage`; they do not add a fourth p
 Before release, run `npm run design:release:check` from the repository root. It
 requires zero planned components, current migration/rollback notes, and locked
 deprecation admission. Publishing remains a post-merge operation from `master`.
+
+Button/input dimensions are pinned to Polaris React 13.9.5: default buttons map to large (32px desktop / 36px mobile), matching inputs. Compact is 28/32px. Density does not resize controls. See [the dimension matrix](../../skills/ket-design-system/references/visual-contract.md) and run `npm run test:design-system:browser` to enforce measured geometry.

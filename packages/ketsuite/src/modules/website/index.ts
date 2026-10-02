@@ -3,6 +3,7 @@
 // scrolling past the other two.
 
 import { defineModule } from '@ketvietlab/ketjs'
+import { imageModels, imageFunctions, imageJobs } from './image-assets.ts'
 import { models } from './models.ts'
 import { joints } from './joints.ts'
 import { sections } from './sections.ts'
@@ -10,6 +11,7 @@ import { views } from './views.ts'
 import { functions } from './functions.ts'
 import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
+import { saveStudioStyle } from './studio-style.ts'
 import { cmsFunctions } from './cms.ts'
 import { publicationFunctions } from './publication.ts'
 import { customerFunctions } from './customer.ts'
@@ -47,6 +49,7 @@ export default defineModule({
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
       'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
+      'error.invalidLogo': 'Logo phải là ảnh tải lên hoặc một đường dẫn https://.',
       'error.invalidTokenValue':
         'Có token mang tên hoặc giá trị không hợp lệ. Giá trị chỉ được chứa chữ, số, khoảng trắng và # . , % ( ) / + * -',
       'error.primaryDomainInUse':
@@ -64,6 +67,7 @@ export default defineModule({
       'error.invalidPath': 'Đường dẫn nội bộ không hợp lệ.',
       'error.invalidSlug': 'Slug chỉ được chứa chữ, số và dấu gạch ngang.',
       'error.revisionNotFound': 'Không tìm thấy revision.',
+      'error.previewAudience': 'Chọn người xem: nhân viên hoặc người có liên kết.',
       'error.entryUnrenderable': 'Trang này dùng section mà bản cài đặt hiện tại không còn cung cấp.',
       'error.publicationUnrenderable':
         'Bản xuất bản chứa trang dùng section mà bản cài đặt hiện tại không còn cung cấp.',
@@ -72,6 +76,11 @@ export default defineModule({
       'error.invalidParent': 'Term cha không hợp lệ.',
       'error.taxonomyCycle': 'Cấu trúc term tạo thành vòng lặp.',
       'error.termSiteMismatch': 'Nội dung và term phải thuộc cùng website.',
+      'error.invalidPostTerm': 'Chuyên mục hoặc thẻ không thuộc website này.',
+      'error.termArchived': 'Chủ đề này đã được lưu trữ.',
+      'error.invalidTermSeo':
+        'Thông tin SEO không hợp lệ: canonical cần là đường dẫn nội bộ hoặc địa chỉ HTTPS.',
+      'error.coverAltRequired': 'Ảnh bìa cần có mô tả cho người không xem được ảnh.',
       'error.termInUse': 'Không thể xóa term đang có term con hoặc đang được gán cho nội dung.',
       'error.mediaInUse': 'Không thể xóa ảnh đang được đặt trên một trang. Hãy gỡ khỏi trang trước.',
       'error.mediaUsageUnknown':
@@ -93,9 +102,17 @@ export default defineModule({
       'customer.error.realmUnavailable': 'Website chưa sẵn sàng cho tài khoản khách hàng.',
       'customer.error.invalidName': 'Tên khách hàng không hợp lệ hoặc quá dài.',
       'customer.error.invalidEmail': 'Địa chỉ email không hợp lệ.',
-      'customer.error.invalidPassword': 'Mật khẩu phải có từ 10 đến 128 ký tự.',
+      'customer.error.invalidPassword': 'Mật khẩu phải có từ 6 đến 128 ký tự.',
       'customer.error.rateLimit': 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
       'customer.error.emailInUse': 'Địa chỉ email này đã được sử dụng.',
+      'customer.error.phoneInUse': 'Số điện thoại này đã gắn với một khách hàng khác.',
+      'customer.error.invalidPhone': 'Số điện thoại không hợp lệ.',
+      'customer.error.loginRequired': 'Cần số điện thoại hoặc email để khách đăng nhập.',
+      'customer.error.signupClosed':
+        'Trang này không cho tự đăng ký. Vui lòng liên hệ bộ phận chăm sóc khách hàng.',
+      'customer.error.partnerUnavailable': 'Không tìm thấy khách hàng.',
+      'customer.error.partnerInOtherRealm': 'Khách hàng này đã có tài khoản ở một trang khác.',
+      'customer.error.accountUnavailable': 'Khách hàng này chưa có tài khoản.',
       'customer.error.invalidCredentials': 'Email hoặc mật khẩu không đúng.',
       'customer.error.sessionExpired': 'Phiên đăng nhập đã hết hạn.',
       'customer.error.csrf': 'Yêu cầu bảo mật không hợp lệ. Vui lòng tải lại trang.',
@@ -127,6 +144,7 @@ export default defineModule({
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
       'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
+      'error.invalidLogo': 'The logo has to be an uploaded image or an https:// address.',
       'error.invalidTokenValue':
         'A token name or value is not allowed. A value may hold letters, digits, spaces and # . , % ( ) / + * -',
       'error.primaryDomainInUse':
@@ -144,6 +162,7 @@ export default defineModule({
       'error.invalidPath': 'The local path is invalid.',
       'error.invalidSlug': 'The slug may only contain letters, numbers and hyphens.',
       'error.revisionNotFound': 'The revision was not found.',
+      'error.previewAudience': 'Choose who can open it: staff or anyone with the link.',
       'error.entryUnrenderable': 'This page places a section this deployment no longer provides.',
       'error.publicationUnrenderable':
         'The publication holds a page placing a section this deployment no longer provides.',
@@ -152,6 +171,11 @@ export default defineModule({
       'error.invalidParent': 'The parent term is invalid.',
       'error.taxonomyCycle': 'The term hierarchy contains a cycle.',
       'error.termSiteMismatch': 'The content and term must belong to the same site.',
+      'error.invalidPostTerm': 'The category or tag does not belong to this site.',
+      'error.termArchived': 'This term has been archived.',
+      'error.invalidTermSeo':
+        'The SEO settings are invalid: the canonical must be a local path or an HTTPS address.',
+      'error.coverAltRequired': 'The cover image needs a description for people who cannot see it.',
       'error.termInUse': 'A term with children or content assignments cannot be deleted.',
       'error.mediaInUse': 'This image is placed on a page. Take it off the page first.',
       'error.mediaUsageUnknown':
@@ -173,9 +197,16 @@ export default defineModule({
       'customer.error.realmUnavailable': 'Customer accounts are not ready for this site.',
       'customer.error.invalidName': 'The customer name is invalid or too long.',
       'customer.error.invalidEmail': 'The email address is invalid.',
-      'customer.error.invalidPassword': 'The password must contain 10 to 128 characters.',
+      'customer.error.invalidPassword': 'The password must contain 6 to 128 characters.',
       'customer.error.rateLimit': 'Too many attempts. Please try again later.',
       'customer.error.emailInUse': 'This email address is already in use.',
+      'customer.error.phoneInUse': 'This phone number already belongs to another customer.',
+      'customer.error.invalidPhone': 'This phone number is not valid.',
+      'customer.error.loginRequired': 'A phone number or an email is needed to sign in.',
+      'customer.error.signupClosed': 'This site does not take sign-ups. Please contact customer care.',
+      'customer.error.partnerUnavailable': 'Customer not found.',
+      'customer.error.partnerInOtherRealm': 'This customer already has an account on another site.',
+      'customer.error.accountUnavailable': 'This customer has no account yet.',
       'customer.error.invalidCredentials': 'The email or password is incorrect.',
       'customer.error.sessionExpired': 'The customer session has expired.',
       'customer.error.csrf': 'The security token is invalid. Reload the page and try again.',
@@ -185,14 +216,21 @@ export default defineModule({
   },
   requires: ['layout', 'website.page'],
   depends: ['partner'],
-  models,
+  models: { ...models, ...imageModels },
   contentTypes,
   taxonomies,
   joints,
   sections,
   views,
-  functions: { ...functions, ...cmsFunctions, ...publicationFunctions, ...customerFunctions },
-  jobs,
+  functions: {
+    ...functions,
+    ...cmsFunctions,
+    saveStudioStyle,
+    ...publicationFunctions,
+    ...customerFunctions,
+    ...imageFunctions,
+  },
+  jobs: { ...jobs, ...imageJobs },
   tokens,
 })
 

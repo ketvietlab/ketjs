@@ -129,7 +129,14 @@ const MENU: MenuNode[] = [
   }),
 ]
 
-/** A bar with every control on, so the design team sees the crowded case. */
+/**
+ * A bar with every control on, so the design team sees the crowded case.
+ *
+ * This keeps the chrome's own GET search and facets deliberately. It is not a
+ * list: it is the reference rendering of the `ListChrome` primitive, which the
+ * framework still offers and CRM still uses. The search-filter bar is an
+ * island over a real collection and has nothing static to show here.
+ */
 const CHROME: ListChrome = {
   section: 'Website',
   search: {

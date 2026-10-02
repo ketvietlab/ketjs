@@ -227,7 +227,7 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
     '/admin/loyalty/wallets',
     '/admin/loyalty/memberships',
     '/admin/loyalty/ledger',
-    '/admin/loyalty/ledger?period=all',
+    '/admin/loyalty/ledger?preset=period-all',
   ]) {
     const page = await e2e.client.get(path)
     assert.equal(page.status, 200, `${path} answered ${page.status}`)
@@ -334,7 +334,11 @@ test('loyalty HTTP E2E: each tier owns its spend period and modal', async (t) =>
 
   const english = await (await e2e.client.get('/admin/loyalty/tiers?lang=en')).text()
   assert.match(english, /Spend period \(months\)/)
-  assert.doesNotMatch(english, /loyalty(?:_backend)?\.[A-Za-z]/)
+  // The bar's island props name its functions, so only visible text is checked.
+  assert.doesNotMatch(
+    english,
+    /(?:>|placeholder="|aria-label="|title=")[^<"]*loyalty(?:_backend)?\.[A-Za-z]/u,
+  )
 })
 
 test('loyalty HTTP E2E: member administration is paged, exact and read-only', async (t) => {
@@ -405,7 +409,8 @@ test('loyalty HTTP E2E: member administration is paged, exact and read-only', as
   assert.match(members, /[?&amp;]page=2/)
   assert.match(members, /\/admin\/partner\/partners\/member-1000/)
 
-  const dormant = await (await e2e.client.get('/admin/loyalty/memberships?state=dormant')).text()
+  // The bar's own URL: activity is a preset now, not a bare query parameter.
+  const dormant = await (await e2e.client.get('/admin/loyalty/memberships?preset=dormant')).text()
   assert.match(dormant, /Khách Loyalty 0000/)
   assert.doesNotMatch(dormant, /Khách Loyalty 1000/)
 

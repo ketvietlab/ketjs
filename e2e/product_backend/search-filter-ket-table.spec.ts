@@ -9,33 +9,97 @@ test.beforeEach(async ({ page }) => {
 })
 
 for (const width of [1440, 1024, 390]) {
-  test(`SearchFilter stays inside its bar and dismisses at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
-    await page.goto('/admin/product/templates?lang=vi')
-    const toggle = page.locator('[data-ui="search-filter-toggle"]')
-    const menu = page.locator('[data-ui="menu"][data-variant="search-filter"]')
-    const panel = menu.locator('[data-ui="menu-panel"]')
-    await toggle.click()
-    await expect(panel).toBeVisible()
-    const bar = await page.locator('[data-ui="search-filter-bar"]').boundingBox()
-    const box = await panel.boundingBox()
-    expect(bar).not.toBeNull()
-    expect(bar!.width).toBeGreaterThan(200)
-    expect(box).not.toBeNull()
-    expect(box!.x).toBeGreaterThanOrEqual(bar!.x - 1)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(bar!.x + bar!.width + 1)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width)
-    // A real click must reach the panel, not the table beneath it.
-    await panel.getByRole('textbox', { name: 'Tên tìm kiếm' }).click()
-    await expect(panel).toBeVisible()
-    await page.getByRole('heading', { name: 'Danh mục sản phẩm', exact: true }).click()
-    await expect(menu).not.toHaveAttribute('open')
-    await toggle.click()
-    await page.keyboard.press('Escape')
-    await expect(menu).not.toHaveAttribute('open')
-    await page.screenshot({ path: `test-results/product-list-${width}.png`, fullPage: true })
-  })
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`SearchFilter layout and keyboard dismissal at ${width}px ${colorScheme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme })
+      await page.goto('/admin/product/templates?lang=vi')
+      const toggle = page.locator('[data-ui="search-filter-toggle"]')
+      const menu = page.locator('[data-ui="menu"][data-variant="search-filter"]')
+      await toggle.click()
+      if (width === 390) {
+        const sheet = page.locator('[data-ui="search-filter-sheet"]')
+        await expect(sheet).toBeVisible()
+        await expect(sheet.locator('[data-ui="modal-close"]')).toBeFocused()
+        await expect(sheet.getByRole('button', { name: 'Đóng', exact: true })).toHaveCount(1)
+        await expect(page.locator('[data-ui="search-filter-section-toggle"]').first()).toBeHidden()
+        const box = await sheet.boundingBox()
+        expect(box!.x).toBeGreaterThanOrEqual(0)
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width)
+        await sheet.getByRole('combobox', { name: 'Trường', exact: true }).selectOption('categoryId')
+        await sheet.getByRole('combobox', { name: 'Điều kiện', exact: true }).selectOption('equals')
+        await expect(sheet.getByRole('combobox', { name: 'Giá trị', exact: true })).toBeVisible()
+        await page.screenshot({ path: `test-results/product-filter-sheet-${width}-${colorScheme}.png` })
+        await page.keyboard.press('Escape')
+        await expect(sheet).not.toBeVisible()
+        await expect(toggle).toBeFocused()
+      } else {
+        const panel = menu.locator('[data-ui="menu-panel"]')
+        await expect(panel).toBeVisible()
+        const bar = await page.locator('[data-ui="search-filter-bar"]').boundingBox()
+        const box = await panel.boundingBox()
+        expect(box!.x).toBeGreaterThanOrEqual(bar!.x - 1)
+        expect(box!.x + box!.width).toBeLessThanOrEqual(bar!.x + bar!.width + 1)
+        await panel.getByRole('combobox', { name: 'Trường', exact: true }).click()
+        await expect(panel).toBeVisible()
+        await page.getByRole('heading', { name: 'Danh mục sản phẩm', exact: true }).click()
+        await expect(menu).not.toHaveAttribute('open')
+        await page.locator('[data-ui="search-filter-section-toggle"][data-section="favorite"]').click()
+        await expect(panel.locator('[data-ui="favorite-save"]')).toHaveCount(0)
+        await expect(panel.getByRole('link', { name: 'Lưu bộ lọc này' })).toHaveAttribute(
+          'href',
+          /modal=favorite/,
+        )
+        await page.keyboard.press('Escape')
+        await expect(menu).not.toHaveAttribute('open')
+      }
+      await page.screenshot({ path: `test-results/product-list-${width}-${colorScheme}.png` })
+    })
+  }
 }
+
+test('inline favorite form stays open on desktop and returns focus after cancel/save', async ({ page }) => {
+  await page.goto('/admin/sales/orders?lang=vi')
+  const menu = page.locator('[data-ui="menu"][data-variant="search-filter"]')
+  await page.locator('[data-ui="search-filter-section-toggle"][data-section="favorite"]').click()
+  const opener = menu.locator('[data-ui="favorite-save-toggle"]')
+  await opener.click()
+  const form = menu.locator('[data-ui="favorite-save"]')
+  const name = form.getByRole('textbox', { name: 'Tên bộ lọc' })
+  await expect(menu).toHaveAttribute('open')
+  await expect(name).toBeFocused()
+  expect((await form.boundingBox())!.y).toBeGreaterThan((await opener.boundingBox())!.y)
+  await form.getByRole('button', { name: 'Huỷ', exact: true }).click()
+  await expect(form).toHaveCount(0)
+  await expect(opener).toBeFocused()
+  await opener.click()
+  await name.fill('Desktop regression favorite')
+  await form.getByRole('button', { name: 'Lưu', exact: true }).click()
+  // Applying a saved favorite may navigate; both response modes must retain the saved entry.
+  await expect(page.locator('[data-ui="search-filter-facet"][data-type="favorite"]')).toContainText(
+    'Desktop regression favorite',
+  )
+})
+
+test('Escape closes a nested grouping disclosure before returning to its desktop trigger', async ({
+  page,
+}) => {
+  await page.goto('/admin/sales/orders?lang=vi')
+  const trigger = page.locator('[data-ui="search-filter-section-toggle"][data-section="groupBy"]')
+  await trigger.click()
+  const menu = page.locator('[data-ui="menu"][data-variant="search-filter"]')
+  const disclosure = menu.locator('[data-facet-type="groupBy"] details[data-ui="disclosure"]').first()
+  const summary = disclosure.locator('summary')
+  await summary.click()
+  await summary.press('Tab')
+  await page.keyboard.press('Escape')
+  await expect(disclosure).not.toHaveAttribute('open')
+  await expect(summary).toBeFocused()
+  await expect(menu).toHaveAttribute('open')
+  await page.keyboard.press('Escape')
+  await expect(menu).not.toHaveAttribute('open')
+  await expect(trigger).toBeFocused()
+})
 
 test('KetTable preserves pagination, selection, native sort and record-modal navigation', async ({
   page,
@@ -81,7 +145,7 @@ test('SearchFilter applies text, groups four levels, and prevents a fifth', asyn
     '/admin/product/templates?lang=vi&group=categoryId&group=active&group=saleOk&group=purchaseOk',
   )
   await expect(page.locator('[data-ui="search-filter-grouping-item"]')).toHaveCount(4)
-  await page.locator('[data-ui="search-filter-toggle"]').click()
+  await page.locator('[data-ui="search-filter-section-toggle"][data-section="groupBy"]').click()
   await expect(page.locator('[data-ui="custom-group-by"]')).toBeDisabled()
   await page.keyboard.press('Escape')
   for (let depth = 0; depth < 4; depth++) {

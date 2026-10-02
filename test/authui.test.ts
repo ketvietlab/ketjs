@@ -129,17 +129,16 @@ test('backend: a fetch() gets a status, because a redirect to HTML answers nothi
   await b.close()
 })
 
-test('backend: signed in, the sidebar says who and offers the way out', async () => {
+test('backend: signed in, the context toolbar says who and offers the way out', async () => {
   const { b, at } = await setup()
   const jar = (await form(at, { login: 'admin', password: 'correct horse' })).headers
     .get('set-cookie')!
     .split(';')[0]!
   const html = await (await fetch(`${at}/admin`, { headers: { ...HTML, cookie: jar } })).text()
-  // At the foot of the sidebar, not in the topbar: it competed there with the
-  // title and the search for the one line that changes on every screen.
-  const foot = html
-    .slice(html.indexOf('data-ui="sidebar-foot"'), html.indexOf('</aside>'))
-    .replace(/<!--[^>]*-->/g, '')
+  const foot = (html.match(/<header data-ui="app-location-bar">[\s\S]*?<\/header>/)?.[0] ?? '').replace(
+    /<!--[^>]*-->/g,
+    '',
+  )
   assert.match(foot, /data-ui="viewer-name"><a href="\/admin\/profile">Nguyễn Quản Trị<\/a>/)
   assert.match(foot, /data-ui="signout"[^>]*action="\/logout"/)
   await b.close()
@@ -168,7 +167,11 @@ test('logout: a form post clears the cookie and returns to the sign-in page', as
 
 test('storefront: none of this touches the public site', async () => {
   const { b, at } = await setup()
-  assert.equal((await fetch(`${at}/`, { headers: HTML })).status, 200)
+  // No redirect to sign-in: the storefront answers, here that the new site has no home page yet.
+  const home = await fetch(`${at}/`, { headers: HTML })
+  assert.equal(home.redirected, false)
+  assert.equal(home.status, 404)
+  assert.match(await home.text(), /data-ket-slot="website\.page"/)
   await b.close()
 })
 

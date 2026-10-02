@@ -34,6 +34,8 @@ export type ButtonSpec = ActionBase & {
   formAction?: string | null
   /** Where that response lands; `_blank` for something meant to be looked at beside the form. */
   formTarget?: string | null
+  /** Let navigation buttons bypass required controls in a multi-step form. */
+  formNoValidate?: boolean
 }
 
 export type LinkButtonSpec = ActionBase & { href: string }
@@ -58,6 +60,7 @@ export const button = (o: ButtonSpec): TemplateResult => (
     form={o.form ?? null}
     formaction={o.formAction ?? null}
     formtarget={o.formTarget ?? null}
+    formnovalidate={o.formNoValidate === true}
     disabled={o.disabled === true || o.loading === true}
     aria-busy={o.loading === true ? 'true' : null}
     aria-describedby={o.describedBy ?? null}

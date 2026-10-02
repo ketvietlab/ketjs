@@ -1,3 +1,4 @@
+import { HOOKS as iconHooks } from '../primitives/icon/index.tsx'
 import { HOOKS as actionHooks } from '../primitives/actions/index.tsx'
 import { HOOKS as feedbackHooks } from '../primitives/feedback/index.tsx'
 import { HOOKS as fieldHooks } from '../primitives/field/index.tsx'
@@ -49,6 +50,7 @@ import { HOOKS as pipelineHooks } from '../patterns/pipeline/index.tsx'
 import { HOOKS as formHooks } from '../patterns/record-form/index.tsx'
 
 const GROUPS = {
+  icons: iconHooks,
   actions: actionHooks,
   feedback: feedbackHooks,
   fields: fieldHooks,
@@ -105,3 +107,6 @@ export const HOOKS: readonly string[] = [...new Set(Object.values(GROUPS).flat()
 export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
   Object.fromEntries(Object.entries(GROUPS).map(([owner, hooks]) => [owner, [...hooks]])),
 )
+
+export { auditLayoutCss } from './layout-audit.ts'
+export type { LayoutRule, LayoutViolation } from './layout-audit.ts'

@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -75,7 +76,7 @@ test('manufacturing BOM HTTP: modal split preserves locale, values, CSRF and leg
   assert.match(list, /href="\/admin\/manufacturing\/boms\?create=1&amp;lang=vi"/)
   assert.match(list, /BOM\/0001/)
   assert.match(list, /Giỏ trái cây/)
-  assert.doesNotMatch(list, /data-ui="record-form"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(list), /data-ui="record-form"|data-ui="modal-layer"/)
 
   const modal = await (await e2e.client.get('/admin/manufacturing/boms?create=1&lang=vi')).text()
   assert.match(modal, /data-ui="list-page"/)

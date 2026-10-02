@@ -23,38 +23,8 @@ import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import { address, company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
+import { adminUrl, live } from './postgres-live.ts'
 
-const configured =
-  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
-const adminUrl = new URL(configured)
-adminUrl.pathname = '/postgres'
-
-/**
- * Reachable **and** able to make a database.
- *
- * The other PostgreSQL suites probe only the connection, so on a machine whose
- * role lacks CREATEDB they run, throw inside the test, and then hold the
- * process open until the runner gives up — several minutes of nothing, per
- * file. Probing the thing the test actually needs turns that into a skip.
- */
-const reachable = await (async () => {
-  const adapter = postgresAdapter(adminUrl.toString())
-  const probe = `ket_probe_${process.pid}_${Date.now()}`
-  try {
-    await adapter.open()
-    await adapter.exec(`CREATE DATABASE "${probe}"`)
-    await adapter.exec(`DROP DATABASE IF EXISTS "${probe}" WITH (FORCE)`)
-    return true
-  } catch {
-    return false
-  } finally {
-    await adapter.close().catch(() => {})
-  }
-})()
-
-const live = {
-  skip: reachable ? false : `no PostgreSQL that can create a database at ${adminUrl.toString()}`,
-}
 const modules = [address, partner, company, storage, user, mail, flow]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
@@ -70,8 +40,8 @@ test('flow PostgreSQL: two people starting a sprint at once leave one current sp
   const first = postgresAdapter(databaseUrl.toString(), { max: 2 })
   const second = postgresAdapter(databaseUrl.toString(), { max: 2 })
   await admin.open()
-  await admin.exec(`CREATE DATABASE "${database}"`)
   try {
+    await admin.exec(`CREATE DATABASE "${database}"`)
     await Promise.all([first.open(), second.open()])
     await migrateOne(first, manifest)
     registerFunctions(modules)

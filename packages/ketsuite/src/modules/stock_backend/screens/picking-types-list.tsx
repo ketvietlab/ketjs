@@ -1,16 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   icon,
   inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -28,7 +28,7 @@ export type PickingTypeListRow = {
 export type PickingTypesListScreenOptions = {
   rows: PickingTypeListRow[]
   /** Locale-aware `/admin/stock/picking-types/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   table?: Partial<DataTable<PickingTypeListRow>>
 }
 
@@ -106,34 +106,13 @@ export const pickingTypesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.pickingType.title')}
-      description={_('stock_backend.pickingType.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('stock_backend.pickingType.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('stock_backend.pickingType.title'), collection.frame)}
       footer={inline([
         badge(`${_('stock_backend.pickingType.summary.incoming')}: ${incomingCount}`, 'positive'),
         badge(`${_('stock_backend.pickingType.summary.outgoing')}: ${outgoingCount}`, 'info'),

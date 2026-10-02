@@ -68,7 +68,7 @@ export {
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
 export type { Placement, LayoutError, IdentifiedPlacement, PlacementChange } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
-export { KetError, Diagnostics } from './kernel/errors.ts'
+export { KetError, Diagnostics, isDefectError } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
@@ -108,11 +108,15 @@ export {
   text,
   bytes,
   streamed,
+  websocket,
   raw,
   document,
   withHeaders,
 } from './server/respond.ts'
 export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
+export type { WebSocketMessage, WebSocketPeer, WebSocketSession } from './server/websocket.ts'
+export { notificationHub, NOTIFY_PAYLOAD_BYTES } from './server/notify.ts'
+export type { NotificationHub } from './server/notify.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
 export type { RuntimeConfig, OpenStore, PublicStorageConfig } from './server/config.ts'
 export {
@@ -306,6 +310,7 @@ export type {
   GroupFieldSpec,
   SortFieldSpec,
   PresetFilterSpec,
+  ListSearchShape,
   ListSearchSpec,
   ListGroup,
   ListSort,

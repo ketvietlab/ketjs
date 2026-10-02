@@ -59,6 +59,24 @@ export type GroupFieldSpec = {
 export type SortFieldSpec = { key: string; label: string; col: Col }
 export type PresetFilterSpec = { key: string; label: string; group: string; expr: Expr }
 
+/**
+ * What a list search looks like from the outside: the keys, labels and types a
+ * URL is parsed against and a filter bar is drawn from. A list whose rows are
+ * filtered in memory has no columns to point at, and reading or validating a
+ * URL never needs one — only compiling the filter to SQL does.
+ */
+export type ListSearchShape = {
+  key: string
+  searchable?: readonly { key: string }[]
+  filterable?: readonly Omit<FilterFieldSpec, 'col'>[]
+  groupable?: readonly Omit<GroupFieldSpec, 'col'>[]
+  sortable?: readonly Omit<SortFieldSpec, 'col'>[]
+  presets?: readonly Omit<PresetFilterSpec, 'expr'>[]
+  defaultSort?: readonly ListSort[]
+  limits?: Partial<ListSearchLimits>
+}
+
+/** A list search whose fields name real columns, so it can compile to SQL. */
 export type ListSearchSpec = {
   key: string
   searchable?: readonly SearchFieldSpec[]
@@ -112,7 +130,7 @@ const positiveInt = (value: string | null, fallback = 1): number => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
 }
 
-export function parseListState(spec: ListSearchSpec, url: URL): ParsedListState {
+export function parseListState(spec: ListSearchShape, url: URL): ParsedListState {
   const warnings: string[] = []
   const limits = { ...DEFAULT_LIMITS, ...spec.limits }
   const presetKeys = new Set((spec.presets ?? []).map((item) => item.key))
@@ -240,7 +258,7 @@ const countTree = (node: FilterNode, depth = 1): { depth: number; rules: number 
   )
 }
 
-export function validateListState(spec: ListSearchSpec, state: ListState): void {
+export function validateListState(spec: ListSearchShape, state: ListState): void {
   const limits = { ...DEFAULT_LIMITS, ...spec.limits }
   const fields = new Map((spec.filterable ?? []).map((field) => [field.key, field]))
   let totalRules = 0

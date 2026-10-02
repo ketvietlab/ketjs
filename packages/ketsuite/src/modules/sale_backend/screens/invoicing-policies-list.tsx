@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   icon,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
@@ -19,7 +20,7 @@ export type InvoicingPolicyRow = Record<string, unknown>
 export type InvoicingPoliciesListScreenOptions = {
   rows: InvoicingPolicyRow[]
   /** Locale-aware `/admin/sales/invoicing-policies/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<InvoicingPolicyRow>>
 }
@@ -80,21 +81,17 @@ export const invoicingPoliciesListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('sale_backend.policies.title')}
-      description={_('sale_backend.policy.subtitle')}
       headerActions={
-        <LinkButton label={_('sale_backend.action.savePolicy')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton
+            label={_('sale_backend.action.savePolicy')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('sale_backend.policies.title'),
-              { ...collection.frame.chrome, layout: 'command', section: undefined, create: null },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('sale_backend.policies.title'), collection.frame)}
       footer={summary}
       body={
         options.rows.length || options.table?.groups?.length

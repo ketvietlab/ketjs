@@ -4,6 +4,7 @@ import {
   CardGrid,
   collectionTable,
   emptyState,
+  type DataTable,
   type Frame,
   linkButton,
   Metric,
@@ -20,6 +21,8 @@ export const propertiesScreen = (
   totals: { rooms: number; available: number; attention: number },
   locale: string,
   frame: Frame,
+  /** What the route decided about the table, notably the groups it is read by. */
+  table?: Partial<DataTable<PropertyRow>>,
 ): TemplateResult => {
   const collection = prepareCollectionTable(
     _,
@@ -30,8 +33,9 @@ export const propertiesScreen = (
       id: (row) => row.id,
       rowHref: (row) =>
         `/admin/hospitality/properties/${encodeURIComponent(row.id)}?lang=${encodeURIComponent(locale)}`,
+      ...table,
     },
-    { paginate: true },
+    { paginate: !table?.groups },
   )
   return (
     <ListScreenFrame
@@ -75,7 +79,7 @@ export const propertiesScreen = (
           id={(item) => item.id}
           card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
-        collection.table.rows.length
+        collection.table.rows.length || table?.groups?.length
           ? collectionTable(_, collection.table)
           : emptyState(
               _('hospitality_core.screen.properties.empty'),

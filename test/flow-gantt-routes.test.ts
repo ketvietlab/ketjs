@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
+import { setImmediate } from 'node:timers/promises'
 import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
@@ -106,7 +107,10 @@ test('flow gantt route: past its reading ceiling the chart says it is a first sl
     const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor('flow.Issue'))} (${columns
       .map((name) => adapter.quoteIdent(name))
       .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`
-    for (let index = 0; index < 2000; index += 1)
+    for (let index = 0; index < 2000; index += 1) {
+      // SQLite writes are synchronous. Let HTTP keep-alive timers and socket
+      // closures run during this large fixture instead of starving the event loop.
+      if (index % 100 === 0) await setImmediate()
       await adapter.run(sql, [
         'acme',
         `bulk-${index}`,
@@ -122,6 +126,7 @@ test('flow gantt route: past its reading ceiling the chart says it is a first sl
         '2026-08-01T00:00:00.000Z',
         new Date(Date.parse('2026-08-01T00:00:00.000Z') + index * 1000).toISOString(),
       ] as never[])
+    }
   })
 
   const html = await (await app.client.get('/admin/flow/projects/platform/gantt?lang=en')).text()

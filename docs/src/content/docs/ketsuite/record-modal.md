@@ -70,11 +70,13 @@ The runtime owns, for every module:
 | Opening | A click on a link naming this kind opens it (`pushState`); a link to the open record switches tab (`replaceState`). `record=<kind>:new` opens the create form (see below). |
 | History | Back and forward over modal entries open or close the modal only. The navigation layer asks through the cancelable `ket:popstate` event and does not re-fetch the page. |
 | Accessibility | `ModalSheet mode="client"`: close controls are buttons, focus moves in and is trapped, Escape closes the top layer, the rest of the page is inert, focus returns to the opener. |
-| Height | A definition with more than one tab renders `ModalSheet height="fixed"`: the dialog keeps one height from loading through every tab. `TabbedView` keeps the bar fixed and only its `TabPanel` scrolls; the panel adds no horizontal padding. A single view and dialog layers size to their content. |
+| Height | A definition with more than one tab renders `ModalSheet height="fixed"`, and the runtime owns that height: it measures each tab it renders and holds the tallest as a min-height, so the dialog opens at the size of its content and never shrinks as the reader moves between tabs — and a record whose tabs are all short never gets a dialog the height of the screen. The floor belongs to the record and starts again with the next one. `TabbedView` keeps the bar fixed and only its `TabPanel` scrolls; the panel adds no horizontal padding. A single view and dialog layers size to their content. |
 | States | Loading, load failure with retry, not found. |
 | Cache | Each island keeps the last 30 contexts it read (including the create form's). Reopening one renders it at once and reads it again quietly behind it. A successful command drops the record it changed, and `ket:records-changed` for the kind drops the named ids (all when none are named). A definition sets `cache: false` when its context must never be shown before a fresh read. |
 | Commands | A form inside the modal names its command with a `__command` field (or a submit button with `name="__command"`). The runtime maps `FormData` through `command.input`, calls `/_ket/fn` with an idempotency key, and applies `after`: `close`, `reload`, `refresh`, `stay`, `{ tab }` or `{ dialog }`. |
-| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. Text/select values survive through `context.draft(name, fallback)` and checkbox/radio state through `context.draftChecked(name, value, fallback)`. |
+| Previews | A command marked `preview: true` asks what would happen instead of making it happen. Its function writes nothing, so the record is not re-read, the collection is not told and what was typed stays on screen. The answer reaches the view as `context.outcome<T>('<command>')`, beside the form that asked for it, and is cleared as soon as anything moves — another record, tab or dialog, a refusal, or the write itself. This is how a change with consequences is confirmed: one form, two submit buttons, and the commit offered only once the consequence has been read. |
+| Answers | `context.outcome` also carries what a command with `after: 'stay'` returned, which is how something the server can say only once — a one-time credential — reaches the reader. Every other `after` replaces the layer, and the answer goes with it. |
+| Refusals | Issues with a `field` are read back by the view through `context.fieldError(name)`; the rest render as a danger notice at the top of the layer. A code that neither `messages` nor `labels` translate reads as `recordModal.saveFailed`, never as the code itself. Text/select values survive through `context.draft(name, fallback)` and checkbox/radio state through `context.draftChecked(name, value, fallback)`. A child workflow can explicitly seed a field from the captured parent with `context.recordDraft?.(name, fallback)`; child drafts remain isolated until its command succeeds. If that command consumes parent fields, declare `clearRecordDrafts: [name]` on the command; only those drafts clear after successful completion, while refusal/cancel preserves them. |
 | Success | A command that leaves the modal open says so where a refusal would have appeared: a positive notice at the top of the layer (`recordModal.savedTitle` / `recordModal.saved`). It clears on the next submit and when another record opens. A command that closes the modal says it by closing. |
 | Unsaved input | Switching tabs preserves text, select, checkbox and radio drafts without prompting. Closing asks `recordModal.unsaved` only for the top layer being discarded. |
 | Dialogs | An element with `data-record-dialog="<name>"` opens a dialog layer of the same record; `data-record-param-*` attributes become its params. Closing it returns to the record without reloading. |
@@ -153,7 +155,7 @@ still ship the same keys in `messages`:
 | `recordModal.notFound` | The record is gone or not visible |
 | `recordModal.retry` | Retry after a load failure |
 | `recordModal.errorTitle` | Title of the refusal notice |
-| `recordModal.saveFailed` | A command failed without issues |
+| `recordModal.saveFailed` | A command failed without issues, or with a code nothing translates |
 | `recordModal.savedTitle` | Title of the notice a succeeded command leaves |
 | `recordModal.saved` | A command succeeded and the modal stayed open |
 | `recordModal.unsaved` | Prompt before discarding typed input |
@@ -165,3 +167,30 @@ Author the definition in TSX and bundle it with esbuild into the module's asset 
 `@ketvietlab/ketjs-view` external (it is served at `/_ket/view/`) and bundle
 `@ketvietlab/design-system` and `@ketvietlab/ketsuite/ui` in, so the island shares the page's single
 renderer and renders the same markup the design-system CSS expects.
+
+
+### Inline photo cells
+
+Use `RecordModalForm` with `dropzone: true`, an upload command, and a public `DropZone` in `body`.
+Selecting a file and dropping a file both submit that form through the record runtime. The runtime
+owns uploads, errors, busy state, and the subsequent context refresh. Keep each cell a separate form;
+placing the photo matrix inside a note or completion form creates invalid nested forms. File controls
+need no module-specific event handler or private design-system attributes.
+
+
+### Pending actions and inline editors
+
+`recordModalHref(url, { kind, id, tab, dialog })` optionally names an entry dialog with the
+`recordDialog` query parameter. The runtime reads the record first and opens only a dialog declared
+by that record definition. Opening the dialog performs no mutation: its command still validates
+permissions, current version, and fields. This is appropriate for kanban drop confirmation. A normal
+record link clears the entry dialog; closing clears it with the record cursor. Do not implement a
+second overlay or write on drop.
+
+`RecordStateTrigger({ name, value, children })` wraps a public button to select a record-local view
+state, such as the active milestone note editor. The runtime retains form drafts before changing
+state. Give editors for different records distinct field names so switching editors never reuses the
+wrong draft. For an inline Cancel action, pass `resetFields: [name]` to discard only that
+editor's draft while preserving other fields and tabs. State triggers do not save a record.
+
+Desktop `fixedHeight` is carried by `--kv-modal-fixed-height`; it never overrides the mobile full-screen height. Avoid inline `height: … !important` on a ModalSheet.

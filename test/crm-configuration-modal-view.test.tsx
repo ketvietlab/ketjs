@@ -44,6 +44,7 @@ const contextOf = <Data,>(kind: string, data: Data, options: Options = {}): Reco
   draft: (name, fallback = '') => options.drafts?.[name] ?? fallback,
   draftChecked: (name, value = '1', fallback = false) =>
     options.draftChecks?.[`${name}\u0000${value}`] ?? fallback,
+  outcome: () => null,
   busy: false,
   dialog: options.dialog ?? null,
   href: () => '',

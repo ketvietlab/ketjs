@@ -1,14 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  collectionActions,
+  collectionControls,
   collectionTable,
   Disclosure,
   emptyState,
   formatMoney,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   RecordForm,
   Section,
   shell,
@@ -37,7 +38,8 @@ export type VendorPricelistsListScreenOptions = {
   /** Locale-aware list and policy POST endpoint. */
   action: string
   /** Locale-aware `/admin/purchase/vendor-pricelists/new` URL. */
-  createHref: string
+  createHref: string | null
+  canSetMethod?: boolean
   currency?: unknown
   invalid?: string | null
   setup?: { pickingTypes: number; vendors: number }
@@ -118,55 +120,44 @@ export const vendorPricelistsListScreen = (
       frame={collection.frame}
       title={_('purchase_backend.pricelists.title')}
       headerActions={
-        <LinkButton
-          label={_('purchase_backend.action.addVendorPrice')}
-          href={options.createHref}
-          variant="primary"
-        />
+        options.createHref ? (
+          <LinkButton
+            label={_('purchase_backend.action.addVendorPrice')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : undefined
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.pricelists.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('purchase_backend.pricelists.title'), collection.frame)}
       footer={`${_('purchase_backend.dashboard.records')}: ${String(options.rows.length)}`}
       body={stack(
         [
           rejection(_, options.invalid),
           options.setup ? missingSetup(_, options.setup) : null,
-          <Disclosure
-            summary={_('purchase_backend.method.title')}
-            body={
-              <Section
-                title={_('purchase_backend.method.title')}
-                body={
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={options.action}
-                        submit={_('purchase_backend.action.saveMethod')}
-                        submitVariant="primary"
-                        hidden={{ action: 'method' }}
-                        fields={options.methodFields}
-                      />
-                    }
-                  />
-                }
-              />
-            }
-          />,
+          options.canSetMethod ? (
+            <Disclosure
+              summary={_('purchase_backend.method.title')}
+              body={
+                <Section
+                  title={_('purchase_backend.method.title')}
+                  body={
+                    <Surface
+                      body={
+                        <RecordForm
+                          action={options.action}
+                          submit={_('purchase_backend.action.saveMethod')}
+                          submitVariant="primary"
+                          hidden={{ action: 'method' }}
+                          fields={options.methodFields}
+                        />
+                      }
+                    />
+                  }
+                />
+              }
+            />
+          ) : null,
           table,
         ],
         'loose',

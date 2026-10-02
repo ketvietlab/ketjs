@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { rowListSearch } from '../backend/row-list.ts'
 import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import {
@@ -19,6 +19,22 @@ import type {
   CompanyHierarchyRow,
   CompanyRow,
 } from './screens/index.ts'
+import { companyListSearch } from './search.ts'
+
+/** The bar's own functions, named once for the list that renders it. */
+const companySearchFunctions = {
+  apply: 'company_backend.applySearchFilter',
+  saveFavorite: 'company_backend.saveSearchFavorite',
+  deleteFavorite: 'company_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'company_backend.setDefaultSearchFavorite',
+}
+
+/** A currency code stands for itself; the archive column needs its own words. */
+const companyGroupLabel = (_: ReturnType<ServeContext['translate']>, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (key === 'active') return _(`company_backend.state.${raw === 'false' ? 'archived' : 'active'}`)
+  return raw || _('backend.chrome.groupEmpty')
+}
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -274,47 +290,34 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const includeArchived = url.searchParams.get('archived') === '1'
-      const search = searchOf(url) ?? ''
-      const currentPage = pageOf(url)
-      const locale = ctx.localeOf(url, req)
-      const needle = search.toLocaleLowerCase(locale)
       const allRows = (await ctx.call('company.listCompanies', { includeArchived }, url, req)) as CompanyRow[]
-      const matching = needle
-        ? allRows.filter((row) =>
-            [row.code, row.name, row.currency].some((value) =>
-              String(value).toLocaleLowerCase(locale).includes(needle),
-            ),
-          )
-        : allRows
-      const rows = matching.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'company_backend.screen.title',
         active: '/admin/companies',
-        body: (_, frame) => {
-          frame.chrome = {
-            search: {
-              name: 'q',
-              value: search,
-              placeholder: _('company_backend.search.companies'),
-              keep: {
-                ...(includeArchived ? { archived: '1' } : {}),
-                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-              },
-            },
-            pager: pager(url, currentPage, rows.length, matching.length),
-          }
+        body: async (_, frame) => {
           const locale = localeQuery(url)
           const returnTo = safeReturnTo(url, `${url.pathname}${url.search}`)
-          return companiesListScreen(_, frame, {
-            rows: rows.map((row) => ({
+          const search = await rowListSearch(ctx, url, req, {
+            spec: companyListSearch,
+            rows: allRows.map((row) => ({
               ...row,
               detailHref: companyDetailPath(url, row.id, returnTo),
             })),
-            total: matching.length,
+            frame,
+            name: 'company-filter',
+            bodyId: 'company-list',
+            functions: companySearchFunctions,
+            labels: { searchPlaceholder: _('company_backend.search.companies') },
+            groupLabel: (key, value) => companyGroupLabel(_, key, value),
+          })
+          return companiesListScreen(_, search.frame, {
+            rows: search.rows,
+            total: search.groups
+              ? search.groups.reduce((sum, group) => sum + group.count, 0)
+              : search.rows.length,
             createHref: companyCreatePath(url, returnTo),
             hierarchyHref: localized('/admin/companies/hierarchy', locale),
-            toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
-            includeArchived,
+            ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
       })

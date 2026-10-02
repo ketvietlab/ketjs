@@ -1,4 +1,6 @@
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { posOrderListSearch } from './search.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -7,6 +9,7 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import {
   configsScreen,
   dashboard,
+  labelOf,
   methodsScreen,
   orderDetail,
   ordersScreen,
@@ -327,6 +330,7 @@ export default defineModule({
   title: 'Điểm bán hàng trong quản trị',
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Hệ thống',
+  functions: searchFilterFunctions,
   menus: {
     pos: { label: 'menu.app', icon: 'store', sequence: 23 },
     'pos.dashboard': {
@@ -681,27 +685,39 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const [rows, partners] = await Promise.all([
-            ctx.call(
-              'pos.listOrders',
-              { ...(url.searchParams.get('state') ? { state: url.searchParams.get('state') } : {}) },
-              url,
-              req,
-            ) as Promise<AnyRow[]>,
+            ctx.call('pos.listOrders', {}, url, req) as Promise<AnyRow[]>,
             ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
           ]),
           names = new Map(partners.map((row) => [String(row.id), row.name]))
         return adminPage(ctx, url, req, {
           title: 'pos_backend.orders.title',
-          body: (_, shell) =>
-            ordersScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: posOrderListSearch,
+              rows: rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+              frame: shell,
+              name: 'pos-order-filter',
+              bodyId: 'pos-order-list',
+              functions: {
+                apply: 'pos_backend.applySearchFilter',
+                saveFavorite: 'pos_backend.saveSearchFavorite',
+                deleteFavorite: 'pos_backend.deleteSearchFavorite',
+                setDefaultFavorite: 'pos_backend.setDefaultSearchFavorite',
+              },
+              labels: { searchPlaceholder: _('pos_backend.orders.title') },
+              groupLabel: (key, value) => {
+                const raw = value == null ? '' : String(value)
+                if (!raw) return _('backend.chrome.groupEmpty')
+                return key === 'state' ? labelOf(_, 'orderState', raw) : raw
+              },
+            })
+            return ordersScreen(
               _,
-              collectionSearchFrame(url, shell, _('pos_backend.orders.title')),
-              searchCollectionRows(
-                url,
-                rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
-                (row: AnyRow) => `${row.posReference ?? ''} ${row.partnerName ?? ''}`,
-              ),
-            ),
+              search.frame,
+              search.rows,
+              search.groups ? { groups: search.groups } : undefined,
+            )
+          },
         })
       },
     '/admin/pos/orders/{id}':

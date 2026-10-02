@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -35,8 +36,6 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
         ],
         total: 31,
         createHref: '/admin/users/new?lang=en',
-        toggleHref: '/admin/users?q=Ada&lang=en',
-        includeArchived: true,
       },
     ),
   )
@@ -47,9 +46,11 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   assert.match(html, /31-31 \/ 31/)
   assert.match(html, /data-row-href="\/admin\/users\/user%2Fa\?lang=en"/)
   assert.match(html, /href="\/admin\/users\/new\?lang=en"/)
+  // The search-filter bar owns the archived toggle, so the header keeps only
+  // the create action before the controls and the table.
   assert.match(
     html,
-    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/users\/new\?lang=en"[\s\S]*?data-ui="list-page-tools"[\s\S]*?href="\/admin\/users\?q=Ada&amp;lang=en"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+    /data-ui="list-page-title-row"[\s\S]*?href="\/admin\/users\/new\?lang=en"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
   )
   assert.doesNotMatch(
     html.slice(html.indexOf('data-ui="list-page-toolbar"')),
@@ -57,7 +58,7 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
   )
   assert.equal((html.match(/href="\/admin\/users\/new\?lang=en"/g) ?? []).length, 1)
   assert.match(html, /data-tone="neutral" data-value="archived"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
 })
 
 test('users list keeps ListPage identity and empty state without decorative pager', () => {
@@ -69,12 +70,43 @@ test('users list keeps ListPage identity and empty state without decorative page
         rows: [],
         total: 0,
         createHref: '/admin/users/new',
-        toggleHref: '/admin/users?archived=1',
-        includeArchived: false,
       },
     ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /user_backend\.users\.empty/)
   assert.doesNotMatch(html, /data-ui="table"|data-ui="pager"/)
+})
+
+test('users list offers no create action to a viewer who may not create a user', () => {
+  const html = renderToString(
+    usersScreen(
+      translate,
+      { chrome: { search: { name: 'q', value: '', placeholder: 'Search users' } } },
+      {
+        rows: [
+          {
+            id: 'ada',
+            login: 'ada',
+            name: 'Ada Lovelace',
+            accessKind: 'internal',
+            securityVersion: 1,
+            passwordReady: true,
+            active: true,
+            superuser: false,
+            detailHref: '/admin/users?record=user.user%3Aada',
+          },
+        ],
+        total: 1,
+        createHref: null,
+      },
+    ),
+  )
+  // Title, then controls, then the table — the order holds without the action.
+  assert.match(
+    html,
+    /data-ui="list-page-title-row"[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
+  )
+  assert.doesNotMatch(html, /user_backend\.action\.createUser/)
+  assert.doesNotMatch(html, /record=user\.user%3Anew|\/admin\/users\/new/)
 })

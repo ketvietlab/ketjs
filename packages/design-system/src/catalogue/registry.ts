@@ -30,6 +30,8 @@ const entry = (
 })
 
 export const componentRegistry: readonly ComponentRegistration[] = [
+  entry('Icon', 'Icons', 'primitives/icon', 'status', 'typography-icons'),
+  entry('Link', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('ReorderList', 'Forms', 'interactions/reorder-list', 'fields', 'reorder-list'),
   entry('ActionGroup', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('Button', 'Actions', 'primitives/actions', 'actions', 'button', 'stable', [
@@ -41,6 +43,8 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('LinkButton', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('Avatar', 'Status', 'primitives/status', 'status', 'identity'),
   entry('Badge', 'Status', 'primitives/status', 'status', 'badges'),
+  entry('Text', 'Status', 'primitives/status', 'status', 'badges'),
+  entry('MediaLabel', 'Status', 'primitives/status', 'status', 'identity'),
   entry('Code', 'Status', 'primitives/status', 'status', 'identity'),
   entry('CountBadge', 'Status', 'primitives/status', 'status', 'badges'),
   entry('Tag', 'Status', 'primitives/status', 'status', 'badges'),
@@ -79,6 +83,15 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('KanbanGrid', 'Layout', 'layouts/layout', 'layouts', 'kanban-card'),
   entry('Metric', 'Layout', 'layouts/layout', 'layouts', 'surface-section'),
   entry('AppShell', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
+  entry('AppBrand', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
+  entry('AppTopbar', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
+  entry(
+    'NavigationToggle',
+    'Navigation',
+    'layouts/app-navigation',
+    'application-structure',
+    'app-navigation',
+  ),
   entry('Page', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
   entry('PageHeader', 'Shell', 'layouts/shell', 'application-structure', 'app-shell'),
   entry('RecordCanvas', 'Shell', 'layouts/shell', 'application-structure', 'record-page'),
@@ -153,6 +166,13 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('Skeleton', 'Feedback', 'interactions/skeleton', 'interactions', 'feedback-runtime'),
   entry(
     'createSearchFilterView',
+    'Data operations',
+    'interactions/search-filter',
+    'interactions',
+    'search-filter',
+  ),
+  entry(
+    'searchFilterRuleLabel',
     'Data operations',
     'interactions/search-filter',
     'interactions',

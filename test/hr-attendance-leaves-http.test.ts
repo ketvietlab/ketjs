@@ -77,8 +77,8 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
   const first = await (await e2e.client.get('/admin/hr/leaves?lang=en')).text()
   assert.match(first, /data-ui="list-page"/)
   assert.match(first, /Leave approvals/)
-  assert.match(first, /data-ui="chrome-search"/)
-  assert.match(first, /data-ui="search-menu"/)
+  assert.match(first, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(first, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(first, /1-30 \/ 32/)
   assert.match(first, /leave-01/)
   assert.doesNotMatch(first, /leave-32/)
@@ -93,20 +93,19 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
   assert.match(second, /leave-32/)
   assert.doesNotMatch(second, /leave-01/)
 
-  const searchPath = '/admin/hr/leaves?q=leave-32&state=requested&lang=en'
+  const searchPath = '/admin/hr/leaves?q=leave-32&preset=requested&lang=en'
   const searched = await (await e2e.client.get(searchPath)).text()
-  assert.match(searched, /value="leave-32"/)
-  assert.match(searched, /data-ui="facet"/)
   assert.match(searched, /leave-32/)
+  assert.doesNotMatch(searched, /leave-01/)
   assert.match(searched, /2026-10-02 – 2026-10-02/)
   assert.match(searched, /Khám bệnh/)
   assert.match(
     searched,
-    /action="\/admin\/hr\/leaves\?q=leave-32&amp;state=requested&amp;lang=en&amp;id=leave-32"/,
+    /action="\/admin\/hr\/leaves\?q=leave-32&amp;preset=requested&amp;lang=en&amp;id=leave-32"/,
   )
 
   const refused = await e2e.client.post(
-    '/admin/hr/leaves?q=leave-30&state=requested&lang=en&id=leave-30',
+    '/admin/hr/leaves?q=leave-30&preset=requested&lang=en&id=leave-30',
     decision('rejected'),
     {
       headers: {
@@ -120,7 +119,7 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
   let requests = (await fixture('hr.leave.manageList', {}, 'admin')) as unknown as Row[]
   assert.equal(requests.find((row) => row.id === 'leave-30')?.state, 'requested')
 
-  const invalidPath = '/admin/hr/leaves?q=leave-31&state=requested&lang=vi&id=leave-31'
+  const invalidPath = '/admin/hr/leaves?q=leave-31&preset=requested&lang=vi&id=leave-31'
   const invalid = await e2e.client.post(invalidPath, decision('invalid'), {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     redirect: 'manual',
@@ -130,7 +129,6 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
   assert.match(invalidHtml, /data-ui="notice" data-tone="danger" role="alert"/)
   assert.match(invalidHtml, /Không thể cập nhật yêu cầu nghỉ/)
   assert.match(invalidHtml, /leave-31/)
-  assert.match(invalidHtml, /value="leave-31"/)
   requests = (await fixture('hr.leave.manageList', {}, 'admin')) as unknown as Row[]
   assert.equal(requests.find((row) => row.id === 'leave-31')?.state, 'requested')
 
@@ -148,13 +146,13 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
   requests = (await fixture('hr.leave.manageList', {}, 'admin')) as unknown as Row[]
   assert.equal(requests.find((row) => row.id === 'leave-32')?.state, 'approved')
 
-  const rejectPath = '/admin/hr/leaves?q=leave-31&state=requested&lang=en&id=leave-31'
+  const rejectPath = '/admin/hr/leaves?q=leave-31&preset=requested&lang=en&id=leave-31'
   const rejected = await e2e.client.post(rejectPath, decision('rejected'), {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     redirect: 'manual',
   })
   assert.equal(rejected.status, 303)
-  assert.equal(rejected.headers.get('location'), '/admin/hr/leaves?q=leave-31&state=requested&lang=en')
+  assert.equal(rejected.headers.get('location'), '/admin/hr/leaves?q=leave-31&preset=requested&lang=en')
   const rejectRetryWithOppositeDecision = await e2e.client.post(rejectPath, decision('approved'), {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     redirect: 'manual',
@@ -167,7 +165,7 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
     'a retried decision must not reverse an already decided request',
   )
 
-  const approvedFilter = await (await e2e.client.get('/admin/hr/leaves?state=approved&lang=en')).text()
+  const approvedFilter = await (await e2e.client.get('/admin/hr/leaves?preset=approved&lang=en')).text()
   assert.match(approvedFilter, /leave-32/)
   assert.doesNotMatch(approvedFilter, /leave-31/)
   assert.match(approvedFilter, /data-value="approved"/)
@@ -193,5 +191,5 @@ test('HR leave approvals HTTP: ListPage search/filter/paging and decisions prese
     'admin',
   )
   await e2e.client.login({ login: 'hr-manager', password: 'correct horse' })
-  assert.equal((await e2e.client.get('/admin/hr/leaves?state=requested&lang=vi')).status, 200)
+  assert.equal((await e2e.client.get('/admin/hr/leaves?preset=requested&lang=vi')).status, 200)
 })

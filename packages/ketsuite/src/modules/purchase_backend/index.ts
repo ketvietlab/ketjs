@@ -1,8 +1,11 @@
-import {
-  collectionSearchFrame,
-  searchCollectionRows,
-  loadCollectionRows,
-} from '../backend/collection-search.ts'
+import { vendorPricelistContext } from './modal/pricelist-context.ts'
+import { defineRecordModalIsland, recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import { purchaseOrderContext } from './modal/context.ts'
+import { optionalRead } from '../backend/optional-read.ts'
+import { loadCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { purchaseOrderListSearch, rfqListSearch, vendorPricelistListSearch } from './search.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -24,7 +27,6 @@ import {
 } from './screens/index.ts'
 import { adminPage, choices, inLocale, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
-import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -96,29 +98,24 @@ const rfqCreatePath = (url: URL, returnTo: string): string => {
   return `${target.pathname}${target.search}`
 }
 
-const listKeep = (url: URL, omitted: string[] = []): Record<string, string> => {
-  const keep: Record<string, string> = {}
-  for (const [key, value] of url.searchParams) if (!['q', 'page', ...omitted].includes(key)) keep[key] = value
-  return keep
+/** Every purchasing list shares one set of functions; see `search-functions.ts`. */
+const purchaseSearchFunctions = {
+  apply: 'purchase_backend.applySearchFilter',
+  saveFavorite: 'purchase_backend.saveSearchFavorite',
+  deleteFavorite: 'purchase_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'purchase_backend.setDefaultSearchFavorite',
 }
 
-const listGroups = (_: Translator, url: URL, rows: AnyRow[], group: string | null) => {
-  if (group !== 'state' && group !== 'vendor') return undefined
-  const grouped = new Map<string, AnyRow[]>()
-  for (const row of rows) {
-    const key = group === 'state' ? String(row.state) : String(row.partnerName ?? row.partnerId)
-    grouped.set(key, [...(grouped.get(key) ?? []), row])
-  }
-  return [...grouped.entries()].map(([key, groupedRows]) => ({
-    id: `${group}:${key}`,
-    label: group === 'state' ? labelOf(_, 'state', key) : key,
-    count: groupedRows.length,
-    depth: 0,
-    open: true,
-    href: withParam(url, 'group', null),
-    rows: groupedRows,
-  }))
+/** A purchasing state or status in the reader's language; the value stays data. */
+const purchaseGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  return key === 'state' || key === 'invoiceStatus' ? labelOf(_, key, raw) : raw
 }
+
+/** How many records the list holds, whether it is grouped or flat. */
+const searchTotal = (search: { rows: unknown[]; groups?: readonly { count: number }[] }): number =>
+  search.groups ? search.groups.reduce((sum, group) => sum + group.count, 0) : search.rows.length
 
 const saveSupplierInfo = async (
   ctx: ServeContext,
@@ -150,14 +147,20 @@ const saveSupplierInfo = async (
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, pickingTypes, taxes, journals, accounts] = await Promise.all([
-    ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('product.listTemplates', { withVariants: true }, url, req) as Promise<AnyRow[]>,
-    ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('stock.listPickingTypes', {}, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listTaxes', { typeTaxUse: 'purchase' }, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listJournals', { type: 'purchase' }, url, req) as Promise<AnyRow[]>,
-    ctx.call('account.listAccounts', {}, url, req) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'partner.listPartners', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'company.listCompanies', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'product.listTemplates', { withVariants: true }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'stock.listPickingTypes', {}, url, req, []) as Promise<AnyRow[]>,
+    optionalRead<AnyRow[]>(ctx, 'account.listTaxes', { typeTaxUse: 'purchase' }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'account.listJournals', { type: 'purchase' }, url, req, []) as Promise<
+      AnyRow[]
+    >,
+    optionalRead<AnyRow[]>(ctx, 'account.listAccounts', {}, url, req, []) as Promise<AnyRow[]>,
   ])
   const own = new Set(companies.map((row) => row.partnerId))
   const purchasable = templates.filter((row) => row.purchaseOk)
@@ -435,6 +438,18 @@ const detailHandler =
   }
 
 const vi = {
+  'dashboard.approvalQueue': 'Đơn mua chờ phê duyệt',
+  'dashboard.queueEmpty': 'Không có đơn mua chờ phê duyệt.',
+  'modal.info': 'Thông tin chung',
+  'modal.lines': 'Sản phẩm',
+  'modal.receipts': 'Nhập hàng',
+  'modal.bills': 'Hoá đơn',
+  'modal.more': 'Thao tác khác',
+  'modal.edit': 'Sửa',
+  'modal.receive': 'Xác nhận đã nhận',
+  'modal.confirmRemove': 'Xoá dòng sản phẩm này?',
+  'modal.confirmReceive': 'Xác nhận đã nhận đủ hàng trong phiếu này?',
+  'modal.confirmCancel': 'Huỷ đơn mua này?',
   'app.title': 'Mua hàng trong quản trị',
   'app.summary': 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   'app.category': 'Hệ thống',
@@ -526,6 +541,8 @@ const vi = {
   'field.tax': 'Thuế mua hàng',
   'field.subtotal': 'Thành tiền',
   'field.minQty': 'Số lượng tối thiểu',
+  'filter.tiered': 'Theo bậc số lượng',
+  'filter.discounted': 'Có chiết khấu',
   'field.delay': 'Thời gian giao (ngày)',
   'field.template': 'Mẫu sản phẩm',
   'field.variant': 'Biến thể',
@@ -553,6 +570,18 @@ const vi = {
   'purchaseMethod.receive': 'Theo số lượng nhận',
 }
 const en = {
+  'dashboard.approvalQueue': 'Purchase orders awaiting approval',
+  'dashboard.queueEmpty': 'No purchase orders are awaiting approval.',
+  'modal.info': 'Overview',
+  'modal.lines': 'Products',
+  'modal.receipts': 'Receipts',
+  'modal.bills': 'Bills',
+  'modal.more': 'More actions',
+  'modal.edit': 'Edit',
+  'modal.receive': 'Confirm receipt',
+  'modal.confirmRemove': 'Remove this product line?',
+  'modal.confirmReceive': 'Confirm all goods in this receipt have arrived?',
+  'modal.confirmCancel': 'Cancel this purchase order?',
   'app.title': 'Purchase administration',
   'app.summary': 'RFQs, purchase orders, receipts, and vendor bills.',
   'app.category': 'System',
@@ -644,6 +673,8 @@ const en = {
   'field.tax': 'Purchase Tax',
   'field.subtotal': 'Subtotal',
   'field.minQty': 'Minimum Quantity',
+  'filter.tiered': 'Quantity tiers',
+  'filter.discounted': 'Discounted',
   'field.delay': 'Delivery Lead Time',
   'field.template': 'Product Template',
   'field.variant': 'Variant',
@@ -675,6 +706,23 @@ export default defineModule({
   name: 'purchase_backend',
   version: '0.1.0',
   depends: ['purchase', 'backend', 'partner_backend'],
+  functions: searchFilterFunctions,
+  assets: new URL('./client/', import.meta.url),
+  islands: {
+    'purchase.vendor-price-modal': defineRecordModalIsland({
+      kind: 'purchase.vendorPrice',
+      client: 'vendor-pricelist-modal.mjs',
+      export: 'vendorPricelistModal',
+    }),
+    'purchase.order-modal': defineRecordModalIsland({
+      kind: 'purchase.order',
+      client: 'purchase-order-modal.mjs',
+      export: 'purchaseOrderModal',
+    }),
+  },
+  fills: {
+    'backend:runtime': `{% island "purchase.order-modal" %}{% island "purchase.vendor-price-modal" %}`,
+  },
   title: 'Mua hàng trong quản trị',
   summary: 'RFQ, đơn mua, nhập hàng và hoá đơn nhà cung cấp.',
   category: 'Hệ thống',
@@ -710,6 +758,8 @@ export default defineModule({
     },
   },
   routes: {
+    '/admin/purchase/vendor-price/{id}/context': vendorPricelistContext,
+    '/admin/purchase/record/{id}/context': purchaseOrderContext,
     '/admin/purchase':
       (ctx): Route =>
       async (url, req) =>
@@ -721,10 +771,26 @@ export default defineModule({
                   ctx.call('purchase.listOrders', {}, url, req) as Promise<AnyRow[]>,
                   common(ctx, url, req),
                 ])
-                return purchaseOverviewScreen(_, orders, shell, localeQuery(url), {
-                  pickingTypes: data.pickingTypes.length,
-                  vendors: data.partners.length,
-                })
+                return purchaseOverviewScreen(
+                  _,
+                  orders.map((row) => ({
+                    ...row,
+                    partnerName:
+                      data.partners.find((partner) => partner.id === row.partnerId)?.name ?? row.partnerId,
+                  })),
+                  shell,
+                  localeQuery(url),
+                  {
+                    createHref: (await ctx.allows('purchase.createOrder', url, req))
+                      ? recordModalCreateHref(new URL(inLocale(url, '/admin/purchase/rfqs'), url), {
+                          kind: 'purchase.order',
+                        })
+                      : null,
+                    rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
+                    pickingTypes: data.pickingTypes.length,
+                    vendors: data.partners.length,
+                  },
+                )
               },
             })
           : text('GET', { status: 405 }),
@@ -739,18 +805,12 @@ export default defineModule({
           return redirect(await createPurchaseOrder(ctx, url, req, form), returnTo, createPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const requestedState = url.searchParams.get('state')
-        const state = ['draft', 'sent', 'to approve'].includes(String(requestedState)) ? requestedState : null
-        const requestedGroup = url.searchParams.get('group')
-        const group = requestedGroup === 'state' || requestedGroup === 'vendor' ? requestedGroup : null
         const [orders, data] = await Promise.all([
           loadCollectionRows(
             (page) =>
               ctx.call(
                 'purchase.listOrders',
-                { states: ['draft', 'sent', 'to approve'], ...(search ? { search } : {}), ...page },
+                { states: ['draft', 'sent', 'to approve'], ...page },
                 url,
                 req,
               ) as Promise<AnyRow[]>,
@@ -759,83 +819,36 @@ export default defineModule({
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
         const matching = orders
-          .filter(
-            (row) =>
-              ['draft', 'sent', 'to approve'].includes(String(row.state)) && (!state || row.state === state),
-          )
+          .filter((row) => ['draft', 'sent', 'to approve'].includes(String(row.state)))
           .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
-        const rows = group ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'purchase_backend.rfqs.title',
-          body: (_, shell) =>
-            rfqsListScreen(_, {
-              frame: {
-                ...shell,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('purchase_backend.rfqs.title'),
-                    keep: listKeep(url),
-                    facets: [
-                      ...(state
-                        ? [
-                            {
-                              label: labelOf(_, 'state', state),
-                              without: withParam(url, 'state', null),
-                            },
-                          ]
-                        : []),
-                      ...(group
-                        ? [
-                            {
-                              label: `${_('backend.chrome.groupBy')}: ${group === 'state' ? _('purchase_backend.field.state') : _('purchase_backend.field.vendor')}`,
-                              without: withParam(url, 'group', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: ['draft', 'sent', 'to approve'].map((value) => ({
-                          id: `state:${value}`,
-                          label: labelOf(_, 'state', value),
-                          path: withParam(url, 'state', state === value ? null : value),
-                          active: state === value,
-                        })),
-                      },
-                      {
-                        id: 'group',
-                        label: _('backend.chrome.groupBy'),
-                        items: [
-                          {
-                            id: 'group:state',
-                            label: _('purchase_backend.field.state'),
-                            path: withParam(url, 'group', group === 'state' ? null : 'state'),
-                            active: group === 'state',
-                          },
-                          {
-                            id: 'group:vendor',
-                            label: _('purchase_backend.field.vendor'),
-                            path: withParam(url, 'group', group === 'vendor' ? null : 'vendor'),
-                            active: group === 'vendor',
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  pager: group ? null : pager(url, page, rows.length, matching.length),
-                },
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: rfqListSearch,
+              rows: matching,
+              frame: shell,
+              name: 'purchase-rfq-filter',
+              bodyId: 'purchase-rfq-list',
+              functions: purchaseSearchFunctions,
+              labels: { searchPlaceholder: _('purchase_backend.rfqs.title') },
+              groupLabel: (key, value) => purchaseGroupLabel(_, key, value),
+            })
+            return rfqsListScreen(_, {
+              frame: search.frame,
+              rows: search.rows,
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
               },
-              rows,
-              total: matching.length,
-              createHref: createPath,
+              total: searchTotal(search),
+              createHref: (await ctx.allows('purchase.createOrder', url, req))
+                ? recordModalCreateHref(url, { kind: 'purchase.order' })
+                : null,
               detailSuffix: localeQuery(url),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
-              table: { groups: listGroups(_, url, matching, group) },
-            }),
+            })
+          },
         })
       },
     '/admin/purchase/rfqs/new':
@@ -867,91 +880,43 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const page = pageOf(url)
-        const search = searchOf(url)
-        const invoice = url.searchParams.get('invoice')
-        const group = url.searchParams.get('group') === 'vendor' ? 'vendor' : null
         const [orders, data] = await Promise.all([
           loadCollectionRows(
             (page) =>
-              ctx.call(
-                'purchase.listOrders',
-                { state: 'purchase', ...(search ? { search } : {}), ...page },
-                url,
-                req,
-              ) as Promise<AnyRow[]>,
+              ctx.call('purchase.listOrders', { state: 'purchase', ...page }, url, req) as Promise<AnyRow[]>,
           ),
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
-        const matching = orders
-          .filter((row) => !invoice || row.invoiceStatus === invoice)
-          .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
-        const rows = group ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const matching = orders.map((row) => ({
+          ...row,
+          partnerName: vendors.get(String(row.partnerId)),
+        }))
         return adminPage(ctx, url, req, {
           title: 'purchase_backend.orders.title',
-          body: (_, shell) =>
-            purchaseOrdersListScreen(_, {
-              frame: {
-                ...shell,
-                chrome: {
-                  search: {
-                    name: 'q',
-                    value: search ?? '',
-                    placeholder: _('purchase_backend.orders.title'),
-                    keep: listKeep(url),
-                    facets: [
-                      ...(invoice
-                        ? [
-                            {
-                              label: labelOf(_, 'invoiceStatus', invoice),
-                              without: withParam(url, 'invoice', null),
-                            },
-                          ]
-                        : []),
-                      ...(group
-                        ? [
-                            {
-                              label: `${_('backend.chrome.groupBy')}: ${_('purchase_backend.field.vendor')}`,
-                              without: withParam(url, 'group', null),
-                            },
-                          ]
-                        : []),
-                    ],
-                    menus: [
-                      {
-                        id: 'filters',
-                        label: _('backend.chrome.filters'),
-                        items: ['no', 'to invoice', 'invoiced'].map((value) => ({
-                          id: `invoice:${value}`,
-                          label: labelOf(_, 'invoiceStatus', value),
-                          path: withParam(url, 'invoice', invoice === value ? null : value),
-                          active: invoice === value,
-                        })),
-                      },
-                      {
-                        id: 'group',
-                        label: _('backend.chrome.groupBy'),
-                        items: [
-                          {
-                            id: 'group:vendor',
-                            label: _('purchase_backend.field.vendor'),
-                            path: withParam(url, 'group', group === 'vendor' ? null : 'vendor'),
-                            active: group === 'vendor',
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  pager: group ? null : pager(url, page, rows.length, matching.length),
-                },
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: purchaseOrderListSearch,
+              rows: matching,
+              frame: shell,
+              name: 'purchase-order-filter',
+              bodyId: 'purchase-order-list',
+              functions: purchaseSearchFunctions,
+              labels: { searchPlaceholder: _('purchase_backend.orders.title') },
+              groupLabel: (key, value) => purchaseGroupLabel(_, key, value),
+            })
+            return purchaseOrdersListScreen(_, {
+              frame: search.frame,
+              rows: search.rows,
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.order', id: String(row.id) }),
               },
-              rows,
-              total: matching.length,
+              total: searchTotal(search),
               detailSuffix: localeQuery(url),
               originHref: inLocale(url, '/admin/purchase/rfqs'),
-              table: { groups: listGroups(_, url, matching, group) },
-            }),
+            })
+          },
         })
       },
     '/admin/purchase/rfqs/{id}': detailHandler,
@@ -1004,39 +969,53 @@ export default defineModule({
             options: PURCHASE_METHODS.map((value) => ({ value, label: labelOf(_, 'purchaseMethod', value) })),
           },
         ]
+        const pricelistRows = rows.map((row) => ({
+          ...row,
+          id: String(row.id),
+          partnerId: String(row.partnerId),
+          productTemplateId: String(row.productTemplateId),
+          minQty: String(row.minQty),
+          price: String(row.price),
+          discount: String(row.discount),
+          delay: String(row.delay),
+          partnerName: vendors.has(String(row.partnerId))
+            ? String(vendors.get(String(row.partnerId)))
+            : undefined,
+          productNameDisplay: templates.has(String(row.productTemplateId))
+            ? String(templates.get(String(row.productTemplateId)))
+            : undefined,
+        }))
         return adminPage(ctx, url, req, {
           title: 'purchase_backend.pricelists.title',
-          body: (_, shell) =>
-            vendorPricelistsListScreen(_, {
-              frame: collectionSearchFrame(url, shell, _('purchase_backend.pricelists.title')),
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: vendorPricelistListSearch,
+              rows: pricelistRows,
+              frame: shell,
+              name: 'purchase-vendor-pricelist-filter',
+              bodyId: 'purchase-vendor-pricelist-list',
+              functions: purchaseSearchFunctions,
+              labels: { searchPlaceholder: _('purchase_backend.pricelists.title') },
+              groupLabel: (key, value) => purchaseGroupLabel(_, key, value),
+            })
+            return vendorPricelistsListScreen(_, {
+              frame: search.frame,
               action: listPath,
-              createHref: inLocale(url, '/admin/purchase/vendor-pricelists/new'),
+              createHref: (await ctx.allows('purchase.saveSupplierInfo', url, req))
+                ? recordModalCreateHref(url, { kind: 'purchase.vendorPrice' })
+                : null,
+              canSetMethod: await ctx.allows('purchase.setPurchaseMethod', url, req),
               currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
               methodFields,
               invalid: url.searchParams.get('invalid'),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
-              rows: searchCollectionRows(
-                url,
-                rows.map((row) => ({
-                  ...row,
-                  id: String(row.id),
-                  partnerId: String(row.partnerId),
-                  productTemplateId: String(row.productTemplateId),
-                  minQty: String(row.minQty),
-                  price: String(row.price),
-                  discount: String(row.discount),
-                  delay: String(row.delay),
-                  partnerName: vendors.has(String(row.partnerId))
-                    ? String(vendors.get(String(row.partnerId)))
-                    : undefined,
-                  productNameDisplay: templates.has(String(row.productTemplateId))
-                    ? String(templates.get(String(row.productTemplateId)))
-                    : undefined,
-                })),
-                (row) =>
-                  `${row.partnerName ?? row.partnerId} ${row.productNameDisplay ?? row.productTemplateId} ${row.minQty} ${row.price}`,
-              ),
-            }),
+              rows: search.rows,
+              table: {
+                ...(search.groups ? { groups: search.groups } : {}),
+                rowHref: (row) => recordModalHref(url, { kind: 'purchase.vendorPrice', id: row.id }),
+              },
+            })
+          },
         })
       },
     '/admin/purchase/vendor-pricelists/new':

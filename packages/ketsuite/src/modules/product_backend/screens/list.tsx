@@ -11,7 +11,6 @@ import {
   KanbanCard,
   KanbanGrid,
   ListPage,
-  PageContext,
   shell,
   thumbnail,
 } from '../../../ui/index.ts'
@@ -54,7 +53,8 @@ export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
  * The catalogue's columns, as data — so a module that adds a field to
  * `product.Template` has something to name when it wants a column for it.
  *
- * Goods and services are not a good/bad axis, so neither gets a judgemental tone.
+ * Kind and stock tracking are properties of a product, not states, so they are
+ * written as words: a badge on every row would repeat one pill down the column.
  * The id is off by default: useful to a specialist, noise to everyone else.
  */
 export const templateColumns = (_: Translator): KetTableColumn[] => [
@@ -64,17 +64,18 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
     format: { kind: 'custom', field: 'name', renderer: 'thumbnail-label' },
     priority: 'primary',
     width: 'wide',
+    wrap: true,
   },
   {
     key: 'type',
     label: _('product_backend.col.type'),
     priority: 'secondary',
     format: {
-      kind: 'status',
+      kind: 'custom',
       field: 'type',
-      tones: {
-        goods: { label: _('product_backend.type.goods'), tone: 'neutral' },
-        service: { label: _('product_backend.type.service'), tone: 'info' },
+      renderer: 'label',
+      options: {
+        labels: { goods: _('product_backend.type.goods'), service: _('product_backend.type.service') },
       },
     },
   },
@@ -82,6 +83,7 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
     key: 'category',
     label: _('product_backend.col.category'),
     format: { kind: 'text', field: 'categoryName' },
+    wrap: true,
     priority: 'secondary',
   },
   {
@@ -89,12 +91,12 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
     label: _('product_backend.field.isStorable'),
     priority: 'secondary',
     format: {
-      kind: 'status',
+      kind: 'custom',
       field: 'isStorable',
-      tones: {
-        true: { label: _('product_backend.value.yes'), tone: 'positive' },
-        false: { label: _('product_backend.value.no'), tone: 'neutral' },
-        '': { label: '—', tone: 'neutral' },
+      renderer: 'label',
+      options: {
+        labels: { true: _('product_backend.value.yes'), false: _('product_backend.value.no'), '': '—' },
+        mutedValues: ['false', ''],
       },
     },
   },
@@ -159,6 +161,10 @@ const kanban = (
  * the global sidebar and navigation slots. Search, grouping, paging and view
  * choice stay URL-driven through the list chrome; its search slot may host the
  * new search-filter island while the surrounding catalogue controls stay intact.
+ *
+ * Product list intentionally omits its redundant breadcrumb and description.
+ * Compact spacing belongs to ListPage; keep the page a direct child of the
+ * backend content pane so that pane does not add a second inset.
  */
 export const productsScreen = (
   _: Translator,
@@ -170,33 +176,30 @@ export const productsScreen = (
   table: JSXChild = null,
   total = rows.length,
   extensionActions?: JSXChild,
+  overlay?: JSXChild,
 ): TemplateResult =>
   shell(
     _,
     _('product_backend.screen.title'),
-    <ListPage
-      variant="operational"
-      frame={frame}
-      context={
-        <PageContext
-          label={_('product_backend.screen.title')}
-          items={[{ label: _('product_backend.menu.app') }, { label: _('product_backend.screen.title') }]}
-          viewer={frame.viewer}
-        />
-      }
-      title={_('product_backend.screen.title')}
-      description={_('product_backend.screen.description')}
-      actions={collectionActions(_, frame, extensionActions)}
-      controls={collectionControls(_, _('product_backend.screen.title'), frame)}
-      body={
-        view === 'list'
-          ? table
-          : rows.length === 0
-            ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-            : kanban(_, rows, recordHref)
-      }
-      footer={_('product_backend.screen.results', { count: total })}
-    />,
+    <>
+      <ListPage
+        variant="operational"
+        frame={frame}
+        context={null}
+        title={_('product_backend.screen.title')}
+        actions={collectionActions(_, frame, extensionActions)}
+        controls={collectionControls(_, _('product_backend.screen.title'), frame)}
+        body={
+          view === 'list'
+            ? table
+            : rows.length === 0
+              ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+              : kanban(_, rows, recordHref)
+        }
+        footer={_('product_backend.screen.results', { count: total })}
+      />
+      {overlay}
+    </>,
     { ...frame, chrome: null, topbar: false },
   )
 

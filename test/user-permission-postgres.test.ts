@@ -4,24 +4,7 @@ import { callFn, compose, defineModule, migrateOne, registerFunctions } from '@k
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import { address, company, partner, user } from '@ketvietlab/ketsuite'
-
-const configured =
-  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
-const adminUrl = new URL(configured)
-adminUrl.pathname = '/postgres'
-const reachable = await (async () => {
-  const adapter = postgresAdapter(adminUrl.toString())
-  try {
-    await adapter.open()
-    const role = (await adapter.all('SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user'))[0]
-    await adapter.close()
-    return Boolean(role?.rolcreatedb)
-  } catch {
-    await adapter.close().catch(() => {})
-    return false
-  }
-})()
-const live = { skip: reachable ? false : `no PostgreSQL CREATE DATABASE role at ${adminUrl.toString()}` }
+import { adminUrl, live } from './postgres-live.ts'
 
 const probe = defineModule({
   name: 'permission_probe',

@@ -7,6 +7,10 @@ The KetSuite design system is a public, server-rendered package and a documentat
 package owns reusable markup, tokens, component styles, and `data-ui` contracts. KetSuite modules own
 business data, translated copy, routes, permissions, and workflow behavior.
 
+Design guidance is maintained only in [Két Design System](https://github.com/ketvietlab/ketjs/tree/develop/skills/ket-design-system).
+Install it with `npx @ketvietlab/ket-design-system-skill@latest`. This page documents
+APIs and runtime delivery; it does not define a competing visual rulebook.
+
 Run `npm run design:system` from the repository root to open the documentation application in
 `apps/design-system`. It has three review surfaces:
 
@@ -16,6 +20,21 @@ Run `npm run design:system` from the repository root to open the documentation a
 - **Inventory** is the Wave 0 governance registry. It shows public exports, KetSuite compatibility
   exports, planned components, ownership, maturity, promotion decisions, evidence posture, and CSS
   ownership.
+
+## Relation selectors
+
+`createRelationSelectView` also accepts optional client-only `RelationSelectCallbacks`. A composing
+island can supply reactive `options` and `disabled` readers, handle `onSelect`, and enable an
+`onCreate(query)` action in the dropdown. `resetAfterSelect` returns an add-to-list picker to its
+placeholder after selecting an option. Local callback-backed options are searchable in full, with no
+empty remote-manager dialog. These callbacks do not go into serialized island configuration; existing
+form fields and server-managed relation selectors retain their contracts.
+
+## Disclosure actions
+
+`Button` and `IconButton` accept optional `expanded` and `controls` props for an action that shows or
+hides a region, such as a row's inline editor. They render `aria-expanded` and `aria-controls`; the
+application still owns the open state and the region's id. Omitting both keeps the previous markup.
 
 ## Inventory contract
 
@@ -65,19 +84,8 @@ Component source owns its selectors. The package continues to publish one ordere
 so applications do not have to reconstruct cascade order. As components move into per-component
 directories, their CSS moves with them and the aggregate entry remains compatible.
 
-KetSuite compatibility CSS loads after the public stylesheet. It may adapt legacy markup, but it must not
-copy public selectors or create another token scale. A compatibility file is removed only after inventory
-shows no remaining consumer.
-
-The public cascade order is declared once as `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
-Component styles remain aggregated through `styles.css`, but selector-bearing files live below their
-owning component directory. Density changes the shared control height, row height, and content gap.
-Layer, focus, reduced-motion, and container breakpoints use named tokens rather than local numbers.
-
-Responsive behavior belongs to component and container contracts. Form fields remain inline, with the
-label on the left and the control on the right, including narrow panels; only the number of field pairs in
-a row collapses. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
-screens.
+The public cascade is `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
+Visual and compatibility ownership rules live in the skill.
 
 ### SearchFilter and KetTable
 
@@ -99,6 +107,26 @@ KetTable supports two delivery modes through the same public `createKetTableView
 Both modes share row selection and external bulk forms. The primary `kt-row-link` has
 `data-primary="true"`; its hit area spans the row while checkboxes and cell controls remain separate.
 An empty grouped result uses the same empty-state contract as a flat result.
+
+All `ListPage` consumers preserve navigation context for same-path GET controls. SearchFilter's
+`{ href }` apply result uses the backend shell's shared fragment navigation: filtering, grouping,
+clearing and selecting favorites no longer reload the document. The shell updates the results,
+toolbar and URL together, then focuses the search input (desktop) or filter trigger (mobile).
+Back/Forward re-renders the corresponding server state. This covers native/static `KetTable`
+adapters and island-backed tables without duplicating domain queries in the browser.
+
+This is an SSR-first hybrid, not JSON-only CSR: URL-driven responses still contain server-rendered
+fragments; islands hydrate/reconcile those fragments and own their client interactions. The first
+document remains complete SSR. Permissions, localized cells and custom server cell callbacks retain
+their server contracts. RPC-driven tables retain their existing client loading mode.
+
+For a custom shell, listen for `ket:search-filter-navigate` on `document`. Its exported
+`SearchFilterNavigateDetail` contains the filter `id`, `href`, cancellation `signal` and
+`respondWith(promise)` callback. Supply the navigation promise synchronously. A failed navigation
+rolls back chips to the displayed list; retryable failures retain the exact attempted draft. Without
+a handler the component retains native navigation, and the legacy `{ html, href }` response remains
+supported. A new filter attempt aborts its preceding navigation request.
+
 `locale` controls formatted cells. Currency cells and `FormattedMoney` accept decimal strings without
 coercing them through a floating-point number, preserving database precision.
 
@@ -115,27 +143,31 @@ cross an island JSON boundary. Native checkboxes submit `fieldName.id=1` to the 
 KetSuite's `collectionTable` adapts its existing column/selection metadata to that public component;
 the legacy column visibility menu remains an explicit compatibility slot until its own promotion.
 
-KétSuite operational lists order context, page identity with collection actions, query controls and table tools, then collection body.
-This is the required pattern for new collection screens. The KétSuite `ListPage` and `ListScreen`
-wrappers automatically render `frame.chrome.create` beside the title, above filters. Supply
-`headerActions` only when the screen has a specialised primary action; it replaces the automatic
-create link, so authorization remains the caller's responsibility. Omitting both leaves no creation
-control; an explicit `headerActions={null}` suppresses a frame's default create link. On narrow
-screens the action stacks beneath the heading, still before filters.
-Keep bulk and secondary collection commands in `actions`; the KétSuite wrapper places them beside
-the primary action in the header and removes the separate action bar. Bulk controls appear only
-when rows belonging to their form are selected. The primary action remains visible. Do not position
-buttons with module-local CSS or put creation links into `actions`. The
-application `collectionControls` and `collectionActions` helpers split existing list chrome into
-those slots without changing command or permission decisions. `searchCollectionRows` is reserved
-for complete authorized catalogues: its explicit callback searches reader-visible fields. Paged
-collections continue using their existing server query/search contracts.
+The `listChrome`/`pagerBar` adapter accepts `Pager.totalLabel` for a localized or
+capped display count such as `10,000+`; `total` remains numeric and `prev`/`next`
+come from the query result. `headerActions` replaces the automatic create link;
+`headerActions={null}` suppresses it. `search.id` and `sort.id` associate controls
+when several toolbars share a document. `searchCollectionRows` searches a complete
+authorized catalogue through its explicit reader-visible-field callback; paged
+collections retain their server-side query implementation.
 
-The catalogue's List page specimen demonstrates the shared header action composition. Product, Partner and the other
-collection screens use this same composition. Existing inline creation forms, such as accounting
-period closing, retain their disclosure below the filters rather than placing a form in the header.
+Native `Field.readOnly` text/date/number values remain selectable and submitted;
+disabled controls do not submit. Selects and choice controls have no native read-only
+state, so an application can pair a disabled control with a hidden submitted value.
+`min`/`max` preserve numeric/date bounds, and checkbox-group requirements belong to
+group validation rather than making every option required.
+
+For an existing RecordWorkspace integration, `RecordForm.submitPlacement="external"`
+omits the local submit row; a controller button associated through its native `form`
+attribute submits and validates that form. `ModalSheet mode="embedded"` renders a
+specimen, while active route modals require the shared focus/history runtime.
+
+The collection adapter exposes `frame.chrome.create`, `headerActions`, `actions`
+and `controls`; the [skill](https://github.com/ketvietlab/ketjs/tree/develop/skills/ket-design-system)
+defines their composition. Example:
 
 ```tsx
+// File: packages/ketsuite/src/modules/product_backend/screens/list.tsx
 <ListPage
   variant="operational"
   frame={frame} // chrome.create contains the authorized { label, path }, if any
@@ -243,4 +275,83 @@ Public operational `ListPage.actionsPlacement="header"` places `actions` in the 
 
 `ReorderList` owns ordered editable row layout, drag handles, add/remove and accessible move controls. It emits the ordered stable ids as JSON through its hidden native field and a bubbling `change` event; its controlled parent supplies updated row content. The record-modal runtime captures textual drafts before consuming this field into view state. `RecordModalForm.body` composes the editor inside the single submission form; `dirty` keeps structural and retained edits subject to the existing close guard.
 
-`SearchFilterConfig.capabilities` can disable `groupBy`, `favorites`, or `customFilters` for a consumer that does not support those operations; omitted flags preserve the complete existing interaction. The component owns `search-filter-columns[data-columns]` and fits the panel to its supported sections. Product attributes reuse this compact SearchFilter island via `frame.chrome.searchContent`, with URL-backed display-type and variant-policy facets; there is no legacy search-menu fallback.
+`SearchFilterConfig.capabilities` can disable `groupBy`, `favorites`, or `customFilters` for a consumer
+that does not support those operations. Omitted flags enable sections that have usable content: grouping
+requires options; favorites require existing entries, a save function, or `favoriteHref`. Explicit
+`false` always hides the section. The component owns `search-filter-columns[data-columns]` and fits the
+panel to its supported sections. Product attributes reuse this compact SearchFilter island via
+`frame.chrome.searchContent`, with URL-backed display-type and variant-policy facets; there is no legacy
+search-menu fallback.
+
+SearchFilter uses separate Filters, Group by, and Favorites triggers by default for every consumer.
+`search-filter-toggle` remains the single filters trigger; nested options keep `disclosure-summary` and
+`menu-item`. Applied `search-filter-facet` chips live in a separate row, including ordered groups. Their
+existing `data-type` distinguishes `filter`, `field`, `favorite`, and `groupBy`; count tests should
+select the kinds they mean. `search-filter-section-toggle[data-section]` opens a desktop section;
+`search-filter-columns[data-panel]` selects that section. Triggers and panels have names matching their
+section. Below 641px, only the filters trigger is visible and opens a native modal dialog
+(`search-filter-sheet`) containing the shared client `ModalSheet` with `dialogSemantics="parent"` so the
+native ancestor owns the single accessible dialog role. Opening focuses the visible close button; the
+client backdrop is hidden from the accessibility tree and tab order. Native modal focus containment,
+backdrop/close buttons and focus return are owned by the island. Escape closes the nearest open nested
+disclosure and focuses its summary, then closes an open favorite form and focuses its toggle, before
+a subsequent Escape closes the panel or sheet. Closing the menu resets the inline favorite form.
+`search-filter-empty` owns the sentence-case saved-search empty message; `search-filter-icon` and
+`search-filter-clear` also belong to this component. Consumers must not override their descendants.
+
+Clear filters preserves the keyword and grouping, removing filter rules/presets and the active favorite.
+The shared apply handler removes the `favorite` query parameter; an explicit empty `q` prevents a
+cleared list from automatically reloading its default favorite. Other navigation parameters remain
+screen-owned. `SearchFilterLabels.operatorLabels`, `clearFilters`, `close`, `favoriteCancel`,
+`favoriteError`, `valueFrom`, and `valueTo` are optional translated labels with English defaults.
+KétSuite supplies Vietnamese and English; downstream consumers that construct labels directly must
+translate the new labels during their release-pin update. `CustomFilterField.choices` supplies
+value/label pairs for selection and reference editors. KétSuite maps declared spec choices and can
+supply permission-checked `fieldChoices`; product uses its existing category/unit API results.
+Number/date/datetime use typed controls, ranges have two inputs, and valueless operators have none.
+
+`favoriteHref` links to an existing screen-owned form; product keeps that route modal inside
+`backend.content` so fragment navigation can open and close it. Without it, the local save form is
+created below `favorite-save-toggle` only after the reader requests it. This trigger is not a menu
+selection and keeps the desktop panel open. Opening focuses the name; cancellation and successful saving
+return focus to the trigger while the component remains mounted. API errors in favorite operations use
+`favoriteError`, independently of filter-application errors, and never expose raw server diagnostics.
+
+Migration: no module opt-in is required; existing capability flags, hooks and apply payloads are
+retained. Rollback the SearchFilter change as a unit (component, labels, shared URL handler, inventory
+and tests) if a downstream consumer fails its interaction checks. The product-only density/header branch
+is independent.
+
+
+### Application topbar and compact lists
+
+KétSuite uses compact density by default: 40px desktop rows, sentence-case column headings, and
+smaller operational list headers. Mobile selection targets remain at least 44px. Tables retain all
+columns and scroll horizontally; the scroll region is keyboard focusable. Classifications use plain
+`Text`, with `tone="muted"` for secondary values; reserve `Badge` for lifecycle states and exceptions.
+`MediaLabel` renders a 24px thumbnail only when present or explicitly reserved. Product lists reserve
+image space across a page only when at least one visible record has an image.
+
+`AppShell.location` places `AppTopbar` with its `location` prop inside the main column: organisation context
+on the left, compact search and all account/indicator/theme tools on the right. `AppBrand` lives in
+the sidebar navigation header. The strip is 48px high; no global bar spans both columns.
+The optional `AppShell.topbar` remains available to other consumers. The launcher opens a native modal dialog
+containing the existing GET search form; local list search remains visible beside its results. `NavigationToggle` can control `AppNavigation` with `externalTrigger`;
+the shared runtime owns its mobile drawer, focus return and inert background. Ctrl/Cmd+K opens global search and focuses its input when no other dialog is open.
+Escape, the close button and backdrop close search and return focus to its launcher without clearing
+the draft. The modal frame stays in an inert template until opened; its search form remains
+inside the closed native dialog so fragment navigation can preserve its draft. Mobile uses an icon launcher the height of the other topbar controls and a full-screen dialog. The optional
+`search.triggerLabel`, `search.closeLabel` and `search.id` localize the launcher and close action and
+distinguish multiple catalogue shells. A native link and noscript form preserve search without JavaScript. KétSuite retains the `backend.global-topbar` fragment slot for navigation compatibility, now inside
+the main column. KétSuite no longer displays breadcrumbs. A shell with `location` hides
+the nested page identity context; standalone pages keep their context. The sidebar footer tools
+move into this strip, including extension items and the account menu. Account menus open downward.
+
+`/admin/search` requires a session and searches permitted menus, products and partners. Optional record
+providers call the same permission-checked, company-scoped functions as their lists, with eight results
+per provider and native detail links. Empty queries never enumerate records. Search terms are bounded
+to 200 characters. Search is server rendered and works without JavaScript.
+
+`searchFilterRuleLabel` is shared by server and island labels. Group intervals are localized, including
+Day/Week/Month/Quarter/Year. KetTable errors use the consumer's localized `loadError`, never raw server
+exception messages. The sidebar search hooks are retired; consumers should use AppTopbar search.

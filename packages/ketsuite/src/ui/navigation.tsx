@@ -55,7 +55,7 @@ export const breadcrumbs = (o: { label: string; items: readonly Breadcrumb[] }):
   </nav>
 )
 
-const viewerContext = (viewer: Viewer): TemplateResult => {
+export const viewerContext = (viewer: Viewer, placement: 'page' | 'topbar' = 'page'): TemplateResult => {
   const company = viewer.companyName ?? viewer.company
   const content = (
     <>
@@ -67,11 +67,25 @@ const viewerContext = (viewer: Viewer): TemplateResult => {
     </>
   )
   return viewer.contextPath ? (
-    <a data-ui="page-context-viewer" href={viewer.contextPath}>
+    <a
+      data-ui="page-context-viewer"
+      data-placement={placement}
+      href={viewer.contextPath}
+      aria-label={[company, viewer.branchName].filter(Boolean).join(' · ')}
+      title={[company, viewer.branchName].filter(Boolean).join(' · ')}
+    >
       {content}
     </a>
   ) : (
-    <span data-ui="page-context-viewer">{content}</span>
+    <span
+      role="group"
+      data-ui="page-context-viewer"
+      data-placement={placement}
+      aria-label={[company, viewer.branchName].filter(Boolean).join(' · ')}
+      title={[company, viewer.branchName].filter(Boolean).join(' · ')}
+    >
+      {content}
+    </span>
   )
 }
 
@@ -128,7 +142,7 @@ export const pageContextFromFrame = (title: string, frame: PageContextFrame): Te
     href: node.path,
   }))
   if (items.length === 0 || items.at(-1)?.label !== title) items.push({ label: title, href: null })
-  return pageContext({ label: title, items, viewer: frame.viewer })
+  return pageContext({ label: title, items })
 }
 
 /**

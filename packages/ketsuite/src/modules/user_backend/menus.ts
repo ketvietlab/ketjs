@@ -6,7 +6,16 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.users',
     path: '/admin/users',
     needs: 'user.listUsers',
+    requires: ['user.listRoles', 'company.listCompanies'],
     sequence: 25,
+  },
+  'admin.access-policies': {
+    parent: 'admin.config',
+    label: 'menu.policies',
+    path: '/admin/access-policies',
+    needs: 'user.listAccessPolicies',
+    requires: ['user.listRoles', 'company.listCompanies'],
+    sequence: 27,
   },
   'admin.roles': {
     parent: 'admin.config',
@@ -14,12 +23,5 @@ export const menus: Record<string, MenuDef> = {
     path: '/admin/roles',
     needs: 'user.listRoles',
     sequence: 26,
-  },
-  'admin.permission-presets': {
-    parent: 'admin.config',
-    label: 'menu.presets',
-    path: '/admin/permission-presets',
-    needs: 'user.applyPreset',
-    sequence: 27,
   },
 }
