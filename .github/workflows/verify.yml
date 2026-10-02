@@ -16,7 +16,7 @@ concurrency:
 jobs:
   plan:
     name: plan test groups
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     outputs:
       groups: ${{ steps.groups.outputs.groups }}
       has_groups: ${{ steps.groups.outputs.has_groups }}
@@ -37,7 +37,7 @@ jobs:
 
   quality:
     name: quality contracts
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
       DESIGN_SYSTEM_AUDIT_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop' }}
@@ -82,7 +82,7 @@ jobs:
     # unrecognised path, or a diff it could not compute, still runs it.
     needs: [plan]
     if: needs.plan.outputs.permissions == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +99,7 @@ jobs:
     needs: [plan, quality]
     if: 1 == 2 #temporary disable
     # if: needs.plan.outputs.has_groups == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -134,7 +134,7 @@ jobs:
     name: postgres / ${{ matrix.group }}
     needs: [plan, quality]
     if: needs.plan.outputs.has_groups == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
