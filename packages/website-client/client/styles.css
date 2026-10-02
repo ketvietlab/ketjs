@@ -1,0 +1,607 @@
+/*
+ * Website Studio application CSS. Enforced by the Design System layout audit: it arranges
+ * application-owned wrappers only and never styles a `data-ui` or `data-pattern` element (L8).
+ * The visitor theme lives in `theme/` and is not Studio UI.
+ */
+@layer ket.app {
+  /*
+   * A `frame: 'workspace'` route renders without AppShell, so nothing paints the page below short
+   * content. Fill the window with the page background the shell gives `app-main`.
+   */
+  .website-workspace {
+    min-height: 100dvh;
+    background: var(--kv-page-bg);
+  }
+
+  .website-workspace:has(.website-builder-workspace) {
+    --kv-page-padding-x: var(--kv-space-2);
+  }
+
+  /* Builder: structure · canvas · inspector, filling the workspace canvas. */
+  .website-builder {
+    display: grid;
+    grid-template-columns: minmax(13.8rem, 16.675rem) minmax(0, 1fr) minmax(16rem, 19rem);
+    align-items: start;
+    gap: var(--kv-space-2);
+    min-height: 0;
+  }
+
+  @media (min-width: 64.001rem) {
+    .website-builder[data-template-preview="true"] {
+      grid-template-columns: minmax(13.8rem, 16.675rem) minmax(0, 1fr);
+    }
+  }
+
+  /* The page preview scrolls on its own so the inspector stays in view while editing. */
+  .website-builder__canvas {
+    max-height: calc(100dvh - 12rem);
+    overflow: auto;
+  }
+
+  @media (max-width: 64rem) {
+    .website-builder {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+.website-builder__canvas[data-viewport="mobile"] {
+  max-width: 390px;
+  margin-inline: auto;
+}
+
+.website-media-preview {
+  margin: 0;
+  max-width: 32rem;
+}
+.website-media-preview img {
+  width: 100%;
+  height: auto;
+}
+
+.website-builder__canvas[data-viewport="mobile"] .wt-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+.website-builder__canvas[data-viewport="mobile"] .wt-node[data-visibility="desktop"],
+.website-builder__canvas[data-viewport="desktop"] .wt-node[data-visibility="mobile"] {
+  display: none;
+}
+
+/* Application-owned workspace regions; DS retains its component spacing and headings. */
+.website-builder-workspace {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--kv-space-2);
+}
+.website-builder-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv-space-1);
+}
+.website-builder-panels a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+.website-builder-panels .website-builder-tool-label {
+  display: none;
+}
+.website-builder-panels a[aria-current="page"] {
+  color: var(--kv-accent);
+  box-shadow: inset 3px 0 currentColor;
+}
+.website-builder__canvas[data-viewport="tablet"] {
+  max-width: 768px;
+  margin-inline: auto;
+}
+.website-block-picker-target {
+  display: grid;
+  gap: var(--kv-space-1);
+  margin: 0;
+  color: var(--kv-text-muted);
+  font-size: var(--kv-text-xs);
+}
+.website-block-picker-target strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--kv-text-main);
+  font-size: var(--kv-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.website-block-picker-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--kv-space-2);
+  min-width: 0;
+  padding-block: var(--kv-space-1);
+}
+.website-block-picker-copy {
+  display: grid;
+  gap: var(--kv-space-1);
+  min-width: 0;
+}
+.website-block-picker-copy strong {
+  font-size: var(--kv-text-sm);
+}
+.website-block-picker-copy small {
+  color: var(--kv-text-muted);
+  line-height: var(--kv-leading-normal);
+}
+.website-template-picker-help {
+  margin: 0;
+  color: var(--kv-text-muted);
+  font-size: var(--kv-text-sm);
+}
+.website-builder-status {
+  padding-block: var(--kv-space-3);
+  color: var(--kv-text-muted);
+}
+@media (max-width: 64rem) {
+  .website-builder-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .website-builder-panels {
+    flex-direction: row;
+    overflow: auto;
+  }
+  .website-builder-panels a {
+    flex: 0 0 44px;
+  }
+  .website-builder-panels a[aria-current="page"] {
+    box-shadow: inset 0 -3px currentColor;
+  }
+}
+
+.website-builder-tool-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+.website-builder-tool-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.website-builder-panels {
+  align-self: start;
+}
+
+.website-builder-panel {
+  container-type: inline-size;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.website-checksum {
+  overflow-wrap: anywhere;
+}
+
+.website-focal-preview {
+  position: relative;
+  cursor: crosshair;
+}
+.website-focal-preview img {
+  display: block;
+  width: 100%;
+}
+.website-focal-preview span {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: white;
+  background: #17191c;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.website-preview-device[data-device="mobile"] {
+  max-width: 390px;
+  margin-inline: auto;
+}
+.website-preview-device[data-device="tablet"] {
+  max-width: 768px;
+  margin-inline: auto;
+}
+
+.website-public-menu-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--kv-space-2);
+  align-items: baseline;
+}
+.website-public-menu-item[data-menu-level="1"] {
+  padding-inline-start: var(--kv-space-2);
+}
+
+/* Builder-owned drag affordances. Fixed feedback does not reflow the preview. */
+.website-builder-node {
+  position: relative;
+}
+.website-builder-drag-handle {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+  z-index: 2;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.website-builder-node[data-builder-container="true"] > .website-builder-drag-handle {
+  inset-inline-start: 4px;
+  inset-inline-end: auto;
+}
+.website-builder-tree-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv-space-1);
+}
+.website-builder-tree-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  height: 28px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.website-builder-tree-grip svg {
+  width: 16px;
+  height: 16px;
+}
+.website-builder-tree-scroll {
+  max-height: calc(100dvh - 16rem);
+  overflow: auto;
+}
+.website-builder-empty-slot {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  padding: var(--kv-space-4);
+  color: var(--kv-text-muted);
+  background: var(--kv-page-bg);
+  font-size: var(--kv-text-sm);
+}
+.website-builder-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+.website-builder-drag-source {
+  opacity: 0.55;
+}
+.website-builder-drop-marker {
+  position: fixed;
+  height: 3px;
+  z-index: 1000;
+  background: var(--kv-accent);
+  pointer-events: none;
+}
+.website-builder-drag-badge {
+  font-family: var(--kv-font-sans);
+  position: fixed;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  z-index: 1000;
+  padding: 4px 8px;
+  background: var(--kv-accent);
+  color: var(--kv-on-accent);
+  font-size: 12px;
+  line-height: 20px;
+  pointer-events: none;
+}
+.website-builder-drag-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  .website-builder-tree-grip {
+    flex-basis: 44px;
+    height: 44px;
+  }
+}
+
+/* Keep the desktop tool rail compact while retaining touch targets on narrow/coarse screens. */
+@media (min-width: 64.001rem) and (pointer: fine) {
+  .website-builder-panels {
+    gap: 2px;
+    max-height: calc(100dvh - 10rem);
+    overflow-y: auto;
+  }
+  .website-builder-panels a {
+    min-height: 32px;
+    flex: 0 0 32px;
+  }
+}
+@media (min-width: 64.001rem) and (pointer: coarse) {
+  .website-builder-workspace {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+}
+
+.website-builder-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv-space-1);
+  flex-shrink: 0;
+}
+.website-builder-zoom-value {
+  min-width: 4ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--kv-text-sm);
+}
+
+.website-builder-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--kv-space-1);
+}
+
+.website-builder-toolbar-mobile {
+  display: none;
+}
+.website-builder-more-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: var(--kv-text-lg);
+}
+@media (max-width: 48rem) {
+  .website-builder-toolbar-desktop {
+    display: none;
+  }
+  .website-builder-toolbar-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-1);
+  }
+}
+
+/* Native modal owns focus/inertness; ModalSheet owns all visible layout. */
+.website-confirm-dialog {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.website-confirm-dialog::backdrop {
+  background: transparent;
+}
+
+/* Token adapter for the canonical KétSuite LiveDoc stylesheet. */
+.website-live-description {
+  --admin-line: var(--kv-border-default);
+  --admin-radius: var(--kv-radius-md);
+  --admin-surface: var(--kv-panel-bg);
+  --admin-surface-subtle: var(--kv-panel-bg-subtle);
+  --admin-gap-xs: var(--kv-space-1);
+  --admin-gap-sm: var(--kv-space-2);
+  --admin-gap-md: var(--kv-space-3);
+  --admin-gap-lg: var(--kv-space-4);
+  --admin-accent: var(--kv-accent);
+  --admin-accent-soft: var(--kv-accent-subtle);
+  --admin-focus-ring: var(--kv-focus-border);
+  --admin-ink-muted: var(--kv-text-muted);
+  min-width: 0;
+}
+/* Bound intrinsic image dimensions before they participate in the modal grid. */
+.website-attachment-preview {
+  width: 100%;
+  max-width: 100%;
+  height: min(28dvh, 16rem);
+  object-fit: contain;
+}
+.website-taxonomy-image-thumbnail {
+  width: 6rem;
+  height: 6rem;
+  object-fit: cover;
+}
+.website-taxonomy-image-cover {
+  width: 100%;
+  max-height: 12rem;
+  object-fit: cover;
+}
+
+.website-taxonomy-image {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.website-form-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(18rem, 1fr);
+  align-items: start;
+  gap: var(--kv-space-4);
+}
+.website-form-authoring,
+.website-form-preview-column {
+  min-width: 0;
+}
+.website-form-preview-toggle {
+  display: none;
+}
+.website-form-preview-desktop {
+  position: sticky;
+  top: var(--kv-space-4);
+}
+@media (max-width: 80rem) {
+  .website-form-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .website-form-preview-desktop {
+    display: none;
+  }
+  .website-form-preview-toggle {
+    display: inline-flex;
+  }
+}
+
+.website-form-field,
+.website-form-preview-column,
+.website-form-authoring {
+  container-type: inline-size;
+}
+
+.website-form-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--kv-space-3);
+  align-items: end;
+}
+@media (max-width: 48rem) {
+  .website-form-config {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.website-theme-cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.website-builder-page-trigger {
+  white-space: nowrap;
+}
+
+.website-builder-page-icon {
+  display: none;
+}
+
+.website-builder-page-chevron,
+.website-builder-page-icon {
+  align-items: center;
+  flex: none;
+}
+
+.website-builder-page-chevron svg,
+.website-builder-page-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (max-width: 48rem) {
+  .website-builder-page-trigger {
+    display: none;
+  }
+
+  .website-builder-page-icon {
+    display: inline-flex;
+  }
+}
+
+/* Menu authoring: source picker and a nested structure; DS owns surfaces and controls. */
+.website-menu-workspace {
+  display: grid;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  gap: var(--kv-space-4);
+  align-items: start;
+}
+.website-menu-field {
+  container-type: inline-size;
+  min-width: 0;
+}
+.website-menu-item {
+  margin-inline-start: calc(min(var(--menu-depth), 6) * 1.25rem);
+}
+.website-menu-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--kv-space-2);
+  align-items: start;
+}
+.website-menu-grip {
+  touch-action: none;
+  cursor: grab;
+}
+.website-menu-grip:active {
+  cursor: grabbing;
+}
+.website-menu-help {
+  color: var(--kv-text-muted);
+  font-size: var(--kv-text-xs);
+  margin-block: 0 var(--kv-space-3);
+}
+.website-menu-item[data-menu-drop="before"] {
+  box-shadow: 0 -3px var(--kv-accent);
+}
+.website-menu-item[data-menu-drop="after"] {
+  box-shadow: 0 3px var(--kv-accent);
+}
+.website-menu-item[data-menu-drop="inside"] {
+  background: var(--kv-accent-subtle);
+}
+@media (max-width: 48rem) {
+  .website-menu-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .website-menu-item {
+    margin-inline-start: calc(min(var(--menu-depth), 4) * 0.75rem);
+  }
+}
+
+.website-menu-sources {
+  max-height: 15rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.website-menu-picker,
+.website-menu-structure {
+  min-width: 0;
+}
+@media (max-width: 48rem) {
+  .website-menu-structure {
+    order: -1;
+  }
+}
+
+/* Article writing uses LiveDoc with a compact document-settings column. */
+.website-post-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: var(--kv-space-4);
+  align-items: start;
+}
+.website-post-content,
+.website-post-settings {
+  min-width: 0;
+}
+@media (max-width: 64rem) {
+  .website-post-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Overview names and metadata follow the shared typography scale. */
+.website-overview-name {
+  font-size: var(--kv-text-md);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.website-overview-meta {
+  font-size: var(--kv-text-xs);
+  font-weight: 400;
+  color: var(--kv-text-muted);
+  font-variant-numeric: tabular-nums;
+}

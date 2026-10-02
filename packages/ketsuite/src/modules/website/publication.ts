@@ -314,7 +314,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
       preparedAt: 'datetime',
       activatedAt: 'datetime?',
     },
-    effects: ['read:website.Publication', 'read:website.SiteMember'],
+    effects: ['read:website.Publication', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []

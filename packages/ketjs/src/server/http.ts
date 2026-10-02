@@ -171,6 +171,7 @@ export type ServeOpts = {
   assets?: AssetMount | AssetMount[]
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, HttpRoute>
+  pageRender?: (scope: Record<string, unknown>) => RouteResult | null
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
   /**
    * True for a page nobody but the holder of its link should see — a draft
@@ -1139,6 +1140,15 @@ export async function createKetServer(o: ServeOpts) {
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
         const privatePage = o.pagePrivate?.(url, req) === true
+        const presented = o.pageRender?.(scope)
+        if (presented)
+          return send(
+            res,
+            privatePage
+              ? { ...presented, headers: { ...presented.headers, ...PRIVATE_PAGE_HEADERS } }
+              : presented,
+            buildId,
+          )
         const pageRegion = o.pageRegion
         if (pageRegion && isNavigationRequest(req)) {
           const page = scope['page'] as { title?: unknown } | undefined
@@ -1161,7 +1171,9 @@ export async function createKetServer(o: ServeOpts) {
           withThemeTokens(theme.renderRegion('layout', scope), theme.tokensCss),
           forceBrowserBootstrap,
         )
-        res.writeHead(200, {
+        // The navigation fragment above stays 200: the client router treats any other status
+        // as a refused navigation, where a missing page should still render its message.
+        res.writeHead(scope['missing'] === true ? 404 : 200, {
           'content-type': 'text/html; charset=utf-8',
           'x-ket-build': buildId,
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),

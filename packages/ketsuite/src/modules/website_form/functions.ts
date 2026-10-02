@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { asc, defineFn, desc, eq, from, isNull } from '@ketvietlab/ketjs'
+import { asc, defineFn, desc, eq, from, isNotNull, isNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canAccessSite, canAdministerSite, canManageStructure } from '../website/access.ts'
 import { actorKeyOf, recordAccess } from './audit.ts'
+import { deliveryOnArrival, deliveryOutput, destinationsOf, MAX_DELIVERY_ATTEMPTS } from './delivery.ts'
 import { purgeFormOnce } from './purge.ts'
 import {
   MAX_EXPORT_ROWS,
@@ -20,10 +21,19 @@ type FormField = {
   name: string
   type?: 'text' | 'email' | 'tel' | 'number' | 'textarea' | 'checkbox'
   required?: boolean
+  label?: unknown
+  maxLength?: unknown
+  classification?: unknown
 }
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const FIELD_TYPES = new Set(['text', 'email', 'tel', 'number', 'textarea', 'checkbox'])
+const CLASSIFICATIONS = new Set(['public', 'personal', 'sensitive'])
+/** The longest answer a field takes when its schema names no limit of its own. */
+const answerCap = (field: FormField): number => {
+  const ceiling = field.type === 'textarea' ? 10_000 : 1_000
+  return Number.isInteger(field.maxLength) ? Math.min(Number(field.maxLength), ceiling) : ceiling
+}
 const page = (limit: unknown, offset: unknown) => ({
   limit: Math.min(Math.max(Number.isInteger(limit) ? Number(limit) : 50, 1), 100),
   offset: Math.min(Math.max(Number.isInteger(offset) ? Number(offset) : 0, 0), 100_000),
@@ -65,6 +75,12 @@ const contractOf = (schema: unknown, consentText: unknown): string =>
 const normalisedNotice = (value: unknown): string | null =>
   value == null ? null : String(value).trim() || null
 
+/** Forms saved before the revision counter existed are revision 0. */
+const revisionOf = (form: Row | null | undefined): number => {
+  const raw = Number(form?.revision ?? 0)
+  return Number.isInteger(raw) && raw > 0 ? raw : 0
+}
+
 /** Forms created before versioning existed are version 1. */
 const versionOf = (form: Row | null | undefined): number => {
   const raw = Number(form?.schemaVersion ?? 1)
@@ -101,6 +117,20 @@ const validateSchema = (schema: unknown): Array<{ field: string; message: string
     seen.add(field.name)
     if (field.type && !FIELD_TYPES.has(field.type))
       errors.push({ field: field.name, message: 'website_form.error.invalidFieldType' })
+    // Optional, but checked when present: a label the visitor never sees, or a limit of zero,
+    // would be stored and shown back to the next editor as if it were a working form.
+    const label = field.label
+    const malformed =
+      (label !== undefined && (typeof label !== 'string' || !label.trim() || label.length > 200)) ||
+      (field.required !== undefined && typeof field.required !== 'boolean') ||
+      (field.maxLength !== undefined &&
+        !(
+          Number.isInteger(field.maxLength) &&
+          Number(field.maxLength) >= 1 &&
+          Number(field.maxLength) <= 10_000
+        )) ||
+      (field.classification !== undefined && !CLASSIFICATIONS.has(String(field.classification)))
+    if (malformed) errors.push({ field: field.name, message: 'website_form.error.invalidSchema' })
   }
   return errors
 }
@@ -130,7 +160,7 @@ const validatePayload = (schema: unknown, payload: unknown): Array<{ field: stri
       errors.push({ field: field.name, message: 'website_form.error.invalidNumber' })
     if (field.type === 'checkbox' && typeof current !== 'boolean')
       errors.push({ field: field.name, message: 'website_form.error.invalidCheckbox' })
-    if (typeof current === 'string' && current.length > (field.type === 'textarea' ? 10_000 : 1_000))
+    if (typeof current === 'string' && current.length > answerCap(field))
       errors.push({ field: field.name, message: 'website_form.error.valueTooLong' })
   }
   return errors
@@ -144,6 +174,15 @@ const digestId = (formId: unknown, key: string): string =>
   createHash('sha256')
     .update(`submission:${String(formId)}:${key}`)
     .digest('hex')
+
+const versionId = (formId: unknown, version: number): string =>
+  createHash('sha256')
+    .update(`${String(formId)}\0${version}`)
+    .digest('base64url')
+    .slice(0, 32)
+
+const versionRow = async (ctx: Ctx, formId: unknown, version: number): Promise<Row | null> =>
+  (await ctx.db.select('website_form.FormVersion', { formId, version }))[0] ?? null
 
 const formById = (ctx: Ctx, id: unknown): Promise<Row | null> => {
   const Form = ctx.table('website_form.Form')
@@ -229,19 +268,23 @@ export const functions: Record<string, FnSpec> = {
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool',
+      revision: 'int',
+      destination: 'text?',
     },
-    effects: ['read:website_form.Form', 'read:website.SiteMember'],
+    effects: ['read:website_form.Form', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []
       const Form = ctx.table('website_form.Form')
-      let query = from(Form).where(eq(Form.siteId, args.siteId)).orderBy(asc(Form.name))
+      let query = from(Form)
+        .where(eq(Form.siteId, args.siteId), isNull(Form.archivedAt))
+        .orderBy(asc(Form.name))
       if (args.active != null) query = query.where(eq(Form.active, args.active))
       const rows = await ctx.db.all(query)
       // Normalised here too: a caller seeding a version from this list would
       // otherwise send an empty value for a pre-versioning row, and the route
       // would read that as "no version declared" and skip the staleness check.
-      return rows.map((row) => ({ ...row, schemaVersion: versionOf(row) }))
+      return rows.map((row) => ({ ...row, schemaVersion: versionOf(row), revision: revisionOf(row) }))
     },
   }),
 
@@ -267,6 +310,117 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * What a public page needs to draw one form section: the fields a visitor fills in and the
+   * contract version the page echoes back. Nothing a visitor should not see - no recipient, no
+   * classification. Null when the form is closed, archived or belongs to another site: the
+   * section then draws nothing, rather than a form that refuses every post.
+   *
+   * `submissionKey` is fresh on every render, so a double click posts one submission, not two.
+   */
+  publicForm: defineFn({
+    anonymous: true,
+    input: { siteId: 'id?', settings: 'json?' },
+    output: {
+      id: 'id',
+      title: 'text',
+      heading: 'text?',
+      description: 'text?',
+      schemaVersion: 'int',
+      fields: 'json',
+      consentText: 'text?',
+      successMessage: 'text?',
+      submissionKey: 'text',
+    },
+    effects: ['read:website.Site', 'read:website_form.Form'],
+    handler: async (ctx: Ctx, args) => {
+      const settings =
+        args.settings && typeof args.settings === 'object' && !Array.isArray(args.settings)
+          ? (args.settings as Row)
+          : {}
+      const text = (value: unknown): string | null =>
+        typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : null
+      if (args.siteId == null || typeof settings.formId !== 'string' || !settings.formId) return null
+      const form = await formById(ctx, settings.formId)
+      if (!form || form.siteId !== args.siteId || !(await servesPublicly(ctx, form))) return null
+      return {
+        id: form.id,
+        title: String(form.name),
+        heading: text(settings.heading),
+        description: text(settings.description),
+        schemaVersion: versionOf(form),
+        fields: fieldsOf(form.schema).map((field) => ({
+          name: field.name,
+          label: typeof field.label === 'string' && field.label.trim() ? field.label : field.name,
+          type: field.type && FIELD_TYPES.has(field.type) ? field.type : 'text',
+          required: field.required === true,
+          maxLength: answerCap(field),
+        })),
+        consentText: form.consentText ? String(form.consentText) : null,
+        successMessage: form.successMessage ? String(form.successMessage) : null,
+        submissionKey: randomUUID(),
+      }
+    },
+  }),
+
+  /**
+   * Every check a visitor's post meets, run against the saved form, storing nothing.
+   *
+   * The Studio preview sends here. Staff see what a visitor would be told, and a test answer
+   * never reaches the queue, the mail or the retention clock.
+   */
+  validateSubmission: defineFn({
+    input: { formId: 'id', payload: 'json', consent: 'bool?' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: ['read:website.Site', 'read:website_form.Form'],
+    handler: async (ctx: Ctx, args) => {
+      const form = await formById(ctx, args.formId)
+      if (!form || form.archivedAt || !(await canAccessSite(ctx, form.siteId)))
+        return invalid('formId', 'website_form.error.formNotFound')
+      if (form.active !== true) return invalid('formId', 'website_form.error.unavailable')
+      const errors = [
+        ...(form.consentText && args.consent !== true
+          ? [{ field: 'consent', message: 'website_form.error.consentRequired' }]
+          : []),
+        ...validatePayload(form.schema, args.payload),
+      ]
+      return errors.length ? { ok: false, errors } : { ok: true }
+    },
+  }),
+
+  /**
+   * What a visitor is shown after posting: which form took it, and when - never an answer.
+   * Internal: the public receipt page and the Studio read it; there is no endpoint that hands
+   * out submissions by id.
+   */
+  submissionReceipt: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { id: 'id' },
+    output: {
+      id: 'id',
+      formId: 'id',
+      siteId: 'id',
+      title: 'text',
+      successMessage: 'text?',
+      createdAt: 'datetime',
+    },
+    effects: ['read:website_form.Form', 'read:website_form.FormSubmission'],
+    handler: async (ctx: Ctx, args) => {
+      const submission = await submissionById(ctx, args.id)
+      const form = submission ? await formById(ctx, submission.formId) : null
+      if (!submission || !form) return null
+      return {
+        id: submission.id,
+        formId: form.id,
+        siteId: form.siteId,
+        title: String(form.name),
+        successMessage: form.successMessage ? String(form.successMessage) : null,
+        createdAt: submission.createdAt,
+      }
+    },
+  }),
+
   saveForm: defineFn({
     input: {
       id: 'id',
@@ -279,13 +433,25 @@ export const functions: Record<string, FnSpec> = {
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool?',
+      /**
+       * The module that receives the submissions (`delivery.ts`). Absent leaves it
+       * alone; null keeps them in the Website only.
+       */
+      destination: 'text?',
+      /**
+       * The `revision` the caller edited. Absent skips the check, as callers that
+       * predate it expect; `null` means the form must not exist yet.
+       */
+      expectedRevision: 'int?',
     },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', schemaVersion: 'int?', errors: 'json?' },
     effects: [
       'read:website.Site',
       'read:website.SiteMember',
       'read:website_form.Form',
       'write:website_form.Form',
+      'read:website_form.FormVersion',
+      'write:website_form.FormVersion',
     ],
     idempotent: true,
     agent: true,
@@ -298,6 +464,12 @@ export const functions: Record<string, FnSpec> = {
       const existing = await formById(ctx, args.id)
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
+      if (existing?.archivedAt) return invalid('id', 'website_form.error.archived')
+      if (
+        args.expectedRevision !== undefined &&
+        (existing ? revisionOf(existing) !== args.expectedRevision : args.expectedRevision !== null)
+      )
+        return invalid('schema', 'website_form.error.saveConflict')
       // The notice that will actually be stored, computed once so the hash and
       // the row can never disagree: absent means "leave it alone", an explicit
       // null clears it. Comparing the raw argument instead made every save that
@@ -324,6 +496,12 @@ export const functions: Record<string, FnSpec> = {
         args.retentionDays === undefined ? (existing?.retentionDays ?? null) : args.retentionDays,
       )
       if (!retention.ok) return invalid('retentionDays', 'website_form.error.invalidRetention')
+      const destination =
+        args.destination === undefined ? (existing?.destination ?? null) : args.destination || null
+      // Only a receiver composed in this deployment: a name nothing reads would
+      // leave every submission waiting for ever and tell the editor nothing.
+      if (destination && !destinationsOf(ctx.manifest).includes(String(destination)))
+        return invalid('destination', 'website_form.error.unknownDestination')
 
       // A save that leaves the field contract alone keeps its version, so an
       // editor fixing a typo in the success message does not invalidate every
@@ -342,6 +520,8 @@ export const functions: Record<string, FnSpec> = {
         successMessage: String(args.successMessage).trim(),
         notifyTo: args.notifyTo ? String(args.notifyTo).trim() : null,
         active: args.active !== false,
+        revision: revisionOf(existing) + 1,
+        destination: destination ? String(destination) : null,
       }
       if (!row.name || row.name.length > 200) return invalid('name', 'website_form.error.invalidName')
       if (!row.successMessage || row.successMessage.length > 1_000)
@@ -362,12 +542,117 @@ export const functions: Record<string, FnSpec> = {
         const swapped = await ctx.db.compareAndSet(
           'website_form.Form',
           { id: args.id },
-          { schemaVersion: (existing.schemaVersion ?? null) as number | null },
+          {
+            schemaVersion: (existing.schemaVersion ?? null) as number | null,
+            revision: (existing.revision ?? null) as number | null,
+          },
           row,
         )
         if (!('dryRun' in swapped) && !swapped.matched)
           return invalid('schema', 'website_form.error.saveConflict')
       } else await ctx.db.insert('website_form.Form', row)
+      if (contractChanged) {
+        // A form older than this table has no row for the version it is leaving; write that one
+        // first, from what the form held until now, so the step from it stays readable.
+        if (existing && !(await versionRow(ctx, args.id, versionOf(existing))))
+          await ctx.db.insert('website_form.FormVersion', {
+            id: versionId(args.id, versionOf(existing)),
+            formId: args.id,
+            version: versionOf(existing),
+            name: existing.name,
+            schema: existing.schema,
+            consentText: existing.consentText ?? null,
+            createdAt: existing.updatedAt ?? existing.createdAt ?? new Date(),
+          })
+        await ctx.db.insert('website_form.FormVersion', {
+          id: versionId(args.id, row.schemaVersion),
+          formId: args.id,
+          version: row.schemaVersion,
+          name: row.name,
+          schema: row.schema,
+          consentText: row.consentText,
+          createdAt: new Date(),
+        })
+      }
+      return { ok: true, id: args.id, revision: row.revision, schemaVersion: row.schemaVersion }
+    },
+  }),
+
+  /**
+   * One form as its editors see it, with every contract it has had.
+   *
+   * `getForm` is the visitor's read: it answers only for a form that is being
+   * served, and leaves out who is notified. An editor needs the form whether or
+   * not it is switched on, and needs to see what earlier versions asked, since
+   * submissions already received were answered against them.
+   */
+  formHistory: defineFn({
+    input: { id: 'id' },
+    output: { form: 'json?', versions: 'json' },
+    effects: [
+      'read:website_form.Form',
+      'read:website_form.FormVersion',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const form = await formById(ctx, args.id)
+      if (!form || form.archivedAt || !(await canAccessSite(ctx, form.siteId)))
+        return { form: null, versions: [] }
+      const Version = ctx.table('website_form.FormVersion')
+      const versions = await ctx.db.all(
+        from(Version).where(eq(Version.formId, form.id)).orderBy(desc(Version.version)),
+      )
+      return {
+        form: { ...form, schemaVersion: versionOf(form), revision: revisionOf(form) },
+        // A form that has not been saved since versions were kept still has its current one.
+        versions: versions.some((v) => v.version === versionOf(form))
+          ? versions
+          : [
+              {
+                formId: form.id,
+                version: versionOf(form),
+                name: form.name,
+                schema: form.schema,
+                consentText: form.consentText ?? null,
+                createdAt: form.updatedAt ?? null,
+              },
+              ...versions,
+            ],
+      }
+    },
+  }),
+
+  /**
+   * Takes a form out of use without touching what it collected.
+   *
+   * Visitors stop reaching it at once, the same as switching it off; it also
+   * leaves the editors' list and refuses further saves. Its submissions keep
+   * their retention and stay readable, so archiving is never a way to lose them.
+   */
+  archiveForm: defineFn({
+    input: { id: 'id', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website_form.Form',
+      'write:website_form.Form',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const form = await formById(ctx, args.id)
+      if (!form || form.archivedAt || !(await canAccessSite(ctx, form.siteId)))
+        return invalid('id', 'website_form.error.formNotFound')
+      if (!(await canManageStructure(ctx, form.siteId))) return invalid('id', 'website.error.forbidden')
+      if (revisionOf(form) !== args.expectedRevision) return invalid('id', 'website_form.error.saveConflict')
+      const swapped = await ctx.db.compareAndSet(
+        'website_form.Form',
+        { id: args.id },
+        { revision: (form.revision ?? null) as number | null, archivedAt: null },
+        { active: false, archivedAt: new Date(), revision: revisionOf(form) + 1 },
+      )
+      if (!('dryRun' in swapped) && !swapped.matched) return invalid('id', 'website_form.error.saveConflict')
       return { ok: true, id: args.id }
     },
   }),
@@ -383,7 +668,7 @@ export const functions: Record<string, FnSpec> = {
    * a separate call, at a higher bar, and it is written down.
    */
   listSubmissions: defineFn({
-    input: { formId: 'id', status: 'text?', limit: 'int?', offset: 'int?' },
+    input: { formId: 'id', status: 'text?', held: 'bool?', limit: 'int?', offset: 'int?' },
     output: {
       id: 'id',
       formId: 'id',
@@ -396,8 +681,14 @@ export const functions: Record<string, FnSpec> = {
       purgedAt: 'datetime?',
       held: 'bool',
       holdReason: 'text?',
+      ...deliveryOutput,
     },
-    effects: ['read:website_form.Form', 'read:website_form.FormSubmission', 'read:website.SiteMember'],
+    effects: [
+      'read:website_form.Form',
+      'read:website_form.FormSubmission',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     handler: async (ctx: Ctx, args) => {
       const form = await formById(ctx, args.formId)
       if (!form || !(await canManageStructure(ctx, form.siteId))) return []
@@ -407,6 +698,8 @@ export const functions: Record<string, FnSpec> = {
         .where(eq(Submission.formId, args.formId))
         .orderBy(desc(Submission.createdAt))
       if (args.status) query = query.where(eq(Submission.status, args.status))
+      if (args.held != null)
+        query = query.where(args.held ? isNotNull(Submission.holdReason) : isNull(Submission.holdReason))
       query = query.limit(paging.limit).offset(paging.offset)
       const previewable = summaryFieldsOf(form)
       return (await ctx.db.all(query)).map((row) => ({
@@ -425,15 +718,22 @@ export const functions: Record<string, FnSpec> = {
    * of them.
    */
   countSubmissions: defineFn({
-    input: { formId: 'id', status: 'text?' },
+    input: { formId: 'id', status: 'text?', held: 'bool?' },
     output: { count: 'int' },
-    effects: ['read:website_form.Form', 'read:website_form.FormSubmission', 'read:website.SiteMember'],
+    effects: [
+      'read:website_form.Form',
+      'read:website_form.FormSubmission',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     handler: async (ctx: Ctx, args) => {
       const form = await formById(ctx, args.formId)
       if (!form || !(await canManageStructure(ctx, form.siteId))) return { count: 0 }
       const Submission = ctx.table('website_form.FormSubmission')
       let query = from(Submission).where(eq(Submission.formId, args.formId))
       if (args.status) query = query.where(eq(Submission.status, args.status))
+      if (args.held != null)
+        query = query.where(args.held ? isNotNull(Submission.holdReason) : isNull(Submission.holdReason))
       return { count: await ctx.db.count(query) }
     },
   }),
@@ -517,6 +817,7 @@ export const functions: Record<string, FnSpec> = {
           fingerprint: key,
           dedupeKey,
           createdAt: now.toISOString(),
+          ...deliveryOnArrival(form),
         })
         return 'dryRun' in inserted || inserted.inserted
       })
@@ -542,7 +843,8 @@ export const functions: Record<string, FnSpec> = {
    * confirms that the row exists.
    */
   readSubmission: defineFn({
-    input: { id: 'id', reason: 'text?' },
+    /** `siteId`, when given, is the site the caller believes it is on; another site's row is not read. */
+    input: { id: 'id', reason: 'text?', siteId: 'id?' },
     output: {
       id: 'id',
       formId: 'id',
@@ -555,16 +857,25 @@ export const functions: Record<string, FnSpec> = {
       createdAt: 'datetime',
       purgedAt: 'datetime?',
       holdReason: 'text?',
+      ...deliveryOutput,
     },
     effects: [
       'read:website_form.Form',
       'read:website_form.FormSubmission',
+      'read:website.Site',
       'read:website.SiteMember',
+      'write:website_form.FormSubmission',
       'write:website_form.FormSubmissionAudit',
     ],
     handler: async (ctx: Ctx, args) => {
       const found = await readableSubmission(ctx, args.id)
-      if (!found) return null
+      // Refused before anything is written: a read that ends in "not here" must not count as one.
+      if (!found || (args.siteId != null && found.form.siteId !== args.siteId)) return null
+      // Opening it is what takes it off the pile of ones nobody has looked at yet.
+      if (found.row.status === 'new') {
+        await ctx.db.update('website_form.FormSubmission', { id: found.row.id }, { status: 'read' })
+        found.row = { ...found.row, status: 'read' }
+      }
       await recordAccess(ctx, {
         formId: found.form.id,
         action: 'read',
@@ -590,6 +901,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:website_form.Form',
       'read:website_form.FormSubmission',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website_form.FormSubmissionAudit',
     ],
@@ -659,6 +971,7 @@ export const functions: Record<string, FnSpec> = {
       'read:website_form.Form',
       'read:website_form.FormSubmission',
       'write:website_form.FormSubmission',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website_form.FormSubmissionAudit',
     ],
@@ -690,6 +1003,63 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   /**
+   * The modules this deployment can hand a form's submissions to, by name.
+   *
+   * Names only: what a receiver is called on screen is its own message,
+   * `<module>.formDestination`, so this module never has to know what CRM is.
+   */
+  listDestinations: defineFn({
+    input: {},
+    output: { name: 'text' },
+    effects: [],
+    handler: async (ctx: Ctx) => destinationsOf(ctx.manifest).map((name) => ({ name })),
+  }),
+
+  /**
+   * Put a failed hand-off back in the receiver's queue.
+   *
+   * Only a failed one: a pending row is already queued, and a delivered one has
+   * a record on the other side that a second hand-off would duplicate. The bar is
+   * the one for holding, since what goes back out is the visitor's answers.
+   */
+  retryDelivery: defineFn({
+    input: { id: 'id', siteId: 'id?' },
+    output: { ok: 'bool', state: 'text?', errors: 'json?' },
+    effects: [
+      'read:website_form.Form',
+      'read:website_form.FormSubmission',
+      'write:website_form.FormSubmission',
+      'read:website.Site',
+      'read:website.SiteMember',
+      'write:website_form.FormSubmissionAudit',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const found = await readableSubmission(ctx, args.id)
+      if (!found || (args.siteId != null && found.form.siteId !== args.siteId))
+        return invalid('id', 'website_form.error.submissionNotFound')
+      if (found.row.deliveryState === 'pending') return { ok: true, state: 'pending' }
+      if (found.row.deliveryState !== 'failed') return invalid('id', 'website_form.error.notRetryable')
+      // The answers are what the receiver turns into its record; once erased there is nothing to send.
+      if (isPurged(found.row)) return invalid('id', 'website_form.error.submissionPurged')
+      const changed = await ctx.db.compareAndSet(
+        'website_form.FormSubmission',
+        { id: found.row.id },
+        { deliveryState: 'failed' },
+        { deliveryState: 'pending', deliveryAttempts: 0, deliveryError: null },
+      )
+      if (!('dryRun' in changed) && !changed.matched) return { ok: true, state: 'pending' }
+      await recordAccess(ctx, {
+        formId: found.form.id,
+        action: 'retry',
+        submissionId: String(found.row.id),
+        reason: `attempts:${Number(found.row.deliveryAttempts ?? MAX_DELIVERY_ATTEMPTS)}`,
+      })
+      return { ok: true, state: 'pending' }
+    },
+  }),
+
+  /**
    * Run one form's retention window now, instead of waiting for the sweep.
    *
    * The same bounded pass the scheduled job uses, so pressing the button and
@@ -703,6 +1073,7 @@ export const functions: Record<string, FnSpec> = {
       'read:website_form.Form',
       'read:website_form.FormSubmission',
       'write:website_form.FormSubmission',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website_form.FormSubmissionAudit',
     ],
@@ -719,7 +1090,7 @@ export const functions: Record<string, FnSpec> = {
 
   /** Who read, exported, held or erased — newest first. */
   listSubmissionAudit: defineFn({
-    input: { formId: 'id', limit: 'int?', offset: 'int?' },
+    input: { formId: 'id', submissionId: 'text?', limit: 'int?', offset: 'int?' },
     output: {
       id: 'id',
       formId: 'id',
@@ -731,19 +1102,20 @@ export const functions: Record<string, FnSpec> = {
       reason: 'text?',
       occurredAt: 'datetime',
     },
-    effects: ['read:website_form.Form', 'read:website_form.FormSubmissionAudit', 'read:website.SiteMember'],
+    effects: [
+      'read:website_form.Form',
+      'read:website_form.FormSubmissionAudit',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     handler: async (ctx: Ctx, args) => {
       const form = await formById(ctx, args.formId)
       if (!form || !(await canAdministerSite(ctx, form.siteId))) return []
       const Audit = ctx.table('website_form.FormSubmissionAudit')
       const paging = page(args.limit, args.offset)
-      return ctx.db.all(
-        from(Audit)
-          .where(eq(Audit.formId, args.formId))
-          .orderBy(desc(Audit.occurredAt))
-          .limit(paging.limit)
-          .offset(paging.offset),
-      )
+      let query = from(Audit).where(eq(Audit.formId, args.formId))
+      if (args.submissionId) query = query.where(eq(Audit.submissionId, args.submissionId))
+      return ctx.db.all(query.orderBy(desc(Audit.occurredAt)).limit(paging.limit).offset(paging.offset))
     },
   }),
 }

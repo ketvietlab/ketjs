@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Ctx } from '@ketvietlab/ketjs'
 
-export type SubmissionAction = 'read' | 'export' | 'purge' | 'hold' | 'release'
+export type SubmissionAction = 'read' | 'export' | 'purge' | 'hold' | 'release' | 'retry'
 
 export type AuditEntry = {
   formId: unknown

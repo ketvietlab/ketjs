@@ -1,0 +1,253 @@
+/* Lành: bundled Core cosmetics skin. Only the visitor surface / builder canvas is styled here. */
+:is(.wt-site, .wt-page, .website-visitor)[data-theme-preset="cosmetics"],
+[data-theme-preset="cosmetics"] .wt-page {
+  --wt-ink: #253f34;
+  --wt-muted: #596458;
+  --wt-paper: #faf8f2;
+  --wt-accent: #284b3a;
+  color: var(--wt-ink);
+  background: var(--wt-paper);
+  font-family: Inter, system-ui, sans-serif;
+}
+[data-theme-preset="cosmetics"] .wt-page {
+  container-type: inline-size;
+}
+.website-visitor[data-theme-preset="cosmetics"] {
+  min-height: 100dvh;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-header {
+  padding: 1.4rem clamp(1.25rem, 5vw, 5rem);
+  background: #faf8f2;
+  border-bottom: 1px solid #dce0d4;
+  color: #253f34;
+  gap: 1rem;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-brand {
+  font:
+    600 1.7rem / 1.1 Georgia,
+    serif;
+  letter-spacing: -0.06em;
+  color: #253f34;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-header nav {
+  gap: 1.75rem;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-header nav a {
+  font-size: 0.875rem;
+  color: #344e3e;
+  text-decoration: none;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-main {
+  max-width: 90rem;
+  padding: 0;
+  margin-inline: auto;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search {
+  padding: 0.7rem clamp(1.25rem, 5vw, 5rem);
+  font-size: 0.8rem;
+  color: #596458;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search summary {
+  cursor: pointer;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search form {
+  padding-block: 1rem;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(.wt-callout) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 0 3rem;
+  min-height: 31rem;
+  padding: 0 0 0 clamp(1.5rem, 5vw, 5rem);
+  background: #eeeee3;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(:has(.wt-cover)):not(.wt-callout) {
+  display: block;
+  min-height: 0;
+  padding: 4rem clamp(1.5rem, 5vw, 5rem);
+  max-width: none;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-cover {
+  grid-column: 2;
+  grid-row: 1 / 5;
+  height: 100%;
+  min-height: 31rem;
+  max-height: 42rem;
+  width: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero__title {
+  grid-column: 1;
+  grid-row: 2;
+  font:
+    400 clamp(2.4rem, 4.1vw, 4.5rem) / 1.08 Georgia,
+    "Times New Roman",
+    serif;
+  letter-spacing: -0.045em;
+  max-width: 12ch;
+  margin: 1.5rem 0;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero__lead {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: 36rem;
+  font-size: 1rem;
+  line-height: 1.8;
+  margin: 0 0 1.75rem;
+  color: #596458;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero > .wt-button {
+  grid-column: 1;
+  grid-row: 4;
+  justify-self: start;
+  align-self: start;
+  margin-bottom: 2rem;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-button {
+  border-radius: 2px;
+  background: var(--wt-accent);
+  color: #fffdf5;
+  padding: 0.85rem 1.5rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-button:hover {
+  background: #3a6047;
+}
+[data-theme-preset="cosmetics"] :is(a, summary):focus-visible {
+  outline: 3px solid #965f4d;
+  outline-offset: 4px;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-text {
+  padding: 3.5rem clamp(1.5rem, 5vw, 5rem);
+  max-width: 58rem;
+  margin-inline: auto;
+}
+[data-theme-preset="cosmetics"] .wt-page :is(.wt-text__title, .wt-callout h2) {
+  font:
+    400 clamp(1.7rem, 3vw, 2.5rem) / 1.2 Georgia,
+    serif;
+  letter-spacing: -0.03em;
+  color: #253f34;
+  margin-block: 0 1rem;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-text p {
+  color: #596458;
+  line-height: 1.9;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns {
+  padding-inline: clamp(1.5rem, 5vw, 5rem);
+  align-items: start;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image {
+  margin: 0;
+  padding: 0;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image img {
+  display: block;
+  width: 100%;
+  border-radius: 0;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout {
+  padding: 3rem clamp(1.5rem, 5vw, 5rem);
+  margin-block: 2rem 0;
+  background: #e8d8ca;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout p {
+  white-space: pre-line;
+  color: #4e5b4f;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout {
+  padding: 1.5rem 0 2rem;
+  margin: 0;
+  background: transparent;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout h2 {
+  font-size: 1.6rem;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-footer {
+  color: #f7f5e9;
+  background: #253f34;
+  border: 0;
+  padding: 2.5rem clamp(1.5rem, 5vw, 5rem);
+  white-space: pre-line;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-footer small {
+  color: #d3dbcc;
+}
+[data-theme-preset="cosmetics"] .wt-theme-header,
+[data-theme-preset="cosmetics"] .wt-theme-footer {
+  background: #faf8f2;
+  color: #253f34;
+}
+@container (max-width: 42rem) {
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero:not(.wt-callout) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 1.5rem 2rem;
+    min-height: 0;
+    gap: 0;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-cover {
+    order: -1;
+    min-height: 0;
+    height: 19rem;
+    width: calc(100% + 3rem);
+    max-width: none;
+    margin-inline: -1.5rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero__title {
+    font-size: 2.5rem;
+    max-width: 15ch;
+    margin-block: 1.75rem 1rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero > .wt-button {
+    align-self: start;
+    margin: 0;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-columns {
+    grid-template-columns: 1fr;
+    padding-inline: 1.5rem;
+  }
+}
+@media (max-width: 42rem) {
+  .website-visitor[data-theme-preset="cosmetics"] .website-visitor-header {
+    flex-direction: column;
+    align-items: start;
+  }
+  .website-visitor[data-theme-preset="cosmetics"] .website-visitor-header nav {
+    gap: 0.5rem 1.25rem;
+    flex-wrap: wrap;
+  }
+  .website-visitor[data-theme-preset="cosmetics"] .website-visitor-header nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* Preserve the existing theme controls when this preset is chosen. */
+.wt-site[data-theme-preset="cosmetics"][data-accent="indigo"] .wt-page {
+  --wt-accent: #4f46b8;
+}
+.wt-site[data-theme-preset="cosmetics"][data-accent="orange"] .wt-page {
+  --wt-accent: #a84715;
+}
+.wt-site[data-theme-preset="cosmetics"][data-buttons="rounded"] .wt-page .wt-button {
+  border-radius: 0.5rem;
+}
+.wt-site[data-theme-preset="cosmetics"][data-font="serif"] .wt-page {
+  font-family: Georgia, serif;
+}
+.wt-site[data-theme-preset="cosmetics"][data-spacing="compact"] .wt-page :is(.wt-text, .wt-callout) {
+  padding-block: 1.5rem;
+}
+.wt-site[data-theme-preset="cosmetics"][data-spacing="spacious"] .wt-page :is(.wt-text, .wt-callout) {
+  padding-block: 4.5rem;
+}

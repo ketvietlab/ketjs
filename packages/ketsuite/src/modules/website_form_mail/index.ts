@@ -112,7 +112,8 @@ const functions: Record<string, FnSpec> = {
             formName: String(form.name ?? ''),
             submissionId: String(submission.id),
             receivedAt: String(submission.createdAt ?? ''),
-            adminUrl: `${origin}/admin/website/forms/${encodeURIComponent(String(form.id))}/submissions/${encodeURIComponent(String(submission.id))}`,
+            // The Studio's own record, scoped to the site the form belongs to.
+            adminUrl: `${origin}/website/submissions/${encodeURIComponent(String(submission.id))}?site=${encodeURIComponent(String(form.siteId))}`,
           }),
         })
         return { deliveryId: delivery.id, to }
