@@ -15,7 +15,7 @@ concurrency:
 jobs:
   plan:
     name: plan permission coverage
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     outputs:
       permissions: ${{ steps.plan.outputs.permissions }}
     steps:
@@ -38,7 +38,7 @@ jobs:
     # unrecognised path, or a diff it could not compute, still runs it.
     needs: [plan]
     if: needs.plan.outputs.permissions == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
