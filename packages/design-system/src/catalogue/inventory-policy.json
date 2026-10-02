@@ -342,6 +342,12 @@
       "decision": "build",
       "wave": 3,
       "gapTask": "DS-024"
+    },
+    "./primitives/icon/index.tsx": {
+      "owner": "Icons",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "Maintain shared Lucide geometry, tone and accessible naming."
     }
   },
   "compatibilityModules": {

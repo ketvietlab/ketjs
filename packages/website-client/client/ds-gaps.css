@@ -1,0 +1,429 @@
+/*
+ * DS gaps only. NOT covered by the layout audit on purpose: every rule here styles a DS-owned hook,
+ * which the layout rules forbid. Each rule names its gap; delete it once the DS fix lands in ketjs
+ * and the override is bumped. Do not add app layout here.
+ */
+@layer ket.app {
+  /*
+   * GAP ds-resource-list-meta: `resource-list-item` always uses `auto 1fr auto`, sized for the
+   * selection checkbox. Without selection the link takes the `auto` track and `meta` the `1fr`
+   * track, so meta sits against the text instead of the end edge.
+   */
+  [data-ui="resource-list-item"]:not(:has(> [data-ui="resource-list-select"])) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /*
+   * GAP ds-surface-head-height: a surface head with `actions` is as tall as its button, one without
+   * is as tall as its title, so the titles and bodies of two surfaces in one grid row sit 3.6px apart.
+   * Give every head the control height of the current density.
+   */
+  [data-ui="surface-head"] {
+    min-height: var(--kv-control-height);
+  }
+
+  /*
+   * GAP ds-section-head-align: a section head aligns to the top so a title with a description keeps
+   * its action beside the title. With a title only, the 17px title sits on the top edge of the 30px
+   * button instead of on its centre line. Wide screens only: at 48rem and below the head is a column,
+   * where `center` would centre the title across the page.
+   */
+  @media (width > 48rem) {
+    [data-ui="section-head"]:not(:has([data-ui="section-description"])) {
+      align-items: center;
+    }
+  }
+
+  /*
+   * GAP ds-grouped-field-grid-gap: the grouped presentation sets every Grid in `app-main` to the 8px
+   * card gap, so in a Grid of fields one input ends 8px from the next field's label. Use the gaps
+   * the DS gives its own `form-grid`. Same specificity as the grouped rule; this file loads later.
+   */
+  [data-kv-design-system] [data-ui="app-main"] [data-ui="grid"]:has(> [data-ui="field"]) {
+    gap: var(--kv-gap-form-row) var(--kv-gap-field-group);
+  }
+
+  /*
+   * GAP ds-search-bar-type: SearchBar sets no font size, so its label and input inherit body text
+   * (15px) while its own compact button is 12px and every other field control is `--kv-text-sm`.
+   */
+  [data-ui="search-bar"] > :is(label, input) {
+    font-size: var(--kv-text-sm);
+  }
+
+  /*
+   * GAP ds-table-action-align: an end-aligned DataTable cell sets `text-align: right`, which a flex
+   * ActionGroup ignores; the header sits at the end and the buttons at the start of the column.
+   */
+  [data-ui="cell"][data-align="end"] > [data-ui="action-group"] {
+    justify-content: flex-end;
+  }
+
+  /*
+   * GAP ds-bar-chart-row-columns: every `bar-chart-row` is its own grid with an `auto` value track,
+   * so a row whose value is shorter ("849" under "3.880") gets a longer bar track and the tracks no
+   * longer share one scale edge. Put the tracks on the list and let each row take them as a subgrid.
+   * Wide screens only: at 48rem and below the DS stacks the track under the label.
+   */
+  @media (width > 48rem) {
+    [data-ui="bar-chart-rows"] {
+      grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr) auto;
+    }
+
+    [data-ui="bar-chart-row"] {
+      grid-column: 1 / -1;
+      grid-template-columns: subgrid;
+    }
+  }
+
+  /*
+   * GAP ds-description-strip-wrap: a strip is a wrapping flex row whose items after the first carry a
+   * start border and padding. When it wraps, the first item of the second line keeps both, so it sits
+   * indented behind a stray rule. On narrow screens lay the strip out as a grid without separators.
+   * Same specificity as the DS rules it undoes; this file loads later.
+   */
+  @media (max-width: 48rem) {
+    [data-ui="description-list"][data-layout="strip"] {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    }
+
+    [data-ui="description-list"][data-layout="strip"] > [data-ui="key-value"] {
+      padding-inline: 0;
+    }
+
+    [data-ui="description-list"][data-layout="strip"] > [data-ui="key-value"] + [data-ui="key-value"] {
+      border-inline-start: 0;
+    }
+  }
+
+  /*
+   * GAP ds-app-shell-narrow-rows: at 48rem and below the shell is one column of auto rows with
+   * `min-height: 100dvh`. The sidebar row collapses to height 0 under a location strip, but when
+   * the page is shorter than the viewport the free space is shared between both rows, so an empty
+   * band opens above the location strip.
+   */
+  @media (max-width: 48rem) {
+    [data-ui="app-shell"][data-has-location="true"] {
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+  }
+
+  /*
+   * GAP ds-data-table-header-priority: at 42rem an operational ListPage hides `secondary` cells.
+   * DataTable defaults every cell to secondary but gives its `th` no priority, so the headers stay
+   * over missing cells. Keep the cells until DataTable marks its headers like KetTable does. The same
+   * rule drops the table's 38rem minimum, which with every column kept breaks titles letter by letter;
+   * keep the minimum so the table scrolls, as a DataTable does everywhere else. (`responsive: 'stack'`
+   * is no way out: the DataTable pattern's row and cell heights outrank the stack rules and rows overlap.)
+   */
+  @media (max-width: 42rem) {
+    /* Same specificity as the DS rule it undoes; this file loads after the DS stylesheet. */
+    [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"]
+      td[data-priority="secondary"] {
+      display: table-cell;
+    }
+
+    [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"] {
+      min-width: 38rem;
+    }
+  }
+
+  /*
+   * GAP ds-list-linked-cell-inset: at 42rem an operational ListPage gives every cell 8px inline
+   * padding. A linked cell has none of its own; its `row-link` carries the 12px desktop inset, so
+   * the list re-pads it and the linked title sits 12px right of its header. Keep the inset on the
+   * link only, at the narrow width.
+   */
+  @media (max-width: 42rem) {
+    [data-ui="list-page"][data-variant="operational"] [data-ui="table"] [data-ui="cell"][data-linked="true"] {
+      padding-inline: 0;
+    }
+
+    [data-ui="list-page"][data-variant="operational"] [data-ui="table"] [data-ui="row-link"] {
+      padding-inline: var(--kv-space-2);
+    }
+  }
+}
+
+/* GAP ds-narrow-workspace-controls: field rows and nowrap buttons overflow narrow desktop builder panels. Remove after DS container-aware fields/actions are available in the pin. */
+@container (max-width: 28rem) {
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"]
+    > :is(
+      [data-ui="field-control"],
+      [data-ui="drop-zone"],
+      [data-ui="field-options"],
+      [data-ui="field-help"],
+      [data-ui="field-error"]
+    ) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  /* A select and its chevron share the row under the label, as in the DS stacked layout; left to
+     auto placement the select drops below the chevron. */
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"][data-kind="select"]
+    > select[data-ui="field-control"],
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"][data-kind="select"]:has(> select)::after {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="action"] {
+    white-space: normal;
+    max-width: 100%;
+  }
+}
+
+/* GAP ds-builder-compact-identity: WorkspacePage lacks a compact editor identity with a back link and inline save/publication states. Scope to builder; remove when the native pattern exposes this composition. */
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-header"] {
+  display: flex;
+  align-items: center;
+  gap: var(--kv-space-2);
+  min-height: 3.5rem;
+  padding: var(--kv-space-2);
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-heading"] {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv-space-2);
+  min-width: 0;
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-title-row"] {
+  display: contents;
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-title"] {
+  font-size: var(--kv-text-lg);
+  line-height: var(--kv-leading-tight);
+  margin: 0;
+  max-width: 20ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-meta"] {
+  order: -1;
+  margin: 0;
+  flex-shrink: 0;
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-actions"] {
+  order: 3;
+  margin-inline-start: auto;
+}
+.website-workspace:has(.website-builder-workspace) [data-ui="board-page-subline"] {
+  margin: 0;
+}
+@media (max-width: 64rem) {
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-header"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-heading"] {
+    display: contents;
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-title"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-subline"] {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-meta"] {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-actions"] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-inline-start: 0;
+  }
+}
+
+@media (max-width: 48rem) {
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-header"] {
+    --kv-touch-target: 2.25rem;
+    --kv-control-height-compact: 2.25rem;
+    row-gap: var(--kv-space-1);
+    padding: var(--kv-space-2);
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-meta"] [data-ui="action"] {
+    padding-inline: var(--kv-space-1);
+  }
+  .website-workspace:has(.website-builder-workspace) [data-ui="board-page-status"] [data-ui="badge"] {
+    font-size: var(--kv-text-xs);
+    padding-block: 0;
+  }
+}
+
+/* GAP ds-livedoc-controls: the public KétSuite editor exports legacy controls without its host's
+   base form/button styling and a document-height option. Standalone hosts need token-based controls,
+   hidden-toolbar support and a taller article canvas until upstream owns them. */
+[data-kv-design-system]
+  [data-ui="flow-editor"]
+  :is([data-ui="flow-editor-mark"], [data-ui="form-control"], [data-action]) {
+  font: inherit;
+  color: var(--kv-text-main);
+  background: var(--kv-interactive-bg);
+  border: 1px solid var(--kv-border-default);
+  border-radius: var(--kv-radius-md);
+  min-height: 2rem;
+  padding: var(--kv-space-1) var(--kv-space-2);
+}
+[data-kv-design-system] [data-ui="flow-editor"] [aria-pressed="true"] {
+  background: var(--kv-accent-subtle);
+  color: var(--kv-accent);
+  border-color: var(--kv-accent-border);
+}
+@media (max-width: 48rem) {
+  [data-kv-design-system]
+    [data-ui="flow-editor"]
+    :is([data-ui="flow-editor-mark"], [data-ui="form-control"], [data-action]) {
+    min-height: 2.75rem;
+  }
+}
+
+[data-kv-design-system] [data-ui="flow-editor"] [role="toolbar"][hidden] {
+  display: none;
+}
+
+[data-kv-design-system] .website-post-form [data-ui="flow-editor-content"] {
+  min-height: clamp(28rem, 55vh, 40rem);
+}
+/* The article column is already capped by RecordPage; the editor fills it like the title above. */
+[data-kv-design-system] .website-post-form [data-ui="flow-editor"] {
+  max-inline-size: none;
+}
+@media (max-width: 48rem) {
+  [data-kv-design-system] .website-post-form [data-ui="flow-editor-content"] {
+    min-height: 22rem;
+  }
+}
+
+/* GAP ds-form-reorder-width: ReorderList lacks a compact configuration-row layout with a leading drag handle and trailing remove action. */
+.website-form-authoring [data-ui="reorder-list-row"] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+}
+.website-form-authoring [data-ui="reorder-list-content"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+.website-form-authoring [data-ui="reorder-list-controls"] {
+  display: contents;
+}
+.website-form-authoring [data-ui="reorder-list-controls"] [data-reorder-handle] {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+}
+.website-form-authoring [data-ui="reorder-list-controls"] [data-reorder-action="remove"] {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+}
+
+/* GAP ds-form-stacked-fields: Field has no explicit stacked layout in this pin. Form authoring requires labels above controls at every width. */
+.website-form-field [data-ui="field"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.website-form-field
+  [data-ui="field"]
+  > :is(
+    [data-ui="field-control"],
+    [data-ui="field-options"],
+    [data-ui="field-help"],
+    [data-ui="field-error"]
+  ) {
+  grid-column: 1;
+  grid-row: auto;
+}
+.website-form-field [data-ui="field"][data-kind="select"] > select[data-ui="field-control"],
+.website-form-field [data-ui="field"][data-kind="select"]:has(> select)::after {
+  grid-column: 1;
+  grid-row: 2;
+}
+/* GAP ds-form-reorder-keyboard: ReorderList has no drag-first variant. Keep move buttons accessible on keyboard focus; touch devices retain them as a non-drag alternative. */
+@media (hover: hover) and (pointer: fine) {
+  .website-form-authoring [data-ui="reorder-list-controls"] [data-reorder-action="up"]:not(:focus-within),
+  .website-form-authoring [data-ui="reorder-list-controls"] [data-reorder-action="down"]:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+/* GAP ds-reorder-drag-icon: ReorderList exposes a text label but no icon slot. Use the canonical builder grip through a mask, preserving the native button and accessible label. */
+.website-form-reorder [data-ui="reorder-list-controls"] [data-reorder-handle] button {
+  width: 32px;
+  min-width: 32px;
+  cursor: grab;
+}
+.website-form-reorder [data-ui="reorder-list-controls"] [data-reorder-handle] button::before {
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: var(--website-reorder-grip) center / contain no-repeat;
+}
+.website-form-reorder [data-ui="reorder-list-controls"] [data-reorder-handle] button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  .website-form-reorder [data-ui="reorder-list-controls"] [data-reorder-handle] button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

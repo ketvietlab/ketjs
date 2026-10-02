@@ -1,5 +1,5 @@
 /**
- * The consumer half of LAYOUT.md: a check an application runs over its own CSS.
+ * The consumer half of Két Design System visual contract: a check an application runs over its own CSS.
  *
  * The design system decides what a container looks like where it sits (a frame on
  * the canvas, flat inside a white region). An application that restyles those

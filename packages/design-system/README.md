@@ -32,7 +32,7 @@ registered primitive. The catalogue rail links to it. `theme=light|dark|system`,
 `density=compact|default|comfortable`, and `tab=overview|activity` are URL-backed;
 theme and density changes retain the navigation specimen's active tab.
 
-The six families cover action hierarchy and sizes, loading/disabled states,
+The seven families cover action hierarchy and sizes, loading/disabled states,
 semantic tones, long labels and identifiers, field validation/access states,
 native choices, route navigation, feedback, and progress boundaries. Use keyboard
 Tab/Shift+Tab for focus, Space for checkboxes, arrow keys for radio/select controls,
@@ -53,6 +53,32 @@ Select keeps the native picker and keyboard behaviour. Its field-owned chevron
 has a token-based inset, reserves space for long values, follows disabled colour,
 and moves with the control when labels stack. Vertical option groups align their
 label with the first option; checkbox/radio controls have no browser margin.
+
+### Normalized primitive contract
+
+Design rules and the numeric Polaris reference matrix are maintained in
+[Két Design System](../../skills/ket-design-system/SKILL.md).
+Install the agent skill with `npx @ketvietlab/ket-design-system-skill@latest`.
+The component APIs and compatibility notes below describe the implementation.
+
+| Family | Public component API | Verification |
+| --- | --- | --- |
+| Typography | Text: visual variant independent of semantic element, tone, weight and numeric treatment | Render + browser dimensions |
+| Icon | Icon: shared Lucide names and informative/decorative semantics | Render + catalogue |
+| Inline links | Link: native navigation, target and disabled treatment | Render |
+| Actions | Button / LinkButton / IconButton: independent variant and tone, loading, pressed and width | Render + browser loading geometry |
+| Action composition | ActionGroup: shared alignment and sibling spacing | Catalogue + CSS |
+| Field shell | FieldFrame: label, help, error and associations | Render |
+| Text inputs | TextField / Field: native value, validation, access and affixes | Render + browser |
+| Search | SearchField: native search and optional clear control | Render + browser clear/focus/events |
+| Numeric inputs | NumberField / MoneyField: numeric constraints, currency and precision | Render + browser dimensions |
+| Multiline input | TextArea: rows, resize and native validation/access | Render + catalogue |
+| Selection | Select: native choices, disabled state and label association | Render + browser |
+| Choices | Checkbox / RadioGroup / CheckboxGroup / Switch: checked state separate from submitted value | Render + browser mixed/reset/submission |
+| Status | Badge / CountBadge / Tag: tone, icons, progress and optional announcements/removal | Render + catalogue |
+| Identity | Avatar / MediaLabel: optional image, fallback and text content | Render + browser image failure |
+| Feedback | Notice / Tooltip: announcements, associations and shared interaction runtime | Render + browser keyboard/Escape |
+| Progress | Progress / Spinner / Skeleton / LoadingState: determinate or loading semantics | Render + catalogue |
 
 ### Date pickers
 
@@ -108,28 +134,6 @@ The `date-picker` / `date-range` hooks own composition; `date-inputs`,
 `date-calendar-status` own the popup. `data-selected`, `data-in-range`,
 `aria-current="date"` and native disabled states define calendar styling; consumers
 compose the public components rather than targeting their descendants.
-
-[LAYOUT.md](./LAYOUT.md) holds the layout rules: where a frame, a heading and a gap
-go, which the components apply by themselves and which `ket-design-system-layout-audit`
-checks in application CSS. Read it before composing a screen or overriding a style.
-
-Compose content with unframed `Section`, `Stack` and `Grid`. `DataTable`, `Metric`
-and `ContentCard` already own their surfaces; do not wrap them in `Surface` or
-another card. Reserve `Surface` for unframed content that needs a working panel,
-such as a form group or a standalone process tool.
-
-Section headings have no bottom border or divider padding in any page pattern.
-Separate sections with layout gaps; add a divider only when the content explicitly
-requires one, never through a page-specific section override.
-
-For titled working blocks, use `Surface title="..." body={form}` or
-`DataTable title="..."`. The title sits inside the panel at 18px (`--kv-text-xl`),
-with optional `actions` beside it. A titled table owns one panel, with a borderless,
-transparent scrolling viewport inside; never wrap it in another `Surface`.
-Inside a white region (a surface, modal, dialog, popover or card) a `Surface` or
-titled table renders flat, as a section of that region (LAYOUT.md L2).
-The title is retained in its empty state, with optional `emptyActions` for recovery.
-Omitting `title` preserves the existing unheaded form surface or standalone table.
 
 ### Popups close on an outside click and on Escape
 
@@ -223,7 +227,7 @@ screens, but new catalogue examples should show one of those practical surfaces
 inside the shell.
 
 `AppNavigation` is the canonical dashboard menu. Supply one grouped item model and
-place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a native
+place it in `AppShell.sidebar`; it is a persistent sidebar at 768px and above and a native
 `details` drawer below that breakpoint. The markup remains usable without JavaScript.
 Items may contain recursive `children`; a parent expands its submenu directly below
 the parent row, and an active descendant opens the complete path on first render.
@@ -231,10 +235,11 @@ Only leaf links expose the active state. Top-level branches form one accordion a
 the complete sidebar, and the interaction adapter keeps the open branch from being
 collapsed without choosing another branch. Use `expanded` when a branch should start
 open without an active descendant.
-Top-level navigation rows use the shared dense metrics: a 30px row, 13px label,
-10px content gap and an 18px leading icon. Icon size belongs to `AppNavigation`, so
-application shells and catalogue demos render the same geometry without local icon
-overrides.
+Sizing, text roles and responsive rules live in the
+[Két Design System navigation contract](../../skills/ket-design-system/references/visual-contract.md#application-navigation).
+Labels and descriptions wrap; rows grow for long translations. Optional leading
+content and counts reserve space only when supplied. Consumers do not override
+navigation geometry or icon size.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 
@@ -318,46 +323,8 @@ selection, native form submission, validation, modal focus management and CSV ex
 Synthetic orders live in the server process only and reset when it restarts;
 the demo has no connection to production records, email or delivery services.
 
-The demo uses `data-presentation="grouped"` on its design-system root: a light grey
-canvas, grey page chrome and white working groups, with a grey KetSuite sidebar in
-light mode.
-The default light palette uses a neutral `#F6F6F7` canvas and a `#F7F5F5`
-sidebar, with a `#E9E7E8` sidebar border and a pale indigo
-`#EEF0FB` selected item. Header and context use the page grey; cards stay white, with
-`#E2E4E8` content dividers. The dark sidebar remains optional.
-Forms and titled tables own one boundary with an 18px heading inside;
-table viewports have no second frame. Titled tables use 12px inset on every side,
-matching the sales demo card, without extra viewport margins or an inner frame.
-The record context column is a continuous
-white region with unframed subsections and metric. Disclosures inside a working
-group are unframed. Kanban cards retain individual boundaries because each is a
-separate navigable record. Do not wrap a whole page or arbitrary sections in cards.
-Grouped layouts use 8px between cards and 12px padding around each entire card,
-including its heading and body. Page gutters and heading-to-body spacing are 12px.
-Field and table-row density is unchanged.
-Buttons, inputs, selects and topbar launchers are the same height at every viewport width:
-density decides it, not the screen, so a button always lines up with the field beside it.
-Below tablet width only rows a finger scrolls through (navigation items, menu items, table
-selection) take the 44px touch height.
-Collection paging lives in `ListChrome.pager` above the table, alongside search and bulk controls.
-The demo shows the visible record range and previous/next links, with no page-number strip or
-separate `ListPage.footer` pagination panel. Paging, search and status filters preserve the
-current query and sort order.
-ListChrome is one command bar: a bounded search field on the leading side, with
-filters and the result range clustered at the trailing edge. On compact widths
-search and paging stay on the first row; filters wrap on the row below.
-Bulk actions occupy space only when a selection exists.
-The earlier `data-presentation="flat"` experiment remains opt-in; the catalogue
-and other consumers retain the default presentation.
-
-The contract is intentionally strict:
-
-- Inter is the only UI typeface;
-- sidebar, main application region, and context right rail use `--kv-radius-app-region` (`0`);
-- independent objects such as KPI cards use the shared 3–12px radius scale;
-- a page is never wrapped in one large card;
-- record sections and rail sections use low-contrast separators instead of nested cards;
-- component CSS consumes semantic/component roles, not numbered palette swatches.
+The demo supports grouped and flat presentations. Visual hierarchy, spacing and
+surface rules are defined only by the skill; API behavior is documented below.
 
 The public entry exports actions, status and feedback objects, fields, navigation,
 `Tab`, `Tabs`, `TabPanel` and `TabbedView`, progress, layout primitives, the responsive application navigation, the
@@ -376,6 +343,10 @@ controls, custom controls, checkbox/radio groups and nested field groups. Route-
 mobile breakpoint. The catalogue includes common component states; the page preview
 also covers loading, empty, error, validation and read-only states in English and Vietnamese.
 
+`KetTableColumn.wrap` opts a descriptive column into wrapping within the shared
+text-width token; rows grow with content. It works in server and island tables.
+Identifiers and numeric columns keep the default single-line behavior.
+
 `rowHref` provides one keyboard link per row, including the full row pointer target.
 Linked cells are display-only. Associate `selection.form` and `bulk.form` with the
 same native form to submit selected IDs and the bulk command. Selection syncing
@@ -384,7 +355,7 @@ and select-all remain application runtime responsibilities.
 From tablet width (48rem) up, a form keeps each label on the left of its control,
 with help and errors below the control. Below tablet width, and in any column
 narrower than 28rem such as a side panel, each label sits above its control
-(LAYOUT.md L7). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
+(see the skill visual contract). A lone checkbox keeps its label beside the box. Native inputs support `readOnly`,
 `min` and `max`; choices can be disabled individually, and invalid nested groups
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.
@@ -415,3 +386,5 @@ within `ListPage`, `RecordPage`, and `WorkspacePage`; they do not add a fourth p
 Before release, run `npm run design:release:check` from the repository root. It
 requires zero planned components, current migration/rollback notes, and locked
 deprecation admission. Publishing remains a post-merge operation from `master`.
+
+Button/input dimensions are pinned to Polaris React 13.9.5: default buttons map to large (32px desktop / 36px mobile), matching inputs. Compact is 28/32px. Density does not resize controls. See [the dimension matrix](../../skills/ket-design-system/references/visual-contract.md) and run `npm run test:design-system:browser` to enforce measured geometry.

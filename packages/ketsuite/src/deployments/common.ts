@@ -17,11 +17,18 @@ import type {
 } from '@ketvietlab/ketjs'
 import * as suite from '../index.ts'
 import backend from '../modules/backend/index.ts'
+import { renderStudioPublic, websiteAnonymousScope } from '../modules/website_backend/studio/public.ts'
 
 export const staffChannelModules = [suite.channelApi, suite.hr, suite.attendance, suite.accountStaffChannel]
 
 export const commonBusinessModules = [
   suite.website,
+  suite.websiteBackend,
+  suite.websiteForm,
+  suite.websiteMenu,
+  suite.websiteSeo,
+  suite.websiteSearch,
+  suite.livedoc,
   ...staffChannelModules,
   suite.address,
   suite.partner,
@@ -82,7 +89,10 @@ export function productPermissions(
         return [name, declaration]
       }),
     ),
-    roleTemplates,
+    roleTemplates: {
+      ...roleTemplates,
+      ...(names.includes('website_backend') ? suite.websiteRoleTemplates : {}),
+    },
   }
 }
 
@@ -91,6 +101,7 @@ export const productServe = (openStore: OpenStore = sqliteStore) =>
   ({
     openStore,
     sessions: { anonymous: { company: 'default' } },
+    resolveAnonymousScope: websiteAnonymousScope,
     resolveSession: suite.resolveUserSession,
     resolveAudience: (url, req) => {
       const authorization = String(req.headers.authorization ?? '')
@@ -121,6 +132,8 @@ export const productServe = (openStore: OpenStore = sqliteStore) =>
             : (result as { functions: string[] }).functions,
         ),
     pages: {
+      render: renderStudioPublic,
+      menuResolve: 'website_menu.publicMenu',
       siteResolve: 'website.resolveSite',
       resolve: 'website.getEntryByPath',
       // Minting a preview link was the whole feature until now: nothing

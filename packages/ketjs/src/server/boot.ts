@@ -224,6 +224,8 @@ export type ServeContext = {
  * `layout` (the sections, as an array or as the JSON the database gave back).
  */
 export type PagesSpec = {
+  /** Trusted deployment presenter. Return null to use the configured KTL theme. */
+  render?: (scope: Record<string, unknown>) => RouteResult | null
   resolve: string
   /** Optional function taking `{ host }` and returning site id, title, locale and theme. */
   siteResolve?: string
@@ -1103,6 +1105,38 @@ export async function bootDeployment(
       })
     }
 
+  /**
+   * What each placement of a section that declares `resolve` needs to be drawn, keyed by
+   * placement id. A presenter is a pure function of its scope, so the data a section cannot carry
+   * in its settings — a form's fields, say — is looked up here, before it runs. Capped per page:
+   * a layout is data, and data must not decide how many calls one request makes.
+   */
+  const SECTION_RESOLVE_LIMIT = 20
+  const resolveSectionData = async (
+    layout: unknown,
+    siteId: string | null,
+    url: URL,
+    req: IncomingMessage,
+  ): Promise<Record<string, unknown>> => {
+    const data: Record<string, unknown> = {}
+    const pending: Array<{ id: string; resolve: string; settings: unknown }> = []
+    const visit = (nodes: unknown): void => {
+      if (!Array.isArray(nodes)) return
+      for (const node of nodes as Array<Record<string, unknown>>) {
+        if (!node || typeof node !== 'object') continue
+        const resolve = manifest.sections[String(node.type)]?.resolve
+        if (resolve && typeof node.id === 'string' && pending.length < SECTION_RESOLVE_LIMIT)
+          pending.push({ id: node.id, resolve, settings: node.settings ?? {} })
+        const slots = node.slots
+        if (slots && typeof slots === 'object') for (const children of Object.values(slots)) visit(children)
+      }
+    }
+    visit(layout)
+    for (const item of pending)
+      data[item.id] = (await ctx.call(item.resolve, { siteId, settings: item.settings }, url, req)) ?? null
+    return data
+  }
+
   type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
   const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
   const requestHost = (url: URL, req: IncomingMessage): string => {
@@ -1329,6 +1363,7 @@ export async function bootDeployment(
     ...(pages
       ? {
           ...(pages.region ? { pageRegion: pages.region } : {}),
+          pageRender: pages.render,
           pagePrivate: (url: URL) => isPreviewRequest(url),
           siteTokens: async (url: URL, req: IncomingMessage) => {
             const resolved = await siteOf(url, req)
@@ -1370,6 +1405,9 @@ export async function bootDeployment(
               path?: string
               layout: unknown
               meta?: Record<string, unknown> | null
+              type?: string
+              fields?: Record<string, unknown> | null
+              appearance?: Record<string, unknown> | null
             } | null
             if (!row) {
               const _ = translate(locale)
@@ -1378,6 +1416,8 @@ export async function bootDeployment(
                 locale,
                 page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' },
                 sections: [],
+                // Answered as a page, but a crawler must not index it as one.
+                missing: true,
               }
             }
             // Navigation belongs to the site, not to the page, so it is resolved
@@ -1388,16 +1428,26 @@ export async function bootDeployment(
               pages.menuResolve && resolvedSite?.id
                 ? ((await ctx.call(pages.menuResolve, { siteId: resolvedSite.id }, url, req)) ?? [])
                 : []
+            const sections = typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout
+            const sectionData = await resolveSectionData(
+              sections,
+              resolvedSite?.id ?? (row as { siteId?: string }).siteId ?? null,
+              url,
+              req,
+            )
             return {
               site,
               locale,
               menu,
-              page: { id: row.id, path: row.path ?? url.pathname, title: row.title },
+              page: { id: row.id, path: row.path ?? url.pathname, title: row.title, type: row.type },
+              fields: row.fields ?? {},
+              appearance: row.appearance ?? null,
               // Whatever the resolver says describes this page. The framework
               // does not name the fields — a module owns them and decides what
               // is public; this only stops hardcoding the answer to "nothing".
               meta: row.meta ?? {},
-              sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+              sections,
+              sectionData,
             }
           },
         }

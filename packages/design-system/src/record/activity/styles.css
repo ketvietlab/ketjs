@@ -26,6 +26,7 @@
   :where([data-kv-design-system]) [data-ui="audit-item"] :is(time, span) {
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="audit-item"] {

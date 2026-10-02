@@ -3,7 +3,7 @@ title: Publishing packages
 description: Prepare, verify, and publish a coordinated KetJS release to npm.
 ---
 
-KetJS releases nine public packages with one version:
+KetJS releases ten public packages with one version:
 
 1. `@ketvietlab/ketjs-view`
 2. `@ketvietlab/ketjs-view-tools`
@@ -14,6 +14,7 @@ KetJS releases nine public packages with one version:
 7. `@ketvietlab/ketsuite`
 8. `@ketvietlab/flow-ui`
 9. `@ketvietlab/flow-client`
+10. `@ketvietlab/website-client`
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
 the package that names it.
@@ -87,7 +88,7 @@ No publish command is part of either local script.
    used by downstream applications; `develop` must never be used as a production dependency pin.
 4. Create and publish GitHub release `v0.1.30` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
-6. Confirm all nine packages and provenance attestations on npm.
+6. Confirm all ten packages and provenance attestations on npm.
 7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
    repository's release process. Never pin a moving branch name.
 8. Run the public smoke path without local tarballs:

@@ -47,8 +47,49 @@ export const models: Record<string, ModelDef> = {
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool',
+      /**
+       * Bumped by every save, whatever it changed. `schemaVersion` only moves when
+       * the visitor-facing contract does, so two editors fixing the success
+       * message at once would both pass a check on it; this one they cannot.
+       * Optional so that forms saved before it existed read as revision 0.
+       */
+      revision: 'int?',
+      /**
+       * When the form was taken out of use. An archived form answers no visitor
+       * and leaves the Studio's list, but keeps its submissions and their
+       * retention: the people who wrote in are still owed the same handling.
+       */
+      archivedAt: 'datetime?',
+      /**
+       * The module that receives this form's submissions as its own records, by
+       * name - `crm_website` turns them into leads. Null keeps them in the Website
+       * only. Not part of the version, like `summaryFields`: where a request goes
+       * once sent changes nothing the visitor was asked. See `delivery.ts`.
+       */
+      destination: 'text?',
     },
     indexes: { site_name: { fields: ['companyId', 'siteId', 'name'], unique: true } },
+  },
+  /**
+   * The contract a form had at one `schemaVersion`, kept after the form moves on.
+   *
+   * A Form is one mutable row, so once its fields change nothing could say what
+   * a submission accepted against version 2 was asked: which labels the visitor
+   * read, which answers were required. One row per version, written when the
+   * version is first stored and never updated.
+   */
+  FormVersion: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      formId: 'ref:website_form.Form',
+      version: 'int',
+      name: 'text',
+      schema: 'json',
+      consentText: 'text?',
+      createdAt: 'datetime',
+    },
+    indexes: { form_version: { fields: ['companyId', 'formId', 'version'], unique: true } },
   },
   FormSubmission: {
     scope: 'company',
@@ -83,6 +124,27 @@ export const models: Record<string, ModelDef> = {
       holdReason: 'text?',
       heldBy: 'text?',
       heldAt: 'datetime?',
+      /**
+       * Where this submission was handed, and what the receiver says became of it.
+       *
+       * The destination is copied from the form at arrival, so re-pointing a form
+       * does not re-route requests already received. The rest is written by the
+       * receiver (`delivery.ts`): its record and where to open it, its own words
+       * for where that record stands, and whether it is still open. The answers
+       * stay here under this module's retention; what the receiver keeps is its own.
+       */
+      destination: 'text?',
+      /** pending | delivered | failed; null when the form routes nowhere. */
+      deliveryState: 'text?',
+      deliveryAttempts: 'int?',
+      deliveryRef: 'text?',
+      deliveryHref: 'text?',
+      deliveryStatus: 'text?',
+      /** open | won | lost | closed, as the receiver reports it. */
+      deliveryOutcome: 'text?',
+      deliveryError: 'text?',
+      deliveredAt: 'datetime?',
+      deliverySyncedAt: 'datetime?',
     },
     indexes: {
       form_created: { fields: ['companyId', 'formId', 'createdAt'] },
@@ -90,6 +152,8 @@ export const models: Record<string, ModelDef> = {
       form_dedupe: { fields: ['companyId', 'formId', 'dedupeKey'], unique: true },
       /** Retention reads by age across every form in a company, not per form. */
       retention: { fields: ['companyId', 'purgedAt', 'createdAt'] },
+      /** A receiver reads its own queue across every form of a company. */
+      delivery: { fields: ['companyId', 'destination', 'deliveryState', 'createdAt'] },
     },
   },
   /**
@@ -108,7 +172,7 @@ export const models: Record<string, ModelDef> = {
       formId: 'ref:website_form.Form',
       /** Null for an action over a set: an export, or a retention pass. */
       submissionId: 'text?',
-      /** read | export | purge | hold | release */
+      /** read | export | purge | hold | release | retry */
       action: 'text',
       /** The acting user, or `system` for a scheduled pass with no actor. */
       actorKey: 'text',

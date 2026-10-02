@@ -43,9 +43,10 @@
     align-items: center;
     gap: var(--kv-space-1);
     min-inline-size: 0;
-    padding: 0 var(--kv-space-2);
-    border: 1px solid var(--kv-border-strong);
-    border-radius: var(--kv-radius-sm);
+    padding: 0 var(--kv-control-padding-inline);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--kv-border-strong);
+    border-radius: var(--kv-control-radius);
     background: var(--kv-panel-bg);
   }
   :where([data-kv-design-system])
@@ -72,6 +73,7 @@
     background: var(--kv-accent-subtle);
     color: var(--kv-text-main);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
   /* filter/field stay the accent tone above; group-by reads as info (a
      distinct, cooler tone), favorite as warning — one tone per facet kind. */
@@ -123,12 +125,16 @@
     background: transparent;
     color: var(--kv-text-main);
     font: inherit;
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
+    padding: var(--kv-control-padding-block) 0;
   }
   :where([data-kv-design-system])
     [data-ui="search-filter"][data-size="compact"]
     [data-ui="search-filter-input"] {
-    min-block-size: var(--kv-control-height-compact);
-    font-size: var(--kv-text-sm);
+    min-block-size: var(--kv-control-height);
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-input"]::placeholder {
     color: var(--kv-text-secondary);
@@ -192,7 +198,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--kv-space-1);
-    min-block-size: var(--kv-control-height-compact);
+    min-block-size: var(--kv-control-height);
     block-size: 100%;
     padding: 0 var(--kv-space-2);
     border: 1px solid var(--kv-border-default);
@@ -201,6 +207,7 @@
     color: var(--kv-text-main);
     font: inherit;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     white-space: nowrap;
     cursor: pointer;
     list-style: none;
@@ -264,6 +271,7 @@
     color: var(--kv-text-secondary);
     font: inherit;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-decoration: underline;
     cursor: pointer;
   }
@@ -312,6 +320,7 @@
     margin: 0 0 var(--kv-space-1);
     padding: 0 var(--kv-space-1);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping"] {
@@ -330,6 +339,7 @@
     gap: var(--kv-space-2);
     color: var(--kv-text-main);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping-clear"] {
@@ -364,6 +374,7 @@
     background: var(--kv-panel-bg);
     color: var(--kv-text-main);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping-label"] {
@@ -371,6 +382,7 @@
     overflow: hidden;
     color: var(--kv-text-main);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -405,6 +417,7 @@
     margin: var(--kv-space-2) var(--kv-space-1) var(--kv-space-1);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system])
@@ -519,6 +532,7 @@
     gap: 0.25rem;
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     white-space: nowrap;
   }
   :where([data-kv-design-system]) [data-ui="favorite-list"] {
@@ -532,6 +546,7 @@
     padding: var(--kv-space-2) var(--kv-space-3);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-transform: none;
   }
   :where([data-kv-design-system]) [data-ui="favorite-item"] {

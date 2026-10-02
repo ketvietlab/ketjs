@@ -24,6 +24,7 @@
     background: var(--kv-surface-raised);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-align: center;
   }
   :where([data-kv-design-system]) [data-ui="lightbox-thumb"] {
@@ -72,6 +73,7 @@
   :where([data-kv-design-system]) [data-ui="lightbox-counter"] {
     margin-inline-end: auto;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-variant-numeric: tabular-nums;
   }
   :where([data-kv-design-system]) :is([data-ui="lightbox-tool"], [data-ui="lightbox-nav"]) {
@@ -136,6 +138,7 @@
     margin: 0;
     padding: var(--kv-space-2) var(--kv-space-4) var(--kv-space-4);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-align: center;
   }
 

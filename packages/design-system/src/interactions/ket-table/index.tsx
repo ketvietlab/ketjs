@@ -61,6 +61,8 @@ export type KetTableColumn = {
   align?: 'start' | 'end'
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
+  /** Let descriptive content wrap within a bounded text column; rows grow as needed. */
+  wrap?: boolean
   sortable?: boolean
   /** Native URL-driven sorting; takes precedence over the RPC sort handler. */
   sortHref?: string
@@ -579,6 +581,8 @@ export function createKetTableView(
             data-col={column.key}
             data-align={column.align ?? 'start'}
             data-kind={column.kind ?? column.format.kind}
+            data-wrap={column.wrap ? 'true' : null}
+            data-width={column.width ?? null}
             data-priority={column.priority ?? 'secondary'}
             data-label={server?.responsive === 'stack' ? column.label : null}
           >
