@@ -187,6 +187,26 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
     nav: { group: 'settings', icon: 'sliders-horizontal' },
     capability: 'website.site.manage',
   },
+  customers: {
+    title: 'website.route.customers',
+    path: 'customers',
+    query: ['q', 'status'],
+    nav: { group: 'experience', icon: 'users' },
+    capability: 'website.customer.manage',
+  },
+  'customer-new': {
+    title: 'website.route.customerNew',
+    path: 'customers/new',
+    query: ['find', 'partner'],
+    modal: { back: 'customers' },
+    capability: 'website.customer.issue',
+  },
+  customer: {
+    title: 'website.route.customers',
+    path: 'customers/:id',
+    modal: { back: 'customers' },
+    capability: 'website.customer.manage',
+  },
 }
 
 for (const [key, type, icon] of [

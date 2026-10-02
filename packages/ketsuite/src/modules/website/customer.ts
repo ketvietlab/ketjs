@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import { defineFn, desc, eq, from, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { normalizePhone } from '../../phone.ts'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
@@ -409,6 +409,68 @@ export const customerAccessForSite = async (ctx: Ctx, input: { siteId: string; p
           lastLoginAt: held.lastLoginAt ?? null,
         }
       : null,
+  }
+}
+
+const CUSTOMER_STATUSES = ['active', 'disabled']
+
+/**
+ * The accounts that sign in to a site, newest first, with how the site takes them: whether visitors
+ * may open one themselves and the host they sign in on. Search reads the name, phone and email.
+ * Like {@link customerAccessForSite}, never a password or a session.
+ */
+export const listCustomerAccounts = async (
+  ctx: Ctx,
+  input: { siteId: string; search?: string | null; status?: string | null; limit?: number; offset?: number },
+) => {
+  const realm = await realmForSite(ctx, input.siteId)
+  if (!realm) return { realm: null, rows: [], total: 0 }
+  const domains = await ctx.db.select('website.SiteDomain', { siteId: input.siteId })
+  const domain = domains.find((row) => row.primary === true) ?? domains[0]
+  const Account = ctx.table('website.CustomerAccount')
+  let query = from(Account).where(eq(Account.realmId, realm.id))
+  if (input.status && CUSTOMER_STATUSES.includes(input.status))
+    query = query.where(eq(Account.status, input.status))
+  const search = String(input.search ?? '')
+    .normalize('NFKC')
+    .trim()
+  if (search) {
+    // A whole number matches its E.164 form; a fragment matches its digits, which E.164 keeps
+    // after the country code. Without digits there is no phone to look for.
+    const digits = normalizePhone(search) ?? search.replace(/\D/g, '').replace(/^0/, '')
+    query = query.where(
+      or(
+        like(Account.displayName, `%${search}%`),
+        like(Account.emailNormalized, `%${normalizeCustomerEmail(search)}%`),
+        ...(digits ? [like(Account.phoneNormalized, `%${digits}%`)] : []),
+      ),
+    )
+  }
+  const total = await ctx.db.count(query)
+  const limit = Math.min(Math.max(Number(input.limit ?? 50), 1), 200)
+  const offset = Math.max(Number(input.offset ?? 0), 0)
+  const now = new Date()
+  const rows = (await ctx.db.all(query.orderBy(desc(Account.createdAt)).limit(limit).offset(offset))).map(
+    (held) => ({
+      id: String(held.id),
+      partnerId: String(held.partnerId),
+      displayName: String(held.displayName),
+      phone: held.phone ?? held.phoneNormalized ?? null,
+      email: held.email ? String(held.email) : null,
+      status: String(held.status),
+      lockedUntil: held.lockedUntil && new Date(String(held.lockedUntil)) > now ? held.lockedUntil : null,
+      createdAt: held.createdAt ?? null,
+      lastLoginAt: held.lastLoginAt ?? null,
+    }),
+  )
+  return {
+    realm: {
+      id: String(realm.id),
+      selfSignup: realm.selfSignup !== false,
+      signInHost: domain ? String(domain.host) : null,
+    },
+    rows,
+    total,
   }
 }
 
@@ -1160,6 +1222,26 @@ export const customerFunctions: Record<string, FnSpec> = {
     ],
     handler: (ctx: Ctx, args) =>
       customerAccessForSite(ctx, { siteId: String(args.siteId), partnerId: String(args.partnerId) }),
+  }),
+
+  /** Staff: the accounts that sign in to a site. See {@link listCustomerAccounts}. */
+  listCustomerAccounts: defineFn({
+    input: { siteId: 'id', search: 'text?', status: 'text?', limit: 'int?', offset: 'int?' },
+    output: { realm: 'json?', rows: 'json', total: 'int' },
+    effects: [
+      'read:website.CustomerRealmSite',
+      'read:website.CustomerRealm',
+      'read:website.SiteDomain',
+      'read:website.CustomerAccount',
+    ],
+    handler: (ctx: Ctx, args) =>
+      listCustomerAccounts(ctx, {
+        siteId: String(args.siteId),
+        search: args.search as string | null,
+        status: args.status as string | null,
+        limit: args.limit as number | undefined,
+        offset: args.offset as number | undefined,
+      }),
   }),
 
   /** Staff: open or close self sign-up for a site's customers. */

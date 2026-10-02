@@ -1618,6 +1618,7 @@ const sources = {
       resetCustomerPassword: ['security', 'security', 'website.security-audit'],
       setCustomerSelfSignup: ['security', 'security', 'website.security-audit'],
       customerAccessForSite: ['read', 'security'],
+      listCustomerAccounts: ['read', 'security'],
       restoreRevision: ['operate', ['operate', 'author']],
       unpublishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       // Whoever can share a draft can take the link back.

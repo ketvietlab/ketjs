@@ -9638,6 +9638,7 @@
         "test/website-form-version.test.ts",
         "test/website-preview-renderer.test.ts",
         "test/website-search-index.test.ts",
+        "test/website-studio-customers-http.test.ts",
         "test/website-studio-forms-http.test.ts",
         "test/website-studio-preview-http.test.ts",
         "test/website-studio-public-form-http.test.ts",
@@ -10896,6 +10897,7 @@
         "test/website-customer-signin-http.test.ts",
         "test/website-form-crm-routing.test.ts",
         "test/website-site-tokens.test.ts",
+        "test/website-studio-customers-http.test.ts",
         "test/website-submission-export.test.ts"
       ],
       "gapTask": "DS-010"
