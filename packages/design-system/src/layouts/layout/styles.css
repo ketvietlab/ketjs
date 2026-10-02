@@ -379,6 +379,41 @@
     background: var(--kv-panel-bg);
   }
 
+  /* A droppable lane owns its hit area, including the space after its last card.
+     12rem is the minimum pointer target for an empty lane, not a card height. */
+  :where([data-kv-design-system]) [data-ui="kanban"][data-drop-target] {
+    min-block-size: 12rem;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--kv-space-4);
+    border-radius: var(--kv-radius-md);
+  }
+
+  :where([data-kv-design-system]) [data-ui="kanban"][data-drop-state="accept"] {
+    background: var(--kv-color-accent-soft);
+    outline: 1px dashed var(--kv-color-accent);
+    outline-offset: -1px;
+  }
+
+  :where([data-kv-design-system]) [data-ui="kanban"][data-drop-state="reject"] {
+    opacity: 0.55;
+  }
+  :where([data-kv-design-system]) [data-ui="kanban-card"][draggable="true"] {
+    cursor: grab;
+  }
+  :where([data-kv-design-system]) [data-ui="kanban-card"][data-dragging="true"] {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+  :where([data-kv-design-system]) [data-ui="kanban-empty"] {
+    margin: 0;
+    padding: var(--kv-space-4);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+    pointer-events: none;
+  }
+
   :where([data-kv-design-system]) [data-ui="kanban-card"][data-interactive="true"]:hover {
     border-color: var(--kv-border-default);
     background: var(--kv-surface-raised);

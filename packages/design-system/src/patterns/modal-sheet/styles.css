@@ -90,6 +90,13 @@
     height: auto;
   }
 
+  /* Short, single-column forms use the same width as the standard sheet. */
+  :where([data-kv-design-system])
+    [data-ui="modal-layer"][data-presentation="dialog"]
+    [data-ui="modal-sheet"][data-size="small"] {
+    width: min(34rem, 100%);
+  }
+
   /* A tabbed dialog keeps one height so switching tabs never resizes it; the body scrolls. */
   :where([data-kv-design-system])
     [data-ui="modal-layer"][data-presentation="dialog"]

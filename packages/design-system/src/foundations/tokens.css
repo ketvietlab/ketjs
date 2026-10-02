@@ -229,7 +229,7 @@
     --kv-gap-control: var(--kv-space-2);
     --kv-gap-form-row: var(--kv-space-4);
     --kv-gap-field-group: var(--kv-space-4);
-    --kv-gap-form-column: var(--kv-space-3);
+    --kv-gap-form-column: var(--kv-space-6);
     --kv-gap-section: var(--kv-space-4);
     /* A surface's inset and the gap under its heading (Két Design System visual contract L6). */
     --kv-surface-inset: var(--kv-space-4);
