@@ -6,8 +6,8 @@ is dark, so the storefront is consistent with its published theme. No external f
 
 ## Files and reuse
 
-- `../cosmetics.mjs`: default theme settings and `cosmeticsStarter(tr)`; six normal editable Placement
-  pages, menu and media declarations. It takes the product translator; copy lives in messages.mjs.
+- `../cosmetics.ts`: default theme settings and `cosmeticsStarter(tr)`; six normal editable Placement
+  pages, menu and media declarations. It takes the product translator; copy lives in messages.ts.
 - `../cosmetics.css`: scoped visitor/canvas presentation; load after `../default.css`.
 - `collection.svg`, `serum.svg`, `cream.svg`: original vector illustrations, not product photography.
 - `../../../atlas/cosmetics-fixture.mjs`: demo-only host seeding. Core never imports it.

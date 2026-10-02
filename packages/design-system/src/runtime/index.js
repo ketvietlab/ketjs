@@ -142,6 +142,10 @@ const attachGlobalSearch = (root) => {
   }
 }
 
+/**
+ * Binds the interactions of every component under `root`: the whole page, or one island's element.
+ * @param {Document | HTMLElement} [root]
+ */
 export const attachDesignSystemInteractions = (root = document) => {
   const cleanupPrimitives = attachPrimitives(root)
   const cleanupDatePickers = attachDatePickers(root)

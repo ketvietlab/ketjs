@@ -180,6 +180,28 @@
     grid-column: 1;
     grid-row: auto;
   }
+  /* A select and its chevron share the row under the label, as in the DS stacked layout; left to
+     auto placement the select drops below the chevron. */
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"][data-kind="select"]
+    > select[data-ui="field-control"],
+  :is(
+      .website-builder-panel,
+      .website-taxonomy-image,
+      .website-form-field,
+      .website-form-preview-column,
+      .website-form-authoring
+    )
+    [data-ui="field"][data-kind="select"]:has(> select)::after {
+    grid-column: 1;
+    grid-row: 2;
+  }
   :is(
       .website-builder-panel,
       .website-taxonomy-image,
@@ -355,6 +377,11 @@
   ) {
   grid-column: 1;
   grid-row: auto;
+}
+.website-form-field [data-ui="field"][data-kind="select"] > select[data-ui="field-control"],
+.website-form-field [data-ui="field"][data-kind="select"]:has(> select)::after {
+  grid-column: 1;
+  grid-row: 2;
 }
 /* GAP ds-form-reorder-keyboard: ReorderList has no drag-first variant. Keep move buttons accessible on keyboard focus; touch devices retain them as a non-drag alternative. */
 @media (hover: hover) and (pointer: fine) {
