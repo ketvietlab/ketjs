@@ -14,8 +14,13 @@ export { websiteRoleTemplates } from './website-role-templates.ts'
 export { DEFAULT_PHONE_REGION, normalizePhone, phoneKey, phoneSearchFragment } from './phone.ts'
 export {
   customerAccessEffects,
+  customerAccessForSite,
+  customerSignupEffects,
   disableCustomerAccess,
+  enableCustomerAccess,
   issueCustomerAccess,
+  resetCustomerPassword,
+  setCustomerSelfSignup,
   type IssueCustomerAccessInput,
   type IssueCustomerAccessResult,
 } from './modules/website/customer.ts'
