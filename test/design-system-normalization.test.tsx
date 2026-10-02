@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import {
@@ -36,6 +37,20 @@ import {
 
 const render = (view: Parameters<typeof renderToString>[0]) =>
   renderToString(view).replace(/<!--.*?-->/gs, '')
+
+test('both table implementations share contextual flattening without changing scrolling or row dividers', () => {
+  const css = readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8')
+  const rule = css.split('}').find((rule) => rule.includes('[data-ui="kt-scroll"]'))!
+  assert.ok(rule, 'KetTable must participate in the shared table layering rule')
+  for (const owner of ['surface', 'modal-sheet', 'dialog', 'popover-panel', 'record-page-aside']) {
+    assert.ok(rule.includes(`[data-ui="${owner}"]`), `missing containing level: ${owner}`)
+  }
+  assert.ok(rule.includes('[data-ui="table-scroll"][data-pattern="data-table"]'))
+  assert.match(rule, /border: 0;/)
+  assert.match(rule, /border-radius: 0;/)
+  assert.match(rule, /background: transparent;/)
+  assert.doesNotMatch(rule, /overflow|kt-cell|kt-row|kt-col/)
+})
 
 test('typography separates visual role, semantic heading and numeric content', () => {
   const html = render(
