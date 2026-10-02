@@ -1147,6 +1147,7 @@ export const coreMessages = {
     'website.form.emptyMessage': 'Thêm khối biểu mẫu vào một trang để bắt đầu nhận liên hệ.',
 
     'website.submission.footer': '{count} kết quả · tự xoá sau {days} ngày, trừ bài được giữ lại',
+    'website.submission.footerKept': '{count} kết quả · chưa đặt hạn tự xoá',
     'website.submission.export': 'Xuất CSV',
     'website.submission.filter': 'Lọc bài gửi',
     'website.submission.filter.all': 'Tất cả',

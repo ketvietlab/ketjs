@@ -119,7 +119,10 @@ export function createSubmissionList(ctx) {
           disabled: !canManage || busy,
         }),
         actionsPlacement: 'header',
-        footer: tr('website.submission.footer', { count: value.total, days: value.form.retentionDays }),
+        // A form without a retention period keeps its submissions until someone removes them.
+        footer: value.form.retentionDays
+          ? tr('website.submission.footer', { count: value.total, days: value.form.retentionDays })
+          : tr('website.submission.footerKept', { count: value.total }),
         controls: h(Tabs, {
           label: tr('website.submission.filter'),
           items: FILTERS.map((filter) => ({

@@ -572,7 +572,9 @@ the request stands, and the Studio shows that beside the copy.
   checked longest ago first. A merged lead is followed to the case it became.
 - `Form.destination` (`text?`, outside the version) is saved by `saveForm`. When the input leaves it
   out, the saved value is kept; `null` or `''` clears it. A name that is not composed is refused with
-  `website_form.error.unknownDestination`. `form-editor` resources add `destination` (`''` when none) and
+  `website_form.error.unknownDestination`. A form with a destination must have an `email` or `tel` field,
+  or the save is refused on `destination` with `website_form.error.destinationNeedsContact`; every
+  receiver has to reach the person. `form-editor` resources add `destination` (`''` when none) and
   `destinations: [{ value, label }]`. The client sends `destination` only when it rendered the control,
   so a host with no destinations never clears one.
 - A submission to a routed form starts at `deliveryState: 'pending'`. Its other delivery fields are
@@ -600,8 +602,8 @@ the request stands, and the Studio shows that beside the copy.
   a retried submission stays `pending`, and its record link points at the ERP path. It shows that link to
   every viewer, since it has no CRM permissions to check.
 - Limits: a new submission waits up to a minute. The Website's retention purge does not touch the CRM
-  lead. Saving a form routed to CRM does not check that it asks for an email or phone; such submissions
-  fail with `noContact`.
+  lead. Contact fields may be optional, so a visitor who leaves them all blank still fails with
+  `noContact`; the public form does not yet require one of them when the form is routed.
 
 ### Public forms and the Studio preview — 2026-10-02
 

@@ -502,6 +502,13 @@ export const functions: Record<string, FnSpec> = {
       // leave every submission waiting for ever and tell the editor nothing.
       if (destination && !destinationsOf(ctx.manifest).includes(String(destination)))
         return invalid('destination', 'website_form.error.unknownDestination')
+      // Whoever takes the request on has to reach the person. Refused here, where the editor can add
+      // the field, rather than as a failure on every submission after it.
+      if (
+        destination &&
+        !fieldsOf(args.schema).some((field) => field.type === 'email' || field.type === 'tel')
+      )
+        return invalid('destination', 'website_form.error.destinationNeedsContact')
 
       // A save that leaves the field contract alone keeps its version, so an
       // editor fixing a typo in the success message does not invalidate every

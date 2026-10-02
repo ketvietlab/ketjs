@@ -1,6 +1,6 @@
 import { page, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { html } from '@ketvietlab/ketjs-view'
+import { websiteStudioDocument } from '../../../ui/website-public.ts'
 import { imageRoutes } from './images.ts'
 import { searchRoutes } from './search.ts'
 import { formRoutes } from './forms.ts'
@@ -25,7 +25,7 @@ const screen =
     })
     return withHeaders(
       page({
-        body: html`<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Website · KétSuite</title><link rel="stylesheet" href="/_ket/asset/website_backend/website.css"><script type="module" src="/_ket/asset/website_backend/website.mjs"></script></head><body><div data-kv-design-system data-theme="light" data-presentation="grouped" data-density="compact"><div id="website-studio" data-props=${props}></div></div></body></html>`,
+        body: websiteStudioDocument(props),
       }),
       { 'cache-control': 'no-store' },
     )
