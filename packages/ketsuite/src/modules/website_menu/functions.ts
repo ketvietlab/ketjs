@@ -1,21 +1,8 @@
 import { asc, defineFn, deleteFrom, eq, from, isNotNull, ne } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
-
-const validHref = (value: unknown): boolean => {
-  const href = String(value ?? '').trim()
-  const hasControl = [...href].some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 31 || code === 127
-  })
-  if (href.startsWith('/') && !href.startsWith('//') && !href.includes('\\') && !hasControl) return true
-  try {
-    const url = new URL(href)
-    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password
-  } catch {
-    return false
-  }
-}
+import { validHref } from './href.ts'
+import { touchMenu } from './studio-menu.ts'
 
 /**
  * How many ancestors an item may have. A menu deeper than this is a site map,
@@ -59,13 +46,13 @@ export const functions: Record<string, FnSpec> = {
   snapshotMenu: defineFn({
     input: { siteId: 'id' },
     output: { items: 'json' },
-    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem'],
+    effects: ['read:website.Site', 'read:website.SiteMember', 'read:website_menu.MenuItem'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return { items: [] }
       const M = ctx.table('website_menu.MenuItem')
       const rows = await ctx.db.all(
-        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position), asc(M.id)).limit(200),
       )
       return {
         items: rows.map((row) => ({
@@ -100,12 +87,17 @@ export const functions: Record<string, FnSpec> = {
   preflightMenu: defineFn({
     input: { siteId: 'id' },
     output: { ok: 'bool', checked: 'int?', dangling: 'json?' },
-    effects: ['read:website.SiteMember', 'read:website.Entry', 'read:website_menu.MenuItem'],
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website.Entry',
+      'read:website_menu.MenuItem',
+    ],
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return { ok: true, checked: 0, dangling: [] }
       const M = ctx.table('website_menu.MenuItem')
       const items = await ctx.db.all(
-        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position), asc(M.id)).limit(200),
       )
       const Entry = ctx.table('website.Entry')
       // Published, not merely present: a menu link to a draft is a link that
@@ -139,17 +131,26 @@ export const functions: Record<string, FnSpec> = {
     anonymous: true,
     input: { siteId: 'id' },
     output: { id: 'id', label: 'text', href: 'text', position: 'int', parentId: 'id?' },
-    effects: ['read:website.Site', 'read:website.Publication', 'read:website_menu.MenuItem'],
+    effects: [
+      'read:website.Site',
+      'read:website.Publication',
+      'read:website_menu.Menu',
+      'read:website_menu.MenuItem',
+    ],
     handler: async (ctx: Ctx, args) => {
       const Site = ctx.table('website.Site')
       const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
       if (!site) return []
 
+      // Navigation saved through the Studio applies on save, like its theme:
+      // the Studio has no site-wide publication to carry it out later.
+      const studio = (await ctx.db.select('website_menu.Menu', { siteId: args.siteId }))[0]
+
       // A site that publishes as a set reads the navigation that went out with
       // the pages, not whatever the editor has saved since. A site that has
       // never prepared a publication reads live rows, which is what every site
       // did before publications existed.
-      if (site.activePublicationId) {
+      if (site.activePublicationId && !studio) {
         const P = ctx.table('website.Publication')
         const publication = await ctx.db.one(
           from(P).where(eq(P.id, site.activePublicationId), eq(P.state, 'active')),
@@ -161,7 +162,7 @@ export const functions: Record<string, FnSpec> = {
 
       const M = ctx.table('website_menu.MenuItem')
       const rows = await ctx.db.all(
-        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position), asc(M.id)).limit(200),
       )
       return rows.map((row) => ({
         id: row.id,
@@ -175,12 +176,12 @@ export const functions: Record<string, FnSpec> = {
 
   listMenu: defineFn({
     input: { siteId: 'id?' },
-    effects: ['read:website_menu.MenuItem', 'read:website.SiteMember'],
+    effects: ['read:website_menu.MenuItem', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (ctx.actor && (!args.siteId || !(await canAccessSite(ctx, args.siteId)))) return []
       const M = ctx.table('website_menu.MenuItem')
-      let query = from(M).orderBy(asc(M.position))
+      let query = from(M).orderBy(asc(M.position), asc(M.id))
       if (args.siteId) query = query.where(eq(M.siteId, args.siteId))
       return ctx.db.all(query)
     },
@@ -188,7 +189,14 @@ export const functions: Record<string, FnSpec> = {
 
   addMenuItem: defineFn({
     input: { id: 'id', siteId: 'id?', label: 'text', href: 'text', position: 'int?', parentId: 'id?' },
-    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem', 'write:website_menu.MenuItem'],
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website_menu.MenuItem',
+      'write:website_menu.MenuItem',
+      'read:website_menu.Menu',
+      'write:website_menu.Menu',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -237,7 +245,10 @@ export const functions: Record<string, FnSpec> = {
         .validate('href', (v) => validHref(v) || 'website.error.invalidPath')
       if (args.position == null) cs = cs.put('position', 0)
       if (!cs.valid) return { ok: false, errors: cs.errors }
-      await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
+      await ctx.tx(async (tx) => {
+        await tx.db.commit(cs, existing ? { id: args.id } : undefined)
+        await touchMenu(tx, args.siteId)
+      })
       return { ok: true, id: args.id }
     },
   }),
@@ -259,7 +270,14 @@ export const functions: Record<string, FnSpec> = {
   moveMenuItem: defineFn({
     input: { id: 'id', direction: 'text' },
     output: { ok: 'bool', id: 'id?', position: 'int?', errors: 'json?' },
-    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem', 'write:website_menu.MenuItem'],
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website_menu.MenuItem',
+      'write:website_menu.MenuItem',
+      'read:website_menu.Menu',
+      'write:website_menu.Menu',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -292,6 +310,7 @@ export const functions: Record<string, FnSpec> = {
         for (const [index, row] of ordered.entries())
           if (Number(row.position ?? 0) !== index)
             await tx.db.update('website_menu.MenuItem', { id: row.id }, { position: index })
+        await touchMenu(tx, item.siteId)
       })
       return { ok: true, id: args.id, position: to }
     },
@@ -299,7 +318,14 @@ export const functions: Record<string, FnSpec> = {
 
   removeMenuItem: defineFn({
     input: { id: 'id' },
-    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem', 'write:website_menu.MenuItem'],
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website_menu.MenuItem',
+      'write:website_menu.MenuItem',
+      'read:website_menu.Menu',
+      'write:website_menu.Menu',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -313,7 +339,10 @@ export const functions: Record<string, FnSpec> = {
       const children = await ctx.db.select('website_menu.MenuItem', { parentId: args.id })
       if (children.length) return invalid('id', 'website_menu.error.menuInUse')
       const M = ctx.table('website_menu.MenuItem')
-      await ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+      await ctx.tx(async (tx) => {
+        await tx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+        await touchMenu(tx, row.siteId)
+      })
       return { ok: true, id: args.id }
     },
   }),

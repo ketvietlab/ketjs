@@ -15,7 +15,9 @@
     "examples/**/*",
     "test/**/*",
     "tools/**/*.ts",
-    "bench/**/*"
+    "bench/**/*",
+    "packages/website-client/client/**/*",
+    "packages/website-client/server/**/*"
   ],
   "exclude": [".build", "packages/*/dist", "node_modules"]
 }

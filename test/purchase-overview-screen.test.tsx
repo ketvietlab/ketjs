@@ -45,7 +45,7 @@ test('purchase overview stays specialized: preserves workflow counts, locale lin
       ],
       {},
       '?lang=vi',
-      { pickingTypes: 1, vendors: 0 },
+      { pickingTypes: 1, vendors: 0, createHref: '/admin/purchase/rfqs?lang=vi&record=purchase.order%3Anew' },
     ),
   )
 
@@ -55,7 +55,8 @@ test('purchase overview stays specialized: preserves workflow counts, locale lin
   assert.match(html, /data-ui="notice" data-tone="warning"/)
   assert.match(html, /Cần cấu hình: nhà cung cấp\./)
   assert.match(html, /href="\/admin\/partner\/partners"/)
-  assert.match(html, /href="\/admin\/purchase\/rfqs\/new\?lang=vi"/)
+  // The primary action opens the RFQ create modal over the RFQ list.
+  assert.match(html, /href="\/admin\/purchase\/rfqs\?lang=vi&amp;record=purchase\.order%3Anew"/)
   assert.match(html, /href="\/admin\/purchase\/rfqs\?state=draft&amp;lang=vi"/)
   assert.match(html, /href="\/admin\/purchase\/rfqs\?state=sent&amp;lang=vi"/)
   assert.match(html, /href="\/admin\/purchase\/rfqs\?state=to\+approve&amp;lang=vi"/)
@@ -72,6 +73,7 @@ test('purchase overview omits setup rejection when prerequisites exist', () => {
   const html = renderToString(purchaseOverviewScreen(translate, [], {}, '', { pickingTypes: 1, vendors: 1 }))
 
   assert.doesNotMatch(html, /data-ui="notice"/)
-  assert.match(html, /href="\/admin\/purchase\/rfqs\/new"/)
+  // Without purchase.createOrder the route passes no createHref, so there is no create action.
+  assert.doesNotMatch(html, /record=purchase\.order|\/rfqs\/new/)
   assert.match(html, /data-ui="metric-value"[^>]*>[\s\S]*?0/)
 })

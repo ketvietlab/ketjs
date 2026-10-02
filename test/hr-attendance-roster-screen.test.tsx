@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -45,7 +46,10 @@ test('HR roster screen: specialized planner retains generation parameters and re
     }),
   )
 
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
+  )
   assert.match(html, /data-ui="record-form"/)
   assert.match(html, /action="\/admin\/hr\/roster\?lang=vi"/)
   assert.match(html, /name="branchId"[^>]*value="missing-branch"/)

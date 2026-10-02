@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
@@ -41,9 +42,12 @@ test('flow epic detail: FormPage keeps Live Doc specialized and exposes localize
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
   assert.match(html, /data-ui="form-page"/)
-  assert.doesNotMatch(html, /data-ui="framed"|data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="framed"|data-ui="record-workspace"|data-ui="modal-layer"/,
+  )
   assert.match(textContent, /data-ui="form-page-title"[^>]*>First release/)
-  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
+  assert.match(textContent, /data-ui="form-page-meta"[\s\S]*?Internal platform/)
   assert.match(html, /data-ui="form-page-body"[\s\S]*data-test="live-doc"/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform%2Fcore\/epics\?lang=en"/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform%2Fcore\/epics\/release%2Fone\/map\?lang=en"/)

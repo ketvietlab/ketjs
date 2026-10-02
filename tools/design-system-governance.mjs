@@ -118,7 +118,8 @@ const sourceFiles = walk(root).filter(
 const invalidDeepImports = []
 for (const path of sourceFiles) {
   for (const match of read(path).matchAll(/['"]@ketvietlab\/design-system\/([^'"]+)['"]/gu)) {
-    if (!['catalogue', 'contract', 'styles.css'].includes(match[1]))
+    // tokens.css is an existing public export for component kits that share only foundations.
+    if (!['catalogue', 'contract', 'styles.css', 'tokens.css'].includes(match[1]))
       invalidDeepImports.push(`${relative(root, path)}: ${match[0]}`)
   }
 }

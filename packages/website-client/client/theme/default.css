@@ -1,0 +1,428 @@
+/*
+ * Default public theme. Deployment-owned presentation for visitors, not Studio UI: the Design System
+ * layout audit does not apply to it and Studio CSS never styles `.wt-*`. Theme selectors stay under
+ * `[data-website-theme]` so the builder canvas cannot leak into the Studio shell or vice versa.
+ */
+[data-website-theme="default"] {
+  --wt-ink: #17191c;
+  --wt-muted: #5b616b;
+  --wt-accent: #0f6d5f;
+  --wt-paper: #ffffff;
+  color: var(--wt-ink);
+  background: var(--wt-paper);
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.6;
+}
+
+[data-website-theme="default"] .wt-hero {
+  padding: 4rem 2.5rem;
+  background: linear-gradient(160deg, #e7f3f0, #fdfbf6);
+}
+
+[data-website-theme="default"] .wt-hero__title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  line-height: 1.15;
+}
+
+[data-website-theme="default"] .wt-hero__lead {
+  max-width: 40rem;
+  margin: 0 0 1.5rem;
+  color: var(--wt-muted);
+  font-size: 1.125rem;
+}
+
+[data-website-theme="default"] .wt-button {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  color: #fff;
+  background: var(--wt-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+[data-website-theme="default"] .wt-text {
+  max-width: 44rem;
+  padding: 2rem 2.5rem;
+}
+
+[data-website-theme="default"] .wt-text[data-align="center"] {
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-website-theme="default"] .wt-text__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+}
+
+[data-website-theme="default"] .wt-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 1rem 2.5rem;
+}
+
+[data-website-theme="default"] .wt-unknown {
+  margin: 1rem 2.5rem;
+  padding: 1rem;
+  color: var(--wt-muted);
+  outline: 1px dashed currentColor;
+}
+
+[data-website-theme="default"] .wt-form {
+  max-width: 44rem;
+  padding: 2rem 2.5rem;
+}
+
+[data-website-theme="default"] .wt-form__body {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+[data-website-theme="default"] .wt-field {
+  display: grid;
+  gap: 0.375rem;
+  inline-size: 100%;
+}
+
+[data-website-theme="default"] .wt-field--check {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 0.625rem;
+}
+
+[data-website-theme="default"] .wt-field--check input {
+  margin-block-start: 0.3rem;
+}
+
+[data-website-theme="default"] .wt-field :is(input:not([type="checkbox"]), textarea) {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--wt-muted);
+  border-radius: 0.375rem;
+  background: var(--wt-paper);
+  color: inherit;
+  font: inherit;
+}
+
+[data-website-theme="default"] .wt-field [aria-invalid="true"] {
+  border-color: #b42318;
+}
+
+[data-website-theme="default"] .wt-field__error {
+  grid-column: 1 / -1;
+  color: #b42318;
+}
+
+[data-website-theme="default"] .wt-form__notice {
+  padding: 0.75rem 1rem;
+  border-inline-start: 3px solid var(--wt-accent);
+  background: color-mix(in srgb, var(--wt-accent) 8%, transparent);
+}
+
+[data-website-theme="default"] .wt-form button.wt-button {
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The honeypot: present for robots that fill every field, out of sight and reach for people. */
+.wt-form__trap {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* Builder-only affordance: the renderer adds `.wt-node` in builder mode, never for visitors. */
+[data-website-theme="default"] .wt-node {
+  cursor: pointer;
+}
+
+[data-website-theme="default"] .wt-node:hover {
+  outline: 1px dashed var(--wt-accent);
+  outline-offset: -1px;
+}
+
+[data-website-theme="default"] .wt-node[data-selected="true"] {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: -2px;
+}
+
+.wt-image {
+  margin: 0;
+  padding: 1.5rem;
+}
+.wt-image img,
+.wt-cover,
+.wt-text video {
+  width: 100%;
+  max-height: 28rem;
+  object-fit: cover;
+}
+.wt-image figcaption {
+  padding-block: 0.5rem;
+}
+
+@media (max-width: 48rem) {
+  .wt-responsive[data-visibility="desktop"] {
+    display: none;
+  }
+  /* Text and forms share one inset, so a form under its introduction lines up with it. */
+  [data-website-theme="default"] :is(.wt-text, .wt-form) {
+    padding-inline: 1rem;
+  }
+}
+@media (min-width: 48.001rem) {
+  .wt-responsive[data-visibility="mobile"] {
+    display: none;
+  }
+}
+
+.wt-site[data-font="serif"] {
+  font-family: Georgia, serif;
+}
+.wt-site[data-accent="indigo"] .wt-button {
+  background: #4f46b8;
+}
+.wt-site[data-accent="orange"] .wt-button {
+  background: #a84715;
+}
+.wt-site[data-accent="green"] .wt-button {
+  background: #275c43;
+}
+
+.wt-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.wt-gallery img {
+  width: 100%;
+  height: auto;
+}
+
+/* Public journeys use the same native DS controls inside a visitor-owned theme shell. */
+.website-visitor {
+  min-height: 100vh;
+  background: var(--kv-bg-canvas);
+  color: var(--kv-text-primary);
+}
+.website-visitor-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 3vw;
+  border-bottom: 1px solid var(--kv-border-default);
+}
+.website-visitor-brand {
+  font-family: Georgia, serif;
+  font-size: 1.65rem;
+  text-decoration: none;
+  color: inherit;
+}
+.website-visitor-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  font-size: 0.875rem;
+}
+.website-visitor-header nav a {
+  color: inherit;
+  text-decoration: none;
+}
+.website-visitor-main {
+  max-width: 76rem;
+  margin: auto;
+  padding: 1.5rem 2vw 3rem;
+}
+.website-visitor-photo {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  display: block;
+}
+.website-visitor-photo-large {
+  max-height: 24rem;
+}
+.website-visitor-photo-wide {
+  max-height: 18rem;
+}
+.website-visitor-footer {
+  padding: 1.5rem 4vw;
+  border-top: 1px solid var(--kv-border-default);
+}
+.website-visitor-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+@media (max-width: 48rem) {
+  .website-visitor-header {
+    padding: 1rem;
+  }
+  .website-visitor-header nav {
+    gap: 0.8rem;
+  }
+  .website-visitor-main {
+    padding: 1rem 0.5rem;
+  }
+  .website-visitor-pager {
+    flex-wrap: wrap;
+  }
+}
+
+/* Visitor shell belongs to the website theme, never to the Studio page patterns. */
+.website-visitor {
+  background: #fffdfa;
+  color: #272d29;
+}
+.website-visitor-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin: 1rem 0 2rem;
+}
+.website-visitor-title h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.65rem;
+}
+.website-visitor-title p {
+  max-width: 42rem;
+  color: #667066;
+  font-size: 1.05rem;
+}
+.website-visitor-main {
+  padding-block: 2rem 4rem;
+}
+.website-visitor-price {
+  font-size: 1.65rem;
+  font-weight: 650;
+  margin-block: 1rem;
+}
+.website-visitor-header nav a {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+.website-visitor-photo-large {
+  max-height: 32rem;
+}
+.website-visitor-header {
+  border-color: #e3e5df;
+}
+.website-visitor-footer {
+  border-color: #e3e5df;
+  color: #5d675e;
+}
+[data-theme="dark"] .website-visitor {
+  background: #171e1b;
+  color: #edf1eb;
+}
+[data-theme="dark"] .website-visitor-title p,
+[data-theme="dark"] .website-visitor-footer {
+  color: #b9c7ba;
+}
+[data-theme="dark"] .website-visitor-header,
+[data-theme="dark"] .website-visitor-footer {
+  border-color: #344139;
+}
+@media (max-width: 48rem) {
+  .website-visitor-title {
+    flex-direction: column;
+    margin: 0.5rem 0 1.5rem;
+  }
+  .website-visitor-main {
+    padding: 1rem;
+  }
+  .website-visitor-header nav {
+    gap: 0.2rem 1rem;
+  }
+}
+
+/* Explicit per-placement presentation settings; these are theme-owned, not Studio frames. */
+.wt-node,
+.wt-responsive {
+  padding: var(--wt-space-desktop, 0);
+  text-align: var(--wt-align-desktop, start);
+}
+.wt-columns[data-layout="stack"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 64rem) {
+  .wt-responsive {
+    padding: var(--wt-space-tablet, 0);
+    text-align: var(--wt-align-tablet, start);
+  }
+}
+@media (max-width: 48rem) {
+  .wt-responsive {
+    padding: var(--wt-space-mobile, 0);
+    text-align: var(--wt-align-mobile, start);
+  }
+}
+
+[data-website-theme="default"] :is(.wt-responsive, .wt-node) {
+  min-inline-size: min(100%, var(--wt-min-desktop, 0px));
+  max-inline-size: var(--wt-max-desktop, 100%);
+}
+@media (max-width: 64rem) {
+  [data-website-theme="default"] :is(.wt-responsive, .wt-node) {
+    min-inline-size: min(100%, var(--wt-min-tablet, 0px));
+    max-inline-size: var(--wt-max-tablet, 100%);
+  }
+}
+@media (max-width: 48rem) {
+  [data-website-theme="default"] :is(.wt-responsive, .wt-node) {
+    min-inline-size: min(100%, var(--wt-min-mobile, 0px));
+    max-inline-size: var(--wt-max-mobile, 100%);
+  }
+}
+
+.wt-site .wt-theme-header {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 1.25rem;
+  color: var(--wt-ink);
+}
+/* The public header and the Studio frame draw the same logo. */
+.wt-public-logo {
+  display: block;
+  max-width: 12rem;
+  max-height: 3rem;
+  object-fit: contain;
+}
+.wt-site .wt-theme-header nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.wt-site .wt-theme-footer {
+  padding: 2rem;
+  background: #f5f5f0;
+  color: var(--wt-ink);
+}
+.wt-site[data-buttons="rounded"] .wt-button {
+  border-radius: 0.5rem;
+}
+.wt-site[data-spacing="compact"] :is(.wt-hero, .wt-text) {
+  padding-block: 1rem;
+}
+.wt-site[data-spacing="spacious"] :is(.wt-hero, .wt-text) {
+  padding-block: 4rem;
+}

@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { routes } from './routes.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 
 export default defineModule({
   name: 'address_backend',
@@ -9,6 +10,7 @@ export default defineModule({
   summary: 'Cài đặt và kiểm tra catalog địa giới theo quốc gia.',
   category: 'Danh bạ',
   routes,
+  functions: searchFilterFunctions,
   menus: {
     'admin.addresses': {
       parent: 'admin.config',
@@ -25,7 +27,6 @@ export default defineModule({
       'app.category': 'Danh bạ',
       'menu.addresses': 'Dữ liệu địa chỉ',
       title: 'Dữ liệu địa chỉ',
-      hint: 'Catalog được đóng gói cùng KetSuite, kiểm tra checksum và chỉ kích hoạt sau khi import hoàn tất.',
       empty: 'Chưa có gói dữ liệu địa chỉ',
       emptyHint: 'Bổ sung quốc gia vào thư mục data của module address.',
       'country.VN': 'Việt Nam',
@@ -57,7 +58,6 @@ export default defineModule({
       'app.category': 'Contacts',
       'menu.addresses': 'Address data',
       title: 'Address data',
-      hint: 'Catalogs ship with KetSuite, are checksum-verified, and activate only after a complete import.',
       empty: 'No address data packs',
       emptyHint: 'Add a country to the address module data directory.',
       'country.VN': 'Vietnam',

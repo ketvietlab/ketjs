@@ -51,7 +51,6 @@ export const ganttScreen = (
       frame={frame}
       eyebrow={_('flow_backend.gantt.title')}
       title={projectName}
-      description={_('flow_backend.gantt.hint')}
       controls={
         frame.chrome ? listChrome(_, projectName, { ...frame.chrome, layout: 'command' }, false) : undefined
       }

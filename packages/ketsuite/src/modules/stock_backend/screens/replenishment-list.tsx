@@ -1,16 +1,15 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  bulkActions,
+  collectionActions,
+  collectionControls,
   collectionTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   RecordForm,
   shell,
 } from '../../../ui/index.ts'
@@ -29,13 +28,13 @@ export type ReplenishmentListRow = {
   toOrder: string
   replenishmentUom: string
   /** Locale-aware run endpoint supplied by the route. */
-  runAction: string
+  runAction: string | null
 }
 
 export type ReplenishmentListScreenOptions = {
   rows: ReplenishmentListRow[]
   /** Localized `/admin/stock/replenishment/new` URL supplied by the route. */
-  createHref: string
+  createHref: string | null
   total?: number
   table?: Partial<DataTable<ReplenishmentListRow>>
 }
@@ -91,16 +90,19 @@ export const replenishmentListColumns = (_: Translator): Array<Column<Replenishm
   {
     key: 'action',
     label: _('stock_backend.replenishment.col.action'),
-    cell: (row) => (
-      <RecordForm
-        action={row.runAction}
-        submit={_('stock_backend.action.run')}
-        submitVariant="secondary"
-        submitSize="compact"
-        layout="inline"
-        fields={[]}
-      />
-    ),
+    cell: (row) =>
+      row.runAction ? (
+        <RecordForm
+          action={row.runAction}
+          submit={_('stock_backend.action.run')}
+          submitVariant="secondary"
+          submitSize="compact"
+          layout="inline"
+          fields={[]}
+        />
+      ) : (
+        ''
+      ),
   },
 ]
 
@@ -131,34 +133,13 @@ export const replenishmentListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('stock_backend.replenishment.title')}
-      description={_('stock_backend.replenishment.subtitle')}
       headerActions={
-        <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        options.createHref ? (
+          <LinkButton label={_('stock_backend.action.create')} href={options.createHref} variant="primary" />
+        ) : null
       }
-      actions={
-        selection || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              selection ? bulkActions(_, selection) : '',
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('stock_backend.replenishment.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame, undefined, selection)}
+      controls={collectionControls(_, _('stock_backend.replenishment.title'), collection.frame)}
       footer={`${_('stock_backend.replenishment.summary.rules')}: ${String(total)}`}
       body={
         options.rows.length || options.table?.groups?.length

@@ -4,6 +4,7 @@ import { bootDeployment, callFn } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import { recordTabsFor } from '../packages/ketsuite/src/modules/product/product-record-tabs.ts'
+import { islands } from '../packages/ketsuite/src/modules/product_backend/islands.ts'
 
 const companyScope = (company: string, branch = `root:${company}`) => ({
   company,
@@ -78,8 +79,20 @@ const boot = async (t: TestContext) => {
 
   await run('uom.saveUnit', { id: 'unit', name: 'Cái', relativeFactor: '1' })
   await run('product.saveCategory', { id: 'cat-1', name: 'Đồ nam' })
-  return { run }
+  return { run, baseUrl: `http://127.0.0.1:${booted.port}` }
 }
+
+test('product modal: every declared client, including the nested variant editor, is served by the build', async (t) => {
+  const { baseUrl } = await boot(t)
+  for (const [name, definition] of Object.entries(islands)) {
+    if (!('client' in definition) || !definition.client) continue
+    const response = await fetch(`${baseUrl}/_ket/asset/product_backend/${definition.client}`)
+    assert.equal(response.status, 200, `${name}: ${definition.client} must be built and served`)
+    assert.match(response.headers.get('content-type') ?? '', /^text\/javascript/)
+    const source = await response.text()
+    assert.ok(source.includes(definition.export ?? 'default'), `${name}: client exports its declared factory`)
+  }
+})
 
 test('product modal context: the create form offers defaults and every choice a superuser may use', async (t) => {
   const { run } = await boot(t)
@@ -97,6 +110,7 @@ test('product modal context: the create form offers defaults and every choice a 
   assert.ok(context.uoms.some((u) => u.value === 'unit'))
   assert.equal(context.stockEnabled, true, 'the stock module is part of this deployment')
   assert.equal(context.permissions.save, true)
+  assert.equal(context.permissions.createAttribute, true)
   assert.equal(context.permissions.archive, true)
   assert.equal(context.permissions.delete, true)
   assert.equal(context.permissions.configureStock, true)
@@ -151,6 +165,14 @@ test('product modal context: an existing template carries its attributes-and-var
   assert.deepEqual((context as Row).extensionTabs, [])
   // The modal's text travels with its data, so the view never shows a message key.
   assert.equal(result.messages['product_backend.tabs.general'], 'Thông tin chung')
+  const editor = await run<Context>('product.templateModalContext', { id: 'tpl' }, 'staff')
+  assert.ok(editor)
+  assert.equal(editor.data.permissions.saveVariantSetup, true)
+  assert.equal(
+    editor.data.permissions.createAttribute,
+    false,
+    'editing variants does not grant shared attribute creation',
+  )
 })
 
 test('product modal context: reading is refused to a viewer who holds no product function at all, and to a stranger', async (t) => {
@@ -172,6 +194,7 @@ test('product modal context: a reader without save rights still opens the record
   assert.ok(result, 'a reader may open the record')
   assert.equal(result.data.record.name, 'Áo thun')
   assert.equal(result.data.permissions.save, false)
+  assert.equal(result.data.permissions.createAttribute, false)
   assert.equal(result.data.permissions.archive, false)
   assert.equal(result.data.permissions.delete, false)
 })

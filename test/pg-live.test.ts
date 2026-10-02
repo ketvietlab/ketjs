@@ -49,6 +49,7 @@ import {
   user,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
 import backend from '@ketvietlab/ketsuite/backend'
 
 /** Every request acts as some company; these tests act as one. */
@@ -434,9 +435,13 @@ test('live pg: a database per tenant, migrated as a fleet', live, async () => {
   // Provisioned here rather than assumed. Expecting a developer's own databases
   // to exist is what kept this one from running anywhere but one laptop.
   const admin = postgresAdapter(URL, { max: 1 })
-  await admin.open()
-  for (const db of ['ketjs_t1', 'ketjs_t2']) await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
-  await admin.close()
+  try {
+    await admin.open()
+    for (const db of ['ketjs_t1', 'ketjs_t2'])
+      await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
+  } finally {
+    await admin.close().catch(() => {})
+  }
   const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 4 })
   try {
     for (const db of ['ketjs_t1', 'ketjs_t2']) {
@@ -1480,7 +1485,8 @@ test(
       assert.equal(updates.filter((result) => (result.value as Row).ok === true).length, 1)
       assert.equal(updates.filter((result) => (result.value as Row).ok === false).length, 1)
       const order = (await call('pos.getOrder', { id: 'race-order' })).value as Row
-      assert.equal(order.revision, '2')
+      // An int field reads back as a number on Postgres too, the same as on SQLite.
+      assert.equal(order.revision, 2)
       const tendered = await Promise.all([
         call('pos.addPayment', {
           id: 'race-tender',
@@ -1842,3 +1848,61 @@ test('live pg: concurrent online reservations admit one winner without overselli
     await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
   }
 })
+
+test(
+  'live pg: a tenant listener hears its own database and holds it open until it stops',
+  live,
+  async (t) => {
+    // NOTIFY is per database, so tenants need databases of their own; skip where they cannot be made.
+    const admin = postgresAdapter(URL)
+    await admin.open()
+    const names = ['ketjs_tenant_listen_a', 'ketjs_tenant_listen_b']
+    try {
+      for (const name of names) {
+        const [row] = await admin.all('SELECT 1 AS present FROM pg_database WHERE datname = $1', [name])
+        if (!row) await admin.exec(`CREATE DATABASE ${name}`)
+      }
+    } catch (error) {
+      await admin.close()
+      t.skip(`cannot create tenant databases: ${(error as Error).message}`)
+      return
+    }
+    await admin.close()
+    const urlOf = (key: string) => {
+      const url = new globalThis.URL(URL)
+      url.pathname = `/ketjs_tenant_listen_${key}`
+      return url.toString()
+    }
+    const pool = createAdapterPool({ max: 2, idleMs: 0, create: (key) => postgresAdapter(urlOf(key)) })
+    const tenants = createTenants({
+      spec: { resolve: () => null, open: (key) => postgresAdapter(urlOf(key)), list: async () => ['a', 'b'] },
+      pool,
+      manifest,
+      joints: () => ({}) as never,
+    })
+    try {
+      const heard: string[] = []
+      let ready = 0
+      const stop = await tenants.listen(
+        'a',
+        'ket_tenant_test',
+        (payload) => heard.push(payload),
+        () => ready++,
+      )
+      assert.equal(ready, 1)
+      await tenants.with('b', (tenant) => tenant.adapter.notifications!.publish('ket_tenant_test', 'from b'))
+      await tenants.with('a', (tenant) => tenant.adapter.notifications!.publish('ket_tenant_test', 'from a'))
+      const deadline = Date.now() + 2_000
+      while (!heard.length && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      assert.deepEqual(heard, ['from a'], "another tenant's notification is another database's")
+
+      assert.equal(await pool.evictIdle(), 1)
+      assert.deepEqual(pool.open, ['a'], 'the listened tenant is not idled out')
+      await stop()
+      assert.equal(await pool.evictIdle(), 1, 'stopping gives it back')
+    } finally {
+      await tenants.close()
+    }
+  },
+)

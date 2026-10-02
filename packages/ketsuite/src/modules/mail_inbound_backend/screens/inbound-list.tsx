@@ -24,7 +24,6 @@ export const inboundScreen = (_: Translator, frame: Frame, options: InboundScree
       variant="operational"
       frame={frame}
       title={_('mail_inbound_backend.title')}
-      description={_('mail_inbound_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}
       status={`${_('mail_inbound_backend.title')}: ${String(options.rows.length)}`}
       body={

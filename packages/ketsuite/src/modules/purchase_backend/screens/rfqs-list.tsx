@@ -1,7 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
+import {
+  collectionActions,
+  collectionControls,
+  emptyState,
+  icon,
+  LinkButton,
+  ListPage,
+  prepareCollectionTable,
+  shell,
+  stack,
+} from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { emptyState, icon, LinkButton, ListPage, listChrome, shell, stack } from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
 import {
   purchaseOrderListColumns,
@@ -13,7 +22,7 @@ import { missingSetup } from './shared.tsx'
 export type RfqsListScreenOptions = {
   frame: Frame
   rows: PurchaseOrderListRow[]
-  createHref: string
+  createHref: string | null
   detailSuffix: string
   total?: number
   setup?: { pickingTypes: number; vendors: number }
@@ -21,12 +30,17 @@ export type RfqsListScreenOptions = {
 }
 
 export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): TemplateResult => {
-  const collection = prepareCollectionTable(_, options.frame, {
-    rows: options.rows,
-    columns: purchaseOrderListColumns(_),
-    id: (row) => String(row.id),
-    ...options.table,
-  })
+  const collection = prepareCollectionTable(
+    _,
+    options.frame,
+    {
+      rows: options.rows,
+      columns: purchaseOrderListColumns(_),
+      id: (row) => String(row.id),
+      ...options.table,
+    },
+    { paginate: !options.table?.groups },
+  )
   const total = options.total ?? options.rows.length
   const table =
     options.rows.length || options.table?.groups?.length
@@ -46,29 +60,16 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
       frame={collection.frame}
       title={_('purchase_backend.rfqs.title')}
       headerActions={
-        <LinkButton
-          label={_('purchase_backend.action.createRfq')}
-          href={options.createHref}
-          variant="primary"
-        />
+        options.createHref ? (
+          <LinkButton
+            label={_('purchase_backend.action.createRfq')}
+            href={options.createHref}
+            variant="primary"
+          />
+        ) : null
       }
-      actions={collection.frame.extras?.['topbar.end']}
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('purchase_backend.rfqs.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(_, collection.frame)}
+      controls={collectionControls(_, _('purchase_backend.rfqs.title'), collection.frame)}
       footer={summary}
       body={stack([options.setup ? missingSetup(_, options.setup) : null, table], 'loose')}
     />,

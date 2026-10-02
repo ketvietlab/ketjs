@@ -1006,6 +1006,19 @@ export function compose(
     })
   }
 
+  for (const [id, def] of Object.entries(manifest.menus)) {
+    if (def.needs && !manifest.functions[def.needs]) continue
+    for (const key of def.requires ?? []) {
+      if (!manifest.functions[key])
+        diag.add({
+          code: 'E_MENU_UNKNOWN_FUNCTION',
+          module: def.by,
+          message: `menu "${id}" requires unknown function "${key}"`,
+          hint: 'declare only the reads and lookups required to render this screen',
+        })
+    }
+  }
+
   // --- view models: the only data surface a theme may read -----------------
   for (const m of order) {
     for (const [vname, def] of Object.entries(m.views)) {
@@ -1226,6 +1239,30 @@ export function compose(
           message: `section "${name}" is already provided by "${existing.by}"`,
         })
         continue
+      }
+      if (def.resolve !== undefined) {
+        const resolver = manifest.functions[def.resolve]
+        if (!resolver) {
+          diag.add({
+            code: 'E_SECTION_UNKNOWN_RESOLVER',
+            module: m.name,
+            message: `section "${name}" resolves its data with unknown function "${def.resolve}"`,
+          })
+          continue
+        }
+        // A public page is served to anyone, so what it calls must be callable by anyone and
+        // must not change anything by being looked at.
+        if (
+          !resolver.anonymous ||
+          resolver.effects.some((effect) => effect.startsWith('write:') || effect.startsWith('enqueue:'))
+        ) {
+          diag.add({
+            code: 'E_SECTION_RESOLVER_UNSAFE',
+            module: m.name,
+            message: `section "${name}" resolver "${def.resolve}" must be anonymous and read-only`,
+          })
+          continue
+        }
       }
       manifest.sections[name] = { ...def, by: m.name }
     }

@@ -10,6 +10,7 @@ import {
   Avatar,
   Badge,
   Breadcrumbs,
+  BulkActions,
   Button,
   ContentCard,
   createRelationSelectView,
@@ -697,8 +698,16 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
           title="Đơn hàng"
           context={context}
           variant="operational"
-          description={`${orders.length} đơn hàng · Kho Thảo Điền`}
-          actions={actions}
+          headerActions={actions}
+          actionsPlacement="header"
+          actions={
+            <BulkActions
+              form="bulk-form"
+              selectedCount={0}
+              summary={<span id="selection-summary">0 đơn được chọn</span>}
+              actions={[{ id: 'advance', name: 'intent', value: 'bulk', label: 'Chuyển bước tiếp theo' }]}
+            />
+          }
           controls={
             <ListChrome
               search={{
@@ -726,12 +735,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                   count: orders.filter((order) => order.stage === stage).length,
                 })),
               ]}
-              bulk={{
-                form: 'bulk-form',
-                selectedCount: 0,
-                summary: <span id="selection-summary">0 đơn được chọn</span>,
-                actions: [{ id: 'advance', name: 'intent', value: 'bulk', label: 'Chuyển bước tiếp theo' }],
-              }}
               pager={{
                 label: 'Trang đơn hàng',
                 summary: `${matching.length ? (pageNumber - 1) * 8 + 1 : 0}–${Math.min(pageNumber * 8, matching.length)} / ${matching.length} đơn hàng`,
@@ -759,7 +762,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <RecordPage
           title={selected.id}
-          description={customerName(selected.customer)}
           context={context}
           variant="operational"
           status={stateBadge(selected)}
@@ -934,7 +936,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title="Bảng giao hàng"
-          description="Theo dõi đơn hàng từ xác nhận đến bàn giao."
           context={context}
           variant="operational"
           layout="canvas"
@@ -1011,7 +1012,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title={sectionLabel}
-          description={`Điều hành ${sectionLabel.toLocaleLowerCase('vi')} trong ${activeModule.label.toLocaleLowerCase('vi')}.`}
           context={context}
           variant="operational"
           actions={
@@ -1087,7 +1087,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       main = (
         <WorkspacePage
           title="Tổng quan bán hàng"
-          description="Thứ Ba, 08 tháng 09 năm 2026"
           context={context}
           variant="operational"
           actions={actions}

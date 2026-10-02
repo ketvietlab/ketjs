@@ -5,14 +5,9 @@ import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { collectionSearchFrame } from '../packages/ketsuite/src/modules/backend/collection-search.ts'
 import { RecordForm } from '../packages/ketsuite/src/ui/index.ts'
-import { ListScreenFrame as WebsiteFrame } from '../packages/ketsuite/src/modules/website_backend/screens/page-frame.tsx'
 import { ListScreenFrame as LoyaltyFrame } from '../packages/ketsuite/src/modules/loyalty_backend/screens/page-frame.tsx'
 import { ListScreenFrame as HospitalityFrame } from '../packages/ketsuite/src/modules/hospitality_core/screens/page-frame.tsx'
 import { ListScreenFrame as BillingFrame } from '../packages/ketsuite/src/modules/hospitality_billing/screens/page-frame.tsx'
-import {
-  contentScreen,
-  sitesScreen,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 import { ordersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
 import { billingScreen } from '../packages/ketsuite/src/modules/hospitality_billing/screens/billing.tsx'
 
@@ -22,7 +17,7 @@ translate.has = () => true
 translate.resolves = () => true
 
 test('domain filters compose with compact search and paging in every experience frame', () => {
-  for (const Frame of [WebsiteFrame, LoyaltyFrame, HospitalityFrame, BillingFrame]) {
+  for (const Frame of [LoyaltyFrame, HospitalityFrame, BillingFrame]) {
     const html = renderToString(
       Frame({
         translator: translate,
@@ -83,48 +78,6 @@ test('POS order pagination retains locale and filters and never changes decimal 
   assert.doesNotMatch(html, /data-row="order-30"/)
   assert.match(html, /href="\/admin\/pos\/orders\?lang=vi&amp;state=paid&amp;q=POS&amp;page=1"/)
   assert.match(html, /1,234\.56/)
-})
-
-test('Website SQL paging remains one command pager and does not repaginate returned rows', () => {
-  const frame = collectionSearchFrame(
-    new URL('https://example.test/admin/website/pages?lang=vi&site=s1&status=draft&q=Home&page=2'),
-    {},
-    'Pages',
-  )
-  const rows = [
-    {
-      id: 'p31',
-      siteId: 's1',
-      type: 'website.page',
-      slug: 'home',
-      path: '/',
-      title: 'Home',
-      status: 'draft',
-    },
-  ]
-  const html = renderToString(
-    contentScreen(
-      translate,
-      rows,
-      [{ value: 's1', label: 'Site' }],
-      's1',
-      frame,
-      '?lang=vi',
-      undefined,
-      {
-        from: 31,
-        to: 31,
-        total: 31,
-        prev: '/admin/website/pages?lang=vi&site=s1&status=draft&q=Home&page=1',
-      },
-      { search: 'Home', status: 'draft' },
-    ),
-  )
-  assert.match(html, /data-row="p31"/)
-  assert.equal((html.match(/data-ui="pager-range"/g) ?? []).length, 1)
-  assert.ok(html.indexOf('data-ui="pager-range"') < html.indexOf('data-ui="ket-table"'))
-  assert.doesNotMatch(html, /data-ui="list-page-footer"/)
-  assert.match(html, /name="status"[\s\S]*value="draft"[^>]*selected/)
 })
 
 test('billing pagination preserves the collection-wide eligible invoice action', () => {
@@ -195,29 +148,4 @@ test('room filters preserve repeated query values, search and column state while
   assert.match(form, /name="tag"[^>]*value="two"/)
   assert.doesNotMatch(form, /name="page"/)
   assert.equal((form.match(/name="property"/g) ?? []).length, 1)
-})
-
-test('Website state filters retain search, locale and repeated context parameters', () => {
-  const frame = collectionSearchFrame(
-    new URL('https://example.test/admin/website/sites?q=Host&lang=vi&tag=one&tag=two&page=2'),
-    {},
-    'Sites',
-  )
-  const html = renderToString(
-    sitesScreen(
-      translate,
-      [{ id: 'site', name: 'Host', title: 'Host', defaultLocale: 'vi', theme: 'paper', active: true }],
-      frame,
-      '?lang=vi',
-    ),
-  )
-  const href = [...html.matchAll(/href="([^"]+)"/g)]
-    .map((match) => match[1]!.replaceAll('&amp;', '&'))
-    .find((href) => href.includes('state=active'))
-  assert.ok(href)
-  const query = new URL(href, 'https://example.test').searchParams
-  assert.equal(query.get('q'), 'Host')
-  assert.equal(query.get('lang'), 'vi')
-  assert.deepEqual(query.getAll('tag'), ['one', 'two'])
-  assert.equal(query.has('page'), false)
 })

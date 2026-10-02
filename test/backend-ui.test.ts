@@ -198,7 +198,7 @@ const CHROME: ListChrome = {
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
-test('KetSuite ListPage derives breadcrumbs and company context from its frame', () => {
+test('KetSuite ListPage derives breadcrumbs without duplicating the global company context', () => {
   const output = renderToString(
     KetSuiteListPage({
       variant: 'operational',
@@ -235,8 +235,8 @@ test('KetSuite ListPage derives breadcrumbs and company context from its frame',
   assert.match(output, /data-ui="list-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /href="\/admin\/flow\/projects"[^>]*>[\s\S]*?Flow/)
   assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
-  assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
 test('KetSuite ListPage keeps external bulk submission beside Create while only selected tools are hidden', () => {
@@ -339,7 +339,7 @@ test('KetSuite FormPage derives its operational topbar from the application fram
   assert.match(output, /data-ui="form-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /Kế toán[\s\S]*?Hệ thống tài khoản[\s\S]*?Tạo tài khoản/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
 test('KetSuite DashboardPage derives context and preserves extension actions', () => {
@@ -367,7 +367,7 @@ test('KetSuite DashboardPage derives context and preserves extension actions', (
   assert.match(output, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /Bán hàng[\s\S]*?Tổng quan bán hàng/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="dashboard-page-actions"[\s\S]*?Tạo báo giá[\s\S]*?Extension action/)
 })
 
@@ -397,7 +397,7 @@ test('KetSuite BoardPage derives context and preserves extension actions', () =>
   assert.match(output, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.match(output, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.match(output, /CRM[\s\S]*?Pipeline bán hàng/)
-  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="board-page-actions"[\s\S]*?Tạo cơ hội[\s\S]*?Extension action/)
   assert.match(output, /data-ui="board-page-toolbar"[\s\S]*?Lọc theo đội/)
 })
@@ -769,8 +769,8 @@ const everything = [
     asOfLabel: 'Cập nhật',
     note: 'Asia/Ho_Chi_Minh',
   }),
-  // A sidebar whose search matched nothing: the label goes, a note takes its place.
-  pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // A viewer with no menu entries still gets a readable empty sidebar.
+  pagesScreen(_, [page()], { menu: [] }),
   // How far along a record is. A value, because the empty case draws nothing at
   // all — which is the point of it, and would show none of the parts.
   progressBar({ value: 62, label: 'Tiến độ' }),
@@ -924,6 +924,24 @@ test('backend content: a breadcrumb that has to shrink clips instead of overprin
   )
 })
 
+test('record form: a narrow column puts labels above their controls, inside a FormPage too', () => {
+  // A form in a record aside kept the 7-9rem label track beside every control,
+  // so a third of the column went to the label; screens patched it one by one.
+  const narrow =
+    ADMIN_CSS.match(/@container record-form \(max-width: 28rem\) \{([\s\S]*?)\n {2}\}/)?.[1] ?? ''
+  assert.match(
+    narrow,
+    /:is\(\[data-ui="form-page"\], :root\)\s+\[data-ui="record-form"\]\[data-layout="default"\]/,
+  )
+  assert.match(narrow, /grid-template-columns: minmax\(0, 1fr\)/)
+  assert.match(narrow, /\[data-ui="form-label"\],[\s\S]*?grid-column: 1;/)
+  assert.ok(
+    ADMIN_CSS.indexOf('@container record-form') >
+      ADMIN_CSS.lastIndexOf('[data-ui="form-page"]\n      [data-ui="record-form"]'),
+    'declared after the FormPage label rhythm it has to outrank',
+  )
+})
+
 test('backend content lets operational page patterns own their spacing', () => {
   assert.match(
     ADMIN_CSS,
@@ -940,7 +958,13 @@ const MODULE_STYLESHEETS = [
 ]
 
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+  const publicComponentCss = [
+    'packages/design-system/src/patterns/modal-sheet/styles.css',
+    'packages/design-system/src/layouts/layout/styles.css',
+    'packages/design-system/src/primitives/status/styles.css',
+    'packages/design-system/src/primitives/actions/styles.css',
+  ]
+  const css = [...STYLESHEETS, ...publicComponentCss].map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
@@ -1055,10 +1079,12 @@ test('routes: the segment after /admin names the section, so a path says where i
     'settings',
     'profile',
     'context',
+    'search',
     'addresses',
     'companies',
     'users',
     'roles',
+    'access-policies',
     'permission-presets',
   ])
   const manifest = compose(ketsuite.modules, { headless: true })
@@ -1267,9 +1293,9 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.match(html, /^<ket-fragments data-title=/)
   assert.deepEqual(
     [...html.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
-    ['backend.sidebar-main', 'backend.topbar', 'backend.content'],
+    ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'],
   )
-  assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
+  assert.match(html, /data-ui="app-location-bar"[\s\S]*?persistent foot/)
 })
 
 test('backend shell: the document uses the design-system application shell', () => {
@@ -1281,19 +1307,29 @@ test('backend shell: the document uses the design-system application shell', () 
   ).replace(/<!--k\[?\]?-->/g, '')
   assert.match(
     html,
-    /^<div data-kv-design-system(?:="true")? data-presentation="grouped"><div data-ui="app-shell"/,
+    /^<div data-kv-design-system(?:="true")? data-presentation="grouped" data-density="compact"><div data-ui="app-shell"/,
     'the grouped presentation gives every screen the mocks page gutter',
   )
   assert.match(html, /<aside data-ui="app-sidebar">[\s\S]*?data-ui="app-navigation"/)
   assert.equal((html.match(/<main\b/g) ?? []).length, 1, 'one main landmark')
-  assert.match(html, /<main data-ui="app-main">\s*<span data-ui="runtime-probe">/)
-  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.content'])
+  assert.match(html, /<main data-ui="app-main">[\s\S]*?<span data-ui="runtime-probe">/)
+  for (const slot of ['backend.sidebar-main', 'backend.topbar', 'backend.global-topbar', 'backend.content'])
     assert.equal(
       (html.match(new RegExp(`data-ket-slot="${slot.replace('.', '\\.')}"`, 'g')) ?? []).length,
       1,
       slot,
     )
   assert.doesNotMatch(html, /data-ui="(?:shell|main|sidebar|sidebar-main)"/)
+  assert.doesNotMatch(html, /data-ui="app-topbar"|data-ui="app-shell-topbar"/)
+  assert.match(html, /data-has-location="true"/)
+  const sidebar = html.match(/<aside data-ui="app-sidebar">[\s\S]*?<\/aside>/)?.[0] ?? ''
+  assert.match(sidebar, /data-ui="navigation-header"[\s\S]*?data-ui="app-brand"[\s\S]*?alt="KetSuite"/)
+  assert.match(
+    html,
+    /data-ui="app-main"[\s\S]*?data-ui="app-location-bar"[\s\S]*?data-ui="app-location-context"[\s\S]*?data-ui="global-search-trigger"[\s\S]*?data-ui="sidebar-foot"/,
+  )
+  assert.doesNotMatch(sidebar, /data-ui="sidebar-foot"|name="theme"|data-ui="viewer"/)
+  assert.equal((html.match(/name="theme"/g) ?? []).length, 1)
   const runtimeAt = html.indexOf('runtime-probe')
   const slotAt = html.indexOf('data-ket-slot="backend.topbar"')
   assert.ok(runtimeAt > 0 && runtimeAt < slotAt, 'the island runtime stays outside the swapped slots')
@@ -1492,7 +1528,10 @@ test('ui contract: an island control carries the same hook a form control does',
   for (const path of globSync('packages/ketsuite/src/**/client/*.mjs')) {
     // the storefront search island is on ui-audit's pending list, markup and all
     if (path.includes('website_search')) continue
-    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+    const source = readFileSync(path, 'utf8')
+    // A bundle is checked where it is written; its minified copy has no lines to point at.
+    if (source.startsWith('// @ts-nocheck Generated by')) continue
+    for (const [index, line] of source.split('\n').entries()) {
       for (const match of line.matchAll(/<(input|select|textarea)\s[^>]*>/g)) {
         if (match[0].includes('data-ui=') || match[0].includes('type="hidden"')) continue
         bare.push(`${path}:${index + 1} ${match[0].slice(0, 60)}`)
@@ -1576,12 +1615,12 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(navigationCss, /\[data-ui="navigation-groups"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('app navigation: cluster icons own the Demo 2 metric', () => {
+test('app navigation: icon geometry is independent of typography', () => {
   const css = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   const rule = css.match(/\[data-ui="navigation-item-leading"\]\s*\[data-ui="icon"\] \{[^}]*\}/)?.[0] ?? ''
-  assert.match(rule, /width:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /height:\s*var\(--kv-text-xl\);/)
-  assert.match(rule, /flex:\s*0 0 var\(--kv-text-xl\);/)
+  assert.match(rule, /width:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /height:\s*var\(--kv-sidebar-icon-size\);/)
+  assert.match(rule, /flex:\s*0 0 var\(--kv-sidebar-icon-size\);/)
 })
 
 test('list chrome: mobile sort can shrink without widening the page', () => {
@@ -1606,8 +1645,14 @@ test('design density: controls and fields follow the canonical component dimensi
   const css = ADMIN_CSS
   assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
   assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
-  assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  const actions = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
+  const fields = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(actions, /\[data-ui="action"\][\s\S]*?min-height:\s*var\(--kv-action-height\);/)
+  assert.match(
+    css,
+    /\[data-control="action"\]:not\(\[data-ui\]\)[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/,
+  )
+  assert.match(fields, /\[data-ui="field-control"\][\s\S]*?min-height:\s*var\(--kv-control-height\);/)
   assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
@@ -1818,12 +1863,25 @@ test('ui contract: markup carries no class attribute at all', () => {
   )
 })
 
-test('ui contract: every input disables browser autocomplete', () => {
+test('ui contract: operational inputs disable autocomplete; public sign-in names credentials', () => {
   const missing: string[] = []
   for (const file of globSync('packages/ketsuite/src/**/*.{ts,tsx,mjs}')) {
     const source = readFileSync(file, 'utf8')
+    if (source.startsWith('// @ts-nocheck Generated by')) continue
     for (const match of source.matchAll(/<input\b[^>]*>/g)) {
       if (/\bautocomplete="off"/.test(match[0])) continue
+      // Public customer authentication owns credential completion; ERP inputs keep off.
+      if (file === 'packages/ketsuite/src/ui/website-public.ts') {
+        const login =
+          /name="login"/.test(match[0]) &&
+          /aria-labelledby="wt-signin-login-label"/.test(match[0]) &&
+          /autocomplete="username"/.test(match[0])
+        const password =
+          /type="password" name="password"/.test(match[0]) &&
+          /aria-labelledby="wt-signin-password-label"/.test(match[0]) &&
+          /autocomplete="current-password"/.test(match[0])
+        if (login || password) continue
+      }
       const line = source.slice(0, match.index).split('\n').length
       missing.push(`${file}:${line}`)
     }
@@ -2020,11 +2078,25 @@ test('a browser navigating gets the page; a client calling gets the JSON', () =>
 
 test('backend shell: the phone menu uses the design-system left drawer', () => {
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
-  const mobile = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
-  )?.groups?.body
+  const mobile = navigationCss.match(/@media \(width < 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/)
+    ?.groups?.body
   assert.match(mobile ?? '', /\[data-ui="navigation-trigger"\] \{[\s\S]*?display: flex/)
   assert.match(mobile ?? '', /\[data-ui="navigation-layer"\] \{[\s\S]*?position: fixed/)
   assert.match(mobile ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobile ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
+})
+
+test('backend compatibility CSS leaves Section and ModalSheet geometry to the design system', () => {
+  const forms = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
+  assert.doesNotMatch(forms, /\[data-ui="(?:section(?:-[a-z-]+)?|modal(?:-[a-z-]+)?)"\]/u)
+  const lists = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.doesNotMatch(lists, /\[data-ui="badge"\]/u)
+  const controls = readFileSync('packages/ketsuite/src/modules/backend/design/controls.css', 'utf8')
+  assert.doesNotMatch(controls, /\[data-ui="(?:tag(?:-remove)?|action(?:-group)?)"\]/u)
+  const content = readFileSync('packages/ketsuite/src/modules/backend/design/content.css', 'utf8')
+  assert.doesNotMatch(content, /\[data-ui="action"\]/u)
+  const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  const layout = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
+  assert.match(modal, /\[data-ui="modal-title"\][^{]*\{[^}]*font-size: var\(--kv-text-xl\)/u)
+  assert.match(layout, /\[data-ui="section-title"\][^{]*\{[^}]*font-size: var\(--kv-text-sm\)/u)
 })

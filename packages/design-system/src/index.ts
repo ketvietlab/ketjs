@@ -1,13 +1,33 @@
-export { ActionGroup, Button, IconButton, LinkButton } from './primitives/actions/index.tsx'
+export { Icon } from './primitives/icon/index.tsx'
+export type { IconName, IconProps } from './primitives/icon/index.tsx'
+export { ActionGroup, Button, IconButton, LinkButton, Link } from './primitives/actions/index.tsx'
 export type {
   ActionSize,
+  ActionTone,
+  LinkProps,
   ActionVariant,
   ButtonProps,
   IconButtonProps,
   LinkButtonProps,
 } from './primitives/actions/index.tsx'
-export { Avatar, Badge, Code, CountBadge, Tag, initials } from './primitives/status/index.tsx'
-export type { Tone } from './primitives/status/index.tsx'
+export {
+  Avatar,
+  Badge,
+  Code,
+  CountBadge,
+  Tag,
+  Text,
+  MediaLabel,
+  initials,
+} from './primitives/status/index.tsx'
+export type {
+  Tone,
+  TextProps,
+  TextVariant,
+  BadgeProps,
+  TagProps,
+  AvatarProps,
+} from './primitives/status/index.tsx'
 export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.tsx'
 export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
@@ -51,6 +71,7 @@ export type {
   RelationManager,
   RelationOption,
   RelationSelectConfig,
+  RelationSelectCallbacks,
   RelationSelectLabels,
 } from './interactions/relation-select/index.tsx'
 export {
@@ -66,13 +87,18 @@ export type {
   LightboxItem,
   LightboxLabels,
 } from './interactions/lightbox/index.tsx'
-export { createSearchFilterView, searchFilter } from './interactions/search-filter/index.tsx'
+export {
+  createSearchFilterView,
+  searchFilter,
+  searchFilterRuleLabel,
+} from './interactions/search-filter/index.tsx'
 export type {
   CustomFilterField,
   SearchFacet,
   SearchFavorite,
   SearchFilterCustomRule,
   SearchFilterConfig,
+  SearchFilterNavigateDetail,
   SearchFilterFieldType,
   SearchFilterLabels,
   SearchFilterManager,
@@ -109,7 +135,20 @@ export {
   TextArea,
   TextField,
 } from './forms/scalar-fields/index.tsx'
-export type { FieldIssue, ScalarFieldProps, SwitchProps } from './forms/scalar-fields/index.tsx'
+export type {
+  FieldIssue,
+  ScalarFieldProps,
+  ScalarFieldBase,
+  TextFieldProps,
+  TextAreaProps,
+  NumberFieldProps,
+  MoneyFieldProps,
+  SearchFieldProps,
+  CheckboxProps,
+  ChoiceGroupProps,
+  SelectProps,
+  SwitchProps,
+} from './forms/scalar-fields/index.tsx'
 export { Combobox, MultiCombobox, TagPicker } from './forms/combobox/index.tsx'
 export type {
   ComboboxOption,
@@ -117,7 +156,13 @@ export type {
   MultiComboboxProps,
 } from './forms/combobox/index.tsx'
 export { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from './forms/date-time/index.tsx'
-export type { DateRangePickerProps, TemporalProps } from './forms/date-time/index.tsx'
+export type {
+  DatePickerProps,
+  DatePickerLabels,
+  DateRangePreset,
+  DateRangePickerProps,
+  TemporalProps,
+} from './forms/date-time/index.tsx'
 export { DropZone, FileUpload } from './forms/upload/index.tsx'
 export type { FileUploadProps } from './forms/upload/index.tsx'
 export { RelationPicker } from './forms/relation-picker/index.tsx'
@@ -186,12 +231,22 @@ export {
   Surface,
 } from './layouts/layout/index.tsx'
 export type {
+  LayoutGap,
+  ResponsiveGap,
   CardGridProps,
   ContentCardProps,
   KanbanCardProps,
   KanbanGridProps,
 } from './layouts/layout/index.tsx'
-export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export {
+  AppBrand,
+  AppShell,
+  AppTopbar,
+  Page,
+  PageHeader,
+  RecordCanvas,
+  RecordSection,
+} from './layouts/shell/index.tsx'
 export type { PageHeaderProps, PageProps } from './layouts/shell/index.tsx'
 export {
   AppNavigation,
@@ -200,6 +255,7 @@ export {
   NavigationHeader,
   NavigationItem,
   NavigationTrigger,
+  NavigationToggle,
 } from './layouts/app-navigation/index.tsx'
 export type {
   AppNavigationProps,

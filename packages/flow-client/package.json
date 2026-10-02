@@ -1,0 +1,87 @@
+{
+  "name": "@ketvietlab/flow-client",
+  "version": "0.1.31",
+  "description": "MIT Flow core client and extension contracts for KetSuite deployments.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/flow-client"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api": "./dist/api.mjs",
+    "./brand.css": "./dist/brand/brand.css",
+    "./extensions": "./dist/extensions.mjs",
+    "./server": "./dist/server-extensions.mjs",
+    "./access-model.mjs": "./dist/access-model.mjs",
+    "./api.mjs": "./dist/api.mjs",
+    "./audit-display.mjs": "./dist/audit-display.mjs",
+    "./command-search.mjs": "./dist/command-search.mjs",
+    "./content-layout.mjs": "./dist/content-layout.mjs",
+    "./custom-fields.mjs": "./dist/custom-fields.mjs",
+    "./document-access.mjs": "./dist/document-access.mjs",
+    "./document-tree.mjs": "./dist/document-tree.mjs",
+    "./documents.mjs": "./dist/documents.mjs",
+    "./extensions.mjs": "./dist/extensions.mjs",
+    "./first-run.mjs": "./dist/first-run.mjs",
+    "./getting-started.mjs": "./dist/getting-started.mjs",
+    "./i18n.mjs": "./dist/i18n.mjs",
+    "./index.mjs": "./dist/index.mjs",
+    "./messages.mjs": "./dist/messages.mjs",
+    "./mutation-feedback.mjs": "./dist/mutation-feedback.mjs",
+    "./navigation.mjs": "./dist/navigation.mjs",
+    "./notice.mjs": "./dist/notice.mjs",
+    "./operations-model.mjs": "./dist/operations-model.mjs",
+    "./operations.mjs": "./dist/operations.mjs",
+    "./organization.mjs": "./dist/organization.mjs",
+    "./project-catalogs.mjs": "./dist/project-catalogs.mjs",
+    "./project-setup.mjs": "./dist/project-setup.mjs",
+    "./routes.mjs": "./dist/routes.mjs",
+    "./server-extensions.mjs": "./dist/server-extensions.mjs",
+    "./setup-catalog.mjs": "./dist/setup-catalog.mjs",
+    "./sprint-cadence.mjs": "./dist/sprint-cadence.mjs",
+    "./task-assignees.mjs": "./dist/task-assignees.mjs",
+    "./task-autosave.mjs": "./dist/task-autosave.mjs",
+    "./task-composer.mjs": "./dist/task-composer.mjs",
+    "./task-order.mjs": "./dist/task-order.mjs",
+    "./timeline.mjs": "./dist/timeline.mjs",
+    "./workspace-overview.mjs": "./dist/workspace-overview.mjs",
+    "./workspace.mjs": "./dist/workspace.mjs"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../..",
+    "test": "node --test test/*.test.mjs",
+    "atlas": "node atlas/server.mjs"
+  },
+  "dependencies": {
+    "@ketvietlab/design-system": "0.1.31",
+    "@ketvietlab/flow-ui": "0.1.31",
+    "@ketvietlab/ketjs-view": "0.1.31",
+    "@ketvietlab/ketjs": "0.1.31",
+    "@ketvietlab/ketsuite": "0.1.31"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist",
+    "EXTENSIONS.md",
+    "NOTICE",
+    "API-CONTRACT.md",
+    "PROVENANCE.md"
+  ]
+}

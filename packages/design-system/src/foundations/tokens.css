@@ -38,26 +38,26 @@
     --kv-ref-text-disabled: #505862;
     --kv-ref-text-inverse: #111318;
 
-    /* Reference: brand. */
+    /* Reference: brand — Indigo #5968df. */
     --kv-ref-accent-100: #efe9e7;
-    --kv-ref-primary-50: #eef2ff;
-    --kv-ref-primary-100: #e0e7ff;
-    --kv-ref-primary-200: #c7d2fe;
-    --kv-ref-primary-300: #a5b4fc;
-    --kv-ref-primary-400: #818cf8;
-    --kv-ref-primary-500: #6366f1;
-    --kv-ref-primary-600: #5563df;
-    --kv-ref-primary-700: #4753c7;
-    --kv-ref-primary-800: #3944a5;
-    --kv-ref-primary-900: #303a83;
+    --kv-ref-primary-50: #eef0fb;
+    --kv-ref-primary-100: #dde2f7;
+    --kv-ref-primary-200: #c3cdf0;
+    --kv-ref-primary-300: #aab6ed;
+    --kv-ref-primary-400: #7485e8;
+    --kv-ref-primary-500: #5968df;
+    --kv-ref-primary-600: #4f5ed0;
+    --kv-ref-primary-700: #4557bc;
+    --kv-ref-primary-800: #394985;
+    --kv-ref-primary-900: #2f3a5f;
     --kv-ref-primary: #5968df;
-    --kv-ref-primary-hover: #6875ea;
-    --kv-ref-primary-active: #4c59c9;
+    --kv-ref-primary-hover: #7485e8;
+    --kv-ref-primary-active: #4f5ed0;
     --kv-ref-primary-subtle: rgb(89 104 223 / 14%);
     --kv-ref-primary-muted: rgb(89 104 223 / 22%);
-    --kv-ref-primary-border: rgb(112 126 240 / 32%);
-    --kv-ref-nav-selected: rgb(76 93 190 / 52%);
-    --kv-ref-nav-selected-hover: rgb(83 101 204 / 62%);
+    --kv-ref-primary-border: rgb(89 104 223 / 32%);
+    --kv-ref-nav-selected: rgb(79 94 208 / 52%);
+    --kv-ref-nav-selected-hover: rgb(89 104 223 / 62%);
 
     /* Reference: semantic colour families. */
     --kv-ref-success: #40c97b;
@@ -72,9 +72,9 @@
     --kv-ref-danger-hover: #f1766d;
     --kv-ref-danger-bg: rgb(239 102 92 / 13%);
     --kv-ref-danger-border: rgb(239 102 92 / 28%);
-    --kv-ref-info: #5794f2;
-    --kv-ref-info-bg: rgb(87 148 242 / 13%);
-    --kv-ref-info-border: rgb(87 148 242 / 25%);
+    --kv-ref-info: #aab6ed;
+    --kv-ref-info-bg: rgb(89 104 223 / 13%);
+    --kv-ref-info-border: rgb(89 104 223 / 25%);
     --kv-ref-status-todo-text: #aab1bc;
     --kv-ref-status-todo-bg: rgb(170 177 188 / 10%);
     --kv-ref-status-progress-text: #6f9cf8;
@@ -108,13 +108,13 @@
     --kv-interactive-hover: light-dark(#f7f5f5, var(--kv-ref-control-hover));
     --kv-interactive-active: light-dark(#efedee, var(--kv-ref-control-active));
     --kv-interactive-disabled: light-dark(#efedee, var(--kv-ref-control-disabled));
-    --kv-accent: light-dark(#5167c4, var(--kv-ref-primary));
-    --kv-accent-hover: light-dark(#45579f, var(--kv-ref-primary-hover));
+    --kv-accent: light-dark(#4f5ed0, var(--kv-ref-primary));
+    --kv-accent-hover: light-dark(#4557bc, var(--kv-ref-primary-hover));
     --kv-accent-active: light-dark(#394985, var(--kv-ref-primary-active));
     --kv-accent-subtle: light-dark(#eef0fb, var(--kv-ref-primary-subtle));
     --kv-accent-muted: light-dark(#dde2f7, var(--kv-ref-primary-muted));
     --kv-accent-border: light-dark(#c3cdf0, var(--kv-ref-primary-border));
-    --kv-focus-border: light-dark(#637ad5, #6474e8);
+    --kv-focus-border: light-dark(#5968df, #7485e8);
     --kv-focus-ring: 0 0 0 3px light-dark(#dde2f7, rgb(89 104 223 / 16%));
     --kv-on-accent: var(--kv-ref-white);
     --kv-positive: light-dark(#1d5d3b, var(--kv-ref-success));
@@ -133,13 +133,13 @@
     --kv-danger-hover: light-dark(#912018, var(--kv-ref-danger-hover));
     --kv-danger-bg: light-dark(#fef3f2, var(--kv-ref-danger-bg));
     --kv-danger-border: light-dark(#fecdca, var(--kv-ref-danger-border));
-    --kv-info: light-dark(#315f8e, var(--kv-ref-info));
-    --kv-info-bg: light-dark(#eaf2fb, var(--kv-ref-info-bg));
-    --kv-info-border: light-dark(#c7dcf0, var(--kv-ref-info-border));
+    --kv-info: light-dark(#4557bc, var(--kv-ref-info));
+    --kv-info-bg: light-dark(#eef0fb, var(--kv-ref-info-bg));
+    --kv-info-border: light-dark(#c3cdf0, var(--kv-ref-info-border));
     --kv-nav-selected: light-dark(#dde2f7, var(--kv-ref-nav-selected));
     --kv-nav-selected-hover: light-dark(#cfd6f5, var(--kv-ref-nav-selected-hover));
     --kv-nav-selected-text: light-dark(#394985, #dce2ff);
-    --kv-tab-active-text: light-dark(#45579f, #8c9aff);
+    --kv-tab-active-text: light-dark(#4557bc, #aab6ed);
 
     /* Compatibility names used by the first public component slice. */
     --kv-color-canvas: var(--kv-page-bg);
@@ -168,22 +168,42 @@
     --kv-color-info-soft: var(--kv-info-bg);
 
     /* Type. */
+    --kv-touch-target: 2.75rem;
+    --kv-app-topbar-height: 3rem;
+    --kv-app-topbar-bg: #20243e;
+    --kv-app-topbar-text: #f5f6ff;
+    --kv-app-topbar-muted: #d4d8ee;
+    --kv-app-topbar-search-bg: #2c3152;
+    --kv-app-topbar-border: #626b95;
+    --kv-app-topbar-focus: #bbc5ff;
     --kv-font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --kv-font-display: var(--kv-font-sans);
     --kv-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    /* Text scale, one pixel above the original 10/11/12/13/14/16/18/22/28 steps.
-       Page titles keep their own `--kv-page-title-size`. */
+    /* Dimension reference: Polaris React 13.9.5 / tokens 9.4.2, standard theme.
+       Két keeps its font family, weights, palette and Lucide icons. */
     --kv-text-2xs: 0.6875rem;
     --kv-text-xs: 0.75rem;
     --kv-text-sm: 0.8125rem;
     --kv-text-md: 0.875rem;
-    --kv-text-base: 0.9375rem;
-    --kv-text-lg: 1.0625rem;
-    --kv-text-xl: 1.1875rem;
-    --kv-text-2xl: 1.4375rem;
-    --kv-text-3xl: 1.8125rem;
+    --kv-text-base: 0.8125rem;
+    --kv-text-lg: 0.875rem;
+    --kv-text-xl: 1.25rem;
+    --kv-text-2xl: 1.5rem;
+    --kv-text-3xl: 1.875rem;
+    --kv-text-4xl: 2.25rem;
+    --kv-line-2xs: 0.75rem;
+    --kv-line-xs: 1rem;
+    --kv-line-sm: 1.25rem;
+    --kv-line-md: 1.25rem;
+    --kv-line-lg: 1.25rem;
+    --kv-line-xl: 1.5rem;
+    --kv-line-2xl: 2rem;
+    --kv-line-3xl: 2.5rem;
+    --kv-line-4xl: 3rem;
+    --kv-page-title-size: var(--kv-text-xl);
+    --kv-page-title-line: var(--kv-line-xl);
     --kv-leading-tight: 1.2;
-    --kv-leading-normal: 1.45;
+    --kv-leading-normal: calc(20 / 13);
     --kv-leading-relaxed: 1.6;
     --kv-weight-normal: 400;
     --kv-weight-medium: 500;
@@ -207,30 +227,52 @@
     --kv-space-12: 3rem;
     --kv-space-16: 4rem;
     --kv-gap-control: var(--kv-space-2);
-    --kv-gap-form-row: 0.875rem;
-    --kv-gap-field-group: var(--kv-space-5);
-    --kv-gap-section: var(--kv-space-7);
-    --kv-page-padding-x: var(--kv-space-7);
-    --kv-page-padding-y: var(--kv-space-6);
+    --kv-gap-form-row: var(--kv-space-4);
+    --kv-gap-field-group: var(--kv-space-4);
+    --kv-gap-form-column: var(--kv-space-6);
+    --kv-gap-section: var(--kv-space-4);
+    /* A surface's inset and the gap under its heading (Két Design System visual contract L6). */
+    --kv-surface-inset: var(--kv-space-4);
+    --kv-surface-head-gap: var(--kv-space-2);
+    /* One 16px gutter on every side of every page, so a record body lines up with its header. */
+    --kv-page-padding-x: var(--kv-space-4);
+    --kv-page-padding-y: var(--kv-space-5);
 
     /* Dimensions and shape. */
-    --kv-control-height-xs: 1.625rem;
-    --kv-control-height-sm: 1.875rem;
-    --kv-control-height-md: 2.125rem;
-    --kv-control-height-lg: 2.5rem;
+    --kv-control-height-xs: 1.5rem;
+    --kv-control-height-sm: 1.75rem;
+    --kv-control-height-md: 2rem;
+    --kv-control-height-lg: 2rem;
+    --kv-control-radius: 0.5rem;
+    --kv-control-padding-block: var(--kv-space-1-5);
+    --kv-control-padding-inline: var(--kv-space-3);
+    --kv-input-font-size: var(--kv-text-sm);
+    --kv-input-line-height: var(--kv-line-sm);
+    /* Default/prominent actions map to Polaris large so they align with inputs.
+       Compact maps to medium. Density must not resize these dimensions. */
+    --kv-action-height: var(--kv-control-height-md);
+    --kv-action-font-size: var(--kv-text-sm);
+    --kv-action-line-height: var(--kv-line-sm);
     --kv-control-height: var(--kv-control-height-md);
     --kv-control-height-compact: var(--kv-control-height-sm);
     --kv-control-height-prominent: var(--kv-control-height-lg);
     --kv-density-control-height: var(--kv-control-height-md);
-    --kv-density-row-height: 3.25rem;
+    --kv-density-row-height: 2.5rem;
     --kv-density-content-gap: var(--kv-space-4);
     /* Wide enough for a root section label at the raised text scale
        ("Chăm sóc khách hàng" at 14px medium). */
     --kv-sidebar-width: 14.25rem;
     --kv-right-rail-width: 21.25rem;
     --kv-sidebar-item-height: 1.875rem;
-    --kv-table-row-height: 3.25rem;
+    --kv-sidebar-child-height: 1.75rem;
+    --kv-sidebar-icon-size: var(--kv-space-5);
+    --kv-sidebar-item-gap: var(--kv-space-2-5);
+    --kv-sidebar-indent: var(--kv-space-5);
+    --kv-table-row-height: 2.5rem;
     --kv-table-header-height: 2.625rem;
+    --kv-table-text-max-width: 28rem;
+    --kv-table-text-min-width: 12rem;
+    --kv-table-text-wide-min-width: 18rem;
     --kv-row-height: var(--kv-table-row-height);
     --kv-container-field-narrow: 42rem;
     --kv-container-rail-collapse: 64rem;
@@ -278,6 +320,7 @@
     --kv-action-primary-hover: light-dark(var(--kv-accent-hover), var(--kv-accent-active));
     --kv-action-primary-active: var(--kv-accent-active);
     --kv-action-primary-ink: var(--kv-on-accent);
+    --kv-action-status-ink: light-dark(var(--kv-ref-white), var(--kv-ref-bg-main));
     --kv-input-bg: light-dark(#ffffff, #20252b);
     --kv-input-bg-hover: light-dark(#f7f5f5, #252b32);
     --kv-input-bg-focus: light-dark(#ffffff, #222831);
@@ -321,20 +364,51 @@
   }
 
   [data-kv-design-system][data-density="compact"] {
-    --kv-density-control-height: var(--kv-control-height-sm);
+    --kv-density-control-height: var(--kv-control-height-md);
     --kv-density-row-height: 2.5rem;
     --kv-density-content-gap: var(--kv-space-3);
   }
 
   [data-kv-design-system][data-density="comfortable"] {
     --kv-density-control-height: var(--kv-control-height-lg);
-    --kv-density-row-height: 3.75rem;
-    --kv-density-content-gap: var(--kv-space-5);
+    --kv-density-row-height: 2.5rem;
+    --kv-density-content-gap: var(--kv-space-4);
   }
 
   [data-kv-design-system] {
     --kv-control-height: var(--kv-density-control-height);
     --kv-row-height: var(--kv-density-row-height);
+  }
+
+  /* Polaris responsive dimensions at md (768px). Ordinary body text and the
+     headingLg page title do not change; editable text grows to 16px. */
+  @media (max-width: 47.9375rem) {
+    :root {
+      --kv-text-2xl: 1.25rem;
+      --kv-text-3xl: 1.5rem;
+      --kv-text-4xl: 1.875rem;
+      --kv-line-2xl: 1.5rem;
+      --kv-line-3xl: 2rem;
+      --kv-line-4xl: 2.5rem;
+      --kv-control-height-xs: 1.75rem;
+      --kv-control-height-sm: 2rem;
+      --kv-control-height-md: 2.25rem;
+      --kv-control-height-lg: 2.25rem;
+      --kv-density-row-height: 3.25rem;
+      --kv-table-row-height: 3.25rem;
+      --kv-input-font-size: 1rem;
+      --kv-input-line-height: 1.5rem;
+      --kv-page-padding-x: var(--kv-space-4);
+      --kv-page-padding-y: var(--kv-space-2);
+    }
+
+    [data-kv-design-system][data-density="compact"] {
+      --kv-density-row-height: 2.75rem;
+    }
+
+    [data-kv-design-system][data-density="comfortable"] {
+      --kv-density-row-height: 3.75rem;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

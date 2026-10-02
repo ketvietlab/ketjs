@@ -41,7 +41,6 @@ export const activitiesScreen = (
       variant="operational"
       frame={frame}
       title={_('activity_backend.title')}
-      description={_('activity_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}
       status={`${_('activity_backend.title')}: ${String(options.rows.length)}`}
       body={stack([

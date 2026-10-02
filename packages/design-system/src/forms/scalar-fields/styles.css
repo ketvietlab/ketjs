@@ -50,3 +50,22 @@
     box-shadow: var(--kv-focus-ring);
   }
 }
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="switch-control"]:has(input:disabled) {
+    cursor: not-allowed;
+  }
+  :where([data-kv-design-system]) [data-ui="switch-control"] input:disabled + [data-ui="switch-track"] {
+    opacity: 0.5;
+  }
+  :where([data-kv-design-system])
+    [data-ui="switch-control"]
+    input[aria-invalid="true"]
+    + [data-ui="switch-track"] {
+    border-color: var(--kv-color-danger);
+  }
+  :where([data-kv-design-system]) [data-ui="field"][data-label-hidden="true"] > [data-ui="switch-control"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}

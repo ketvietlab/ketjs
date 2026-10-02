@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -59,7 +60,10 @@ test('trial balance HTTP includes the full end day, sorts accounts and preserves
   const html = await response.text()
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(html),
+    /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
   assert.match(html, /data-ui="date-picker" method="get" action="\/admin\/accounting\/trial-balance"/)
   assert.match(html, /type="hidden" name="lang" value="vi"/)
   assert.match(html, /name="dateFrom"[^>]*value="2026-06-30"/)

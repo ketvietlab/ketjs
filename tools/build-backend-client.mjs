@@ -16,6 +16,34 @@ const USER_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/user_backend'
 const PRODUCT_BACKEND_DIR = join(ROOT, 'packages/ketsuite/src/modules/product_backend')
 const entries = [
   {
+    source: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/modal/pricelist-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/modal/policy-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/transfer-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/stock-transfer-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/inventory-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/inventory-count-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/modal/configuration-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/stock_backend/client/stock-configuration-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/modal/order-modal-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/purchase_backend/client/purchase-order-modal.mjs'),
+  },
+  {
+    source: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/modal/order-modal-view.tsx'),
+    output: join(ROOT, 'packages/ketsuite/src/modules/sale_backend/client/sale-order-modal.mjs'),
+  },
+  {
     source: join(DESIGN_SYSTEM_DIR, 'interactions/relation-select/index.tsx'),
     output: join(BACKEND_CLIENT_DIR, 'relation-select.mjs'),
   },
@@ -41,6 +69,10 @@ const entries = [
   },
   // The CRM configuration record modals: one bundle, one export per record kind.
   {
+    source: join(CRM_BACKEND_DIR, 'modal/case-modal-view.tsx'),
+    output: join(CRM_BACKEND_DIR, 'client/crm-case-modal.mjs'),
+  },
+  {
     source: join(CRM_BACKEND_DIR, 'modal/configuration-modal-view.tsx'),
     output: join(CRM_BACKEND_DIR, 'client/crm-configuration-modal.mjs'),
   },
@@ -48,6 +80,16 @@ const entries = [
   {
     source: join(USER_BACKEND_DIR, 'modal/user-modal-view.tsx'),
     output: join(USER_BACKEND_DIR, 'client/user-modal.mjs'),
+  },
+  // The role record modal, including the roles collection's create action.
+  {
+    source: join(USER_BACKEND_DIR, 'modal/role-modal-view.tsx'),
+    output: join(USER_BACKEND_DIR, 'client/role-modal.mjs'),
+  },
+  // The access-rule record modal, including the rules collection's create action.
+  {
+    source: join(USER_BACKEND_DIR, 'modal/access-policy-modal-view.tsx'),
+    output: join(USER_BACKEND_DIR, 'client/access-policy-modal.mjs'),
   },
   // The product template record modal, including the catalogue's create action.
   {
@@ -57,6 +99,11 @@ const entries = [
   {
     source: join(PRODUCT_BACKEND_DIR, 'modal/attribute-modal-view.tsx'),
     output: join(PRODUCT_BACKEND_DIR, 'client/attribute-modal.mjs'),
+  },
+  // Loaded when the template modal opens its Attributes & variants tab.
+  {
+    source: join(UI_CLIENT_DIR, 'variant-editor-view.tsx'),
+    output: join(PRODUCT_BACKEND_DIR, 'client/variant-editor.mjs'),
   },
 ]
 

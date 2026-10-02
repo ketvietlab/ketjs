@@ -28,10 +28,11 @@ const schema = (properties: Record<string, unknown>, required: string[] = []) =>
   ...(required.length ? { required } : {}),
 })
 const string = { type: 'string' }
-const authBody = schema({ email: { type: 'string', format: 'email' }, password: string }, [
-  'email',
-  'password',
-])
+/** Sign in with an email or, where staff issued the account, a phone number. */
+const authBody = schema(
+  { email: { type: 'string', format: 'email' }, phone: { type: 'string', maxLength: 32 }, password: string },
+  ['password'],
+)
 const registerBody = schema(
   { displayName: string, email: { type: 'string', format: 'email' }, password: string },
   ['displayName', 'email', 'password'],
@@ -68,6 +69,7 @@ const publicAccount = (account: Account) => ({
   id: account.id,
   displayName: account.displayName,
   email: account.email,
+  phone: account.phone ?? null,
 })
 
 /**
@@ -275,7 +277,7 @@ const authenticate = async (
           password: body.password,
           rateKey,
         }
-      : { realmId: context.realmId, email: body.email, password: body.password, rateKey },
+      : { realmId: context.realmId, email: body.email, phone: body.phone, password: body.password, rateKey },
     url,
     req,
   )) as { ok?: boolean; account?: Account; errors?: unknown }
@@ -335,6 +337,11 @@ export const customerRoutes = routesOf(
             siteId: context?.siteId ?? identity?.siteId ?? null,
           },
           customer: identity ? publicAccount(identity.account) : null,
+          /**
+           * A page that reloads has lost the token sign-in handed it, and without one it cannot sign
+           * out. Reading it back takes a same-origin script: nothing here allows another origin to.
+           */
+          csrfToken: identity?.presentation === 'cookie' ? csrfTokenFor(identity.token) : null,
           capabilities,
           capabilityRevision: stableHash(capabilities),
         },

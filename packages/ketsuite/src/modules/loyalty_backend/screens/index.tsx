@@ -316,7 +316,6 @@ export const programsScreen = (
     <ListScreenFrame
       translator={_}
       title={_('loyalty_backend.programs.title')}
-      subtitle={_('loyalty_backend.programs.hint')}
       frame={collection.frame}
       headerActions={linkButton({
         label: _('loyalty_backend.action.createProgram'),
@@ -453,7 +452,6 @@ export const walletsScreen = (
     <ListScreenFrame
       translator={_}
       title={_('loyalty_backend.wallets.title')}
-      subtitle={_('loyalty_backend.wallets.hint')}
       frame={collection.frame}
       body={stack([
         statRow([
@@ -795,7 +793,6 @@ export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals
     <ListScreenFrame
       translator={_}
       title={_('loyalty_backend.ledger.title')}
-      subtitle={_('loyalty_backend.ledger.hint')}
       frame={collection.frame}
       body={stack([
         statRow([
@@ -899,7 +896,6 @@ export const membershipsScreen = (
     <ListScreenFrame
       translator={_}
       title={_('loyalty_backend.members.title')}
-      subtitle={_('loyalty_backend.members.hint')}
       frame={collection.frame}
       body={stack([
         statRow([
@@ -998,7 +994,6 @@ export const tiersScreen = (
     <ListScreenFrame
       translator={_}
       title={_('loyalty_backend.memberships.title')}
-      subtitle={_('loyalty_backend.memberships.hint')}
       frame={collection.frame}
       headerActions={linkButton({
         label: _('loyalty_backend.action.addTier'),

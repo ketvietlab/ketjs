@@ -23,6 +23,7 @@ import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
+import { buildWebsiteClient } from './build-website-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -35,13 +36,25 @@ const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
     (entry) =>
       entry.isDirectory() &&
       existsSync(join(PACKAGES, entry.name, 'package.json')) &&
-      existsSync(join(PACKAGES, entry.name, 'src')),
+      (existsSync(join(PACKAGES, entry.name, 'src')) || existsSync(join(PACKAGES, entry.name, 'client'))),
   )
   .map((entry) => entry.name)
 
 const tsc = join(ROOT, 'node_modules', '.bin', 'tsc')
 const codeExtension = new Set(['.ts', '.tsx', '.mts', '.cts'])
-const buildInputs = new Set(['.ts', '.tsx', '.mts', '.cts', '.mjs', '.json', '.css', '.ktl', '.tmpl'])
+const buildInputs = new Set([
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.mjs',
+  '.json',
+  '.css',
+  '.ktl',
+  '.tmpl',
+  '.png',
+  '.svg',
+])
 
 /** @param {number} milliseconds */
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -118,10 +131,12 @@ const sourceFingerprint = () => {
 
 const artifactsExist = () =>
   existsSync(join(BUILD, 'ket.workspace.js')) &&
-  packageNames.every(
-    (name) =>
-      existsSync(join(BUILD, 'packages', name, 'src', 'index.js')) &&
-      existsSync(join(PACKAGES, name, 'dist', 'index.js')),
+  packageNames.every((name) =>
+    ['index.js', 'index.mjs'].some(
+      (entry) =>
+        existsSync(join(BUILD, 'packages', name, 'src', entry)) &&
+        existsSync(join(PACKAGES, name, 'dist', entry)),
+    ),
   )
 
 /**
@@ -158,6 +173,7 @@ try {
   await buildBackendClients()
   await buildChartClient()
   await buildFlowClient()
+  await buildWebsiteClient()
   await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
@@ -186,6 +202,29 @@ try {
       for (const name of packageNames) {
         const emitted = join(stageBuild, 'packages', name, 'src')
         const dist = join(stageDist, name)
+        const legacyClient = join(PACKAGES, name, 'client')
+        if (name === 'website-client') {
+          // Website Studio is typed source, unlike the legacy Flow client.
+          const compiled = join(stageBuild, 'packages', name)
+          const declarations = join(stageTypes, name)
+          cpSync(compiled, dist, { recursive: true })
+          cpSync(declarations, dist, { recursive: true })
+          copyAssets(legacyClient, [join(compiled, 'client'), join(dist, 'client')])
+          continue
+        }
+        if (existsSync(legacyClient)) {
+          // Imported Flow application: syntax checked JS, with no source compilation.
+          const check = spawnSync(process.execPath, [join(ROOT, 'tools/check-flow-client.mjs')], {
+            cwd: ROOT,
+            stdio: 'inherit',
+          })
+          if (check.error) throw check.error
+          if (check.status !== 0) throw new Error('Flow client syntax check failed')
+          mkdirSync(emitted, { recursive: true })
+          mkdirSync(dist, { recursive: true })
+          copyAssets(legacyClient, [emitted, dist])
+          continue
+        }
         if (!existsSync(emitted)) throw new Error(`TypeScript emitted no package artifact for ${name}`)
         cpSync(emitted, dist, { recursive: true })
         const declarations = join(stageTypes, name, 'src')
@@ -212,8 +251,10 @@ try {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }
-      const atlasCli = join(PACKAGES, 'design-system', 'dist', 'atlas-cli.js')
-      if (existsSync(atlasCli)) chmodSync(atlasCli, 0o755)
+      for (const name of ['atlas-cli.js', 'layout-audit-cli.js']) {
+        const cli = join(PACKAGES, 'design-system', 'dist', name)
+        if (existsSync(cli)) chmodSync(cli, 0o755)
+      }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
     } finally {
       rmSync(stage, { recursive: true, force: true })

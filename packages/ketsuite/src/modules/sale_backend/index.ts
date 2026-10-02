@@ -1,5 +1,11 @@
+import { invoicingPolicyContext } from './modal/policy-context.ts'
+import { defineRecordModalIsland, recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import { saleOrderContext } from './modal/context.ts'
+import { optionalRead } from '../backend/optional-read.ts'
 import { loadSaleOrderCollection, loadSalePartnerNames } from './order-collection.ts'
-import { collectionSearchFrame, searchCollectionRows } from '../backend/collection-search.ts'
+import { rowListSearch } from '../backend/row-list.ts'
+import { invoicingPolicyListSearch, quotationListSearch, saleOrderListSearch } from './search.ts'
+import { searchFilterFunctions } from './search-functions.ts'
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
@@ -138,16 +144,27 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
       // the pickers search server-side past the cap. Uncapped, a customer base
       // imported from a chat channel put every partner in the tenant into
       // memory on every sale page.
-      ctx.call('partner.listPartners', { limit: 200 }, url, req) as Promise<AnyRow[]>,
-      ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('product.listTemplates', { withVariants: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
-      ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('pricing.listPricelists', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listTaxes', { typeTaxUse: 'sale' }, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listJournals', { type: 'sale' }, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listAccounts', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('account.listPaymentTerms', {}, url, req) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'partner.listPartners', { limit: 200 }, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'company.listCompanies', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(
+        ctx,
+        'product.listTemplates',
+        { withVariants: true, limit: 200 },
+        url,
+        req,
+        [],
+      ) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'stock.listWarehouses', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'pricing.listPricelists', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'account.listTaxes', { typeTaxUse: 'sale' }, url, req, []) as Promise<
+        AnyRow[]
+      >,
+      optionalRead<AnyRow[]>(ctx, 'account.listJournals', { type: 'sale' }, url, req, []) as Promise<
+        AnyRow[]
+      >,
+      optionalRead<AnyRow[]>(ctx, 'account.listAccounts', {}, url, req, []) as Promise<AnyRow[]>,
+      optionalRead<AnyRow[]>(ctx, 'account.listPaymentTerms', {}, url, req, []) as Promise<AnyRow[]>,
     ])
   const own = new Set(companies.map((r) => r.partnerId)),
     sellable = templates.filter((r) => r.saleOk),
@@ -175,7 +192,7 @@ const partnerNames = async (
   rows: AnyRow[],
 ): Promise<Map<string, unknown>> => {
   const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
-  if (!ids.length) return new Map()
+  if (!ids.length || !(await ctx.allows('partner.listPartners', url, req))) return new Map()
   // Explicit-ID lookups are bounded too; resolve every order's customer before
   // visible-field search, including customers beyond the first lookup batch.
   return loadSalePartnerNames(
@@ -496,6 +513,8 @@ const detail =
     return backendPage(ctx, req, { lang, title: String(order.name), body })
   }
 const vi = {
+  'dashboard.awaiting': 'Báo giá đang chờ phản hồi',
+  'dashboard.queueEmpty': 'Không có báo giá đang chờ phản hồi.',
   'app.title': 'Bán hàng trong quản trị',
   'app.summary': 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   'app.category': 'Hệ thống',
@@ -585,6 +604,15 @@ const vi = {
   'invoices.title': 'Hoá đơn khách hàng',
   empty: 'Chưa có dữ liệu.',
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
+  'modal.info': 'Thông tin',
+  'modal.lines': 'Sản phẩm',
+  'modal.deliveries': 'Giao hàng',
+  'modal.invoices': 'Hoá đơn',
+  'modal.more': 'Thao tác khác',
+  'modal.edit': 'Sửa dòng',
+  'modal.confirmRemove': 'Xoá dòng sản phẩm này?',
+  'modal.confirmCancel': 'Huỷ đơn bán hàng này?',
+  'action.updateLine': 'Lưu dòng',
   'action.create': 'Tạo báo giá',
   'action.addLine': 'Thêm dòng',
   'action.removeLine': 'Xoá',
@@ -642,6 +670,8 @@ const vi = {
   'invoicePolicy.delivery': 'Theo số lượng giao',
 }
 const en = {
+  'dashboard.awaiting': 'Quotations awaiting a response',
+  'dashboard.queueEmpty': 'No quotations are awaiting a response.',
   'app.title': 'Sales administration',
   'app.summary': 'Quotations, sales orders, deliveries, and customer invoices.',
   'app.category': 'System',
@@ -731,6 +761,15 @@ const en = {
   'invoices.title': 'Customer Invoices',
   empty: 'No data yet.',
   emptyHint: 'Create the first record to get started.',
+  'modal.info': 'Information',
+  'modal.lines': 'Products',
+  'modal.deliveries': 'Deliveries',
+  'modal.invoices': 'Invoices',
+  'modal.more': 'Other actions',
+  'modal.edit': 'Edit line',
+  'modal.confirmRemove': 'Remove this product line?',
+  'modal.confirmCancel': 'Cancel this sales order?',
+  'action.updateLine': 'Save line',
   'action.create': 'Create Quotation',
   'action.addLine': 'Add line',
   'action.removeLine': 'Remove',
@@ -787,12 +826,40 @@ const en = {
   'invoicePolicy.order': 'Ordered quantities',
   'invoicePolicy.delivery': 'Delivered quantities',
 }
+/** Every sales list shares one set of functions; see `search-functions.ts`. */
+const saleSearchFunctions = {
+  apply: 'sale_backend.applySearchFilter',
+  saveFavorite: 'sale_backend.saveSearchFavorite',
+  deleteFavorite: 'sale_backend.deleteSearchFavorite',
+  setDefaultFavorite: 'sale_backend.setDefaultSearchFavorite',
+}
+
+/** A sales state or status in the reader's language; the value survives as data. */
+const saleGroupLabel = (_: Translator, key: string, value: unknown): string => {
+  const raw = value == null ? '' : String(value)
+  if (!raw) return _('backend.chrome.groupEmpty')
+  const message = `sale_backend.${key}.${raw}`
+  return _.resolves(message) ? _(message) : raw
+}
+
 export default defineModule({
   name: 'sale_backend',
   version: '0.1.0',
   depends: ['sale', 'backend', 'partner_backend'],
   assets: new URL('./client/', import.meta.url),
-  islands,
+  islands: {
+    'sale.invoice-policy-modal': defineRecordModalIsland({
+      kind: 'sale.invoicePolicy',
+      client: 'invoicing-policy-modal.mjs',
+      export: 'invoicingPolicyModal',
+    }),
+    ...islands,
+    'sale.order-modal': defineRecordModalIsland({
+      kind: 'sale.order',
+      client: 'sale-order-modal.mjs',
+      export: 'saleOrderModal',
+    }),
+  },
   behaviors: {
     'sale.editor': {
       client: 'sale.mjs',
@@ -808,6 +875,7 @@ export default defineModule({
     },
     'order.editor': { props: { identity: 'text', orderId: 'id', lang: 'text?' } },
   },
+  functions: searchFilterFunctions,
   title: 'Bán hàng trong quản trị',
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
@@ -838,18 +906,21 @@ export default defineModule({
       parent: 'sale',
       label: 'menu.policies',
       path: '/admin/sales/invoicing-policies',
-      needs: 'sale.setInvoicePolicy',
+      needs: 'sale.listInvoicePolicies',
+      for: ['sale.setInvoicePolicy'],
       sequence: 2010,
     },
   },
   routes: {
+    '/admin/sales/invoice-policy/{id}/context': invoicingPolicyContext,
+    '/admin/sales/record/{id}/context': saleOrderContext,
     '/admin/sales':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         // "New today" is the reader's today, so the counting happens in their
         // timezone rather than the server's.
-        const [counts, recent] = await Promise.all([
+        const [counts, recent, awaiting] = await Promise.all([
           ctx.call(
             'sale.countOrders',
             { timezone: await timezoneOf(ctx, url, req) },
@@ -860,14 +931,20 @@ export default defineModule({
           // the rest, and a dashboard that loads five hundred rows to show five
           // is the same mistake the counters were moved into the database to fix.
           ctx.call('sale.listOrders', { state: 'sale', limit: RECENT_ORDERS }, url, req) as Promise<AnyRow[]>,
+          ctx.call('sale.listOrders', { state: 'sent', limit: 10 }, url, req) as Promise<AnyRow[]>,
         ])
-        const names = await partnerNames(ctx, url, req, recent)
+        const names = await partnerNames(ctx, url, req, [...recent, ...awaiting])
         return adminPage(ctx, url, req, {
           title: 'sale_backend.dashboard.title',
           body: async (_, shell) =>
             overviewScreen(_, {
               frame: shell,
               counts,
+              createHref: (await ctx.allows('sale.createOrder', url, req))
+                ? recordModalCreateHref(new URL(quotationListPath(url), url), { kind: 'sale.order' })
+                : null,
+              rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+              awaiting: awaiting.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
               recent: recent.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
               localeQuery: localeQuery(url),
             }),
@@ -900,36 +977,38 @@ export default defineModule({
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
-          body: async (_, shell) =>
-            quotationsListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: quotationListSearch,
+              rows: rows
+                .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-quotation-filter',
+              bodyId: 'sale-quotation-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.quotations.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return quotationsListScreen(
               _,
               {
-                createHref: createPath,
+                createHref: (await ctx.allows('sale.createOrder', url, req))
+                  ? recordModalCreateHref(url, { kind: 'sale.order' })
+                  : null,
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.quotation',
                 ),
-                rows: searchCollectionRows(
-                  url,
-                  rows
-                    .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                    .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-                  (row: AnyRow) =>
-                    String(row.name ?? '') +
-                    ' ' +
-                    String(row.partnerName ?? '') +
-                    ' ' +
-                    String(row.dateOrder ?? '') +
-                    ' ' +
-                    String(row.validityDate ?? '') +
-                    ' ' +
-                    String(row.state ?? '') +
-                    ' ' +
-                    String(row.amountTotal ?? ''),
-                ),
+                rows: search.rows,
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+                },
                 detailSuffix,
               },
-              collectionSearchFrame(url, shell, _('sale_backend.quotations.title')),
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/new':
@@ -973,31 +1052,33 @@ export default defineModule({
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
-          body: async (_, shell) =>
-            salesOrdersListScreen(
+          body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: saleOrderListSearch,
+              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+              frame: shell,
+              name: 'sale-order-filter',
+              bodyId: 'sale-order-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.orders.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
+            return salesOrdersListScreen(
               _,
               {
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: searchCollectionRows(
-                  url,
-                  rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-                  (row: AnyRow) =>
-                    String(row.name ?? '') +
-                    ' ' +
-                    String(row.partnerName ?? '') +
-                    ' ' +
-                    String(row.dateOrder ?? '') +
-                    ' ' +
-                    String(row.state ?? '') +
-                    ' ' +
-                    String(row.amountTotal ?? ''),
-                ),
+                rows: search.rows,
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
+                },
                 detailSuffix,
               },
-              collectionSearchFrame(url, shell, _('sale_backend.orders.title')),
-            ),
+              search.frame,
+            )
+          },
         })
       },
     '/admin/sales/quotations/{id}': detail,
@@ -1017,17 +1098,29 @@ export default defineModule({
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
           body: async (_, shell) => {
+            const search = await rowListSearch(ctx, url, req, {
+              spec: invoicingPolicyListSearch,
+              rows,
+              frame: shell,
+              name: 'sale-invoicing-policy-filter',
+              bodyId: 'sale-invoicing-policy-list',
+              functions: saleSearchFunctions,
+              labels: { searchPlaceholder: _('sale_backend.policies.title') },
+              groupLabel: (key, value) => saleGroupLabel(_, key, value),
+            })
             const workspace = invoicingPoliciesListScreen(
               _,
               {
-                createHref: invoicingPolicyModalPath(url),
-                rows: searchCollectionRows(
-                  url,
-                  rows,
-                  (row: AnyRow) => String(row.name ?? '') + ' ' + String(row.invoicePolicy ?? ''),
-                ),
+                createHref: (await ctx.allows('sale.setInvoicePolicy', url, req))
+                  ? recordModalCreateHref(url, { kind: 'sale.invoicePolicy' })
+                  : null,
+                rows: search.rows,
+                table: {
+                  ...(search.groups ? { groups: search.groups } : {}),
+                  rowHref: (row) => recordModalHref(url, { kind: 'sale.invoicePolicy', id: String(row.id) }),
+                },
               },
-              collectionSearchFrame(url, shell, _('sale_backend.policies.title')),
+              search.frame,
             )
             if (url.searchParams.get('create') !== '1') return workspace
             return modalWorkspace(
@@ -1083,6 +1176,7 @@ export default defineModule({
   },
   messages: { vi, en },
   fills: {
+    'backend:runtime': `{% island "sale.order-modal" %}{% island "sale.invoice-policy-modal" %}`,
     'sale_backend:order.editor': `{% island "sale.editor" %}`,
   },
 })

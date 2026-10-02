@@ -76,7 +76,7 @@ test('flow issue detail route: FormPage preserves live collaboration, localized 
   assert.match(html, /data-ui="form-page" data-scope="flow-issue-detail-form-page"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"/)
   assert.match(textContent, /data-ui="form-page-title"[^>]*>Finish login/)
-  assert.match(textContent, /data-ui="form-page-description"[^>]*>Internal platform/)
+  assert.match(textContent, /data-ui="form-page-meta"[\s\S]*?Internal platform/)
   assert.match(textContent, /data-ui="form-page-status"[^>]*>.*To do/)
   assert.match(textContent, /High/)
   assert.match(textContent, /Assignee: Administrator/)

@@ -48,9 +48,9 @@
     margin: 0;
     color: var(--kv-text-muted);
     font-size: var(--kv-text-2xs);
+    line-height: var(--kv-line-2xs);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-normal);
     text-transform: uppercase;
   }
 
@@ -69,15 +69,7 @@
     font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: 0;
-    line-height: var(--kv-leading-tight);
-  }
-
-  :where([data-kv-design-system]) [data-ui="board-page-description"] {
-    max-width: 56rem;
-    margin: 0;
-    color: var(--kv-text-muted);
-    font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
+    line-height: var(--kv-page-title-line);
   }
 
   :where([data-kv-design-system]) [data-ui="board-page-subline"] {
@@ -92,6 +84,7 @@
   :where([data-kv-design-system]) [data-ui="board-page-meta"] {
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-variant-numeric: tabular-nums;
   }
 
@@ -126,10 +119,6 @@
     padding: var(--kv-space-4) var(--kv-page-padding-x) var(--kv-space-8);
   }
 
-  :where([data-kv-design-system]) [data-ui="board-page-body"] > [data-ui="stack"] {
-    gap: var(--kv-space-4);
-  }
-
   @media (max-width: 42rem) {
     :where([data-kv-design-system])
       [data-ui="board-page"][data-variant="operational"]
@@ -148,10 +137,6 @@
       gap: var(--kv-space-3);
     }
 
-    :where([data-kv-design-system]) [data-ui="board-page-title"] {
-      font-size: var(--kv-text-lg);
-    }
-
     :where([data-kv-design-system]) [data-ui="board-page-actions"] {
       justify-content: flex-start;
     }
@@ -160,5 +145,14 @@
     :where([data-kv-design-system]) [data-ui="board-page-body"] {
       padding-inline: var(--kv-space-4);
     }
+  }
+}
+
+@layer ket.app {
+  /* Match operational list headers in the compact Suite shell. */
+  :where([data-kv-design-system][data-density="compact"])
+    [data-ui="board-page"][data-variant="operational"]
+    [data-ui="board-page-header"] {
+    padding-block: var(--kv-space-2);
   }
 }

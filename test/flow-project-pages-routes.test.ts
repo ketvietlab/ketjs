@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -64,7 +65,7 @@ test('flow project pages route: specialized tree and URL-owned create preserve h
   const textContent = html.replace(/<!--k\[?-->/g, '')
   assert.equal(page.status, 200)
   assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
-  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="form-page"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="list-page-title"[^>]*>Internal platform/)
   assert.match(html, /data-ui="doc-tree"/)
   assert.match(html, /data-ui="doc-branch"/)
@@ -170,11 +171,12 @@ test('flow project pages: the document tree carries a search box that filters it
   const path = '/admin/flow/projects/platform/pages?lang=en'
 
   const opened = await (await app.client.get(path)).text()
-  // The box is really on the page, with the name the route reads.
-  assert.match(opened, /name="q"/)
+  // The search-filter bar is really on the page, over the query the route reads.
+  assert.match(opened, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(opened, /name="q"[^>]*data-ui="chrome-search-input"/)
 
   const all = await (await app.client.get(path)).text()
   const searched = await (await app.client.get(`${path}&q=Local`)).text()
-  assert.notEqual(all, searched, 'and typing in it changes what comes back')
-  assert.match(searched, /value="Local"/, 'the box keeps what was typed')
+  assert.notEqual(all, searched, 'and asking for a word changes what comes back')
+  assert.match(searched, /Local/, 'what was asked for is what came back')
 })

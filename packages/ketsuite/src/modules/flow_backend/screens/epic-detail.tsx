@@ -52,7 +52,7 @@ export const epicDetailScreen = (
       frame={frame}
       scope="flow-epic-detail-form-page"
       title={title}
-      description={options.projectName}
+      meta={options.projectName}
       actions={inline([
         linkButton({
           href: mapHref,

@@ -27,16 +27,13 @@
     gap: var(--kv-space-1);
   }
 
-  /* One fused box — the search field and the single caret toggle share one
-     border, like a single input-group rather than two adjacent controls. */
+  /* Search and section triggers are separate controls; applied state gets its own row. */
   :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
     position: relative;
     display: flex;
     align-items: stretch;
     inline-size: 100%;
-    border: 1px solid var(--kv-border-strong);
-    border-radius: var(--kv-radius-sm);
-    background: var(--kv-panel-bg);
+    gap: var(--kv-space-2);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-field"] {
     position: relative;
@@ -46,12 +43,16 @@
     align-items: center;
     gap: var(--kv-space-1);
     min-inline-size: 0;
-    padding: 0.25rem 0.5rem;
+    padding: 0 var(--kv-control-padding-inline);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--kv-border-strong);
+    border-radius: var(--kv-control-radius);
+    background: var(--kv-panel-bg);
   }
   :where([data-kv-design-system])
     [data-ui="search-filter"][data-size="compact"]
     [data-ui="search-filter-field"] {
-    padding-block: 0.125rem;
+    padding-block: 0;
   }
   :where([data-kv-design-system]) [data-ui="search-filter-facets"] {
     display: flex;
@@ -70,20 +71,21 @@
     border: 1px solid var(--kv-accent-border);
     border-radius: var(--kv-radius-sm);
     background: var(--kv-accent-subtle);
-    color: var(--kv-accent-active);
+    color: var(--kv-text-main);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
   /* filter/field stay the accent tone above; group-by reads as info (a
      distinct, cooler tone), favorite as warning — one tone per facet kind. */
   :where([data-kv-design-system]) [data-ui="search-filter-facet"][data-type="groupBy"] {
     border-color: var(--kv-info-border);
     background: var(--kv-info-bg);
-    color: var(--kv-info);
+    color: var(--kv-text-main);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-facet"][data-type="favorite"] {
     border-color: var(--kv-warning-border);
     background: var(--kv-warning-bg);
-    color: var(--kv-warning);
+    color: var(--kv-text-main);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-facet"] > span {
     min-inline-size: 0;
@@ -95,8 +97,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
+    inline-size: var(--kv-space-6);
+    block-size: var(--kv-space-6);
     flex: none;
     padding: 0;
     border: 0;
@@ -123,13 +125,22 @@
     background: transparent;
     color: var(--kv-text-main);
     font: inherit;
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
+    padding: var(--kv-control-padding-block) 0;
   }
   :where([data-kv-design-system])
     [data-ui="search-filter"][data-size="compact"]
     [data-ui="search-filter-input"] {
-    min-block-size: var(--kv-control-height-compact);
-    font-size: var(--kv-text-sm);
+    min-block-size: var(--kv-control-height);
+    font-size: var(--kv-input-font-size);
+    line-height: var(--kv-input-line-height);
   }
+  :where([data-kv-design-system]) [data-ui="search-filter-input"]::placeholder {
+    color: var(--kv-text-secondary);
+    opacity: 1;
+  }
+
   /* The reset (../../foundations/reset.css) puts a box-shadow ring on every
      `:focus-visible` form control, `<input>` included — override both
      properties it sets, not just `outline`, or the ring still shows. */
@@ -181,63 +192,56 @@
     font-weight: 600;
   }
 
-  /* The single caret trigger, fused flush against the field box above — no
-     border of its own on the shared edge, just a divider. Its `<details>`
-     parent is already stretched to the field box's height as a flex item of
-     [data-ui="search-filter-bar"] (default `align-items: stretch` — giving
-     an `inline-block` element like `[data-ui="menu"]` an explicit height
-     here, even one that resolves to `auto`, would turn that stretch off;
-     leave it alone). The `<summary>` itself does need `block-size: 100%`,
-     though — it only sizes to its own content by default. It DOES need its
-     own outer-corner radius matching the bar's: its opaque background is a
-     plain rectangle sitting right at the bar's rounded right edge, and
-     without a matching radius here that rectangle squares off over the
-     bar's own curve. */
-  :where([data-kv-design-system]) [data-ui="search-filter-toggle"] {
-    display: flex;
-    block-size: 100%;
-    min-inline-size: 2.25rem;
+  :where([data-kv-design-system])
+    :is([data-ui="search-filter-toggle"], [data-ui="search-filter-section-toggle"]) {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--kv-space-1);
+    min-block-size: var(--kv-control-height);
+    block-size: 100%;
     padding: 0 var(--kv-space-2);
-    border: 0;
-    border-inline-start: 1px solid var(--kv-border-default);
-    border-start-end-radius: var(--kv-radius-sm);
-    border-end-end-radius: var(--kv-radius-sm);
-    background: var(--kv-panel-bg-subtle);
-    color: var(--kv-text-secondary);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    color: var(--kv-text-main);
+    font: inherit;
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+    white-space: nowrap;
     cursor: pointer;
     list-style: none;
   }
-  :where([data-kv-design-system])
-    [data-ui="search-filter"][data-size="compact"]
-    [data-ui="search-filter-toggle"] {
-    min-inline-size: var(--kv-control-height-compact);
-    padding-inline: var(--kv-space-1);
+  :where([data-kv-design-system]) [data-ui="search-filter-section-toggle"] {
+    align-self: stretch;
+    block-size: auto;
   }
   :where([data-kv-design-system]) [data-ui="search-filter-toggle"]::-webkit-details-marker {
     display: none;
   }
-  :where([data-kv-design-system]) [data-ui="search-filter-toggle"]:hover {
+  :where([data-kv-design-system])
+    :is([data-ui="search-filter-toggle"], [data-ui="search-filter-section-toggle"]):hover {
     background: var(--kv-surface-hover);
   }
-  :where([data-kv-design-system]) [data-ui="menu"][data-active="true"] [data-ui="search-filter-toggle"] {
-    background: var(--kv-accent-subtle);
-    color: var(--kv-accent-active);
+  :where([data-kv-design-system]) [data-ui="search-filter-icon"] {
+    flex: none;
+    color: var(--kv-text-secondary);
   }
-
-  /* Anchor to the whole bar, never to its narrow caret or the app viewport.
-     Container queries also work inside a sidebar layout, modal or catalogue. */
+  :where([data-kv-design-system]) [data-ui="search-filter-field"]:focus-within {
+    outline: 2px solid var(--kv-focus-border);
+    outline-offset: 1px;
+  }
   :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] {
     position: static;
   }
   :where([data-kv-design-system]) [data-ui="menu"][data-variant="search-filter"] [data-ui="menu-panel"] {
     left: auto;
     right: 0;
-    width: min(52rem, 100%);
+    width: min(26rem, 100%);
     min-inline-size: 0;
     max-inline-size: 100%;
+    max-block-size: min(32rem, 70dvh);
+    overflow-y: auto;
   }
   :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
     display: grid;
@@ -247,36 +251,76 @@
     min-inline-size: 0;
     display: grid;
     align-content: start;
-    gap: 0.125rem;
   }
-  :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
-    padding-block-start: var(--kv-space-2);
-    border-block-start: 1px solid var(--kv-border-default);
+  :where([data-kv-design-system])
+    [data-ui="search-filter-columns"][data-panel="filter"]
+    > :not([data-facet-type="filter"]),
+  :where([data-kv-design-system])
+    [data-ui="search-filter-columns"][data-panel="groupBy"]
+    > :not([data-facet-type="groupBy"]),
+  :where([data-kv-design-system])
+    [data-ui="search-filter-columns"][data-panel="favorite"]
+    > :not([data-facet-type="favorite"]) {
+    display: none;
   }
-  @container search-filter (min-width: 42rem) {
-    :where([data-kv-design-system]) [data-ui="search-filter-columns"] {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+  :where([data-kv-design-system]) [data-ui="search-filter-clear"] {
+    min-block-size: var(--kv-space-6);
+    border: 0;
+    padding: var(--kv-space-1) var(--kv-space-2);
+    background: transparent;
+    color: var(--kv-text-secondary);
+    font: inherit;
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-sheet"] {
+    padding: 0;
+    border: 0;
+    max-width: none;
+    max-height: none;
+    color: var(--kv-text-main);
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-sheet"][open] {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    margin: 0;
+    background: transparent;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-sheet"]::backdrop {
+    background: transparent;
+  }
+  @container search-filter (max-width: 28rem) {
+    :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
+      flex-wrap: wrap;
     }
-    :where([data-kv-design-system]) [data-ui="search-filter-columns"][data-columns="1"] {
-      grid-template-columns: minmax(0, 1fr);
+    :where([data-kv-design-system]) [data-ui="search-filter-field"] {
+      flex-basis: 100%;
     }
-    :where([data-kv-design-system]) [data-ui="search-filter-columns"][data-columns="2"] {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 640px) {
+    :where([data-kv-design-system]) [data-ui="search-filter-bar"] {
+      flex-wrap: nowrap;
     }
-    :where([data-kv-design-system]) [data-ui="search-filter-column"] {
-      padding-inline-end: var(--kv-space-3);
+    :where([data-kv-design-system]) [data-ui="search-filter-section-toggle"] {
+      display: none;
+    }
+    :where([data-kv-design-system]) [data-ui="search-filter"][data-size] a[data-ui="menu-item"] {
+      min-block-size: var(--kv-touch-target);
     }
     :where([data-kv-design-system]) [data-ui="search-filter-column"] + [data-ui="search-filter-column"] {
-      padding-block-start: 0;
-      border-block-start: 0;
-      border-inline-start: 1px solid var(--kv-border-default);
-      padding-inline-start: var(--kv-space-3);
+      padding-block-start: var(--kv-space-3);
+      border-block-start: 1px solid var(--kv-border-default);
     }
   }
   :where([data-kv-design-system]) [data-ui="search-filter-column-title"] {
     margin: 0 0 var(--kv-space-1);
     padding: 0 var(--kv-space-1);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping"] {
@@ -293,8 +337,9 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--kv-space-2);
-    color: var(--kv-info);
+    color: var(--kv-text-main);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping-clear"] {
@@ -327,8 +372,9 @@
     place-items: center;
     border-radius: var(--kv-radius-full);
     background: var(--kv-panel-bg);
-    color: var(--kv-info);
+    color: var(--kv-text-main);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system]) [data-ui="search-filter-grouping-label"] {
@@ -336,6 +382,7 @@
     overflow: hidden;
     color: var(--kv-text-main);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -353,7 +400,7 @@
     border: 0;
     border-radius: var(--kv-radius-sm);
     background: transparent;
-    color: var(--kv-info);
+    color: var(--kv-text-main);
     font: inherit;
     cursor: pointer;
   }
@@ -370,22 +417,23 @@
     margin: var(--kv-space-2) var(--kv-space-1) var(--kv-space-1);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: var(--kv-weight-bold);
   }
   :where([data-kv-design-system])
     [data-ui="search-filter-column"][data-facet-type="filter"]
     [data-ui="search-filter-column-title"] {
-    color: var(--kv-accent-active);
+    color: var(--kv-text-main);
   }
   :where([data-kv-design-system])
     [data-ui="search-filter-column"][data-facet-type="groupBy"]
     [data-ui="search-filter-column-title"] {
-    color: var(--kv-info);
+    color: var(--kv-text-main);
   }
   :where([data-kv-design-system])
     [data-ui="search-filter-column"][data-facet-type="favorite"]
     [data-ui="search-filter-column-title"] {
-    color: var(--kv-warning);
+    color: var(--kv-text-main);
   }
 
   :where([data-kv-design-system]) [data-ui="custom-filter"] {
@@ -436,11 +484,29 @@
     cursor: not-allowed;
   }
 
+  :where([data-kv-design-system]) [data-ui="favorite-save-toggle"] {
+    display: flex;
+    width: 100%;
+    min-height: var(--kv-control-height);
+    align-items: center;
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: var(--kv-text-main);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="favorite-save-toggle"]:hover {
+    background: var(--kv-interactive-hover);
+  }
   :where([data-kv-design-system]) [data-ui="favorite-save"] {
     display: grid;
     gap: var(--kv-space-2);
     margin: var(--kv-space-2) 0;
     padding-block-end: var(--kv-space-2);
+    padding-inline: var(--kv-space-3);
     border-block-end: 1px solid var(--kv-border-default);
   }
   :where([data-kv-design-system]) [data-ui="favorite-save-row"] {
@@ -466,6 +532,7 @@
     gap: 0.25rem;
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     white-space: nowrap;
   }
   :where([data-kv-design-system]) [data-ui="favorite-list"] {
@@ -473,6 +540,14 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+  :where([data-kv-design-system]) [data-ui="search-filter-empty"] {
+    margin: 0;
+    padding: var(--kv-space-2) var(--kv-space-3);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+    text-transform: none;
   }
   :where([data-kv-design-system]) [data-ui="favorite-item"] {
     display: grid;
@@ -499,7 +574,7 @@
     cursor: pointer;
   }
   :where([data-kv-design-system]) [data-ui="favorite-item-default"][data-default="true"] {
-    color: var(--kv-warning);
+    color: var(--kv-text-main);
   }
   :where([data-kv-design-system]) [data-ui="favorite-item-default"]:is(:hover, :focus-visible),
   :where([data-kv-design-system]) [data-ui="favorite-item-remove"]:is(:hover, :focus-visible) {

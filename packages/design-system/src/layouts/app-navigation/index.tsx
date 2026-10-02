@@ -4,6 +4,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 export const HOOKS = [
   'app-navigation',
   'navigation-trigger',
+  'navigation-toggle',
   'navigation-trigger-icon',
   'navigation-trigger-identity',
   'navigation-trigger-label',
@@ -54,7 +55,9 @@ export type NavigationGroupData = {
 export type AppNavigationProps = {
   id: string
   label: string
-  identity: JSXChild
+  identity?: JSXChild
+  /** A topbar may provide NavigationToggle while this component owns the drawer. */
+  externalTrigger?: boolean
   groups: readonly NavigationGroupData[]
   context?: JSXChild
   supplementary?: JSXChild
@@ -68,7 +71,7 @@ export type AppNavigationProps = {
 export const NavigationTrigger = (props: {
   controls: string
   label: string
-  identity: JSXChild
+  identity?: JSXChild
   open?: boolean
 }): TemplateResult => (
   <summary
@@ -87,13 +90,13 @@ export const NavigationTrigger = (props: {
 )
 
 export const NavigationHeader = (props: {
-  identity: JSXChild
+  identity?: JSXChild
   context?: JSXChild
   closeLabel: string
 }): TemplateResult => (
   <header data-ui="navigation-header">
     <div>
-      <div data-ui="navigation-identity">{props.identity}</div>
+      {props.identity !== undefined && <div data-ui="navigation-identity">{props.identity}</div>}
       {props.context !== undefined && <div data-ui="navigation-context">{props.context}</div>}
     </div>
     <button data-ui="navigation-close" type="button" aria-label={props.closeLabel}>
@@ -183,7 +186,7 @@ export const NavigationGroup = (props: NavigationGroupData & { branchGroup?: str
 export const NavigationDrawer = (props: {
   id: string
   label: string
-  identity: JSXChild
+  identity?: JSXChild
   groups: readonly NavigationGroupData[]
   context?: JSXChild
   supplementary?: JSXChild
@@ -192,7 +195,13 @@ export const NavigationDrawer = (props: {
   closeLabel: string
 }): TemplateResult => (
   <div data-ui="navigation-layer">
-    <button data-ui="navigation-backdrop" type="button" aria-label={props.closeLabel} tabIndex={-1} />
+    <button
+      data-ui="navigation-backdrop"
+      type="button"
+      aria-label={props.closeLabel}
+      aria-hidden="true"
+      tabIndex={-1}
+    />
     <div data-ui="navigation-drawer" id={props.id} data-navigation-label={props.label} tabIndex={-1}>
       <NavigationHeader identity={props.identity} context={props.context} closeLabel={props.closeLabel} />
       <nav data-ui="navigation-groups" aria-label={props.label} data-ket-slot={props.navigationSlot}>
@@ -216,7 +225,12 @@ export const AppNavigation = (props: AppNavigationProps): TemplateResult => {
   const drawerId = `${props.id}-drawer`
   const closeLabel = props.closeLabel ?? 'Close navigation'
   return (
-    <details data-ui="app-navigation" data-navigation-id={props.id} open={props.open === true}>
+    <details
+      data-ui="app-navigation"
+      data-navigation-id={props.id}
+      data-external-trigger={props.externalTrigger ? 'true' : null}
+      open={props.open === true}
+    >
       <NavigationTrigger
         controls={drawerId}
         label={props.menuLabel ?? 'Menu'}
@@ -237,3 +251,25 @@ export const AppNavigation = (props: AppNavigationProps): TemplateResult => {
     </details>
   )
 }
+
+export const NavigationToggle = (props: { controls: string; label: string }): TemplateResult => (
+  <button
+    data-ui="navigation-toggle"
+    type="button"
+    aria-controls={props.controls}
+    aria-label={props.label}
+    aria-expanded="false"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      aria-hidden="true"
+    >
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  </button>
+)

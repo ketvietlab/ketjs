@@ -63,7 +63,6 @@ export const credentialScreen = (
     <WorkspaceScreen
       translator={_}
       title={_('attendance_backend.credentials.title')}
-      subtitle={_('attendance_backend.credentials.subtitle')}
       frame={frame}
       body={stack([
         ...(options.notice

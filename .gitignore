@@ -19,10 +19,16 @@ packages/ketsuite/src/ui/client/live-doc.mjs.map
 # backend asset root by tools/build-backend-client.mjs.
 packages/ketsuite/src/ui/client/mail-bundle.mjs
 packages/ketsuite/src/ui/client/mail-bundle.mjs.map
+packages/ketsuite/src/modules/crm_backend/client/crm-case-modal.mjs
+packages/ketsuite/src/modules/crm_backend/client/crm-case-modal.mjs.map
 packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs
 packages/ketsuite/src/modules/crm_backend/client/crm-configuration-modal.mjs.map
 packages/ketsuite/src/modules/user_backend/client/user-modal.mjs
 packages/ketsuite/src/modules/user_backend/client/user-modal.mjs.map
+packages/ketsuite/src/modules/user_backend/client/role-modal.mjs
+packages/ketsuite/src/modules/user_backend/client/role-modal.mjs.map
+packages/ketsuite/src/modules/user_backend/client/access-policy-modal.mjs
+packages/ketsuite/src/modules/user_backend/client/access-policy-modal.mjs.map
 packages/ketsuite/src/modules/product_backend/client/product-modal.mjs
 packages/ketsuite/src/modules/product_backend/client/product-modal.mjs.map
 packages/ketsuite/src/modules/product_backend/client/attribute-modal.mjs
@@ -77,3 +83,18 @@ npm-debug.log*
 .vscode/
 *.swp
 .DS_Store
+
+# Commerce record modal bundles, rebuilt from typed sources.
+packages/ketsuite/src/modules/purchase_backend/client/purchase-order-modal.mjs*
+packages/ketsuite/src/modules/sale_backend/client/sale-order-modal.mjs*
+packages/ketsuite/src/modules/stock_backend/client/stock-configuration-modal.mjs*
+packages/ketsuite/src/modules/stock_backend/client/inventory-count-modal.mjs*
+
+packages/ketsuite/src/modules/stock_backend/client/stock-transfer-modal.mjs*
+
+packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs*
+packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs*
+
+packages/flow-client/atlas/vendor/
+
+/packages/ketsuite/src/modules/website_backend/client/

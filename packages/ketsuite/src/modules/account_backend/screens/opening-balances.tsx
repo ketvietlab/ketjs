@@ -21,7 +21,7 @@ import {
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormField, Frame } from '../../../ui/index.ts'
+import type { DataTable, FormField, Frame } from '../../../ui/index.ts'
 
 type Row = Record<string, unknown>
 
@@ -36,7 +36,14 @@ const stateBadge = (_: Translator, state: unknown) => {
 
 export const openingBalancesListScreen = (
   _: Translator,
-  options: { frame: Frame; rows: Row[]; createHref: string; rowHref: (row: Row) => string },
+  options: {
+    frame: Frame
+    rows: Row[]
+    createHref: string
+    rowHref: (row: Row) => string
+    /** What the search-filter bar decided about the table, such as its groups. */
+    table?: Partial<DataTable<Row>>
+  },
 ): TemplateResult => {
   const collection = prepareCollectionTable(
     _,
@@ -77,8 +84,9 @@ export const openingBalancesListScreen = (
           cell: (row) => code(String(row.sourceChecksum).slice(0, 12)),
         },
       ],
+      ...options.table,
     },
-    { paginate: true },
+    { paginate: !options.table?.groups },
   )
   return shell(
     _,
@@ -88,13 +96,12 @@ export const openingBalancesListScreen = (
       frame={collection.frame}
       title={_('account_backend.opening.title')}
       controls={collectionControls(_, _('account_backend.opening.title'), collection.frame)}
-      description={_('account_backend.opening.subtitle')}
       headerActions={
         <LinkButton label={_('account_backend.opening.create')} href={options.createHref} variant="primary" />
       }
       footer={`${_('account_backend.opening.summary')}: ${String(options.rows.length)}`}
       body={
-        options.rows.length ? (
+        options.rows.length || options.table?.groups?.length ? (
           collectionTable(_, collection.table)
         ) : (
           <Surface
@@ -122,7 +129,6 @@ export const openingBalanceImportScreen = (
       frame={options.frame}
       scope="opening-balance-import"
       title={_('account_backend.opening.create')}
-      description={_('account_backend.opening.createHint')}
       body={
         <Surface
           body={

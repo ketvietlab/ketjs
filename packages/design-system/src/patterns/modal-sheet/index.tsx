@@ -30,7 +30,7 @@ export const ModalSheet = (props: {
   status?: JSXChild
   actions?: JSXChild
   presentation?: 'sheet' | 'dialog'
-  size?: 'default' | 'large'
+  size?: 'small' | 'default' | 'large'
   /**
    * `content` (default) lets a dialog grow with its body up to the viewport cap. `fixed`
    * holds the dialog at that cap so switching between tabs of different heights does not
@@ -41,10 +41,8 @@ export const ModalSheet = (props: {
    * Overrides `fixed`'s height (default: the viewport cap, `100dvh` minus a margin —
    * tall on most screens). A CSS length or `calc()`/`min()` expression, for a dialog
    * whose own content is shorter than the viewport and would otherwise sit in a mostly
-   * empty frame. Set inline with `!important`, not as a plain CSS rule: a legacy
-   * admin stylesheet (`packages/ketsuite/src/modules/backend/design/forms.css`)
-   * still targets these same `data-ui` hooks at equal specificity and would
-   * otherwise win the cascade by loading later. Ignored when `height` isn't `fixed`.
+   * empty frame. Stored in a CSS custom property so responsive fullscreen rules
+   * still take precedence. Ignored when `height` is not `fixed`.
    */
   fixedHeight?: string
   /**
@@ -54,6 +52,8 @@ export const ModalSheet = (props: {
    * no navigation layer ever treats closing it as a page change.
    */
   mode?: 'overlay' | 'embedded' | 'client'
+  /** A native dialog ancestor can own the accessible dialog role and name. */
+  dialogSemantics?: 'self' | 'parent'
   unsavedPrompt?: string | null
 }): TemplateResult => {
   const client = props.mode === 'client'
@@ -68,7 +68,7 @@ export const ModalSheet = (props: {
       data-unsaved-prompt={props.unsavedPrompt ?? null}
     >
       {client ? (
-        <button data-ui="modal-backdrop" type="button" aria-label={props.closeLabel} tabindex="-1">
+        <button data-ui="modal-backdrop" type="button" aria-hidden="true" tabIndex={-1}>
           <span>{props.closeLabel}</span>
         </button>
       ) : (
@@ -81,11 +81,16 @@ export const ModalSheet = (props: {
         data-ui="modal-sheet"
         data-size={props.size ?? 'default'}
         data-height={props.height === 'fixed' ? 'fixed' : null}
-        style={props.height === 'fixed' && props.fixedHeight ? `height: ${props.fixedHeight} !important` : ''}
-        role="dialog"
-        aria-modal={embedded ? 'false' : 'true'}
-        aria-labelledby={`${props.id}-title`}
-        aria-describedby={props.description ? `${props.id}-description` : null}
+        style={
+          props.height === 'fixed' && props.fixedHeight ? `--kv-modal-fixed-height: ${props.fixedHeight}` : ''
+        }
+        {...(props.dialogSemantics === 'parent'
+          ? {}
+          : { role: 'dialog', 'aria-modal': embedded ? 'false' : 'true' })}
+        aria-labelledby={props.dialogSemantics === 'parent' ? null : `${props.id}-title`}
+        aria-describedby={
+          props.dialogSemantics !== 'parent' && props.description ? `${props.id}-description` : null
+        }
         tabindex={embedded ? null : '-1'}
       >
         <header data-ui="modal-head">

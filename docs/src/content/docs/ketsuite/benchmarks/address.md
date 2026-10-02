@@ -71,5 +71,5 @@ nên kết quả này chỉ chứng minh không thấy hồi quy theo ngưỡng 
 - 90 targeted tests pass: unit, PostgreSQL concurrency, HTTP E2E, Partner,
   Company/Branch, Hospitality và joint contract.
 - Type check và format check pass; lint phần Address/Partner/Hospitality pass.
-- Full suite không chạy local theo `AGENT.md`; CI chạy khi PR target `develop`.
+- Full suite không chạy local theo `AGENT.md`; CI chạy khi PR release target `master`.
 - Browser acceptance covers desktop/mobile layouts in Vietnamese and English.

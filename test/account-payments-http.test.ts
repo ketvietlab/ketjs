@@ -1,3 +1,4 @@
+import { withoutGlobalSearchDialog } from './helpers/shell.ts'
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
@@ -56,7 +57,7 @@ test('payments HTTP separates a filtered ListPage from its stable full FormPage'
     memo: 'NEEDLE PAYMENT',
   })
 
-  const returnTo = `${path}?lang=vi&state=paid&type=inbound&partnerType=customer&q=NEEDLE+PAYMENT`
+  const returnTo = `${path}?lang=vi&preset=paid&preset=inbound&preset=customer&q=NEEDLE+PAYMENT`
   const list = await app.client.get(returnTo)
   const listHtml = await list.text()
   assert.equal(list.status, 200)
@@ -64,9 +65,14 @@ test('payments HTTP separates a filtered ListPage from its stable full FormPage'
   assert.match(listHtml, /PAY\/HTTP\/LIST/)
   assert.match(listHtml, /Khách hàng thanh toán/)
   assert.match(listHtml, /data-row-href="\/admin\/accounting\/entries\/payment-http-list%3Amove\?lang=vi"/)
-  assert.ok((listHtml.match(/data-ui="facet"/g) ?? []).length >= 3)
+  // The search-filter bar carries what the three facet menus used to carry.
+  assert.match(listHtml, /data-island="backend\.search-filter"/)
+  assert.doesNotMatch(listHtml, /name="q"[^>]*data-ui="chrome-search-input"/)
   assert.match(listHtml, /href="\/admin\/accounting\/payments\/new\?lang=vi&amp;returnTo=/)
-  assert.doesNotMatch(listHtml, /payment-register-form|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(listHtml),
+    /payment-register-form|data-ui="modal-layer"|mail\.chatter/,
+  )
 
   const create = await app.client.get(`${path}/new?lang=vi&returnTo=${encodeURIComponent(returnTo)}`)
   const createHtml = await create.text()
@@ -90,8 +96,11 @@ test('payments HTTP separates a filtered ListPage from its stable full FormPage'
   assert.equal((createHtml.match(/data-island="backend\.relation-select"/g) ?? []).length, 2)
   assert.match(createHtml, /type="hidden" name="action" value="register"/)
   assert.match(createHtml, /type="hidden" name="id" value="[^"]+"/)
-  assert.match(createHtml, /href="\/admin\/accounting\/payments\?lang=vi&amp;state=paid/)
-  assert.doesNotMatch(createHtml, /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.match(createHtml, /href="\/admin\/accounting\/payments\?lang=vi&amp;preset=paid/)
+  assert.doesNotMatch(
+    withoutGlobalSearchDialog(createHtml),
+    /data-ui="list-page"|data-ui="modal-layer"|mail\.chatter/,
+  )
 
   const unsafe = await (await app.client.get(`${path}/new?lang=en&returnTo=https://evil.example/`)).text()
   assert.match(unsafe, /href="\/admin\/accounting\/payments\?lang=en"/)
@@ -113,7 +122,7 @@ test('payments HTTP separates a filtered ListPage from its stable full FormPage'
 test('payment POST retains every rejected value and retries one stable record', async (t) => {
   const { app, bankId, receivableId } = await bootPayments(t)
   const path = '/admin/accounting/payments'
-  const returnTo = `${path}?lang=vi&state=paid`
+  const returnTo = `${path}?lang=vi&preset=paid`
   const formPath = `${path}/new?lang=vi&returnTo=${encodeURIComponent(returnTo)}`
   const rejected = await app.client.post(
     formPath,
@@ -146,7 +155,7 @@ test('payment POST retains every rejected value and retries one stable record', 
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;customer-payment&quot;/)
   assert.match(rejectedHtml, /&quot;value&quot;:&quot;missing-control-account&quot;/)
   assert.match(rejectedHtml, /<option value="missing-open-item" selected="true">/)
-  assert.match(rejectedHtml, /href="\/admin\/accounting\/payments\?lang=vi&amp;state=paid"/)
+  assert.match(rejectedHtml, /href="\/admin\/accounting\/payments\?lang=vi&amp;preset=paid"/)
 
   const body = new URLSearchParams({
     action: 'register',

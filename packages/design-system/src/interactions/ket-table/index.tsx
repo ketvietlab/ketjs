@@ -8,6 +8,7 @@ import { FormattedDate, FormattedMoney, FormattedNumber } from '../../record/for
 export const HOOKS = [
   'ket-table',
   'kt-scroll',
+  'kt-selection-target',
   'kt-grid',
   'kt-select-col',
   'kt-select-all',
@@ -60,6 +61,8 @@ export type KetTableColumn = {
   align?: 'start' | 'end'
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
+  /** Let descriptive content wrap within a bounded text column; rows grow as needed. */
+  wrap?: boolean
   sortable?: boolean
   /** Native URL-driven sorting; takes precedence over the RPC sort handler. */
   sortHref?: string
@@ -121,6 +124,7 @@ export type KetTableGroup = {
 }
 
 export type KetTableLabels = {
+  region?: string
   selectAll: string
   selectRow: string
   sortedAscending: string
@@ -380,8 +384,8 @@ export function createKetTableView(
       // on every click would just repeat the same expensive query for free.
       const listValue = await callApi(manager.listFunction, input)
       rows.set(Array.isArray(listValue) ? (listValue as KetTableRow[]) : [])
-    } catch (caught) {
-      error.set(caught instanceof Error ? caught.message : labels.loadError)
+    } catch {
+      error.set(labels.loadError)
     } finally {
       loading.set(false)
     }
@@ -461,8 +465,8 @@ export function createKetTableView(
           })),
         )
       }
-    } catch (caught) {
-      error.set(caught instanceof Error ? caught.message : labels.loadError)
+    } catch {
+      error.set(labels.loadError)
     } finally {
       loading.set(false)
     }
@@ -553,17 +557,19 @@ export function createKetTableView(
     >
       {config.selection ? (
         <td data-ui="kt-select-cell">
-          <input
-            data-ui="kt-row-select"
-            type="checkbox"
-            autocomplete="off"
-            name={server ? `${config.selection.fieldName ?? 'selected'}.${idOf(row)}` : undefined}
-            value={server ? '1' : undefined}
-            form={server ? config.selection.formId : undefined}
-            checked={isSelected(row)}
-            aria-label={`${labels.selectRow}: ${idOf(row)}`}
-            onChange={() => toggleSelect(row)}
-          />
+          <label data-ui="kt-selection-target">
+            <input
+              data-ui="kt-row-select"
+              type="checkbox"
+              autocomplete="off"
+              name={server ? `${config.selection.fieldName ?? 'selected'}.${idOf(row)}` : undefined}
+              value={server ? '1' : undefined}
+              form={server ? config.selection.formId : undefined}
+              checked={isSelected(row)}
+              aria-label={`${labels.selectRow}: ${idOf(row)}`}
+              onChange={() => toggleSelect(row)}
+            />
+          </label>
         </td>
       ) : null}
       {each(
@@ -575,6 +581,8 @@ export function createKetTableView(
             data-col={column.key}
             data-align={column.align ?? 'start'}
             data-kind={column.kind ?? column.format.kind}
+            data-wrap={column.wrap ? 'true' : null}
+            data-width={column.width ?? null}
             data-priority={column.priority ?? 'secondary'}
             data-label={server?.responsive === 'stack' ? column.label : null}
           >
@@ -807,21 +815,23 @@ export function createKetTableView(
         {(isGrouped() ? groups().length === 0 : rows().length === 0) ? (
           <EmptyState title={labels.empty} message={labels.emptyHint} />
         ) : (
-          <div data-ui="kt-scroll">
+          <div data-ui="kt-scroll" tabindex="0" role="region" aria-label={labels.region ?? 'Results'}>
             <table data-ui="kt-grid">
               {server?.caption && <caption data-ui="kt-caption">{server.caption}</caption>}
               <thead>
                 <tr>
                   {config.selection ? (
                     <th data-ui="kt-select-col" scope="col">
-                      <input
-                        data-ui="kt-select-all"
-                        type="checkbox"
-                        autocomplete="off"
-                        checked={allVisibleSelected()}
-                        aria-label={labels.selectAll}
-                        onChange={toggleSelectAllVisible}
-                      />
+                      <label data-ui="kt-selection-target">
+                        <input
+                          data-ui="kt-select-all"
+                          type="checkbox"
+                          autocomplete="off"
+                          checked={allVisibleSelected()}
+                          aria-label={labels.selectAll}
+                          onChange={toggleSelectAllVisible}
+                        />
+                      </label>
                     </th>
                   ) : null}
                   {each(columns, (column) => column.key, columnHeader)}

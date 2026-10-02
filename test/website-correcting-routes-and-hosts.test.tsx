@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import type { Adapter, ServeContext, Translator } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import type { Adapter, ServeContext } from '@ketvietlab/ketjs'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
   address,
@@ -11,18 +10,14 @@ import {
   partner,
   storage,
   website,
+  livedoc,
+  user,
   websiteBackend,
   websiteForm,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
-import {
-  type DomainRow,
-  redirectsScreen,
-  type RedirectRow,
-  siteDomainsScreen,
-  type SiteRow,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 
 const SCOPE = { company: 'acme', branches: null }
 const modules = [
@@ -33,8 +28,11 @@ const modules = [
   backend,
   website,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
   websiteForm,
+  livedoc,
+  user,
   websiteBackend,
   paperTheme,
 ]
@@ -51,10 +49,8 @@ const boot = async (): Promise<Adapter> => {
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
 
-const translate = ((key: string) => key) as Translator
-translate.locale = 'en'
-translate.has = () => true
-translate.resolves = () => true
+type DomainRow = { host: string; primary: boolean }
+type RedirectRow = { toPath: string }
 
 const seed = async (db: Adapter) => {
   await call(db, 'website.saveSite', {
@@ -187,83 +183,18 @@ test('redirects: the off switch on the contract can now be reached', async () =>
   assert.equal(off.length, 1)
 })
 
-const site: SiteRow = {
-  id: 'site1',
-  name: 'moc',
-  title: 'Moc',
-  defaultLocale: 'vi',
-  theme: 'theme_paper',
-  active: true,
-}
-const domain = (over: Partial<DomainRow> = {}): DomainRow => ({
-  id: 'd1',
-  siteId: 'site1',
-  host: 'moc.vn',
-  primary: true,
-  redirectToPrimary: false,
-  ...over,
-})
-const redirect = (over: Partial<RedirectRow> = {}): RedirectRow => ({
-  id: 'r1',
-  siteId: 'site1',
-  fromPath: '/cu',
-  toPath: '/moi',
-  permanent: true,
-  active: true,
-  ...over,
-})
-
-test('domains screen: every row offers a correction and a removal', () => {
-  const html = renderToString(siteDomainsScreen(translate, site, [domain()], {}))
-  assert.match(html, /\/admin\/website\/sites\/site1\/domains\?edit=d1/u)
-  assert.match(html, /action="\/admin\/website\/sites\/site1\/domains\/d1\/remove"/u)
-})
-
-test('domains screen: ?edit fills the form and points it at that row', () => {
-  const html = renderToString(siteDomainsScreen(translate, site, [domain()], {}, { editing: domain() }))
-  assert.match(html, /action="\/admin\/website\/sites\/site1\/domains\/d1"/u)
-  assert.match(html, /value="moc\.vn"/u)
-  assert.match(html, /domains\.edit/u)
-})
-
-test('redirects screen: a row can be corrected and switched off', () => {
-  const html = renderToString(redirectsScreen(translate, [redirect()], [], 'site1', {}))
-  assert.match(html, /edit=r1/u)
-  assert.match(html, /action="\/admin\/website\/redirects\/r1\/state"/u)
-  assert.match(html, /action\.deactivate/u)
-  // The state filter is the reason there is anything but "active" to look at.
-  assert.match(html, /state=inactive/u)
-})
-
-test('redirects screen: one already off offers the way back on', () => {
-  const html = renderToString(redirectsScreen(translate, [redirect({ active: false })], [], 'site1', {}))
-  assert.match(html, /action\.activate/u)
-  assert.equal(html.includes('action.deactivate'), false)
-})
-
-test('redirects screen: ?edit points the form at that row rather than a new one', () => {
-  const html = renderToString(
-    redirectsScreen(translate, [redirect()], [], 'site1', {}, { editing: redirect() }),
-  )
-  assert.match(html, /action="\/admin\/website\/redirects\/r1"/u)
-  assert.match(html, /redirects\.edit/u)
-})
-
-const getStatus = async (key: string, params: Record<string, string>): Promise<number | undefined> => {
-  const entry = manifest.routes[key]
-  if (!entry) throw new Error(`${key} is not composed`)
+const studioApiGet = async (operation: string): Promise<number | undefined> => {
+  const entry = manifest.routes['/website/api/{operation}']
+  if (!entry) throw new Error('the Studio API is not composed')
   const route = entry.make({} as unknown as ServeContext)
   const req = { method: 'GET', headers: { host: 'moc.example' } }
-  const result = await route(new URL(`http://moc.example${key}`), req as never, params)
+  const result = await route(new URL(`http://moc.example/website/api/${operation}`), req as never, {
+    operation,
+  })
   return result.status
 }
 
-test('routes: the four new ones change state, so none of them answers a GET', async () => {
-  for (const [key, params] of [
-    ['/admin/website/redirects/{id}', { id: 'r1' }],
-    ['/admin/website/redirects/{id}/state', { id: 'r1' }],
-    ['/admin/website/sites/{id}/domains/{domainId}', { id: 'site1', domainId: 'd1' }],
-    ['/admin/website/sites/{id}/domains/{domainId}/remove', { id: 'site1', domainId: 'd1' }],
-  ] as const)
-    assert.equal(await getStatus(key, params), 405, `${key} must refuse a GET`)
+test('routes: redirects and domains change state, so none of them answers a GET', async () => {
+  for (const operation of ['website.saveRedirect', 'website.saveDomain'])
+    assert.equal(await studioApiGet(operation), 405, `${operation} must refuse a GET`)
 })

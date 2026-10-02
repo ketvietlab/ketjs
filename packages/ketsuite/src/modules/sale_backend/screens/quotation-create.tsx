@@ -27,7 +27,6 @@ export const quotationCreateScreen = (
       frame={frame}
       scope="sale-quotation-create-form-page"
       title={_('sale_backend.quotation.create.title')}
-      description={_('sale_backend.quotation.create.hint')}
       actions={
         <FormCluster
           label={_('sale_backend.quotation.create.title')}

@@ -1,16 +1,16 @@
-import { prepareCollectionTable } from '../../../ui/index.ts'
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  collectionActions,
+  collectionControls,
   collectionTable,
   dataTable,
   emptyState,
   icon,
-  inline,
   LinkButton,
   ListPage,
-  listChrome,
+  prepareCollectionTable,
   Section,
   shell,
   stack,
@@ -167,7 +167,6 @@ export const paymentTermsListScreen = (
       variant="operational"
       frame={collection.frame}
       title={_('account_backend.terms.title')}
-      description={_('account_backend.term.subtitle')}
       headerActions={
         <LinkButton
           label={_('account_backend.action.createTerm')}
@@ -175,36 +174,18 @@ export const paymentTermsListScreen = (
           variant="primary"
         />
       }
-      actions={
-        options.lineCreateHref || collection.frame.extras?.['topbar.end'] !== undefined
-          ? inline([
-              options.lineCreateHref ? (
-                <LinkButton
-                  label={_('account_backend.action.addTermLine')}
-                  href={options.lineCreateHref}
-                  variant="secondary"
-                />
-              ) : undefined,
-              collection.frame.extras?.['topbar.end'] ?? '',
-            ])
-          : undefined
-      }
-      controls={
-        collection.frame.chrome
-          ? listChrome(
-              _,
-              _('account_backend.terms.title'),
-              {
-                ...collection.frame.chrome,
-                layout: 'command',
-                section: undefined,
-                create: null,
-                selection: null,
-              },
-              false,
-            )
-          : undefined
-      }
+      actions={collectionActions(
+        _,
+        collection.frame,
+        options.lineCreateHref ? (
+          <LinkButton
+            label={_('account_backend.action.addTermLine')}
+            href={options.lineCreateHref}
+            variant="secondary"
+          />
+        ) : undefined,
+      )}
+      controls={collectionControls(_, _('account_backend.terms.title'), collection.frame)}
       footer={status}
       body={stack(
         [

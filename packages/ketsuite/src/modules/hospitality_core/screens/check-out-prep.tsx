@@ -199,7 +199,6 @@ export const checkOutPrepScreen = (
     <RecordScreen
       translator={_}
       title={_('hospitality_core.checkOutPrep.title', { code: reservation.code })}
-      subtitle={_('hospitality_core.checkOutPrep.subtitle')}
       frame={frame}
       body={stack([
         ...notices,

@@ -1,47 +1,8 @@
 /* Shared sections, relations, modal, media and form components. */
 
 @layer ket.app {
-  /* Page hierarchy and surfaces. */
-  [data-ui="section"] {
-    display: grid;
-    gap: var(--admin-gap-sm);
-    min-inline-size: 0;
-  }
-  [data-ui="section-head"] {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--admin-gap);
-  }
-  [data-ui="section-eyebrow"],
-  [data-ui="section-title"],
-  [data-ui="section-description"] {
-    margin: 0;
-  }
-  [data-ui="section-eyebrow"] {
-    color: var(--admin-ink-secondary);
-    font-size: var(--admin-size-xs);
-    font-weight: 700;
-    letter-spacing: 0.075em;
-    text-transform: uppercase;
-  }
-  [data-ui="section-title"] {
-    color: var(--admin-ink);
-    font-size: var(--admin-size-md);
-    line-height: 1.35;
-  }
-  [data-ui="section-description"] {
-    margin-block-start: var(--admin-gap-xs);
-    color: var(--admin-ink-secondary);
-    font-size: var(--admin-size-sm);
-  }
-  [data-ui="section-actions"] {
-    flex: 0 0 auto;
-  }
-  [data-ui="section-body"] {
-    min-inline-size: 0;
-  }
-
+  /* Section and ModalSheet are public DS components. Their typography,
+     spacing and responsive geometry must not be overridden here. */
   [data-ui="surface"] {
     min-inline-size: 0;
     border: 1px solid var(--admin-divider-subtle);
@@ -129,133 +90,6 @@
     min-inline-size: 0;
     color: var(--admin-ink);
     font: inherit;
-  }
-
-  [data-ui="modal-sheet"][data-size="large"] {
-    inline-size: min(56rem, calc(100vw - var(--admin-gap-lg)));
-  }
-  [data-ui="modal-layer"][data-presentation="dialog"] {
-    place-items: center;
-    padding: var(--admin-gap-lg);
-  }
-  [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"] {
-    inline-size: min(56rem, 100%);
-    block-size: auto;
-    max-block-size: calc(100dvh - var(--admin-gap-lg) * 2);
-    border: 1px solid var(--admin-line-strong);
-    border-radius: var(--admin-radius-lg);
-    overflow: hidden;
-  }
-
-  /* Large describes the working width, not a required amount of empty height.
-     Content determines the block size until the viewport cap is reached; the
-     sheet body already owns overflow for genuinely long workbenches. */
-  [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size="large"] {
-    inline-size: min(1200px, 100%);
-    block-size: auto;
-    max-block-size: calc(100dvh - 100px);
-  }
-
-  /* URL-addressable modal workspace. The backdrop is a real close link and
-     the sheet owns its scroll, so the document never grows horizontally. */
-  [data-ui="modal-layer"] {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    display: grid;
-    min-inline-size: 0;
-    justify-items: end;
-  }
-  body:has([data-ui="modal-layer"][data-route-modal="true"]) {
-    overflow: hidden;
-  }
-  [data-ui="modal-backdrop"] {
-    position: absolute;
-    z-index: 0;
-    inset: 0;
-    display: block;
-    background: color-mix(in srgb, #000 36%, transparent);
-    text-decoration: none;
-  }
-  button[data-ui="modal-backdrop"] {
-    padding: 0;
-    border: 0;
-    cursor: pointer;
-  }
-  [data-ui="modal-backdrop"] > span {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  [data-ui="modal-sheet"] {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    inline-size: min(34rem, calc(100vw - var(--admin-gap-lg)));
-    max-inline-size: 100%;
-    block-size: 100dvh;
-    min-inline-size: 0;
-    grid-template-rows: auto minmax(0, 1fr);
-    border-inline-start: 1px solid var(--admin-line-strong);
-    background: var(--admin-surface);
-    box-shadow: var(--admin-shadow-float);
-  }
-  [data-ui="modal-head"] {
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--admin-gap);
-    padding: var(--admin-gap) var(--admin-gap-md);
-    border-block-end: 1px solid var(--admin-line);
-  }
-  [data-ui="modal-heading"] {
-    display: grid;
-    min-inline-size: 0;
-    gap: var(--admin-gap-xs);
-  }
-  /* The title and what state its record is in read as one line. */
-  [data-ui="modal-title-row"] {
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    gap: var(--admin-gap-sm);
-  }
-  [data-ui="modal-title"] {
-    min-inline-size: 0;
-    margin: 0;
-    overflow: hidden;
-    color: var(--admin-ink);
-    font-size: var(--admin-size-md);
-    line-height: 1.35;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  [data-ui="modal-description"] {
-    margin: 0;
-    color: var(--admin-ink-muted);
-    font-size: var(--admin-size-sm);
-    line-height: 1.45;
-  }
-  [data-ui="modal-close"] {
-    display: grid;
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
-    flex: 0 0 auto;
-    place-items: center;
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-sm);
-    color: var(--admin-ink-secondary);
-    text-decoration: none;
-  }
-  [data-ui="modal-body"] {
-    min-inline-size: 0;
-    overflow: auto;
-    padding: var(--admin-gap-md);
-    overscroll-behavior: contain;
   }
 
   [data-ui="media"] {
@@ -413,11 +247,6 @@
   [data-ui="record-form"][data-layout="inline"] > [data-ui="form-actions"] {
     grid-column: 2;
     align-self: end;
-  }
-  [data-ui="form-grid"] {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--admin-gap-sm) var(--admin-gap-lg);
   }
   [data-ui="form-field"] {
     display: grid;
@@ -891,21 +720,6 @@
     [data-ui="relation-dialog-actions"] [data-ui="action"] {
       flex: 0 0 auto;
     }
-    [data-ui="modal-layer"],
-    [data-ui="modal-layer"][data-presentation="dialog"] {
-      padding: 0;
-    }
-    /* Include every size: the large desktop dialog must not override mobile height. */
-    [data-ui="modal-layer"] [data-ui="modal-sheet"],
-    [data-ui="modal-layer"] [data-ui="modal-sheet"][data-size],
-    [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size] {
-      inline-size: 100%;
-      block-size: 100dvh;
-      max-block-size: 100dvh;
-      box-shadow: none;
-      border: 0;
-      border-radius: 0;
-    }
   }
 
   /* Compatibility RecordForm uses `form-field` while the public FormPage
@@ -961,6 +775,37 @@
       > [data-ui="form-grid"]
       > [data-ui="form-field"][data-kind="textarea"]
       > [data-ui="form-label"] {
+      margin-block-start: 0;
+    }
+  }
+
+  /* A record form in a narrow column (a record aside, a side panel) puts its
+     labels above their controls whatever the viewport: beside them, the 7-9rem
+     label track takes a third of the column. The record form is the container.
+     `:root` matches the specificity of the FormPage rhythm above, so a narrow
+     column wins inside a FormPage too. */
+  @container record-form (max-width: 28rem) {
+    :is([data-ui="form-page"], :root)
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      row-gap: var(--admin-gap-xs);
+    }
+    :is([data-ui="form-page"], :root)
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"])
+      > :is(
+        [data-ui="form-label"],
+        [data-ui="form-control"],
+        [data-ui="form-options"],
+        [data-ui="form-help"],
+        [data-ui="form-error"],
+        ket-island
+      ) {
+      grid-column: 1;
       margin-block-start: 0;
     }
   }
