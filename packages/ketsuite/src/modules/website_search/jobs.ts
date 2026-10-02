@@ -84,7 +84,7 @@ export const jobs: Record<string, JobSpec> = {
         // The same passes the screen and the visitor path drive - a job
         // context cannot reach a declared function, so this is the import
         // rather than the call, and the behaviour is identical either way.
-        if (isCurrent(await stateFor(ctx, site.id), site)) continue
+        if (await isCurrent(ctx, await stateFor(ctx, site.id), site)) continue
         let done = false
         while (!done && budget > 0) {
           done = (await rebuildPass(ctx, site)).done

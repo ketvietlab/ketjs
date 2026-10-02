@@ -511,3 +511,136 @@ test('form: an empty notice is the same as none', async () => {
   })) as Result
   assert.equal(accepted.ok, true)
 })
+
+type History = {
+  form: { revision: number; schemaVersion: number } | null
+  versions: Array<{ version: number; schema: unknown }>
+}
+
+test('form: every contract stays readable after the form moves on', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', {
+    id: 'f1',
+    siteId: 'site1',
+    name: 'Liên hệ',
+    schema: twoFields,
+    successMessage: 'Đã nhận.',
+  })
+  // A wording change touches no contract, so it adds no version.
+  await call(db, 'website_form.saveForm', {
+    id: 'f1',
+    siteId: 'site1',
+    name: 'Liên hệ',
+    schema: twoFields,
+    successMessage: 'Cảm ơn.',
+  })
+  const history = (await call(db, 'website_form.formHistory', { id: 'f1' })) as History
+  assert.deepEqual(
+    history.versions.map((v) => [v.version, v.schema]),
+    [
+      [2, twoFields],
+      [1, oneField],
+    ],
+  )
+  assert.equal(history.form?.revision, 3)
+})
+
+test('form: a form saved before versions were kept writes its old contract before the new one', async () => {
+  const db = await boot()
+  await seed(db)
+  await db.run('DELETE FROM website_form_form_version')
+  // Read before any save, the form still shows the contract it is on.
+  const before = (await call(db, 'website_form.formHistory', { id: 'f1' })) as History
+  assert.deepEqual(
+    before.versions.map((v) => v.version),
+    [1],
+  )
+  await call(db, 'website_form.saveForm', {
+    id: 'f1',
+    siteId: 'site1',
+    name: 'Liên hệ',
+    schema: twoFields,
+    successMessage: 'Đã nhận.',
+  })
+  const after = (await call(db, 'website_form.formHistory', { id: 'f1' })) as History
+  assert.deepEqual(
+    after.versions.map((v) => [v.version, v.schema]),
+    [
+      [2, twoFields],
+      [1, oneField],
+    ],
+  )
+})
+
+test('form: a save names the revision it edited, and a stale one is refused', async () => {
+  const db = await boot()
+  await seed(db)
+  const save = (expectedRevision: number | null, successMessage: string) =>
+    call(db, 'website_form.saveForm', {
+      id: 'f1',
+      siteId: 'site1',
+      name: 'Liên hệ',
+      schema: oneField,
+      successMessage,
+      expectedRevision,
+    }) as Promise<Result & { revision?: number }>
+  assert.equal((await save(1, 'Một')).revision, 2)
+  // Only the message changed, so the version stayed put; the revision is what catches the race.
+  const stale = await save(1, 'Hai')
+  assert.equal(stale.ok, false)
+  assert.equal(stale.errors?.[0]?.message, 'website_form.error.saveConflict')
+  // `null` claims the form is new.
+  assert.equal((await save(null, 'Ba')).ok, false)
+})
+
+test('form: an archived form stops answering and refuses edits, its submissions kept', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.submitForm', { formId: 'f1', payload: { email: 'a@b.vn' } })
+  const archived = (await call(db, 'website_form.archiveForm', { id: 'f1', expectedRevision: 1 })) as Result
+  assert.equal(archived.ok, true)
+  assert.equal(await call(db, 'website_form.getForm', { id: 'f1' }), null)
+  assert.deepEqual(await call(db, 'website_form.listForms', { siteId: 'site1' }), [])
+  const edit = (await call(db, 'website_form.saveForm', {
+    id: 'f1',
+    siteId: 'site1',
+    name: 'Liên hệ',
+    schema: oneField,
+    successMessage: 'Đã nhận.',
+  })) as Result
+  assert.equal(edit.errors?.[0]?.message, 'website_form.error.archived')
+  assert.equal(
+    ((await call(db, 'website_form.countSubmissions', { formId: 'f1' })) as { count: number }).count,
+    1,
+  )
+})
+
+test('form: a field keeps to the length and labels its schema declares', async () => {
+  const db = await boot()
+  await seed(db, { fields: [{ name: 'code', type: 'text', required: true, label: 'Mã', maxLength: 5 }] })
+  const long = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { code: '123456' },
+  })) as Result
+  assert.deepEqual(long.errors, [{ field: 'code', message: 'website_form.error.valueTooLong' }])
+  assert.equal(
+    ((await call(db, 'website_form.submitForm', { formId: 'f1', payload: { code: '12345' } })) as Result).ok,
+    true,
+  )
+  for (const field of [
+    { name: 'a', label: ' ' },
+    { name: 'a', maxLength: 0 },
+    { name: 'a', classification: 'secret' },
+    { name: 'a', required: 'yes' },
+  ]) {
+    const refused = (await call(db, 'website_form.saveForm', {
+      id: 'f2',
+      siteId: 'site1',
+      name: 'Khác',
+      schema: { fields: [field] },
+      successMessage: 'Đã nhận.',
+    })) as Result
+    assert.equal(refused.errors?.[0]?.message, 'website_form.error.invalidSchema', JSON.stringify(field))
+  }
+})

@@ -19,9 +19,7 @@ const modules = [
   suite.crmSale,
   suite.crmBackend,
   suite.purchaseBackend,
-  // `livedoc` comes first because `flow_backend` depends on it: issue
-  // descriptions, wiki pages and the project brief are collaborative documents.
-  suite.livedoc,
+  // LiveDoc is already composed by commonBusinessModules for Website and Flow.
   suite.flow,
   suite.flowBackend,
   suite.accountBackend,

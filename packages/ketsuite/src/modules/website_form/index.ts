@@ -49,6 +49,12 @@ export default defineModule({
       'error.exportFieldsRequired': 'Hãy chọn ít nhất một trường để xuất.',
       'error.submissionNotFound': 'Không tìm thấy lượt gửi.',
       'error.submissionPurged': 'Lượt gửi đã được xóa nội dung, không thể giữ lại.',
+      'error.formNotFound': 'Không tìm thấy biểu mẫu.',
+      'error.archived': 'Biểu mẫu đã được lưu trữ, không thể sửa.',
+      'error.unknownDestination': 'Nơi nhận phản hồi này không có trong hệ thống.',
+      'error.destinationNeedsContact':
+        'Biểu mẫu chuyển phản hồi sang nơi khác cần có ô email hoặc số điện thoại để liên hệ lại khách.',
+      'error.notRetryable': 'Chỉ gửi lại được phản hồi chuyển không thành công.',
     },
     en: {
       'app.title': 'Website forms',
@@ -86,6 +92,12 @@ export default defineModule({
       'error.exportFieldsRequired': 'Choose at least one field to export.',
       'error.submissionNotFound': 'The submission was not found.',
       'error.submissionPurged': 'This submission has been erased and cannot be held.',
+      'error.formNotFound': 'The form was not found.',
+      'error.archived': 'This form has been archived and cannot be edited.',
+      'error.unknownDestination': 'This destination is not available here.',
+      'error.destinationNeedsContact':
+        'A form that hands its submissions on needs an email or phone field, so the person can be reached.',
+      'error.notRetryable': 'Only a failed hand-off can be retried.',
     },
   },
   models,

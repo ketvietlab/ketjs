@@ -114,7 +114,7 @@ test('form mail: the notification says a request arrived and where to open it', 
   assert.equal(delivery?.subject, 'Mộc · Trà & gốm · Tư vấn quà tặng có 1 yêu cầu mới')
   assert.match(
     String(delivery?.text),
-    new RegExp(`https://admin\\.moc\\.example/admin/website/forms/f1/submissions/${submissionId}`),
+    new RegExp(`https://admin\\.moc\\.example/website/submissions/${submissionId}\\?site=site1\\b`, 'u'),
   )
 })
 

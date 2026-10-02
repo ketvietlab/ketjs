@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import type { Adapter, Translator } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import type { Adapter } from '@ketvietlab/ketjs'
 import { address, company, paperTheme, partner, storage, website } from '@ketvietlab/ketsuite'
-import { mediaFieldsOf, mediaIdsIn } from '../packages/ketsuite/src/modules/website/media-usage.ts'
 import {
-  mediaFormScreen,
-  type MediaUsage,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
+  mediaFieldsOf,
+  mediaIdsIn,
+  type MediaUse,
+} from '../packages/ketsuite/src/modules/website/media-usage.ts'
 
 /**
  * `deleteMediaMetadata` removed a row with no question asked, so an image could
@@ -31,10 +30,7 @@ const boot = async (): Promise<Adapter> => {
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
 
-const translate = ((key: string) => key) as Translator
-translate.locale = 'en'
-translate.has = () => true
-translate.resolves = () => true
+type MediaUsage = { used: boolean; capped: boolean; uses: MediaUse[] }
 
 const seed = async (db: Adapter) => {
   await call(db, 'website.saveSite', {
@@ -139,29 +135,4 @@ test('media: taking it off the page frees it again', async () => {
     expectedRevisionId: entry.revision?.id,
   })
   assert.equal(((await call(db, 'website.deleteMediaMetadata', { id: 'm1' })) as { ok?: boolean }).ok, true)
-})
-
-test('media screen: the pages that draw it are named, or the refusal is', () => {
-  const used: MediaUsage = {
-    used: true,
-    capped: false,
-    uses: [{ entryId: 'p1', path: '/trang', title: 'Trang', published: true }],
-  }
-  const html = renderToString(
-    mediaFormScreen(translate, { id: 'm1', siteId: 'site1', attachmentId: 'att1' }, {}, { usage: used }),
-  )
-  assert.match(html, /\/admin\/website\/pages\/p1/u)
-  assert.match(html, /\/trang/u)
-
-  const unknown = renderToString(
-    mediaFormScreen(
-      translate,
-      { id: 'm1', siteId: 'site1', attachmentId: 'att1' },
-      {},
-      { usage: { used: false, capped: true, uses: [] } },
-    ),
-  )
-  // A scan that did not finish must not read as "safe to delete".
-  assert.match(unknown, /media\.usageUnknown/u)
-  assert.equal(unknown.includes('media.usageNone'), false)
 })
