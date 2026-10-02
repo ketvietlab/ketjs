@@ -22,6 +22,8 @@ export const jobs: Record<string, JobSpec> = {
         {
           status: 'published',
           publishedRevisionId: args.revisionId,
+          publishedAppearance: entry.scheduledAppearance ?? null,
+          scheduledAppearance: null,
           scheduledRevisionId: null,
           publishAt: null,
           publishedAt: new Date().toISOString(),

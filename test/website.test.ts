@@ -60,9 +60,15 @@ test('website: seo adds typed fields to a page it does not own', () => {
 test('website: sections from three modules land in one registry', () => {
   assert.deepEqual(Object.keys(manifest.sections).sort(), [
     'menu.primary',
+    'website.callout',
     'website.columns',
+    'website.faq',
+    'website.gallery',
     'website.hero',
+    'website.image',
+    'website.quote',
     'website.rich_text',
+    'website.video',
   ])
   assert.equal(manifest.sections['menu.primary']!.by, 'website_menu')
 })
@@ -93,6 +99,16 @@ test('agent: the composition schema tells an agent what a page may contain', () 
     // media library knows where a picture is used - and it tells an agent the
     // same thing: this setting names a media item, not a URL to invent.
     settings: {
+      responsive: 'json?',
+      visibility: 'text?',
+      profile: 'text?',
+      locale: 'text?',
+      layoutMode: 'text?',
+      alt: 'text?',
+      focalX: 'int?',
+      focalY: 'int?',
+      imageFit: 'text?',
+      imageRatio: 'text?',
       heading: 'text',
       subheading: 'text?',
       image: 'ref:website.MediaMetadata?',

@@ -96,3 +96,5 @@ packages/ketsuite/src/modules/purchase_backend/client/vendor-pricelist-modal.mjs
 packages/ketsuite/src/modules/sale_backend/client/invoicing-policy-modal.mjs*
 
 packages/flow-client/atlas/vendor/
+
+/packages/ketsuite/src/modules/website_backend/client/

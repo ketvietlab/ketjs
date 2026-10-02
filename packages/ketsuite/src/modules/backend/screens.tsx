@@ -57,7 +57,7 @@ export const pageColumns = (_: Translator): Array<Column<PageRow>> => [
 /**
  * The list screen, as the design catalogue and the table contract exercise it.
  *
- * No route renders this: `website_backend` owns the product page list, which is
+ * No route renders this: the Website Studio owns the product page list, which is
  * site-scoped and carries revisions, preview and publish. This one used to be
  * served at `/admin/pages` beside it, so the sidebar offered "Trang" twice, in two
  * different apps, over the same rows. It stays because it is the smallest complete

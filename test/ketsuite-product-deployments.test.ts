@@ -14,6 +14,7 @@ import {
   office,
 } from '../packages/ketsuite/src/deployment.ts'
 import { ketsuiteRoleTemplates } from '../packages/ketsuite/src/role-templates.ts'
+import { websiteRoleTemplates } from '../packages/ketsuite/src/website-role-templates.ts'
 
 const moduleNames = (deployment: DeploymentDeclaration): string[] =>
   deployment.modules.map((module) => (typeof module === 'string' ? module : module.name))
@@ -60,9 +61,10 @@ for (const [name, deployment, templates] of products)
       }).then((r) => r.value as T)
 
     // Only this product's roles are declared: another product's jobs are not offered here.
+    // Every product runs a website, so the Website jobs come with each of them.
     assert.deepEqual(
       Object.keys(booted.manifest.permissions.roleTemplates).sort(),
-      Object.keys(templates).sort(),
+      Object.keys({ ...templates, ...websiteRoleTemplates }).sort(),
     )
 
     const tenant = await call<{ ok: boolean; companyId: string; branchId: string; userId: string }>(
@@ -94,7 +96,12 @@ for (const [name, deployment, templates] of products)
         branch: tenant.branchId,
       },
     )
-    assert.deepEqual(context.data.roles.map((role) => role.id).sort(), Object.keys(templates).sort())
+    assert.deepEqual(
+      context.data.roles.map((role) => role.id).sort(),
+      Object.keys({ ...templates, ...websiteRoleTemplates }).sort(),
+    )
     const [roles] = [await call<Row[]>('user.listRoles', {}, tenant.userId, { company: tenant.companyId })]
-    assert.ok(roles.every((role) => String(role.templateKey).startsWith(`${name}.`)))
+    assert.ok(
+      roles.every((role) => [`${name}.`, 'website.'].some((p) => String(role.templateKey).startsWith(p))),
+    )
   })

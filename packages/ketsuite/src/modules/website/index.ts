@@ -3,6 +3,7 @@
 // scrolling past the other two.
 
 import { defineModule } from '@ketvietlab/ketjs'
+import { imageModels, imageFunctions, imageJobs } from './image-assets.ts'
 import { models } from './models.ts'
 import { joints } from './joints.ts'
 import { sections } from './sections.ts'
@@ -10,6 +11,7 @@ import { views } from './views.ts'
 import { functions } from './functions.ts'
 import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
+import { saveStudioStyle } from './studio-style.ts'
 import { cmsFunctions } from './cms.ts'
 import { publicationFunctions } from './publication.ts'
 import { customerFunctions } from './customer.ts'
@@ -64,6 +66,7 @@ export default defineModule({
       'error.invalidPath': 'Đường dẫn nội bộ không hợp lệ.',
       'error.invalidSlug': 'Slug chỉ được chứa chữ, số và dấu gạch ngang.',
       'error.revisionNotFound': 'Không tìm thấy revision.',
+      'error.previewAudience': 'Chọn người xem: nhân viên hoặc người có liên kết.',
       'error.entryUnrenderable': 'Trang này dùng section mà bản cài đặt hiện tại không còn cung cấp.',
       'error.publicationUnrenderable':
         'Bản xuất bản chứa trang dùng section mà bản cài đặt hiện tại không còn cung cấp.',
@@ -72,6 +75,11 @@ export default defineModule({
       'error.invalidParent': 'Term cha không hợp lệ.',
       'error.taxonomyCycle': 'Cấu trúc term tạo thành vòng lặp.',
       'error.termSiteMismatch': 'Nội dung và term phải thuộc cùng website.',
+      'error.invalidPostTerm': 'Chuyên mục hoặc thẻ không thuộc website này.',
+      'error.termArchived': 'Chủ đề này đã được lưu trữ.',
+      'error.invalidTermSeo':
+        'Thông tin SEO không hợp lệ: canonical cần là đường dẫn nội bộ hoặc địa chỉ HTTPS.',
+      'error.coverAltRequired': 'Ảnh bìa cần có mô tả cho người không xem được ảnh.',
       'error.termInUse': 'Không thể xóa term đang có term con hoặc đang được gán cho nội dung.',
       'error.mediaInUse': 'Không thể xóa ảnh đang được đặt trên một trang. Hãy gỡ khỏi trang trước.',
       'error.mediaUsageUnknown':
@@ -152,6 +160,7 @@ export default defineModule({
       'error.invalidPath': 'The local path is invalid.',
       'error.invalidSlug': 'The slug may only contain letters, numbers and hyphens.',
       'error.revisionNotFound': 'The revision was not found.',
+      'error.previewAudience': 'Choose who can open it: staff or anyone with the link.',
       'error.entryUnrenderable': 'This page places a section this deployment no longer provides.',
       'error.publicationUnrenderable':
         'The publication holds a page placing a section this deployment no longer provides.',
@@ -160,6 +169,11 @@ export default defineModule({
       'error.invalidParent': 'The parent term is invalid.',
       'error.taxonomyCycle': 'The term hierarchy contains a cycle.',
       'error.termSiteMismatch': 'The content and term must belong to the same site.',
+      'error.invalidPostTerm': 'The category or tag does not belong to this site.',
+      'error.termArchived': 'This term has been archived.',
+      'error.invalidTermSeo':
+        'The SEO settings are invalid: the canonical must be a local path or an HTTPS address.',
+      'error.coverAltRequired': 'The cover image needs a description for people who cannot see it.',
       'error.termInUse': 'A term with children or content assignments cannot be deleted.',
       'error.mediaInUse': 'This image is placed on a page. Take it off the page first.',
       'error.mediaUsageUnknown':
@@ -200,14 +214,21 @@ export default defineModule({
   },
   requires: ['layout', 'website.page'],
   depends: ['partner'],
-  models,
+  models: { ...models, ...imageModels },
   contentTypes,
   taxonomies,
   joints,
   sections,
   views,
-  functions: { ...functions, ...cmsFunctions, ...publicationFunctions, ...customerFunctions },
-  jobs,
+  functions: {
+    ...functions,
+    ...cmsFunctions,
+    saveStudioStyle,
+    ...publicationFunctions,
+    ...customerFunctions,
+    ...imageFunctions,
+  },
+  jobs: { ...jobs, ...imageJobs },
   tokens,
 })
 

@@ -17,6 +17,11 @@ const vi = {
   'error.rateLimit': 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
   'error.inboxUnavailable':
     'Kênh tiếp nhận tiềm năng chưa sẵn sàng. Website đang chạy dưới một công ty chưa được tạo.',
+  formDestination: 'CRM · khách tiềm năng',
+  'error.noContact': 'Phản hồi không có email hay số điện thoại nên CRM không tạo được khách tiềm năng.',
+  'error.answersErased': 'Câu trả lời đã bị xoá theo hạn lưu trước khi chuyển sang CRM.',
+  'error.formMissing': 'Không còn biểu mẫu của phản hồi này.',
+  'error.deliveryFailed': 'Chưa chuyển được sang CRM.',
 } as const
 const en: Record<keyof typeof vi, string> = {
   'app.title': 'CRM Website',
@@ -37,5 +42,10 @@ const en: Record<keyof typeof vi, string> = {
   'error.rateLimit': 'Too many requests from here. Please try again later.',
   'error.inboxUnavailable':
     'Lead capture is not available: the site is being served under a company that does not exist.',
+  formDestination: 'CRM leads',
+  'error.noContact': 'The submission has no email or phone number, so CRM could not create a lead.',
+  'error.answersErased': 'The answers were erased under the retention period before reaching CRM.',
+  'error.formMissing': 'The form of this submission no longer exists.',
+  'error.deliveryFailed': 'The submission could not be handed to CRM.',
 }
 export const messages = { vi, en }
