@@ -1,7 +1,7 @@
 {
   "name": "@ketvietlab/ketsuite",
   "version": "0.1.31",
-  "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
+  "description": "KetSuite \u2014 business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -59,6 +59,10 @@
     "./user-modal-client": {
       "types": "./dist/ui/client/user-modal-client.d.ts",
       "default": "./dist/ui/client/user-modal-client.js"
+    },
+    "./ui/icons": {
+      "types": "./dist/ui/icons.d.ts",
+      "default": "./dist/ui/icons.js"
     }
   },
   "dependencies": {
