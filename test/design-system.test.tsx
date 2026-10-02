@@ -1076,6 +1076,9 @@ test('design system: RecordPage renders a record surface rather than the form co
 })
 
 test('design system: form rows collapse while field pairs remain inline', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  assert.match(tokens, /--kv-gap-form-column: var\(--kv-space-6\)/)
+  assert.match(tokens, /--kv-gap-form-row: var\(--kv-space-4\)/)
   const primitives = primitiveCss
   assert.match(primitives, /grid-template-columns: minmax\(0, min\(35%, 9rem\)\) minmax\(0, 1fr\)/)
   const patterns = patternCss
@@ -2303,4 +2306,37 @@ test('design system: bulk action visibility belongs to the component outside Lis
     styles,
     /:where\(\[data-kv-design-system\]\) \[data-ui="bulk-actions"\]:not\(\[data-has-selection="true"\]\) \{\s*display: none/,
   )
+})
+
+test('design system: empty Kanban lanes retain an accessible drop target', () => {
+  const empty = renderToString(
+    <KanbanGrid
+      rows={[]}
+      id={() => ''}
+      card={() => <></>}
+      dropTarget="won"
+      dropLabel="Move to won"
+      emptyLabel="No records yet"
+    />,
+  )
+  assert.match(empty, /data-drop-target="won"[^>]*role="group"[^>]*aria-label="Move to won"/)
+  assert.match(empty, /data-ui="kanban-empty">[\s\S]*No records yet/)
+  assert.match(
+    layoutCss,
+    /\[data-ui="kanban"\]\[data-drop-target\]\s*\{[^}]*min-block-size: 12rem;[^}]*align-content: start;/,
+  )
+  const populated = renderToString(
+    <KanbanGrid
+      rows={['a']}
+      id={(id) => id}
+      dropTarget="working"
+      dropLabel="Move to working"
+      card={(id) => <KanbanCard id={id} title="Work" draggable href="#record" />}
+    />,
+  )
+  assert.match(populated, /data-drop-target="working"/)
+  assert.match(populated, /data-ui="kanban-card"[^>]*draggable="true"/)
+  assert.doesNotMatch(populated, /data-ui="kanban-empty"/)
+  const readOnly = renderToString(<KanbanCard id="readonly" title="Read only" href="#record" />)
+  assert.doesNotMatch(readOnly, /draggable="true"/)
 })
