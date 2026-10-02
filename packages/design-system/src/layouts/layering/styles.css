@@ -99,10 +99,10 @@
       [data-ui="content-card"],
       [data-ui="kanban-card"]
     )
-    [data-ui="table-scroll"][data-pattern="data-table"],
+    :is([data-ui="table-scroll"][data-pattern="data-table"], [data-ui="kt-scroll"]),
   [data-kv-design-system][data-presentation="grouped"]
     [data-ui="record-page-aside"]
-    [data-ui="table-scroll"][data-pattern="data-table"] {
+    :is([data-ui="table-scroll"][data-pattern="data-table"], [data-ui="kt-scroll"]) {
     border: 0;
     border-radius: 0;
     background: transparent;
