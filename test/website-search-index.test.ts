@@ -297,3 +297,120 @@ test('search: the sweep is what keeps the index level between publications', () 
   assert.deepEqual(sweep?.schedule, { every: '1h' })
   assert.ok(manifest.jobs['website_search.rebuildStale'], 'and the per-company pass it queues')
 })
+
+test('index: one entry published, withdrawn or moved is enough to make it stale', async () => {
+  // A site that publishes entry by entry never moves its active publication, so an index
+  // built once used to stay "current" through every later change and never found them.
+  const db = await boot()
+  await site(db)
+  await write(db, 'one', 'Trà một')
+  await call(db, 'website_search.reindexSite', { siteId: 'site1', passes: 10 })
+  const current = async () =>
+    ((await call(db, 'website_search.indexStatus', { siteId: 'site1' })) as { current: boolean }).current
+  assert.equal(await current(), true)
+
+  await write(db, 'two', 'Trà hai')
+  assert.equal(await current(), false, 'a publish')
+  assert.deepEqual((await search(db, 'trà')).hits.map((h) => h.path).sort(), ['/one', '/two'])
+
+  await call(db, 'website.trashEntry', { id: 'one' })
+  assert.equal(await current(), false, 'a withdrawal')
+  assert.deepEqual(
+    (await search(db, 'trà')).hits.map((h) => h.path),
+    ['/two'],
+  )
+
+  await call(db, 'website.saveEntry', {
+    id: 'two',
+    siteId: 'site1',
+    type: 'website.post',
+    slug: 'hai',
+    path: '/hai',
+    title: 'Trà hai',
+    layout,
+  })
+  assert.equal(await current(), false, 'a move')
+  assert.deepEqual(
+    (await search(db, 'trà')).hits.map((h) => h.path),
+    ['/hai'],
+  )
+})
+
+test('index: the body and the sections are searched, and describe a result with no excerpt', async () => {
+  const db = await boot()
+  await site(db)
+  const long = `${'Đất nung giữ nhiệt rất lâu '.repeat(10)}hết`
+  await call(db, 'website.saveEntry', {
+    id: 'am',
+    siteId: 'site1',
+    type: 'website.post',
+    slug: 'am',
+    path: '/am',
+    title: 'Ấm',
+    // The article's rich text is its LiveDoc; a section left over in the layout is not read twice.
+    layout: [{ type: 'website.rich_text', settings: { heading: 'Cũ', body: 'Bản cũ còn sót' } }],
+    fields: { bodyDoc: JSON.stringify([{ type: 'p', delta: [{ insert: long }] }]) },
+  })
+  await call(db, 'website.publishEntry', { id: 'am' })
+  await call(db, 'website.saveEntry', {
+    id: 'vuon',
+    siteId: 'site1',
+    type: 'website.page',
+    slug: 'vuon',
+    path: '/vuon',
+    title: 'Vườn',
+    layout: [
+      {
+        type: 'website.columns',
+        slots: { left: [{ type: 'website.rich_text', settings: { heading: 'Đồi chè', body: 'Sương sớm' } }] },
+      },
+    ],
+  })
+  await call(db, 'website.publishEntry', { id: 'vuon' })
+
+  const body = await search(db, 'giữ nhiệt')
+  assert.deepEqual(
+    body.hits.map((h) => h.path),
+    ['/am'],
+  )
+  const excerpt = String((body.hits[0] as { excerpt?: string }).excerpt)
+  assert.ok(excerpt.endsWith('…') && excerpt.length <= 181, excerpt)
+  assert.ok(long.startsWith(excerpt.slice(0, -1)), 'cut at a word, from the start of the body')
+  assert.deepEqual((await search(db, 'bản cũ')).hits, [])
+  // A section nested in columns is read too.
+  assert.deepEqual(
+    (await search(db, 'sương sớm')).hits.map((h) => h.path),
+    ['/vuon'],
+  )
+
+  // One type at a time when asked.
+  assert.deepEqual((await search(db, 'đồi chè', { type: 'website.post' })).hits, [])
+  assert.deepEqual(
+    (await search(db, 'đồi chè', { type: 'website.page' })).hits.map((h) => h.path),
+    ['/vuon'],
+  )
+})
+
+test('index: a page under a namespace the deployment serves is not indexed', async () => {
+  const db = await boot()
+  await site(db)
+  await write(db, 'tra', 'Trà ngon')
+  await call(db, 'website.saveEntry', {
+    id: 'shadow',
+    siteId: 'site1',
+    type: 'website.post',
+    slug: 'shadow',
+    path: '/api/tra-ngon',
+    title: 'Trà ngon',
+    layout,
+  })
+  await call(db, 'website.publishEntry', { id: 'shadow' })
+  assert.deepEqual(
+    (await search(db, 'trà')).hits.map((h) => h.path),
+    ['/tra'],
+  )
+  const status = (await call(db, 'website_search.indexStatus', { siteId: 'site1' })) as {
+    documentCount: number
+  }
+  assert.equal(status.documentCount, 1)
+})

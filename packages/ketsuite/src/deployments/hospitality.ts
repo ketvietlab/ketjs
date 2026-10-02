@@ -13,6 +13,12 @@ import {
 
 const modules = [
   suite.website,
+  suite.websiteBackend,
+  suite.websiteForm,
+  suite.websiteMenu,
+  suite.websiteSeo,
+  suite.websiteSearch,
+  suite.livedoc,
   ...staffChannelModules,
   suite.uom,
   suite.product,

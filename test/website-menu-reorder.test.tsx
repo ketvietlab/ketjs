@@ -120,9 +120,10 @@ test('menu: only up or down', async () => {
   assert.equal(result.errors?.[0]?.message, 'website_menu.error.invalidDirection')
 })
 
-test('menu: the move has a route composed for it', async () => {
+test('menu: the move stays a domain API while the old screen is retired', async () => {
   const backend = (await import('@ketvietlab/ketsuite/backend')).default
-  const { company, storage, websiteBackend, websiteForm, websiteSeo } = await import('@ketvietlab/ketsuite')
+  const { company, livedoc, storage, user, websiteBackend, websiteForm, websiteSearch, websiteSeo } =
+    await import('@ketvietlab/ketsuite')
   const composed = compose([
     address,
     partner,
@@ -131,11 +132,14 @@ test('menu: the move has a route composed for it', async () => {
     backend,
     website,
     websiteMenu,
+    websiteSearch,
     websiteSeo,
     websiteForm,
+    livedoc,
+    user,
     websiteBackend,
     paperTheme,
   ])
-  assert.ok(composed.routes['/admin/website/menus/{id}/move'], 'the button needs somewhere to post')
+  assert.equal(composed.routes['/admin/website/menus/{id}/move'], undefined, 'the old UI must not come back')
   assert.ok(composed.functions['website_menu.moveMenuItem'])
 })

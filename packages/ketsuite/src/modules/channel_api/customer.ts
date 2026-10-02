@@ -337,6 +337,11 @@ export const customerRoutes = routesOf(
             siteId: context?.siteId ?? identity?.siteId ?? null,
           },
           customer: identity ? publicAccount(identity.account) : null,
+          /**
+           * A page that reloads has lost the token sign-in handed it, and without one it cannot sign
+           * out. Reading it back takes a same-origin script: nothing here allows another origin to.
+           */
+          csrfToken: identity?.presentation === 'cookie' ? csrfTokenFor(identity.token) : null,
           capabilities,
           capabilityRevision: stableHash(capabilities),
         },

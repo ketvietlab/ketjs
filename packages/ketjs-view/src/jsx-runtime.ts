@@ -22,10 +22,11 @@ export type IntrinsicProps = {
   type?: string
   name?: string | null
   value?: unknown
-  disabled?: boolean
-  checked?: boolean
-  selected?: boolean
-  hidden?: boolean
+  // Null and false omit a boolean attribute; an empty string writes it bare, as markup does.
+  disabled?: boolean | '' | null
+  checked?: boolean | '' | null
+  selected?: boolean | '' | null
+  hidden?: boolean | '' | null
   style?: string | Record<string, string | number | null | undefined>
   onClick?: (event: Event) => void
   onInput?: (event: Event) => void

@@ -1,88 +1,12 @@
 import type { MenuDef } from '@ketvietlab/ketjs'
-
 export const menus: Record<string, MenuDef> = {
-  website: { label: 'menu.app', icon: 'globe', sequence: 30 },
-  'website.pages': {
-    parent: 'website',
-    label: 'menu.pages',
-    path: '/admin/website/pages',
-    needs: 'website.listEntries',
-    sequence: 10,
-  },
-  'website.posts': {
-    parent: 'website',
-    label: 'menu.posts',
-    path: '/admin/website/posts',
-    needs: 'website.listEntries',
-    sequence: 15,
-  },
-  'website.taxonomies': {
-    parent: 'website',
-    label: 'menu.taxonomies',
-    path: '/admin/website/taxonomies',
-    needs: 'website.listTaxonomyTerms',
-    sequence: 20,
-  },
-  'website.media': {
-    parent: 'website',
-    label: 'menu.media',
-    path: '/admin/website/media',
-    needs: 'website.listMedia',
+  website: {
+    label: 'menu.app',
+    icon: 'globe',
+    path: '/website',
+    needs: 'website_backend.studioContext',
+    requires: ['website.getEntry'],
+    for: ['website.saveEntry', 'website.publishEntry'],
     sequence: 30,
-  },
-  'website.menus': {
-    parent: 'website',
-    label: 'menu.menus',
-    path: '/admin/website/menus',
-    needs: 'website_menu.listMenu',
-    sequence: 40,
-  },
-  'website.forms': {
-    parent: 'website',
-    label: 'menu.forms',
-    path: '/admin/website/forms',
-    needs: 'website_form.listForms',
-    sequence: 50,
-  },
-  /**
-   * Above configuration, because it is a thing to glance at rather than a
-   * thing to set up.
-   */
-  'website.health': {
-    parent: 'website',
-    label: 'menu.health',
-    path: '/admin/website/health',
-    needs: 'website.listSites',
-    sequence: 70,
-  },
-  'website.configuration': { parent: 'website', label: 'menu.configuration', sequence: 90 },
-  'website.sites': {
-    parent: 'website.configuration',
-    label: 'menu.sites',
-    path: '/admin/website/sites',
-    needs: 'website.listSites',
-    sequence: 10,
-  },
-  /**
-   * Publishing a set is an everyday act, so it sits with the content rather
-   * than under configuration.
-   */
-  'website.publications': {
-    parent: 'website',
-    label: 'menu.publications',
-    path: '/admin/website/publications',
-    needs: 'website.listPublications',
-    sequence: 60,
-  },
-  /**
-   * Redirects sit beside the sites rather than under one, because the question
-   * "where did this address go" arrives without a site in mind.
-   */
-  'website.redirects': {
-    parent: 'website.configuration',
-    label: 'menu.redirects',
-    path: '/admin/website/redirects',
-    needs: 'website.listRedirects',
-    sequence: 20,
   },
 }

@@ -152,7 +152,10 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
     theme: suite.paperTheme,
     themes: [suite.hospitalityTheme, suite.retailTheme],
     datastore: 'main',
-    permissions: { modules: suite.ketsuitePermissionModules, roleTemplates: everyProductRole() },
+    permissions: {
+      modules: suite.ketsuitePermissionModules,
+      roleTemplates: { ...everyProductRole(), ...suite.websiteRoleTemplates },
+    },
     worker: { queues: productQueues },
     serve: {
       ...productServe(openStore),
