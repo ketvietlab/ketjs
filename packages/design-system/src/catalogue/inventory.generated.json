@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 153,
     "cssFiles": 80,
-    "cssLines": 16599
+    "cssLines": 16650
   },
   "rows": [
     {
@@ -2177,6 +2177,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -2216,6 +2217,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/layering.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -3176,6 +3178,7 @@
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
+        "test/ui-modal-large-dialog.test.tsx",
         "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-015"
@@ -7344,6 +7347,7 @@
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
+        "test/ui-modal-large-dialog.test.tsx",
         "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-015"
@@ -12360,7 +12364,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 708,
+      "lines": 743,
       "hooks": [
         "card-actions",
         "card-body",
@@ -12383,6 +12387,7 @@
         "kanban",
         "kanban-actions",
         "kanban-card",
+        "kanban-empty",
         "kanban-media",
         "kanban-meta",
         "kanban-note",
@@ -12467,7 +12472,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 149,
+      "lines": 158,
       "hooks": [
         "board-page",
         "board-page-actions",
@@ -12644,7 +12649,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 249,
+      "lines": 256,
       "hooks": [
         "action",
         "modal-actions",

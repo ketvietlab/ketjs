@@ -37,6 +37,7 @@ export const HOOKS = [
   'card-meta',
   'card-actions',
   'kanban',
+  'kanban-empty',
   'kanban-card',
   'kanban-media',
   'kanban-title',
@@ -266,12 +267,15 @@ export type KanbanCardProps = {
   note?: string | null
   actions?: JSXChild
   selected?: boolean
+  /** Native drag source; the product runtime validates and handles the move. */
+  draggable?: boolean
 }
 
 export const KanbanCard = (props: KanbanCardProps): TemplateResult => (
   <article
     data-ui="kanban-card"
     data-key={props.id}
+    draggable={props.draggable === true ? 'true' : undefined}
     data-interactive={String(!!props.href)}
     data-selected={String(props.selected === true)}
   >
@@ -287,10 +291,19 @@ export type KanbanGridProps<T> = {
   rows: readonly T[]
   id: (row: T) => unknown
   card: (row: T) => TemplateResult
+  /** A lane remains a usable drop target even when rows is empty. */
+  dropTarget?: string
+  dropLabel?: string
+  emptyLabel?: string
 }
 
 export const KanbanGrid = <T,>(props: KanbanGridProps<T>): TemplateResult => (
-  <div data-ui="kanban">{each(props.rows, props.id, (row) => props.card(row))}</div>
+  <div data-ui="kanban" data-drop-target={props.dropTarget} role="group" aria-label={props.dropLabel}>
+    {each(props.rows, props.id, (row) => props.card(row))}
+    {props.dropTarget && props.rows.length === 0 && (
+      <p data-ui="kanban-empty">{props.emptyLabel ?? props.dropLabel}</p>
+    )}
+  </div>
 )
 
 /**
