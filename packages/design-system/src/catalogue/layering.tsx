@@ -1,5 +1,7 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { ContentCard, Disclosure, Grid, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import { SearchBar } from '../data-operations/list-controls/index.tsx'
+import { Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Field } from '../primitives/field.tsx'
 import { Notice } from '../primitives/feedback.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
@@ -36,7 +38,7 @@ const fields = (prefix: string): TemplateResult => (
   />
 )
 
-/** One form, drawn in a wide surface and in a record-aside-sized column (LAYOUT.md L7). */
+/** One form, drawn in a wide surface and in a record-aside-sized column (Két Design System visual contract L7). */
 const noteForm = (prefix: string): TemplateResult => (
   <RecordForm
     action="#layering"
@@ -48,7 +50,7 @@ const noteForm = (prefix: string): TemplateResult => (
   />
 )
 
-/** Bare fields stacked in a panel, with no record form around them (LAYOUT.md L7). */
+/** Bare fields stacked in a panel, with no record form around them (Két Design System visual contract L7). */
 const panelFields = (prefix: string): TemplateResult => (
   <Stack
     items={[
@@ -64,7 +66,7 @@ const Case = (props: { name: string; body: JSXChild }): TemplateResult => (
 )
 
 /**
- * LAYOUT.md L1–L2 on one page: every container on the canvas and again inside a
+ * Két Design System visual contract L1–L2 on one page: every container on the canvas and again inside a
  * white region, so the browser check can compare the two by computed style.
  */
 export const LayeringPreview = (props: {
@@ -74,11 +76,108 @@ export const LayeringPreview = (props: {
     data-kv-design-system
     data-theme="light"
     data-presentation={props.presentation === 'grouped' ? 'grouped' : null}
-    style="padding: 12px; background: var(--kv-page-bg)"
+    style="padding: var(--kv-page-padding-x); background: var(--kv-page-bg)"
   >
     <Stack
+      gap="loose"
       items={[
+        <Section
+          title="Nhịp và phân cấp của Két"
+          description="Cùng vai trò, cùng khoảng cách ở mọi màn hình. Màu Két và icon Lucide được giữ nguyên."
+          body={
+            <Grid
+              columns={3}
+              items={[
+                <Metric
+                  label="Hành động liên quan"
+                  value="8 px"
+                  detail="Khoảng cách giữa các nút cùng nhóm."
+                />,
+                <Metric
+                  label="Bên trong vùng làm việc"
+                  value="16 px"
+                  detail="Hàng form, nhóm nội dung, inset surface và modal; heading cách nội dung 8 px."
+                />,
+                <Metric
+                  label="Button và input"
+                  value="32 / 36 px"
+                  detail="Cùng chiều cao: desktop 32 px, mobile 36 px. Button mặc định = Polaris large."
+                />,
+              ]}
+            />
+          }
+        />,
+        <Case
+          name="dimensions"
+          body={
+            <Surface
+              title="Kích thước Polaris · màu Két"
+              description="Polaris React 13.9.5: chữ 13/20, input 32 px và button large 32 px trên desktop. Dưới 768 px: input 16/24 và cả hai cao 36 px. Density không làm lệch cặp nút–input."
+              body={
+                <Stack
+                  items={(['default', 'compact', 'comfortable'] as const).map((density) => (
+                    <div data-kv-design-system data-density={density} data-dimension-density={density}>
+                      <Section
+                        title={`Density: ${density}`}
+                        body={
+                          <Stack
+                            items={[
+                              <Inline
+                                items={[
+                                  <Field
+                                    id={`dimension-${density}`}
+                                    name="query"
+                                    label="Tìm đơn hàng"
+                                    labelHidden
+                                    value="Đơn hàng tháng 10"
+                                  />,
+                                  <Button label="Tìm kiếm" variant="primary" />,
+                                  <LinkButton label="Xuất dữ liệu" href="#dimensions" />,
+                                  <Button label="Đã khóa" disabled />,
+                                  <Button label="Đang lưu" loading />,
+                                  <Button label="Prominent" size="prominent" />,
+                                  <IconButton label="Thêm" icon="+" />,
+                                ]}
+                              />,
+                              <Inline items={[<Button label="Compact · dùng riêng" size="compact" />]} />,
+                              <SearchBar
+                                action="#dimensions"
+                                id={`dimension-search-${density}`}
+                                label="Tìm kiếm"
+                                submitLabel="Tìm"
+                              />,
+                            ]}
+                          />
+                        }
+                      />
+                    </div>
+                  ))}
+                />
+              }
+            />
+          }
+        />,
         <Case name="canvas-surface" body={<Surface title="On the canvas" body={fields('layering-1')} />} />,
+        <Case
+          name="single-column-form"
+          body={
+            <div style="max-inline-size: 32rem">
+              <Surface
+                title="One column, one label track"
+                body={
+                  <RecordForm
+                    action="#layering"
+                    submitLabel="Save"
+                    fields={[
+                      { id: 'rhythm-short', name: 'short', label: 'Customer', value: 'An Việt' },
+                      { id: 'rhythm-full', name: 'full', label: 'Address', value: 'Thảo Điền', span: 'full' },
+                    ]}
+                  />
+                }
+              />
+            </div>
+          }
+        />,
         <Case name="wide-form" body={<Surface title="A wide form" body={noteForm('layering-wide')} />} />,
         <Case
           name="narrow-form"

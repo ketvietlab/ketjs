@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/website-client",
-  "version": "0.1.29",
+  "version": "0.1.31",
   "type": "module",
   "license": "MIT",
   "description": "Website Studio CSR client and server extension contracts for KetSuite.",
@@ -16,8 +16,8 @@
     "EXTENSIONS.md"
   ],
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.29",
-    "@ketvietlab/design-system": "0.1.29",
-    "@ketvietlab/ketsuite": "0.1.29"
+    "@ketvietlab/ketjs-view": "0.1.31",
+    "@ketvietlab/design-system": "0.1.31",
+    "@ketvietlab/ketsuite": "0.1.31"
   }
 }

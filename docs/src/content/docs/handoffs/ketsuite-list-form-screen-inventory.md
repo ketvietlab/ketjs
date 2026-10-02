@@ -5,8 +5,9 @@ description: One shared-branch work item for every KetSuite backend screen consi
 
 # KetSuite list/form screen migration inventory
 
-This is the single source of truth for migrating KetSuite server-rendered backend screens to the public
-`ListPage` and `FormPage` patterns. The inventory is route-led: a screen is counted when a GET-capable
+This is historical delivery evidence for the completed ListPage/FormPage migration.
+Current design guidance lives in the repository’s `skills/ket-design-system/SKILL.md`;
+the old target names and operating rules below describe that migration only. The inventory is route-led: a screen is counted when a GET-capable
 backend or self-service route renders it. POST-only commands, archive/delete endpoints, downloads, partial
 fragments, and channel APIs are not separate screens.
 
@@ -43,13 +44,8 @@ sub-agent mechanism is retired. Historical `Owner` values remain as delivery evi
 
 Statuses: `ready`, `in-progress`, `blocked`, `review`, `done`, `keep` (intentional specialized layout).
 
-Targets:
-
-- `ListPage`: operational collection with identity/action row, URL-driven controls, result state and table.
-- `FormPage`: create/edit/detail form with compact identity, actions, body and optional one-third context rail.
-- `Split`: the current route mixes creation and collection; the same agent separates ListPage and FormPage.
-- `Specialized`: dashboard, board, calendar, register, preview, portal, or other task surface that should not be
-  forced into list/form. The row still receives an audit so it cannot be silently skipped.
+Design targets now follow Két Design System. The inventory retains its original
+target labels as historical evidence, including the legacy FormPage target.
 
 ## Inventory
 

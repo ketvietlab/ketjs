@@ -1,6 +1,7 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { Icon } from '../primitives/icon/index.tsx'
 import { ReorderList } from '../interactions/reorder-list/index.tsx'
-import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
+import { ActionGroup, Button, IconButton, LinkButton, Link } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag, Text, MediaLabel } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
@@ -56,7 +57,8 @@ import {
   TextField,
 } from '../forms/scalar-fields/index.tsx'
 import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
-import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
+import { DatePickerExamples } from './date-pickers.tsx'
+import { DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
 import { DropZone, FileUpload } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
 import {
@@ -149,8 +151,25 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
             label: 'Reports',
             leading: '▤',
             children: [
-              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table' },
-              { id: `${props.active}-stock-report`, label: 'Inventory', href: '#metric' },
+              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table', count: 7 },
+              {
+                id: `${props.active}-stock-report`,
+                label: 'Inventory',
+                href: '#metric',
+                leading: <Icon name="inbox" />,
+              },
+              {
+                id: `${props.active}-report-settings`,
+                label: 'Cấu hình',
+                children: [
+                  { id: `${props.active}-terms`, label: 'Điều khoản thanh toán', href: '#navigation-terms' },
+                  {
+                    id: `${props.active}-long-label`,
+                    label: 'Phương thức thanh toán dành cho nhà cung cấp quốc tế',
+                    href: '#navigation-long',
+                  },
+                ],
+              },
             ],
           },
         ],
@@ -323,10 +342,11 @@ export const componentGroups: readonly ComponentGroup[] = [
           <ActionGroup
             label="Button variants"
             actions={[
-              <Button label="Create order" variant="primary" leading="+" />,
+              <Button label="Create order" variant="primary" icon="plus" />,
               <Button label="Save draft" variant="secondary" />,
               <Button label="More details" variant="tertiary" />,
-              <Button label="Terminate" variant="destructive" />,
+              <Button label="Terminate" variant="secondary" tone="danger" />,
+              <Link label="Read the action rules" href="/primitives#primitive-actions" />,
               <Button label="Saving" loading />,
               <Button label="Unavailable" disabled />,
               <LinkButton label="Opening record" href="#record-page" loading />,
@@ -339,7 +359,7 @@ export const componentGroups: readonly ComponentGroup[] = [
       {
         id: 'action-sizes',
         name: 'Action sizes',
-        description: 'Density changes target size without changing hierarchy.',
+        description: 'Default matches input height; compact is explicit. Prominent is a compatibility alias.',
         render: () => (
           <ActionGroup
             label="Action sizes"
@@ -361,6 +381,30 @@ export const componentGroups: readonly ComponentGroup[] = [
     name: 'Status & identity',
     description: 'Compact objects for operational scanning.',
     examples: [
+      {
+        id: 'typography-icons',
+        name: 'Text and Lucide icons',
+        description: 'Typography role, document semantics and shared icon geometry.',
+        render: () => (
+          <Stack
+            items={[
+              <Text as="h3" variant="headingLg">
+                Operations
+              </Text>,
+              <Text as="p" variant="bodyMd">
+                One typography contract for every component.
+              </Text>,
+              <Inline
+                items={[
+                  <Icon name="info" label="Information" />,
+                  <Icon name="circle-check" tone="positive" label="Complete" />,
+                  <Text numeric>1,284.00</Text>,
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
       {
         id: 'badges',
         name: 'Badge and tag',
@@ -1735,11 +1779,17 @@ export const componentGroups: readonly ComponentGroup[] = [
                   {
                     key: 'name',
                     label: 'Server collection',
+                    wrap: true,
                     cell: (row: { id: string; name: string }) => <strong>{row.name}</strong>,
                     sortHref: '#ket-table',
                   },
                 ]}
-                rows={[{ id: 'server-row', name: 'Semantic server cell' }]}
+                rows={[
+                  {
+                    id: 'server-row',
+                    name: 'Semantic server cell with a descriptive product name that wraps while the row grows to keep all of its content readable',
+                  },
+                ]}
                 id={(row) => row.id}
                 rowHref={() => '#ket-table'}
                 caption="URL-driven server collection"
@@ -1929,20 +1979,13 @@ export const componentGroups: readonly ComponentGroup[] = [
       },
       {
         id: 'date-time',
-        name: 'Civil date and local time',
-        description: 'Civil dates and local times submit their source text without implicit UTC conversion.',
+        name: 'Date pickers and local time',
+        description:
+          'Interactive calendars, seven quick ranges, draft selection and native civil-date submission. Open /dates for the focused playground.',
         render: () => (
           <Stack
             items={[
-              <DatePicker id="date" name="date" label="Delivery date" value="2026-09-08" />,
-              <DateRangePicker
-                id="range"
-                label="Reporting period"
-                start={{ id: 'from', name: 'from', value: '2026-09-01' }}
-                end={{ id: 'to', name: 'to', value: '2026-09-30' }}
-                startLabel="From"
-                endLabel="To"
-              />,
+              <DatePickerExamples />,
               <DateTimePicker
                 id="appointment"
                 name="appointment"
