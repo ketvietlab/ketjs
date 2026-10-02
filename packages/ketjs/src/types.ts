@@ -225,6 +225,13 @@ export type SectionDef = {
   title?: string
   settings?: Record<string, string>
   slots?: Record<string, SlotDef>
+  /**
+   * A read-only, anonymous function answering `{ siteId, settings }` with what one placement
+   * needs to be drawn on a public page, such as the fields of the form it places. The page is
+   * served before any presenter runs, so the presenter cannot fetch; this is called once per
+   * placement and its answer reaches the presenter as `sectionData[placement.id]`.
+   */
+  resolve?: string
 }
 export type ViewDef = { of: string; fields: string[] }
 

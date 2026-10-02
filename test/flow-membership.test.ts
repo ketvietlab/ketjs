@@ -17,7 +17,7 @@ import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { address, company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import backend from '@ketvietlab/ketsuite/backend'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
-import { functions as flowFunctions } from '../packages/ketsuite/src/modules/flow/functions.ts'
+import { functions as flowFunctions } from '../packages/ketsuite/src/modules/flow/functions/index.ts'
 import livedoc from '../packages/ketsuite/src/modules/livedoc/index.ts'
 
 const app = defineDeployment({

@@ -15,7 +15,7 @@
     color: var(--kv-color-ink);
     font-family: var(--kv-font-sans);
     font-size: var(--kv-text-base);
-    line-height: var(--kv-leading-normal);
+    line-height: var(--kv-line-sm);
     text-rendering: optimizeLegibility;
   }
 

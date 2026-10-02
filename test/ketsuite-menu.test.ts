@@ -16,7 +16,6 @@ const configurationGroups = new Set([
   'hospitality.configuration',
   'pos.configGroup',
   'stock.config',
-  'website.configuration',
 ])
 
 test('KétSuite sidebar is two levels except multi-screen configuration groups', () => {

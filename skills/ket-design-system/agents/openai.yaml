@@ -1,0 +1,4 @@
+interface:
+  display_name: "Két Design System"
+  short_description: "Chuẩn hoá component, typo, spacing và surface Két"
+  default_prompt: "Use $ket-design-system to standardize this screen and verify its component, typography, spacing and surface contracts."

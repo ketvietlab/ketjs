@@ -1,0 +1,30 @@
+{
+  "reference": {
+    "polaris": "13.9.5",
+    "tokens": "9.4.2",
+    "theme": "standard",
+    "sources": [
+      "https://registry.npmjs.org/@shopify/polaris/-/polaris-13.9.5.tgz",
+      "https://registry.npmjs.org/@shopify/polaris-tokens/-/polaris-tokens-9.4.2.tgz"
+    ],
+    "button": "build/esnext/components/Button/Button.out.css; Button.esnext: large -> bodyMd, medium -> bodySm",
+    "input": "build/esnext/components/TextField/TextField.out.css: Input padding, md breakpoint; Backdrop radius",
+    "spacing": "FormLayout gap 400; FormLayout.Group inline gap 300; tokens space-button-group-gap, space-card-padding, space-card-gap"
+  },
+  "desktop": {
+    "body": [13, 20],
+    "pageTitle": [20, 24],
+    "button": [32, 13, 20, 6, 12, 8],
+    "compactButton": [28, 12, 16, 6, 12, 8],
+    "input": [32, 13, 20, 6, 12, 8]
+  },
+  "mobile": {
+    "body": [13, 20],
+    "pageTitle": [20, 24],
+    "button": [36, 13, 20, 6, 12, 8],
+    "compactButton": [32, 12, 16, 6, 12, 8],
+    "input": [36, 16, 24, 6, 12, 8]
+  },
+  "geometryOrder": ["height", "fontSize", "lineHeight", "paddingTop", "paddingRight", "borderRadius"],
+  "spacing": { "actions": 8, "formRows": 16, "formColumns": 12, "groups": 16, "surfaceInset": 16 }
+}

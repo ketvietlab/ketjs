@@ -13,6 +13,7 @@ export type PageIdentityProps = {
   context?: JSXChild
   eyebrow?: string | null
   title: string
+  description?: JSXChild
   status?: JSXChild
   actions?: JSXChild
   /** Retain action content while removing an empty or conditional identity slot from layout. */
@@ -22,10 +23,6 @@ export type PageIdentityProps = {
 
 /**
  * The single identity band shared by every full-page component and recipe.
- *
- * A page identity has no description: every page header keeps one height, so
- * switching screens never moves the controls and content below it. Explain a
- * section inside the section, or put guidance in the empty state.
  */
 export const pageIdentityContent = (kind: PageIdentityKind, props: PageIdentityProps): TemplateResult => (
   <>
@@ -49,6 +46,11 @@ export const pageIdentityContent = (kind: PageIdentityKind, props: PageIdentityP
           </div>
         )}
       </div>
+      {props.description !== undefined && props.description !== null && props.description !== '' && (
+        <p data-ui={`${kind}-description`} data-kv-page-identity="description">
+          {props.description}
+        </p>
+      )}
       {props.status !== undefined && (
         <div data-ui={`${kind}-subline`} data-kv-page-identity="subline">
           <span data-ui={`${kind}-status`} data-kv-page-identity="status">

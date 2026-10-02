@@ -23,6 +23,7 @@ import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
+import { buildWebsiteClient } from './build-website-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -172,6 +173,7 @@ try {
   await buildBackendClients()
   await buildChartClient()
   await buildFlowClient()
+  await buildWebsiteClient()
   await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
@@ -201,6 +203,15 @@ try {
         const emitted = join(stageBuild, 'packages', name, 'src')
         const dist = join(stageDist, name)
         const legacyClient = join(PACKAGES, name, 'client')
+        if (name === 'website-client') {
+          // Website Studio is typed source, unlike the legacy Flow client.
+          const compiled = join(stageBuild, 'packages', name)
+          const declarations = join(stageTypes, name)
+          cpSync(compiled, dist, { recursive: true })
+          cpSync(declarations, dist, { recursive: true })
+          copyAssets(legacyClient, [join(compiled, 'client'), join(dist, 'client')])
+          continue
+        }
         if (existsSync(legacyClient)) {
           // Imported Flow application: syntax checked JS, with no source compilation.
           const check = spawnSync(process.execPath, [join(ROOT, 'tools/check-flow-client.mjs')], {

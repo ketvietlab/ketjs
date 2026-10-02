@@ -15,19 +15,6 @@
     flex: 0 0 auto;
   }
 
-  /* Full-row controls share the label track of either half-row field. At
-     narrower desktop widths, 35% of a half-row is smaller than the 9rem cap. */
-  @media (min-width: 48rem) {
-    :where([data-kv-design-system])
-      [data-ui="form-grid"]
-      > [data-ui="field"][data-span="full"]:not([data-kind="group"]) {
-      grid-template-columns: minmax(0, min(9rem, calc((100% - var(--kv-gap-field-group)) * 0.175))) minmax(
-          0,
-          1fr
-        );
-    }
-  }
-
   @media (max-width: 47.9375rem) {
     :where([data-kv-design-system]) [data-ui="list-chrome-row"][data-row="query"] {
       flex-wrap: wrap;
@@ -73,12 +60,13 @@
     background: var(--kv-color-danger-soft);
     color: var(--kv-color-danger);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="form-grid"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--kv-gap-form-row) var(--kv-gap-field-group);
+    gap: var(--kv-gap-form-row) var(--kv-gap-form-column);
   }
 
   :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"][data-span="full"] {
@@ -98,10 +86,20 @@
     :where([data-kv-design-system])
       [data-ui="form-grid"]
       > [data-ui="field"][data-span="full"]:not([data-kind="group"]) {
-      grid-template-columns: minmax(0, min(9rem, calc((100% - var(--kv-gap-field-group)) * 0.175))) minmax(
+      grid-template-columns: minmax(0, min(9rem, calc((100% - var(--kv-gap-form-column)) * 0.175))) minmax(
           0,
           1fr
         );
+    }
+  }
+
+  /* When the form collapses to one column, full-span and ordinary fields
+     must use the same label track. Viewport width alone cannot decide this. */
+  @container record-form (max-width: 42rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-grid"]
+      > [data-ui="field"][data-span="full"]:not([data-kind="group"]) {
+      grid-template-columns: minmax(0, min(35%, 9rem)) minmax(0, 1fr);
     }
   }
 

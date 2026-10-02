@@ -43,6 +43,7 @@
 
   [data-ui="flow-editor-content"] {
     display: grid;
+    align-content: start;
     gap: var(--admin-gap-sm);
     min-block-size: 10rem;
     padding: var(--admin-gap-sm) var(--admin-gap-md);
@@ -240,4 +241,84 @@
     justify-content: flex-end;
     gap: var(--admin-gap-xs);
   }
+}
+
+[data-ui="flow-editor-content"] [data-block="image"] img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+[data-ui="flow-editor-content"] [data-block="image"] {
+  min-width: 0;
+  position: relative;
+  outline: none;
+}
+[data-ui="flow-editor-content"] [data-live-image-box] {
+  position: relative;
+  max-width: 100%;
+}
+[data-ui="flow-editor-content"] [data-live-image-box] img {
+  width: 100%;
+}
+[data-ui="flow-editor-content"] [data-image-align="center"] [data-live-image-box] {
+  margin-inline: auto;
+}
+[data-ui="flow-editor-content"] [data-image-align="right"] [data-live-image-box] {
+  margin-inline-start: auto;
+}
+[data-ui="flow-editor-content"] [data-selected] [data-live-image-box] {
+  outline: 2px solid var(--admin-focus-ring);
+}
+[data-ui="flow-editor-content"] [data-live-image-tools] {
+  display: none;
+  position: absolute;
+  inset-block-start: var(--admin-gap-xs);
+  inset-inline-start: var(--admin-gap-xs);
+  z-index: var(--kv-z-dropdown);
+  box-sizing: border-box;
+  max-width: calc(100% - 2 * var(--admin-gap-xs));
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--admin-gap-xs);
+  padding: var(--admin-gap-xs);
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  box-shadow: var(--kv-shadow-sm);
+}
+[data-ui="flow-editor-content"]
+  [data-block="image"]:is(:hover, :focus-within, [data-selected])
+  [data-live-image-tools] {
+  display: flex;
+}
+[data-ui="flow-editor-content"] [data-live-image-tools] label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--admin-gap-xs);
+}
+[data-ui="flow-editor-content"] [data-live-image-resize] {
+  display: none;
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  color: inherit;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+[data-ui="flow-editor-content"]
+  [data-block="image"]:is(:hover, :focus-within, [data-selected])
+  [data-live-image-resize] {
+  display: block;
+}
+[data-ui="flow-editor-content"] [data-image-align="right"] [data-live-image-resize] {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  cursor: nesw-resize;
 }

@@ -7,6 +7,10 @@ The KetSuite design system is a public, server-rendered package and a documentat
 package owns reusable markup, tokens, component styles, and `data-ui` contracts. KetSuite modules own
 business data, translated copy, routes, permissions, and workflow behavior.
 
+Design guidance is maintained only in [Két Design System](https://github.com/ketvietlab/ketjs/tree/develop/skills/ket-design-system).
+Install it with `npx @ketvietlab/ket-design-system-skill@latest`. This page documents
+APIs and runtime delivery; it does not define a competing visual rulebook.
+
 Run `npm run design:system` from the repository root to open the documentation application in
 `apps/design-system`. It has three review surfaces:
 
@@ -80,21 +84,8 @@ Component source owns its selectors. The package continues to publish one ordere
 so applications do not have to reconstruct cascade order. As components move into per-component
 directories, their CSS moves with them and the aggregate entry remains compatible.
 
-KetSuite compatibility CSS loads after the public stylesheet. It may adapt legacy markup, but it must not
-copy public selectors or create another token scale. A compatibility file is removed only after inventory
-shows no remaining consumer.
-
-The public cascade order is declared once as `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
-Component styles remain aggregated through `styles.css`, but selector-bearing files live below their
-owning component directory. Density changes the shared control height, row height, and content gap.
-Layer, focus, reduced-motion, and container breakpoints use named tokens rather than local numbers.
-
-In a two-column `form-grid`, full-span fields share the label width of half-span fields, so their controls align. At the single-column breakpoint every field puts its label above its control. Modules must not compensate with local margins or label widths.
-
-Responsive behavior belongs to component and container contracts. From tablet width (48rem) up, a form
-field is inline, with the label on the left and the control on the right. Below tablet width, and in any
-column narrower than 28rem such as a side panel, the label sits above the control. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
-screens.
+The public cascade is `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
+Visual and compatibility ownership rules live in the skill.
 
 ### SearchFilter and KetTable
 
@@ -152,25 +143,28 @@ cross an island JSON boundary. Native checkboxes submit `fieldName.id=1` to the 
 KetSuite's `collectionTable` adapts its existing column/selection metadata to that public component;
 the legacy column visibility menu remains an explicit compatibility slot until its own promotion.
 
-KétSuite operational lists order context, page identity with collection actions, query controls and table tools, then collection body.
-This is the required pattern for new collection screens. The KétSuite `ListPage` and `ListScreen`
-wrappers automatically render `frame.chrome.create` beside the title, above filters. Supply
-`headerActions` only when the screen has a specialised primary action; it replaces the automatic
-create link, so authorization remains the caller's responsibility. Omitting both leaves no creation
-control; an explicit `headerActions={null}` suppresses a frame's default create link. On narrow
-screens the action stacks beneath the heading, still before filters.
-Keep bulk and secondary collection commands in `actions`; the KétSuite wrapper places them beside
-the primary action in the header and removes the separate action bar. Bulk controls appear only
-when rows belonging to their form are selected. The primary action remains visible. Do not position
-buttons with module-local CSS or put creation links into `actions`. The
-application `collectionControls` and `collectionActions` helpers split existing list chrome into
-those slots without changing command or permission decisions. `searchCollectionRows` is reserved
-for complete authorized catalogues: its explicit callback searches reader-visible fields. Paged
-collections continue using their existing server query/search contracts.
+The `listChrome`/`pagerBar` adapter accepts `Pager.totalLabel` for a localized or
+capped display count such as `10,000+`; `total` remains numeric and `prev`/`next`
+come from the query result. `headerActions` replaces the automatic create link;
+`headerActions={null}` suppresses it. `search.id` and `sort.id` associate controls
+when several toolbars share a document. `searchCollectionRows` searches a complete
+authorized catalogue through its explicit reader-visible-field callback; paged
+collections retain their server-side query implementation.
 
-The catalogue's List page specimen demonstrates the shared header action composition. Product, Partner and the other
-collection screens use this same composition. Existing inline creation forms, such as accounting
-period closing, retain their disclosure below the filters rather than placing a form in the header.
+Native `Field.readOnly` text/date/number values remain selectable and submitted;
+disabled controls do not submit. Selects and choice controls have no native read-only
+state, so an application can pair a disabled control with a hidden submitted value.
+`min`/`max` preserve numeric/date bounds, and checkbox-group requirements belong to
+group validation rather than making every option required.
+
+For an existing RecordWorkspace integration, `RecordForm.submitPlacement="external"`
+omits the local submit row; a controller button associated through its native `form`
+attribute submits and validates that form. `ModalSheet mode="embedded"` renders a
+specimen, while active route modals require the shared focus/history runtime.
+
+The collection adapter exposes `frame.chrome.create`, `headerActions`, `actions`
+and `controls`; the [skill](https://github.com/ketvietlab/ketjs/tree/develop/skills/ket-design-system)
+defines their composition. Example:
 
 ```tsx
 // File: packages/ketsuite/src/modules/product_backend/screens/list.tsx

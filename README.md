@@ -10,6 +10,9 @@ A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
 
 Developer documentation: **[ketjs.ketviet.vn](https://ketjs.ketviet.vn/)**.
 
+UI work follows [Két Design System](skills/ket-design-system/SKILL.md), the canonical
+agent skill for component selection, typography, spacing and surface hierarchy.
+
 > [!WARNING]
 > **Ket is under active development. The 0.x line is preview software and is not stable.**
 > APIs, data formats, CLI behavior, and deployment assumptions may change without

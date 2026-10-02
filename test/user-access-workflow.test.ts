@@ -182,6 +182,20 @@ test('user workflow: atomic creation, batch assignment, preview, exact removal a
     (await adapter.all('SELECT * FROM user_assignment WHERE "userId" = ?', ['new-user'])).length,
     2,
   )
+  // Company-level access without a chosen branch must still yield a session.
+  assert.deepEqual(
+    (await adapter.all('SELECT "branchId" FROM user_branch_membership WHERE "userId" = ?', ['new-user'])).map(
+      (row) => row.branchId,
+    ),
+    ['root:c'],
+  )
+  const session = await run(
+    'user.resolveSessionContext',
+    { userId: 'new-user', securityVersion: 0 },
+    'new-user',
+  )
+  assert.equal(session.ok, true, JSON.stringify(session))
+  assert.equal(session.context.branch, 'root:c')
   assert.equal((await run('user.checkUserEmail', { email: 'new@example.test' })).available, false)
   await assert.rejects(() =>
     run('workflow_probe.create', {

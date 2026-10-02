@@ -201,7 +201,7 @@ export const AppTopbar = (props: {
   )
 }
 
-export type PageHeaderProps = Omit<PageIdentityProps, 'context'>
+export type PageHeaderProps = Omit<PageIdentityProps, 'context' | 'description'>
 
 export const PageHeader = (props: PageHeaderProps): TemplateResult => (
   <header data-ui="page-header" data-kv-page-identity="header">
@@ -209,7 +209,7 @@ export const PageHeader = (props: PageHeaderProps): TemplateResult => (
   </header>
 )
 
-export type PageProps = PageIdentityProps & {
+export type PageProps = Omit<PageIdentityProps, 'description'> & {
   body: JSXChild
 }
 
