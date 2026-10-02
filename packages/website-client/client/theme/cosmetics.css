@@ -1,0 +1,799 @@
+/*
+ * Lành: bundled Core cosmetics skin for the visitor surface, the Studio visitor frame and the builder
+ * canvas. Ivory paper, forest green and brass; a serif display face over a quiet sans body. Fonts are
+ * named, never fetched: a site without them falls back to the system serif and sans.
+ * Load after default.css. Every rule is scoped by `[data-theme-preset="cosmetics"]`.
+ */
+:is(.wt-site, .wt-page, .website-visitor)[data-theme-preset="cosmetics"],
+[data-theme-preset="cosmetics"] .wt-page {
+  --wt-ink: #1f2a26;
+  --wt-muted: #5c655f;
+  --wt-paper: #faf7f1;
+  --wt-accent: #25483e;
+  --lanh-accent-strong: color-mix(in srgb, var(--wt-accent) 82%, #000);
+  --lanh-on-accent: #fbf8f1;
+  --lanh-cream: #f3ede2;
+  --lanh-sand: #e8dfcf;
+  --lanh-line: #e0d6c4;
+  --lanh-brass: #b29462;
+  --lanh-brass-deep: #84683b;
+  --lanh-serif:
+    "Cormorant Garamond", "Cormorant", "Noto Serif Display", "Noto Serif", Georgia, "Times New Roman", serif;
+  --lanh-sans: "Be Vietnam Pro", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --lanh-gutter: clamp(1.25rem, 5vw, 5rem);
+  --lanh-section: 5rem;
+  --lanh-radius: 2px;
+  --lanh-button-radius: 2px;
+  color: var(--wt-ink);
+  background: var(--wt-paper);
+  font-family: var(--lanh-sans);
+  line-height: 1.65;
+}
+[data-theme-preset="cosmetics"] .wt-page {
+  container-type: inline-size;
+}
+/* A short page still ends on the footer, not on the browser's blank canvas. */
+.website-visitor[data-theme-preset="cosmetics"],
+.wt-public .wt-site[data-theme-preset="cosmetics"] {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+:is(.website-visitor, .wt-public .wt-site)[data-theme-preset="cosmetics"] > :is(.website-visitor-main, main) {
+  flex: 1;
+}
+[data-theme-preset="cosmetics"] :is(a, summary, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--lanh-brass);
+  outline-offset: 3px;
+}
+
+/* --- Header ------------------------------------------------------------------------------------ */
+[data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2.5rem;
+  padding: 1.15rem var(--lanh-gutter);
+  background: var(--wt-paper);
+  border-bottom: 1px solid var(--lanh-line);
+  color: var(--wt-ink);
+}
+.wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+[data-theme-preset="cosmetics"] .wt-theme-header > a:first-child strong,
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-brand {
+  font: 500 1.75rem / 1 var(--lanh-serif);
+  letter-spacing: 0.01em;
+  color: var(--wt-accent);
+  text-decoration: none;
+}
+[data-theme-preset="cosmetics"] .wt-public-logo {
+  display: block;
+  max-height: 2.75rem;
+}
+[data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) nav {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-theme-header nav ul {
+  justify-content: center;
+  gap: 0.25rem 2rem;
+}
+[data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--wt-ink);
+  font-size: 0.9375rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+[data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) nav a:hover {
+  color: var(--wt-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--lanh-brass);
+  text-underline-offset: 6px;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-search-box {
+  gap: 0;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-search-box input {
+  inline-size: 13rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--lanh-line);
+  border-right: 0;
+  border-radius: var(--lanh-button-radius) 0 0 var(--lanh-button-radius);
+  background: #fff;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-search-box button {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--wt-accent);
+  border-radius: 0 var(--lanh-button-radius) var(--lanh-button-radius) 0;
+  background: var(--wt-accent);
+  color: var(--lanh-on-accent);
+  font-weight: 600;
+}
+/* The account sits beside the search, closer than the header's own gap. */
+.wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header .wt-public-account {
+  min-height: 2.5rem;
+  margin-inline-start: -1.5rem;
+  padding: 0 1.125rem;
+  border: 1px solid var(--lanh-line);
+  border-radius: var(--lanh-button-radius);
+  background: #fff;
+  color: var(--wt-accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header .wt-public-account:hover {
+  border-color: var(--wt-accent);
+}
+.wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header .wt-public-account[data-signed-in] {
+  max-inline-size: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-color: transparent;
+  background: var(--lanh-cream);
+}
+
+/* --- Sections ---------------------------------------------------------------------------------- */
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(.wt-callout) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 0 4rem;
+  min-height: 34rem;
+  padding: 0 0 0 var(--lanh-gutter);
+  background: linear-gradient(160deg, var(--lanh-cream), var(--wt-paper) 70%);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(:has(.wt-cover)):not(.wt-callout) {
+  display: block;
+  min-height: 0;
+  max-width: none;
+  padding: calc(var(--lanh-section) * 0.9) var(--lanh-gutter);
+  text-align: center;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-cover {
+  grid-column: 2;
+  grid-row: 1 / 5;
+  width: 100%;
+  height: 100%;
+  min-height: 34rem;
+  max-height: 44rem;
+  margin: 0;
+  border-radius: 0;
+  background: var(--lanh-sand);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero__title {
+  grid-column: 1;
+  grid-row: 2;
+  max-width: 16ch;
+  margin: 2rem 0 1.25rem;
+  text-wrap: balance;
+  font: 400 clamp(2.75rem, 5vw, 5rem) / 1.04 var(--lanh-serif);
+  letter-spacing: -0.01em;
+  color: var(--lanh-accent-strong);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(:has(.wt-cover)) .wt-hero__title {
+  max-width: 18ch;
+  margin-inline: auto;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero__lead {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: 34rem;
+  margin: 0 0 2rem;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  color: var(--wt-muted);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero:not(:has(.wt-cover)) .wt-hero__lead {
+  margin-inline: auto;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-hero > .wt-button {
+  grid-column: 1;
+  grid-row: 4;
+  justify-self: start;
+  align-self: start;
+  margin-bottom: 2.5rem;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 1.75rem;
+  border: 1px solid var(--wt-accent);
+  border-radius: var(--lanh-button-radius);
+  background: var(--wt-accent);
+  color: var(--lanh-on-accent);
+  font: 600 0.9375rem / 1.2 var(--lanh-sans);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-button:hover {
+  background: var(--lanh-accent-strong);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-text {
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: var(--lanh-section) var(--lanh-gutter);
+}
+[data-theme-preset="cosmetics"] .wt-page :is(.wt-text__title, .wt-text > h2, .wt-callout h2) {
+  margin-block: 0 1.25rem;
+  font: 400 clamp(2rem, 3.4vw, 3rem) / 1.12 var(--lanh-serif);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  color: var(--lanh-accent-strong);
+}
+/* A brass rule under centred titles: the preset's one ornament. */
+[data-theme-preset="cosmetics"] .wt-page .wt-text[data-align="center"] .wt-text__title::after {
+  content: "";
+  display: block;
+  width: 3rem;
+  height: 1px;
+  margin: 1.25rem auto 0;
+  background: var(--lanh-brass);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-text p {
+  margin-block: 0 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  color: var(--wt-muted);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns {
+  gap: 2.5rem;
+  align-items: start;
+  padding: 0 var(--lanh-gutter) var(--lanh-section);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image {
+  margin: 0;
+  padding: 0;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image img {
+  display: block;
+  width: 100%;
+  border-radius: var(--lanh-radius);
+  background: var(--lanh-cream);
+}
+/* A product tile keeps its own proportion; the default height cap would letterbox it in a wide column. */
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-image img {
+  max-height: none;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image figcaption:empty {
+  display: none;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-image figcaption {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--wt-muted);
+}
+
+/* A standalone call to action is a forest band: heading and action left, the steps right. */
+[data-theme-preset="cosmetics"] .wt-page .wt-callout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 2rem 4rem;
+  margin: 0;
+  padding: var(--lanh-section) var(--lanh-gutter);
+  background: var(--wt-accent);
+  color: var(--lanh-on-accent);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout h2 {
+  grid-column: 1;
+  margin: 0;
+  color: var(--lanh-on-accent);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout p {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  margin: 0;
+  padding-left: 2rem;
+  border-left: 1px solid color-mix(in srgb, var(--lanh-brass) 60%, transparent);
+  white-space: pre-line;
+  font-size: 1.0625rem;
+  line-height: 1.9;
+  color: color-mix(in srgb, var(--lanh-on-accent) 86%, transparent);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout .wt-button {
+  grid-column: 1;
+  justify-self: start;
+  align-self: end;
+  border-color: var(--lanh-brass);
+  background: var(--lanh-brass);
+  color: #1b2622;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-callout .wt-button:hover {
+  background: #c4a877;
+}
+
+/* Inside columns a call to action is a product card's text: no band, a quiet outlined action. */
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout {
+  display: block;
+  padding: 1.5rem 0 0;
+  background: transparent;
+  color: var(--wt-ink);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.875rem;
+  color: var(--lanh-accent-strong);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout p {
+  margin: 0 0 1.25rem;
+  padding: 0;
+  border: 0;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: var(--wt-muted);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout .wt-button {
+  border-color: var(--wt-accent);
+  background: transparent;
+  color: var(--wt-accent);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-columns .wt-callout .wt-button:hover {
+  background: var(--wt-accent);
+  color: var(--lanh-on-accent);
+}
+
+[data-theme-preset="cosmetics"] .wt-page details.wt-text {
+  width: min(100% - 2 * var(--lanh-gutter), 46rem - 2 * var(--lanh-gutter));
+  padding: 0;
+  margin-block: 0 var(--lanh-section);
+  border-block: 1px solid var(--lanh-line);
+}
+[data-theme-preset="cosmetics"] .wt-page details.wt-text summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 44px;
+  padding-block: 1.5rem;
+  font: 500 1.625rem / 1.25 var(--lanh-serif);
+  color: var(--lanh-accent-strong);
+  cursor: pointer;
+  list-style: none;
+}
+[data-theme-preset="cosmetics"] .wt-page details.wt-text summary::-webkit-details-marker {
+  display: none;
+}
+[data-theme-preset="cosmetics"] .wt-page details.wt-text summary::after {
+  content: "+";
+  font: 300 1.75rem / 1 var(--lanh-sans);
+  color: var(--lanh-brass-deep);
+}
+[data-theme-preset="cosmetics"] .wt-page details.wt-text[open] summary::after {
+  content: "−";
+}
+[data-theme-preset="cosmetics"] .wt-page details.wt-text p {
+  padding-bottom: 1.25rem;
+}
+[data-theme-preset="cosmetics"] .wt-page blockquote.wt-text p {
+  font: italic 400 clamp(1.5rem, 2.6vw, 2.125rem) / 1.35 var(--lanh-serif);
+  color: var(--lanh-accent-strong);
+}
+[data-theme-preset="cosmetics"] .wt-page blockquote.wt-text cite {
+  font-style: normal;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lanh-brass-deep);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-gallery img {
+  border-radius: var(--lanh-radius);
+}
+
+/* --- Forms ------------------------------------------------------------------------------------- */
+[data-theme-preset="cosmetics"] .wt-page .wt-form {
+  max-width: 40rem;
+  margin: 0 auto var(--lanh-section);
+  padding: 2.5rem;
+  border: 1px solid var(--lanh-line);
+  border-radius: var(--lanh-radius);
+  background: #fff;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-form :is(h2, legend) {
+  font: 400 2rem / 1.15 var(--lanh-serif);
+  color: var(--lanh-accent-strong);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-field {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-field :is(input:not([type="checkbox"]), textarea, select) {
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--lanh-line);
+  border-radius: var(--lanh-radius);
+  background: var(--wt-paper);
+  color: var(--wt-ink);
+  font: 400 1rem / 1.5 var(--lanh-sans);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-field :is(input, textarea, select):focus {
+  border-color: var(--lanh-brass);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lanh-brass) 28%, transparent);
+}
+[data-theme-preset="cosmetics"] .wt-page .wt-form button.wt-button {
+  width: 100%;
+  cursor: pointer;
+}
+
+/* --- Footer ------------------------------------------------------------------------------------ */
+[data-theme-preset="cosmetics"] :is(.wt-theme-footer, .website-visitor-footer) {
+  padding: 3.5rem var(--lanh-gutter);
+  border: 0;
+  border-top: 1px solid var(--lanh-brass);
+  background: color-mix(in srgb, var(--wt-accent) 78%, #000);
+  color: color-mix(in srgb, var(--lanh-on-accent) 88%, transparent);
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  white-space: pre-line;
+}
+[data-theme-preset="cosmetics"] .wt-theme-footer::first-line {
+  font: 500 1.5rem / 2 var(--lanh-serif);
+  color: var(--lanh-on-accent);
+}
+[data-theme-preset="cosmetics"] :is(.wt-theme-footer, .website-visitor-footer) a {
+  color: inherit;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-footer small {
+  color: color-mix(in srgb, var(--lanh-on-accent) 65%, transparent);
+}
+
+/* --- Listings, posts and receipts on the public site ------------------------------------------- */
+.wt-site[data-theme-preset="cosmetics"]
+:is(.wt-public-archive, .wt-public-search, .wt-public-post, .wt-public-receipt) {
+  padding-block: 3.5rem var(--lanh-section);
+}
+.wt-site[data-theme-preset="cosmetics"]
+  :is(.wt-public-archive, .wt-public-search, .wt-public-post, .wt-public-receipt)
+  h1 {
+  font: 400 clamp(2.25rem, 4vw, 3.5rem) / 1.1 var(--lanh-serif);
+  color: var(--lanh-accent-strong);
+}
+.wt-site[data-theme-preset="cosmetics"] :is(.wt-public-archive, .wt-public-search) h2 {
+  font: 500 1.625rem / 1.25 var(--lanh-serif);
+}
+.wt-site[data-theme-preset="cosmetics"] :is(.wt-public-archive, .wt-public-search) li {
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--lanh-line);
+}
+.wt-site[data-theme-preset="cosmetics"] main a:not(.wt-button) {
+  color: var(--wt-accent);
+  text-decoration-color: var(--lanh-brass);
+  text-underline-offset: 4px;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-receipt dl {
+  border-color: var(--lanh-line);
+  border-radius: var(--lanh-radius);
+  background: #fff;
+}
+
+/* --- Customer sign-in -------------------------------------------------------------------------- */
+/* The welcome is the brand's: deep accent, brass light and the site's mark as a watermark. */
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin {
+  min-height: calc(100dvh - 12rem);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__story {
+  gap: 1.5rem;
+  padding: 4.5rem clamp(2rem, 6vw, 6rem);
+  background:
+    radial-gradient(circle at 85% 15%, rgb(178 148 98 / 22%), transparent 42%),
+    linear-gradient(160deg, color-mix(in srgb, var(--wt-accent) 90%, #fff), var(--lanh-accent-strong));
+  color: #d5e1da;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__mark {
+  inset-inline-end: -7.5rem;
+  inset-block-end: -8.75rem;
+  inline-size: 32.5rem;
+  opacity: 0.09;
+  filter: grayscale(1) brightness(3);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__eyebrow {
+  color: #e2c999;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__headline {
+  color: #fbf7ef;
+  font-family: var(--lanh-serif);
+  font-size: clamp(2.125rem, 3.6vw, 3.125rem);
+  font-weight: 500;
+  line-height: 1.12;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__benefits {
+  gap: 1.125rem;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__benefits strong {
+  color: #fbf7ef;
+  font-weight: 600;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__benefits .wt-public-signin__icon {
+  border-color: rgb(226 201 153 / 45%);
+  color: #e2c999;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__panel {
+  background:
+    radial-gradient(
+      circle at 10% 90%,
+      color-mix(in srgb, var(--lanh-brass) 14%, var(--wt-paper)),
+      transparent 45%
+    ),
+    var(--wt-paper);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__card {
+  padding: 2.5rem;
+  border-color: var(--lanh-line);
+  border-radius: max(var(--lanh-radius), 4px);
+  box-shadow:
+    0 1px 2px rgb(30 41 37 / 4%),
+    0 12px 32px -18px rgb(30 41 37 / 22%);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__card h1 {
+  margin: 0 0 0.5rem;
+  color: var(--wt-accent);
+  font-family: var(--lanh-serif);
+  font-size: 2.25rem;
+  font-weight: 500;
+  line-height: 1.15;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__lead {
+  color: var(--wt-muted);
+  opacity: 1;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__notice {
+  border-radius: max(var(--lanh-radius), 4px);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__field > span:first-child {
+  color: var(--wt-ink);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__field input {
+  min-height: 3.125rem;
+  border-color: #d8ccbb;
+  border-radius: max(var(--lanh-radius), 4px);
+  color: var(--wt-ink);
+  font: 400 1rem / 1.4 var(--lanh-sans);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__field input::placeholder {
+  color: color-mix(in srgb, var(--wt-muted) 70%, #fff);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__field input:focus {
+  outline: none;
+  border-color: var(--lanh-brass);
+  box-shadow: 0 0 0 3px rgb(178 148 98 / 45%);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__field input[aria-invalid="true"] {
+  border-color: #a3443a;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__reveal {
+  color: var(--wt-muted);
+  opacity: 1;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__reveal[aria-pressed="true"] {
+  color: var(--wt-accent);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin .wt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0 1.75rem;
+  border: 1px solid var(--wt-accent);
+  border-radius: var(--lanh-button-radius);
+  background: var(--wt-accent);
+  color: var(--lanh-on-accent);
+  font: 600 0.9375rem / 1.2 var(--lanh-sans);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin .wt-button:hover {
+  background: var(--lanh-accent-strong);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__form .wt-button {
+  margin-top: 0.25rem;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__help {
+  border-top-color: var(--lanh-line);
+  color: var(--wt-muted);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__help p {
+  opacity: 1;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__help strong,
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__signed strong {
+  color: var(--wt-ink);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__secure {
+  color: var(--wt-muted);
+  opacity: 1;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__signed p {
+  margin: 0;
+  color: var(--wt-muted);
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__signout {
+  min-height: 3rem;
+  padding: 0 1.75rem;
+  border-color: var(--lanh-line);
+  border-radius: var(--lanh-button-radius);
+  background: #fff;
+  color: var(--wt-ink);
+  font: 600 0.9375rem / 1.2 var(--lanh-sans);
+  letter-spacing: 0.02em;
+}
+.wt-site[data-theme-preset="cosmetics"] .wt-public-signin__signout:hover {
+  border-color: var(--lanh-brass);
+}
+
+@media (max-width: 54rem) {
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-signin {
+    min-height: 0;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-signin__story {
+    gap: 1rem;
+    padding: 2.5rem 1.5rem;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-signin__headline {
+    font-size: 1.875rem;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-signin__benefits {
+    gap: 0.75rem;
+    font-size: 0.9375rem;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-signin__card {
+    padding: 1.75rem 1.25rem;
+  }
+}
+
+/* --- Studio visitor frame ---------------------------------------------------------------------- */
+.website-visitor[data-theme-preset="cosmetics"] .website-visitor-main {
+  max-width: 90rem;
+  padding: 0;
+  margin-inline: auto;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search {
+  padding: 0.7rem var(--lanh-gutter);
+  font-size: 0.8125rem;
+  color: var(--wt-muted);
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search summary {
+  cursor: pointer;
+}
+.website-visitor[data-theme-preset="cosmetics"] .website-public-search form {
+  padding-block: 1rem;
+}
+
+/* --- Narrow ------------------------------------------------------------------------------------ */
+@container (max-width: 48rem) {
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero:not(.wt-callout) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    min-height: 0;
+    padding: 0 1.5rem 3rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-cover {
+    order: -1;
+    width: calc(100% + 3rem);
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin-inline: -1.5rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero__title {
+    max-width: 15ch;
+    margin-block: 2rem 1rem;
+    font-size: 2.75rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-hero > .wt-button {
+    align-self: start;
+    margin: 0;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3rem;
+    padding-inline: 1.5rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-callout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-callout p {
+    grid-column: 1;
+    grid-row: auto;
+    padding: 0 0 0 1.25rem;
+  }
+  [data-theme-preset="cosmetics"] .wt-page .wt-form {
+    padding: 1.5rem;
+  }
+}
+@media (max-width: 48rem) {
+  [data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) {
+    gap: 0.5rem 1rem;
+    padding-block: 0.75rem 0;
+  }
+  [data-theme-preset="cosmetics"] .wt-theme-header > a:first-child strong,
+  .website-visitor[data-theme-preset="cosmetics"] .website-visitor-brand {
+    font-size: 1.5rem;
+  }
+  /* The menu keeps one scrolling row under the brand instead of wrapping into a block. */
+  [data-theme-preset="cosmetics"] :is(.wt-theme-header, .website-visitor-header) nav {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-theme-header nav ul {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 1.5rem;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-search-box {
+    margin-left: auto;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-search-box input {
+    inline-size: 6.5rem;
+    padding-inline: 0.75rem;
+  }
+  .wt-site[data-theme-preset="cosmetics"] .wt-public-search-box button {
+    padding-inline: 0.75rem;
+  }
+  .wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header .wt-public-account {
+    margin-inline-start: 0;
+    padding-inline: 0.875rem;
+  }
+}
+/* A phone has room for the brand and one control; with an account offered, that is the account. */
+@media (max-width: 30rem) {
+  .wt-site[data-theme-preset="cosmetics"] .wt-theme-header:has(.wt-public-account) .wt-public-search-box {
+    display: none;
+  }
+  .wt-public .wt-site[data-theme-preset="cosmetics"] .wt-theme-header .wt-public-account {
+    margin-inline-start: auto;
+  }
+}
+
+/* --- The Studio style choices ------------------------------------------------------------------ */
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-accent="indigo"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-accent="indigo"] .wt-page {
+  --wt-accent: #3b3a85;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-accent="orange"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-accent="orange"] .wt-page {
+  --wt-accent: #94461d;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-buttons="rounded"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-buttons="rounded"] .wt-page {
+  --lanh-radius: 14px;
+  --lanh-button-radius: 999px;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-font="serif"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-font="serif"] .wt-page {
+  --lanh-sans: var(--lanh-serif);
+  font-size: 1.0625rem;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-spacing="compact"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-spacing="compact"] .wt-page {
+  --lanh-section: 3rem;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-spacing="spacious"],
+:is(.wt-site, .website-visitor)[data-theme-preset="cosmetics"][data-spacing="spacious"] .wt-page {
+  --lanh-section: 7rem;
+}

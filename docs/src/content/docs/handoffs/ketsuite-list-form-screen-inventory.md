@@ -299,27 +299,8 @@ because it is embedded in `pos_backend/index.ts`.
 
 ### Website administration lane
 
-Structure debt: split `website_backend/screens.tsx` into `screens/`. Page and post aliases currently share
-renderers, so each shared family is one assignment until leaf wrappers exist. Legacy `/admin/website/content`
-aliases remain owned by the page/post family and are not separate agents.
-
-| ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
-|---|---|---|---|---|---|---|
-| WEB-01 | done | Sites | `/admin/website/sites` | `screens/index.tsx::sitesScreen` | ListPage | Codex |
-| WEB-02 | done | Site create/detail | `/admin/website/sites/new`, `/admin/website/sites/{id}` | `screens/index.tsx::siteFormScreen` | FormPage | Codex |
-| WEB-03 | done | Pages/posts collections | `/admin/website/pages`, `/admin/website/posts` | `screens/index.tsx::contentScreen` | ListPage | Codex |
-| WEB-04 | done | Page/post create/detail/publish | `/pages/new`, `/pages/{id}`, `/posts/new`, `/posts/{id}` | `screens/index.tsx::entryFormScreen` | FormPage | Codex |
-| WEB-05 | done | Page/post revision history | `/pages/{id}/revisions`, `/posts/{id}/revisions` | `screens/index.tsx::revisionsScreen` | ListPage | Codex |
-| WEB-06 | done | Page/post preview launcher | `/pages/{id}/preview`, `/posts/{id}/preview` | `screens/index.tsx::previewScreen` | Specialized | Codex |
-| WEB-07 | done | Taxonomies | `/admin/website/taxonomies` | `screens/index.tsx::taxonomyScreen` | ListPage | Codex |
-| WEB-08 | done | Taxonomy create/detail | `/admin/website/taxonomies/new`, `/taxonomies/{id}` | `screens/index.tsx::taxonomyFormScreen` | FormPage | Codex |
-| WEB-09 | done | Media library | `/admin/website/media` | `screens/index.tsx::mediaScreen` | ListPage | Codex |
-| WEB-10 | done | Media create/detail | `/admin/website/media/new`, `/media/{id}` | `screens/index.tsx::mediaFormScreen` | FormPage | Codex |
-| WEB-11 | done | Navigation menus | `/admin/website/menus` | `screens/index.tsx::menusScreen` | ListPage | Codex |
-| WEB-12 | done | Menu create/detail | `/admin/website/menus/new`, `/menus/{id}` | `screens/index.tsx::menuFormScreen` | FormPage | Codex |
-| WEB-13 | done | Website forms | `/admin/website/forms` | `screens/index.tsx::formsScreen` | ListPage | Codex |
-| WEB-14 | done | Website form create | `/admin/website/forms/new` | `screens/index.tsx::formCreateScreen` | FormPage | Codex |
-| WEB-15 | done | Form submissions | `/admin/website/forms/{id}/submissions` | `screens/index.tsx::submissionsScreen` | ListPage | Codex |
+Retired. The server-rendered admin under `/admin/website` (WEB-01 through WEB-15) was removed; the
+Website Studio at `/website` replaces every one of those screens and calls the same `website*` functions.
 
 ### Public CRM website lane
 

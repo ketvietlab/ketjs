@@ -10,24 +10,20 @@ import {
   reportEditorScreen,
   reportsScreen,
 } from '../packages/ketsuite/src/modules/report_backend/screens/index.tsx'
-import {
-  FormScreenFrame as WebsiteFormFrame,
-  ListScreenFrame as WebsiteListFrame,
-} from '../packages/ketsuite/src/modules/website_backend/screens/page-frame.tsx'
 
 const translate = ((key: string) => key) as Translator
 translate.locale = 'en'
 translate.has = () => true
 translate.resolves = () => true
 
-test('Website and Loyalty page frames use the shared ListPage and FormPage contracts', () => {
-  for (const frame of [WebsiteListFrame, LoyaltyListFrame]) {
+test('Loyalty page frames use the shared ListPage and FormPage contracts', () => {
+  for (const frame of [LoyaltyListFrame]) {
     assert.match(
       renderToString(frame({ translator: translate, title: 'List', frame: {}, body: <p>Rows</p> })),
       /data-ui="list-page"/,
     )
   }
-  for (const frame of [WebsiteFormFrame, LoyaltyFormFrame]) {
+  for (const frame of [LoyaltyFormFrame]) {
     assert.match(
       renderToString(frame({ translator: translate, title: 'Form', frame: {}, body: <p>Fields</p> })),
       /data-ui="form-page"/,

@@ -26,7 +26,8 @@ CRM — and Website composes them through optional bridge modules.
 
 - `website`: sites, domains, site membership, entries and revisions, taxonomy, media metadata,
   redirects, preview tokens, and the customer realm.
-- `website_backend`: the administration surface. Auto-installs once `backend` is present.
+- `website_backend`: the Website Studio at `/website`. Auto-installs once `backend` is present. The
+  server-rendered admin under `/admin/website` that the sections below sometimes describe is removed.
 - `website_menu`: navigation items a theme can place.
 - `website_seo`: per-entry metadata, and the public `robots.txt` and `sitemap.xml` projection.
 - `website_search`: the search box a theme can place, over published entries.
@@ -1206,3 +1207,51 @@ npm run build --silent && node --test .build/test/website-seo.test.js
 
 `test/website-seo.test.ts` covers the projection rules as pure functions and the write path against a
 SQLite adapter, including cross-site isolation and the refusal of a foreign canonical.
+
+
+## Studio draft images
+
+Studio uploads entry images through `POST /website/images/{entryId}/{image|cover}?site={siteId}`.
+The route requires the ERP editing grant and active company, decodes raster data before storing it,
+and uses the deployment Object Storage provider. `website.ImageAsset` records a private 24-hour lease
+before bytes are written; the upload response contains an authorized `/website/files/{id}` URL.
+Only the uploading actor can read an unclaimed image. A saved draft is readable by authorized Studio
+readers; anonymous access requires a reference in the published entry of an active site.
+
+`website.saveEntry` and `website.restoreRevision` claim image references inside their revision
+transaction. Failed validation or stale revisions leave uploads pending. Historical revisions and
+publication snapshots retain their references, so removing an image from the latest body does not
+break history. Collection never relies on a browser unload request.
+
+Enable workers: `website.collectImages` runs every minute and retries Object Storage removal failures.
+Unreferenced attached objects have a separate 24-hour grace. Completed abandoned uploads lose bytes
+before metadata; unfinished uploads retain deletion tombstones to collect late writes. Tombstone
+metadata retention must be configured before a long-lived deployment. Generic `/files` attachment
+semantics remain unchanged, and taxonomy ownership is not covered by this entry-only bridge.
+
+
+## Studio site appearance
+
+`website.saveStudioStyle` updates the site's draft appearance using `expectedRevisionId` and an atomic
+compare-and-set on `Site.styleRevision`. Accepted values are title, preset, accent, font, spacing,
+buttons, logo and footer. This does not create a page revision or publish content. Studio's frame and
+authenticated preview read `Site.studioStyle`. Publishing freezes that configuration in
+`Entry.publishedAppearance`; scheduling freezes it in `scheduledAppearance`. The worker promotes the
+scheduled snapshot rather than reading later draft configuration. Cancel, unpublish and archive clear
+the corresponding snapshot.
+
+The function belongs to `website.configure` with the `website.configuration-audit` policy marker.
+The managed `website.designer` role includes author and configure capabilities, not publishing.
+It is available for explicit assignment through ERP administration; existing users are not upgraded.
+
+
+The trusted `pages.render` deployment callback can present resolved public content without executing
+uploaded theme code. Studio uses the same pure block renderer and theme CSS as its builder, and the
+canonical LiveDoc serializer for server-rendered posts. Native `website_menu.publicMenu` supplies the
+header; the Studio menu authoring adapter is still pending. An entry without a style snapshot, or with
+unsupported industry sections, falls back to the configured KTL theme for the whole page. Blog/search
+and pixel parity are not yet verified.
+
+`websiteAnonymousScope` resolves an exact configured hostname inside the selected tenant database.
+Multiple matching companies fail closed; an unknown domain delegates to existing anonymous scope
+handling. Private fleet composition preserves this result before applying its tenant fallback.

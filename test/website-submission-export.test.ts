@@ -4,6 +4,8 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@
 import type { Adapter } from '@ketvietlab/ketjs'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
+  user,
+  livedoc,
   address,
   company,
   paperTheme,
@@ -13,12 +15,15 @@ import {
   websiteBackend,
   websiteForm,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
 import { csvCell, csvOf, safeFilename } from '../packages/ketsuite/src/modules/website_backend/csv.ts'
 
 const SCOPE = { company: 'acme', branches: null }
 const modules = [
+  user,
+  livedoc,
   address,
   partner,
   company,
@@ -26,6 +31,7 @@ const modules = [
   backend,
   website,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
   websiteForm,
   websiteBackend,
@@ -150,11 +156,14 @@ test('csv: a filename keeps only what a browser and a person can both read', () 
   assert.equal(safeFilename('///'), 'export')
 })
 
-test('export: the routes exist, so the functions are reachable at all', () => {
+test('export: domain APIs remain registered while the old SSR screens are retired', () => {
+  assert.ok(manifest.functions['website_form.exportSubmissions'])
+  assert.ok(manifest.functions['website_form.purgeSubmissions'])
+  assert.ok(manifest.functions['website_form.readSubmission'])
   for (const route of [
     '/admin/website/forms/{id}/submissions/export',
     '/admin/website/forms/{id}/submissions/purge',
     '/admin/website/forms/{id}/submissions/{submissionId}',
   ])
-    assert.ok(manifest.routes[route], `${route} must be composed`)
+    assert.equal(manifest.routes[route], undefined, `${route} must not revive the old UI`)
 })

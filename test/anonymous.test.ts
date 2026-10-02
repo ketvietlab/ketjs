@@ -91,7 +91,9 @@ test('routes: the storefront stays open, which is the point of the distinction',
   const b = await boot()
   try {
     const full = await fetch(`http://127.0.0.1:${b.port}/`)
-    assert.equal(full.status, 200)
+    // Open, not populated: the storefront itself answers that this new site has no home page yet.
+    assert.equal(full.status, 404)
+    assert.equal(full.redirected, false)
     const fullHtml = await full.text()
     assert.match(fullHtml, /data-ket-slot="website\.page"/)
     assert.match(fullHtml, /data-island="website\.search"/)

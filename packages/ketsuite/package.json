@@ -59,6 +59,10 @@
     "./user-modal-client": {
       "types": "./dist/ui/client/user-modal-client.d.ts",
       "default": "./dist/ui/client/user-modal-client.js"
+    },
+    "./ui/icons": {
+      "types": "./dist/ui/icons.d.ts",
+      "default": "./dist/ui/icons.js"
     }
   },
   "dependencies": {

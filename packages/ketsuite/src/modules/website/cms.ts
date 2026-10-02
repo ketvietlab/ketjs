@@ -19,6 +19,7 @@ import {
   withPlacementIds,
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
+import { studioAppearance } from './studio-style.ts'
 import {
   canAccessSite,
   canAdministerSite,
@@ -27,6 +28,8 @@ import {
   canManageStructure,
   canPublishEntry,
 } from './access.ts'
+import { claimImages, imageClaimEffects } from './image-assets.ts'
+import { isSafeUrl, studioFields, termDescription } from './studio-content.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { usageOf } from './media-usage.ts'
@@ -215,6 +218,120 @@ const validateFields = (
   return errors
 }
 
+/** Terms saved before revisions existed answer with a stable stand-in, so they can be edited. */
+const termView = (term: Row): Row => ({ ...term, revisionId: term.revisionId ?? `${term.id}@0` })
+
+/** A term's head tags; `false` when the shape is wrong, so nothing half-valid is stored. */
+const termSeo = (raw: unknown): Row | false => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const seo = raw as Row
+  if (
+    Object.keys(seo).some((key) => !['title', 'description', 'canonical', 'indexing'].includes(key)) ||
+    Object.values(seo).some((value) => typeof value !== 'string') ||
+    String(seo.title ?? '').length > 300 ||
+    String(seo.description ?? '').length > 1000 ||
+    (seo.indexing && !['index', 'noindex'].includes(String(seo.indexing)))
+  )
+    return false
+  const canonical = String(seo.canonical ?? '').trim()
+  if (canonical && (!isSafeUrl(canonical) || !/^(?:https:\/\/|\/(?!\/))/.test(canonical))) return false
+  return {
+    title: String(seo.title ?? '').trim(),
+    description: String(seo.description ?? '').trim(),
+    canonical,
+    indexing: seo.indexing === 'noindex' ? 'noindex' : 'index',
+  }
+}
+
+/** Where a term is still named: child terms, and the draft or live revision of a post. */
+const termUsage = async (ctx: Ctx, term: Row): Promise<Row[]> => {
+  const Term = ctx.table('website.TaxonomyTerm')
+  const children = (
+    await ctx.db.all(from(Term).where(eq(Term.siteId, term.siteId), eq(Term.parentId, term.id)))
+  ).filter((child) => !child.archivedAt)
+  const Entry = ctx.table('website.Entry')
+  const posts = await ctx.db.all(
+    from(Entry).where(
+      eq(Entry.siteId, term.siteId),
+      eq(Entry.type, 'website.post'),
+      ne(Entry.status, 'trash'),
+    ),
+  )
+  const revisionIds = [
+    ...new Set(posts.flatMap((post) => [post.currentRevisionId, post.publishedRevisionId]).filter(Boolean)),
+  ]
+  const Revision = ctx.table('website.EntryRevision')
+  const revisions = revisionIds.length
+    ? await ctx.db.all(
+        from(Revision)
+          .select(Revision.id, Revision.entryId, Revision.fields)
+          .where(inArray(Revision.id, revisionIds)),
+      )
+    : []
+  const names = (fields: unknown): boolean => {
+    const value = (fields && typeof fields === 'object' ? fields : {}) as Row
+    return value.category === term.id || (Array.isArray(value.tags) && value.tags.includes(term.id))
+  }
+  const using = new Set(revisions.filter((revision) => names(revision.fields)).map((r) => r.entryId))
+  return [
+    ...children.map((child) => ({ id: child.id, title: child.name, type: 'child' })),
+    ...posts
+      .filter((post) => using.has(post.id))
+      .map((post) => ({ id: post.id, title: post.title, type: 'post' })),
+  ]
+}
+
+/**
+ * A post's category and tags are ids of this site's terms. They used to be stored as
+ * sent, so a tag could stand in for a category, or a term of another site be shown on
+ * this one; a cover without a description reached visitors with no alternative text.
+ */
+const postFieldErrors = async (
+  ctx: Ctx,
+  siteId: unknown,
+  fields: Row,
+): Promise<Array<{ field: string; message: string }>> => {
+  const errors: Array<{ field: string; message: string }> = []
+  const tags = fields.tags ?? []
+  if (!Array.isArray(tags) || tags.some((id) => typeof id !== 'string'))
+    return [{ field: 'tags', message: 'website.error.invalidPostTerm' }]
+  if (fields.tags != null) fields.tags = [...new Set(tags as string[])]
+  const wanted = [
+    ...(fields.category ? [[String(fields.category), 'website.category']] : []),
+    ...(tags as string[]).map((id) => [id, 'website.tag']),
+  ]
+  if (wanted.length) {
+    const Term = ctx.table('website.TaxonomyTerm')
+    const terms = await ctx.db.all(
+      from(Term).where(
+        eq(Term.siteId, siteId),
+        inArray(
+          Term.id,
+          wanted.map(([id]) => id),
+        ),
+      ),
+    )
+    const found = new Map(
+      terms.filter((term) => !term.archivedAt).map((term) => [String(term.id), String(term.taxonomy)]),
+    )
+    for (const [id, taxonomy] of wanted)
+      if (found.get(id!) !== taxonomy)
+        errors.push({
+          field: taxonomy === 'website.category' ? 'category' : 'tags',
+          message: 'website.error.invalidPostTerm',
+        })
+  }
+  const day = String(fields.publishedAt ?? '')
+  if (
+    day &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(day) || new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day)
+  )
+    errors.push({ field: 'publishedAt', message: 'website.error.invalidDatetime' })
+  if (String(fields.cover ?? '').trim() && !String(fields.coverAlt ?? '').trim())
+    errors.push({ field: 'coverAlt', message: 'website.error.coverAltRequired' })
+  return errors
+}
+
 /**
  * How many published entries one search may scan. The window is a cost ceiling,
  * not a page size: it is applied to entries that are actually publishable, so a
@@ -309,6 +426,130 @@ const searchMatches = async (
     if (matches.length >= need) break
   }
   return { matches, capped }
+}
+
+/** Posts one archive page lists, and how many recent posts one archive request may read. */
+const ARCHIVE_PAGE_SIZE = 20
+const ARCHIVE_SCAN_LIMIT = 500
+
+/**
+ * The public page of a category or tag: `/category/<slug>` or `/tag/<slug>`, then
+ * `/page/<n>` past the first page.
+ *
+ * A term has no entry of its own, so the page is answered here, in the shape
+ * getEntryByPath already gives the storefront: the listing rides in `fields`, where the
+ * presenter reads it, and the framework is not asked to know what an archive is. An entry
+ * published at the same path keeps it. An archived term has no page.
+ *
+ * Only the published revision of a post is consulted, under the same gate as search. The
+ * scan reads the newest ARCHIVE_SCAN_LIMIT posts in small batches, because the category
+ * lives in a revision's fields beside its body; `capped` says older posts were not read.
+ */
+const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | null> => {
+  const match = /^\/(category|tag)\/([^/]+)(?:\/page\/([1-9]\d{0,3}))?$/.exec(path)
+  if (!match) return null
+  const [, kind, slug, pageText] = match
+  const Term = ctx.table('website.TaxonomyTerm')
+  const term = await ctx.db.one(
+    from(Term).where(eq(Term.siteId, site.id), eq(Term.taxonomy, `website.${kind}`), eq(Term.slug, slug)),
+  )
+  if (!term || term.archivedAt) return null
+
+  const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
+  const Entry = ctx.table('website.Entry')
+  const scanned = await ctx.db.all(
+    from(Entry)
+      .where(
+        eq(Entry.siteId, site.id),
+        eq(Entry.type, 'website.post'),
+        isNotNull(Entry.publishedRevisionId),
+        ne(Entry.status, 'trash'),
+      )
+      .orderBy(desc(Entry.publishedAt))
+      .limit(ARCHIVE_SCAN_LIMIT + 1),
+  )
+  const capped = scanned.length > ARCHIVE_SCAN_LIMIT
+  const candidates = scanned
+    .slice(0, ARCHIVE_SCAN_LIMIT)
+    .filter((entry) => !isReservedPath(String(entry.path), prefixes))
+  const Revision = ctx.table('website.EntryRevision')
+  const posts: Row[] = []
+  for (let i = 0; i < candidates.length; i += 50) {
+    const batch = candidates.slice(i, i + 50)
+    const revisions = await ctx.db.all(
+      from(Revision)
+        .select(Revision.id, Revision.entryId, Revision.title, Revision.excerpt, Revision.fields)
+        .where(
+          inArray(
+            Revision.id,
+            batch.map((entry) => entry.publishedRevisionId),
+          ),
+        ),
+    )
+    for (const entry of batch) {
+      const revision = revisions.find((r) => r.id === entry.publishedRevisionId && r.entryId === entry.id)
+      const fields = (revision?.fields && typeof revision.fields === 'object' ? revision.fields : {}) as Row
+      const named =
+        kind === 'category'
+          ? fields.category === term.id
+          : Array.isArray(fields.tags) && fields.tags.includes(term.id)
+      if (!revision || !named) continue
+      posts.push({
+        id: entry.id,
+        path: entry.path,
+        title: revision.title,
+        excerpt: revision.excerpt || fields.excerpt || String(fields.bodyText ?? '').slice(0, 180) || null,
+        publishedAt: fields.publishedAt || entry.publishedAt || null,
+        appearance: entry.publishedAppearance ?? null,
+      })
+    }
+  }
+  posts.sort((a, b) => String(b.publishedAt ?? '').localeCompare(String(a.publishedAt ?? '')))
+
+  const pageNo = Number(pageText ?? 1)
+  const pageCount = Math.max(1, Math.ceil(posts.length / ARCHIVE_PAGE_SIZE))
+  if (pageNo > pageCount) return null
+  const base = `/${kind}/${term.slug}`
+  const shown = posts.slice((pageNo - 1) * ARCHIVE_PAGE_SIZE, pageNo * ARCHIVE_PAGE_SIZE)
+  // The archive wears the style its newest post went out with, so it never shows a style
+  // an editor has saved but not yet published.
+  const home = shown.length
+    ? null
+    : await ctx.db.one(from(Entry).where(eq(Entry.siteId, site.id), eq(Entry.path, '/')))
+  const seo = (term.seo && typeof term.seo === 'object' ? term.seo : {}) as Row
+  return {
+    id: term.id,
+    siteId: site.id,
+    type: 'website.archive',
+    path,
+    title: term.name,
+    excerpt: term.description ?? null,
+    layout: [],
+    appearance:
+      (shown[0]?.appearance as Row | null) ?? home?.publishedAppearance ?? studioAppearance(ctx, site),
+    fields: {
+      seo: {
+        title: seo.title || term.name,
+        description: seo.description || term.description || '',
+        // Later pages are their own pages; only the first takes the editor's canonical.
+        canonical: pageNo === 1 ? seo.canonical || base : path,
+        indexing: seo.indexing === 'noindex' ? 'noindex' : 'index',
+      },
+      archive: {
+        taxonomy: kind,
+        title: term.name,
+        descriptionDoc: term.descriptionDoc ?? null,
+        description: term.description ?? '',
+        page: pageNo,
+        pageCount,
+        total: posts.length,
+        capped,
+        previous: pageNo > 1 ? (pageNo === 2 ? base : `${base}/page/${pageNo - 1}`) : null,
+        next: pageNo < pageCount ? `${base}/page/${pageNo + 1}` : null,
+        posts: shown.map(({ appearance: _, ...post }) => post),
+      },
+    },
+  }
 }
 
 const sha256 = (input: string): string => createHash('sha256').update(input).digest('hex')
@@ -432,7 +673,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const memberships = ctx.actor ? await ctx.db.select('website.SiteMember', { userId: ctx.actor }) : []
       const roleBySite = new Map(memberships.map((row) => [String(row.siteId), String(row.role)]))
       const allowed = new Set(roleBySite.keys())
-      const visible = ctx.actor ? sites.filter((site) => allowed.has(String(site.id))) : sites
+      const visible =
+        ctx.actor && !ctx.manifest.modules.website_backend
+          ? sites.filter((site) => allowed.has(String(site.id)))
+          : sites
       const domains = await ctx.db.select('website.SiteDomain')
       const domainsBySite = new Map<string, typeof domains>()
       for (const domain of domains) {
@@ -572,7 +816,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
   deleteDomain: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.SiteMember', 'read:website.SiteDomain', 'write:website.SiteDomain'],
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website.SiteDomain',
+      'write:website.SiteDomain',
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
@@ -599,7 +848,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       primary: 'bool',
       redirectToPrimary: 'bool',
     },
-    effects: ['read:website.SiteMember', 'read:website.SiteDomain'],
+    effects: ['read:website.Site', 'read:website.SiteMember', 'read:website.SiteDomain'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAdministerSite(ctx, args.siteId))) return []
@@ -638,7 +887,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
   listSiteMembers: defineFn({
     input: { siteId: 'id', limit: 'int?', offset: 'int?' },
     output: { id: 'id', siteId: 'id', userId: 'id', role: 'text' },
-    effects: ['read:website.SiteMember'],
+    effects: ['read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAdministerSite(ctx, args.siteId))) return []
@@ -657,7 +906,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
   removeSiteMember: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.SiteMember', 'write:website.SiteMember'],
+    effects: ['read:website.Site', 'read:website.SiteMember', 'write:website.SiteMember'],
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const member = (await ctx.db.select('website.SiteMember', { id: args.id }))[0]
@@ -686,7 +935,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       status: 'text',
       updatedAt: 'datetime?',
     },
-    effects: ['read:website.Entry', 'read:website.SiteMember'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []
@@ -709,7 +958,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
   countEntries: defineFn({
     input: { siteId: 'id', type: 'text?', status: 'text?', search: 'text?' },
     output: { count: 'int' },
-    effects: ['read:website.Entry', 'read:website.SiteMember'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember'],
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return { count: 0 }
       const Entry = ctx.table('website.Entry')
@@ -727,7 +976,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
   getEntry: defineFn({
     input: { id: 'id' },
     output: { entry: 'json', revision: 'json?' },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.SiteMember'],
+    effects: [
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.id)
@@ -753,6 +1007,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       fields: 'json?',
       meta: 'json?',
       published: 'bool?',
+      appearance: 'json?',
     },
     effects: [
       'read:website.Site',
@@ -760,6 +1015,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       'read:website.Entry',
       'read:website.EntryRevision',
       'read:website.Page',
+      'read:website.TaxonomyTerm',
     ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -791,13 +1047,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
+            appearance: entry.publishedAppearance ?? null,
             // The head metadata travels with the page it describes. Without it
             // the storefront handed the theme an empty meta, so the fields
             // website_seo declares were stored and never rendered.
             meta: await servedMeta(ctx, site, entry),
           }
       }
-      return null
+      return termArchive(ctx, site, path)
     },
   }),
 
@@ -858,13 +1115,16 @@ export const cmsFunctions: Record<string, FnSpec> = {
       conflict: 'json?',
     },
     effects: [
+      ...imageClaimEffects,
       'read:website.Site',
       'read:website.Entry',
       'read:website.EntryRevision',
       'read:website.SiteMember',
+      'read:website.TaxonomyTerm',
       'write:website.Entry',
       'write:website.EntryRevision',
     ],
+    idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await siteById(ctx, args.siteId))) return invalid('siteId', 'website.error.siteNotFound')
@@ -875,8 +1135,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
         return forbidden()
       if (
         existing &&
-        args.expectedRevisionId != null &&
-        args.expectedRevisionId !== existing.currentRevisionId
+        ((ctx.actor && ctx.manifest.modules.website_backend && args.expectedRevisionId == null) ||
+          (args.expectedRevisionId != null && args.expectedRevisionId !== existing.currentRevisionId))
       )
         // "Someone else saved" was the whole answer, which leaves the editor to
         // reload and find the difference by eye. The refusal now carries the
@@ -903,8 +1163,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
       // written before identity existed gains it on its first save and keeps it
       // on every save after. A client that already carries ids keeps its own.
       const layout = withPlacementIds(args.layout as Placement[], sha256)
+      args.fields = studioFields(String(args.type), args.fields)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }
+      if (args.type === 'website.post') {
+        const postErrors = await postFieldErrors(ctx, args.siteId, args.fields as Row)
+        if (postErrors.length) return { ok: false, errors: postErrors }
+      }
       const path = cleanPath(args.path)
       if (!path) return invalid('path', 'website.error.invalidPath')
       const slug = String(args.slug)
@@ -948,7 +1213,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
           const changed = await tx.db.compareAndSet(
             'website.Entry',
             { id: args.id },
-            { currentRevisionId: existing.currentRevisionId },
+            { currentRevisionId: existing.currentRevisionId, status: existing.status },
             entry,
           )
           if (!('dryRun' in changed) && !changed.matched) return false
@@ -968,6 +1233,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),
         })
+        await claimImages(tx, args.id, args.siteId, revisionId, [layout, args.fields])
         return true
       })
       if (!saved)
@@ -985,6 +1251,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     effects: [
       'read:website.Entry',
       'read:website.EntryRevision',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website.Entry',
       'enqueue:website.publishScheduled',
@@ -1008,6 +1275,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
           unrenderable: [renderable],
         }
       const revisionId = String(entry.currentRevisionId)
+      // Capture configuration now; later edits must not change an existing publication
+      // or a scheduled one. The worker only promotes this immutable snapshot.
+      const site = (await ctx.db.select('website.Site', { id: entry.siteId }))[0]
+      const appearance = studioAppearance(ctx, site)
       const now = new Date()
       const scheduled = args.publishAt ? new Date(String(args.publishAt)) : null
       if (scheduled && Number.isNaN(scheduled.getTime()))
@@ -1020,6 +1291,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
           {
             status: 'scheduled',
             scheduledRevisionId: revisionId,
+            scheduledAppearance: appearance,
             publishAt: scheduled.toISOString(),
           },
         )
@@ -1039,7 +1311,9 @@ export const cmsFunctions: Record<string, FnSpec> = {
         {
           status: 'published',
           publishedRevisionId: revisionId,
+          publishedAppearance: appearance,
           scheduledRevisionId: null,
+          scheduledAppearance: null,
           publishAt: null,
           publishedAt: now.toISOString(),
         },
@@ -1047,6 +1321,45 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!('dryRun' in changed) && !changed.matched)
         return invalid('expectedRevisionId', 'website.error.editConflict')
       return { ok: true, id: args.id, status: 'published' }
+    },
+  }),
+
+  cancelScheduledEntry: defineFn({
+    input: { id: 'id', expectedRevisionId: 'id', expectedScheduledRevisionId: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || entry.status === 'trash') return invalid('id', 'website.error.revisionNotFound')
+      if (!(await canPublishEntry(ctx, entry))) return forbidden()
+      if (
+        args.expectedRevisionId !== entry.currentRevisionId ||
+        args.expectedScheduledRevisionId !== entry.scheduledRevisionId
+      )
+        return invalid('expectedRevisionId', 'website.error.editConflict')
+      // Clearing only the scheduled revision also makes queued jobs harmless.
+      // The existing public revision and all subsequent drafts remain intact.
+      const changed = await ctx.db.compareAndSet(
+        'website.Entry',
+        { id: args.id },
+        {
+          currentRevisionId: entry.currentRevisionId,
+          scheduledRevisionId: entry.scheduledRevisionId,
+          publishAt: entry.publishAt,
+          status: entry.status,
+        },
+        {
+          status: entry.publishedRevisionId ? 'published' : 'draft',
+          scheduledRevisionId: null,
+          scheduledAppearance: null,
+          publishAt: null,
+        },
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
+      return { ok: true, id: args.id }
     },
   }),
 
@@ -1067,22 +1380,34 @@ export const cmsFunctions: Record<string, FnSpec> = {
    * have, which is "get this off my list".
    */
   trashEntry: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevisionId: 'id?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember', 'write:website.Entry'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.id)
       if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (args.expectedRevisionId != null && args.expectedRevisionId !== entry.currentRevisionId)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       if (entry.status === 'trash') return { ok: true, id: args.id }
       // The same clearing unpublishEntry does. The resolver checks the status
       // too, but a pointer left behind is a pointer somebody later trusts.
-      await ctx.db.update(
+      const changed = await ctx.db.compareAndSet(
         'website.Entry',
         { id: args.id },
-        { status: 'trash', publishedRevisionId: null, scheduledRevisionId: null, publishAt: null },
+        { currentRevisionId: entry.currentRevisionId, status: entry.status },
+        {
+          status: 'trash',
+          publishedRevisionId: null,
+          publishedAppearance: null,
+          scheduledRevisionId: null,
+          scheduledAppearance: null,
+          publishAt: null,
+        },
       )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       return { ok: true, id: args.id }
     },
   }),
@@ -1095,18 +1420,27 @@ export const cmsFunctions: Record<string, FnSpec> = {
    * implicit revival, and a screen needs a control that says what it does.
    */
   untrashEntry: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevisionId: 'id?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember', 'write:website.Entry'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.id)
       if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (args.expectedRevisionId != null && args.expectedRevisionId !== entry.currentRevisionId)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       if (entry.status !== 'trash') return { ok: true, id: args.id }
       // A draft, never straight back to published: what it used to say may be
       // the reason it was thrown away.
-      await ctx.db.update('website.Entry', { id: args.id }, { status: 'draft' })
+      const changed = await ctx.db.compareAndSet(
+        'website.Entry',
+        { id: args.id },
+        { currentRevisionId: entry.currentRevisionId, status: entry.status },
+        { status: 'draft' },
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       return { ok: true, id: args.id }
     },
   }),
@@ -1131,7 +1465,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
   unpublishEntry: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
-    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    effects: ['read:website.Entry', 'read:website.Site', 'read:website.SiteMember', 'write:website.Entry'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -1144,7 +1478,9 @@ export const cmsFunctions: Record<string, FnSpec> = {
         {
           status: 'draft',
           publishedRevisionId: null,
+          publishedAppearance: null,
           scheduledRevisionId: null,
+          scheduledAppearance: null,
           publishAt: null,
         },
       )
@@ -1203,7 +1539,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
   listRevisions: defineFn({
     input: { entryId: 'id', limit: 'int?', offset: 'int?' },
     output: { id: 'id', entryId: 'id', version: 'int', kind: 'text', authorId: 'id?', createdAt: 'datetime' },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.SiteMember'],
+    effects: [
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
       if (!entry || !(await canEditEntry(ctx, entry))) return []
@@ -1251,7 +1592,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
       identified: 'bool?',
       errors: 'json?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.SiteMember'],
+    effects: [
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
       if (!entry || !(await canEditEntry(ctx, entry))) return invalid('entryId', 'website.error.forbidden')
@@ -1283,11 +1629,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
   }),
 
   restoreRevision: defineFn({
-    input: { entryId: 'id', revisionId: 'id' },
+    input: { entryId: 'id', revisionId: 'id', expectedRevisionId: 'id?' },
     output: { ok: 'bool', id: 'id?', revisionId: 'id?', version: 'int?', errors: 'json?' },
     effects: [
+      ...imageClaimEffects,
       'read:website.Entry',
       'read:website.EntryRevision',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website.Entry',
       'write:website.EntryRevision',
@@ -1296,6 +1644,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
       if (!entry || !(await canEditEntry(ctx, entry))) return forbidden()
+      if (args.expectedRevisionId != null && args.expectedRevisionId !== entry.currentRevisionId)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       const revision = (
         await ctx.db.select('website.EntryRevision', { id: args.revisionId, entryId: args.entryId })
       )[0]
@@ -1332,6 +1682,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),
         })
+        await claimImages(tx, args.entryId, entry.siteId, revisionId, [revision.layout, revision.fields])
         return true
       })
       return restored
@@ -1340,29 +1691,82 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * A link to one revision, not to whatever the draft becomes: the person asked
+   * to look at it should see what they were asked about. Without `revisionId`
+   * it pins the current one. A day is the longest a link lives.
+   */
   createPreviewToken: defineFn({
-    input: { entryId: 'id', ttlSeconds: 'int?', oneTime: 'bool?' },
+    input: { entryId: 'id', revisionId: 'id?', audience: 'text?', ttlSeconds: 'int?', oneTime: 'bool?' },
     output: { token: 'text', expiresAt: 'datetime' },
-    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.PreviewToken'],
+    effects: [
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
+      'write:website.PreviewToken',
+    ],
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
       if (!entry?.currentRevisionId) throw new Error('entry has no revision')
       if (!(await canEditEntry(ctx, entry))) throw new Error('website.error.forbidden')
-      const ttl = Math.min(Math.max(Number(args.ttlSeconds ?? 900), 60), 3600)
+      if (args.audience != null && args.audience !== 'staff' && args.audience !== 'link')
+        throw new Error('website.error.previewAudience')
+      const revisionId = args.revisionId ?? entry.currentRevisionId
+      const revision = (await ctx.db.select('website.EntryRevision', { id: revisionId }))[0]
+      if (!revision || revision.entryId !== entry.id) throw new Error('website.error.revisionNotFound')
+      const ttl = Math.min(Math.max(Number(args.ttlSeconds ?? 900), 60), 86400)
       const token = randomBytes(24).toString('base64url')
       const expiresAt = new Date(Date.now() + ttl * 1000).toISOString()
       await ctx.db.insert('website.PreviewToken', {
         id: randomUUID(),
         entryId: args.entryId,
-        revisionId: entry.currentRevisionId,
+        revisionId,
         digest: digest(token),
         expiresAt,
         createdBy: ctx.actor,
         oneTime: args.oneTime === true,
+        audience: args.audience ?? null,
         usedAt: null,
         revokedAt: null,
       })
       return { token, expiresAt }
+    },
+  }),
+
+  /** What the Studio shows beside a link it opened: which revision, for whom, until when. */
+  previewLink: defineFn({
+    input: { token: 'text' },
+    output: {
+      entryId: 'id',
+      siteId: 'id',
+      revisionId: 'id',
+      audience: 'text',
+      expiresAt: 'datetime',
+      active: 'bool',
+    },
+    effects: [
+      'read:website.PreviewToken',
+      'read:website.Entry',
+      'read:website.Site',
+      'read:website.SiteMember',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const Token = ctx.table('website.PreviewToken')
+      const token = await ctx.db.one(from(Token).where(eq(Token.digest, digest(String(args.token)))))
+      const entry = token ? await entryById(ctx, token.entryId) : null
+      if (!token || !entry || !ctx.actor || !(await canAccessSite(ctx, entry.siteId))) return null
+      return {
+        entryId: entry.id,
+        siteId: entry.siteId,
+        revisionId: token.revisionId,
+        audience: token.audience ?? 'link',
+        expiresAt: token.expiresAt,
+        active:
+          !token.revokedAt &&
+          !(token.oneTime === true && token.usedAt) &&
+          new Date(String(token.expiresAt)) > new Date(),
+      }
     },
   }),
 
@@ -1388,12 +1792,15 @@ export const cmsFunctions: Record<string, FnSpec> = {
       fields: 'json?',
       meta: 'json?',
       published: 'bool?',
+      appearance: 'json?',
     },
     effects: [
       'read:website.PreviewToken',
       'write:website.PreviewToken',
       'read:website.Entry',
       'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
     ],
     handler: async (ctx: Ctx, args) => {
       const Token = ctx.table('website.PreviewToken')
@@ -1408,6 +1815,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const entry = await entryById(ctx, token.entryId)
       const revision = (await ctx.db.select('website.EntryRevision', { id: token.revisionId }))[0]
       if (!entry || !revision || revision.entryId !== entry.id) return null
+      // A staff link forwarded outside opens nothing, rather than the draft.
+      if (token.audience === 'staff' && (!ctx.actor || !(await canAccessSite(ctx, entry.siteId)))) return null
       if (token.oneTime === true) {
         const used = await ctx.db.compareAndSet(
           'website.PreviewToken',
@@ -1428,15 +1837,19 @@ export const cmsFunctions: Record<string, FnSpec> = {
         fields: revision.fields,
         meta: publicMeta(entry),
         published: entry.status === 'published',
+        // Dressed as publishing now would dress it: publish captures the site's current style.
+        appearance: studioAppearance(ctx, (await ctx.db.select('website.Site', { id: entry.siteId }))[0]),
       }
     },
   }),
 
+  /** Every link to an entry, or with `token` only that one. */
   revokePreviewTokens: defineFn({
-    input: { entryId: 'id' },
+    input: { entryId: 'id', token: 'text?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:website.Entry',
+      'read:website.Site',
       'read:website.SiteMember',
       'read:website.PreviewToken',
       'write:website.PreviewToken',
@@ -1445,7 +1858,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
       if (!entry || !(await canEditEntry(ctx, entry))) return forbidden()
-      const tokens = await ctx.db.select('website.PreviewToken', { entryId: args.entryId })
+      const tokens = await ctx.db.select(
+        'website.PreviewToken',
+        args.token == null
+          ? { entryId: args.entryId }
+          : { entryId: args.entryId, digest: digest(String(args.token)) },
+      )
       const revokedAt = new Date().toISOString()
       for (const token of tokens)
         if (!token.revokedAt) await ctx.db.update('website.PreviewToken', { id: token.id }, { revokedAt })
@@ -1463,8 +1881,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
       name: 'text',
       description: 'text?',
       parentId: 'id?',
+      descriptionDoc: 'text?',
+      seo: 'json?',
+      revisionId: 'text',
+      archivedAt: 'datetime?',
     },
-    effects: ['read:website.TaxonomyTerm', 'read:website.SiteMember'],
+    effects: ['read:website.TaxonomyTerm', 'read:website.Site', 'read:website.SiteMember'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []
@@ -1474,7 +1896,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
         .where(eq(Term.siteId, args.siteId))
         .orderBy(asc(Term.taxonomy), asc(Term.name), asc(Term.id))
       if (args.taxonomy) query = query.where(eq(Term.taxonomy, args.taxonomy))
-      return ctx.db.all(query.limit(paging.limit).offset(paging.offset))
+      return (await ctx.db.all(query.limit(paging.limit).offset(paging.offset))).map(termView)
     },
   }),
 
@@ -1488,11 +1910,15 @@ export const cmsFunctions: Record<string, FnSpec> = {
       name: 'text',
       description: 'text?',
       parentId: 'id?',
+      descriptionDoc: 'text?',
+      seo: 'json?',
+      revisionId: 'text',
+      archivedAt: 'datetime?',
     },
-    effects: ['read:website.TaxonomyTerm', 'read:website.SiteMember'],
+    effects: ['read:website.TaxonomyTerm', 'read:website.Site', 'read:website.SiteMember'],
     handler: async (ctx: Ctx, args) => {
       const term = (await ctx.db.select('website.TaxonomyTerm', { id: args.id }))[0]
-      return term && (await canAccessSite(ctx, term.siteId)) ? term : null
+      return term && (await canAccessSite(ctx, term.siteId)) ? termView(term) : null
     },
   }),
 
@@ -1505,8 +1931,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
       name: 'text',
       description: 'text?',
       parentId: 'id?',
+      descriptionDoc: 'text?',
+      seo: 'json?',
+      expectedRevisionId: 'text?',
     },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', revisionId: 'text?', errors: 'json?' },
     effects: [
       'read:website.Site',
       'read:website.SiteMember',
@@ -1516,43 +1945,116 @@ export const cmsFunctions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
-      if (!ctx.manifest.taxonomies[String(args.taxonomy)])
-        return invalid('taxonomy', 'website.error.invalidTaxonomy')
+      const taxonomy = ctx.manifest.taxonomies[String(args.taxonomy)]
+      if (!taxonomy) return invalid('taxonomy', 'website.error.invalidTaxonomy')
       if (!(await siteById(ctx, args.siteId))) return invalid('siteId', 'website.error.siteNotFound')
       if (!(await canManageStructure(ctx, args.siteId))) return forbidden()
       if (args.parentId === args.id) return invalid('parentId', 'website.error.taxonomyCycle')
       const existing = (await ctx.db.select('website.TaxonomyTerm', { id: args.id }))[0]
       if (existing && (existing.siteId !== args.siteId || existing.taxonomy !== args.taxonomy))
         return invalid('id', 'website.error.immutableOwnership')
+      if (existing?.archivedAt) return invalid('id', 'website.error.termArchived')
+      // The Studio always says which version it edited; older callers may still omit it.
+      const studio = !!ctx.actor && !!ctx.manifest.modules.website_backend
+      if (
+        existing
+          ? (studio || args.expectedRevisionId != null) &&
+            args.expectedRevisionId !== termView(existing).revisionId
+          : args.expectedRevisionId != null
+      )
+        return invalid('expectedRevisionId', 'website.error.editConflict')
       const slug = String(args.slug ?? '').trim()
       const name = String(args.name ?? '').trim()
       if (!validSlug(slug)) return invalid('slug', 'website.error.invalidSlug')
       if (!name || name.length > 200) return invalid('name', 'website.error.invalidName')
+      const seo = args.seo == null ? null : termSeo(args.seo)
+      if (seo === false) return invalid('seo', 'website.error.invalidTermSeo')
       const Term = ctx.table('website.TaxonomyTerm')
       const duplicate = await ctx.db.one(
         from(Term).where(eq(Term.siteId, args.siteId), eq(Term.taxonomy, args.taxonomy), eq(Term.slug, slug)),
       )
       if (duplicate && duplicate.id !== args.id) return invalid('slug', 'website.error.duplicateSlug')
+      if (args.parentId && !taxonomy.hierarchical) return invalid('parentId', 'website.error.invalidParent')
       let parentId = args.parentId ?? null
       for (let depth = 0; parentId && depth <= 100; depth += 1) {
         const parent = (await ctx.db.select('website.TaxonomyTerm', { id: parentId }))[0]
-        if (!parent || parent.siteId !== args.siteId || parent.taxonomy !== args.taxonomy)
+        if (
+          !parent ||
+          parent.siteId !== args.siteId ||
+          parent.taxonomy !== args.taxonomy ||
+          (depth === 0 && parent.archivedAt)
+        )
           return invalid('parentId', 'website.error.invalidParent')
         if (parent.id === args.id || depth === 100) return invalid('parentId', 'website.error.taxonomyCycle')
         parentId = parent.parentId ?? null
       }
+      const description =
+        args.descriptionDoc == null || args.descriptionDoc === ''
+          ? { doc: null, text: args.description ?? null }
+          : termDescription(args.descriptionDoc)
+      const revisionId = randomUUID()
       const row = {
         id: args.id,
         siteId: args.siteId,
         taxonomy: args.taxonomy,
         slug,
         name,
-        description: args.description ?? null,
+        description: description.text || null,
+        descriptionDoc: description.doc,
         parentId: args.parentId ?? null,
+        seo: seo ?? existing?.seo ?? null,
+        revisionId,
       }
-      if (existing) await ctx.db.update('website.TaxonomyTerm', { id: args.id }, row)
-      else await ctx.db.insert('website.TaxonomyTerm', row)
-      return { ok: true, id: args.id }
+      if (existing) {
+        const changed = await ctx.db.compareAndSet(
+          'website.TaxonomyTerm',
+          { id: args.id },
+          { revisionId: existing.revisionId ?? null, archivedAt: null },
+          row,
+        )
+        if (!('dryRun' in changed) && !changed.matched)
+          return invalid('expectedRevisionId', 'website.error.editConflict')
+      } else {
+        const inserted = await ctx.db.insertIfAbsent('website.TaxonomyTerm', row)
+        if (!('dryRun' in inserted) && !inserted.inserted)
+          return invalid('expectedRevisionId', 'website.error.editConflict')
+      }
+      return { ok: true, id: args.id, revisionId }
+    },
+  }),
+
+  archiveTerm: defineFn({
+    input: { id: 'id', expectedRevisionId: 'text' },
+    output: { ok: 'bool', id: 'id?', revisionId: 'text?', errors: 'json?', usage: 'json?' },
+    effects: [
+      'read:website.TaxonomyTerm',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Site',
+      'read:website.SiteMember',
+      'write:website.TaxonomyTerm',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const term = (await ctx.db.select('website.TaxonomyTerm', { id: args.id }))[0]
+      if (!term || !(await canManageStructure(ctx, term.siteId))) return forbidden()
+      if (term.archivedAt) return { ok: true, id: args.id, revisionId: termView(term).revisionId }
+      if (args.expectedRevisionId !== termView(term).revisionId)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
+      // Archiving what a post still names would leave the post unsavable and its page
+      // linking to a term visitors cannot open, so the editor is told where it is used.
+      const usage = await termUsage(ctx, term)
+      if (usage.length) return { ...invalid('id', 'website.error.termInUse'), usage }
+      const revisionId = randomUUID()
+      const changed = await ctx.db.compareAndSet(
+        'website.TaxonomyTerm',
+        { id: args.id },
+        { revisionId: term.revisionId ?? null, archivedAt: null },
+        { archivedAt: new Date().toISOString(), revisionId },
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid('expectedRevisionId', 'website.error.editConflict')
+      return { ok: true, id: args.id, revisionId }
     },
   }),
 
@@ -1562,6 +2064,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     effects: [
       'read:website.TaxonomyTerm',
       'read:website.EntryTerm',
+      'read:website.Site',
       'read:website.SiteMember',
       'write:website.TaxonomyTerm',
     ],
@@ -1584,6 +2087,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:website.Entry',
+      'read:website.Site',
       'read:website.SiteMember',
       'read:website.TaxonomyTerm',
       'write:website.EntryTerm',
@@ -1604,6 +2108,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     output: { id: 'id', termId: 'id', taxonomy: 'text', slug: 'text', name: 'text' },
     effects: [
       'read:website.Entry',
+      'read:website.Site',
       'read:website.SiteMember',
       'read:website.EntryTerm',
       'read:website.TaxonomyTerm',
@@ -1648,7 +2153,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
   unassignTerm: defineFn({
     input: { entryId: 'id', termId: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.EntryTerm'],
+    effects: [
+      'read:website.Entry',
+      'read:website.Site',
+      'read:website.SiteMember',
+      'write:website.EntryTerm',
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const entry = await entryById(ctx, args.entryId)
@@ -1718,7 +2228,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       width: 'int?',
       height: 'int?',
     },
-    effects: ['read:website.MediaMetadata', 'read:website.SiteMember'],
+    effects: ['read:website.MediaMetadata', 'read:website.Site', 'read:website.SiteMember'],
     handler: async (ctx: Ctx, args) => {
       const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
       return media && (await canAccessSite(ctx, media.siteId)) ? media : null
@@ -1737,6 +2247,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     output: { used: 'bool', capped: 'bool', uses: 'json' },
     effects: [
       'read:website.MediaMetadata',
+      'read:website.Site',
       'read:website.SiteMember',
       'read:website.Entry',
       'read:website.EntryRevision',
@@ -1755,6 +2266,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:website.MediaMetadata',
+      'read:website.Site',
       'read:website.SiteMember',
       'read:website.Entry',
       'read:website.EntryRevision',
@@ -1789,7 +2301,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       width: 'int?',
       height: 'int?',
     },
-    effects: ['read:website.MediaMetadata', 'read:website.SiteMember'],
+    effects: ['read:website.MediaMetadata', 'read:website.Site', 'read:website.SiteMember'],
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []
       const Media = ctx.table('website.MediaMetadata')
@@ -1853,7 +2365,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
   listRedirects: defineFn({
     input: { siteId: 'id', active: 'bool?', limit: 'int?', offset: 'int?' },
     output: { id: 'id', siteId: 'id', fromPath: 'text', toPath: 'text', permanent: 'bool', active: 'bool' },
-    effects: ['read:website.Redirect', 'read:website.SiteMember'],
+    effects: ['read:website.Redirect', 'read:website.Site', 'read:website.SiteMember'],
     handler: async (ctx: Ctx, args) => {
       if (!(await canAccessSite(ctx, args.siteId))) return []
       const Redirect = ctx.table('website.Redirect')
