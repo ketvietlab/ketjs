@@ -50,7 +50,7 @@ contract; never shrink text to fit. Zero default outer text margins.
 | Related actions | 8px | ActionGroup |
 | Title block to content | 8px | Surface/Section |
 | Surface/modal inset | 16px | Outer surface/overlay |
-| Form columns | 12px | Form layout |
+| Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
 | Field groups/sections | 16px | Parent layout |
 | Page gutter | 24px desktop, 16px mobile | Page |
@@ -65,7 +65,9 @@ uses the Button-owned 20px box and 2px inner gap; do not substitute the 8px grou
 Textarea grows by rows/content. Native and compound controls use the same type and
 geometry. Loading keeps the button's label/icon footprint and accessible name.
 
-24px is the outer desktop gutter, not a default form/section gap. Stack gap aliases
+24px is the outer desktop gutter and the gap between form columns. The form-column
+gap is Két policy (Polaris FormLayout.Group uses 12px); it separates complete fields,
+not a label from its input. Form rows and section gaps remain 16px. Stack gap aliases
 are none=0, tight=4, compact=8, column=12, default=16, loose=16. The last two are
 compatibility aliases, not distinct density levels. Use pattern defaults before
 choosing generic gaps. Parent presentation/theme CSS must not override a child's gap.
@@ -158,3 +160,18 @@ on DS hooks/private descendants, or override their tokens to restyle one route.
 No revert-layer or unlayered override to bypass ownership. Runtime style values for
 measured positions are allowed only in the owning component/runtime. Semantic rich
 text, hidden form inputs and documented compatibility adapters are not imitation UI.
+
+### Kanban drag targets
+
+For a board lane, pass `KanbanGrid.dropTarget`, a localized `dropLabel` and
+`emptyLabel`. The lane owns a minimum 12rem hit area even with zero cards and
+keeps space after its last card droppable. This geometry belongs to the DS;
+consumers must not implement lane height by inserting a fake card.
+`KanbanCard.draggable` opts into native drag. The product runtime owns permitted
+transitions, persistence and confirmation; it sets `data-drop-state` to `accept`
+or `reject` for feedback and must keep a keyboard-accessible move command.
+A drop must resolve the target lane, never require a target card.
+
+ModalSheet dialog sizes: `small` (34rem) for short single-column forms,
+`default` (56rem) for two-column forms or modest tables, and `large` (75rem)
+for dense workspaces. Choose by content structure, not field count.

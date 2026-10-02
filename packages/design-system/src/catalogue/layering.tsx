@@ -1,5 +1,16 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import {
+  ContentCard,
+  Disclosure,
+  Grid,
+  Inline,
+  KanbanCard,
+  KanbanGrid,
+  Metric,
+  Section,
+  Stack,
+  Surface,
+} from '../layouts/index.tsx'
 import { SearchBar } from '../data-operations/list-controls/index.tsx'
 import { Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Field } from '../primitives/field.tsx'
@@ -157,6 +168,42 @@ export const LayeringPreview = (props: {
             />
           }
         />,
+        <Case
+          name="kanban-empty-lane"
+          body={
+            <Grid
+              columns={2}
+              items={[
+                <Section
+                  title="Assigned"
+                  body={
+                    <KanbanGrid
+                      rows={[{ id: 'sample', title: 'Drag source' }]}
+                      id={(row) => row.id}
+                      dropTarget="assigned"
+                      dropLabel="Assigned lane"
+                      emptyLabel="Drop a card here"
+                      card={(row) => <KanbanCard id={row.id} title={row.title} draggable href="#sample" />}
+                    />
+                  }
+                />,
+                <Section
+                  title="Empty lane"
+                  body={
+                    <KanbanGrid
+                      rows={[]}
+                      id={() => ''}
+                      dropTarget="empty"
+                      dropLabel="Empty lane drop target"
+                      emptyLabel="Drop a card here"
+                      card={() => <></>}
+                    />
+                  }
+                />,
+              ]}
+            />
+          }
+        />,
         <Case name="canvas-surface" body={<Surface title="On the canvas" body={fields('layering-1')} />} />,
         <Case
           name="single-column-form"
@@ -178,7 +225,10 @@ export const LayeringPreview = (props: {
             </div>
           }
         />,
-        <Case name="wide-form" body={<Surface title="A wide form" body={noteForm('layering-wide')} />} />,
+        <Case
+          name="wide-form"
+          body={<Surface title="A wide form · 24px column gap" body={noteForm('layering-wide')} />}
+        />,
         <Case
           name="narrow-form"
           body={
@@ -209,6 +259,20 @@ export const LayeringPreview = (props: {
                   body={fields('layering-2')}
                 />
               }
+            />
+          }
+        />,
+        <Case
+          name="small-modal"
+          body={
+            <ModalSheet
+              id="layering-small-modal"
+              mode="embedded"
+              presentation="dialog"
+              size="small"
+              title="Edit label"
+              closeLabel="Close"
+              body={fields('small-modal')}
             />
           }
         />,
