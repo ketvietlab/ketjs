@@ -176,3 +176,11 @@ A drop must resolve the target lane, never require a target card.
 ModalSheet dialog sizes: `small` (34rem) for short single-column forms,
 `default` (56rem) for two-column forms or modest tables, and `large` (75rem)
 for dense workspaces. Choose by content structure, not field count.
+
+## Credential completion
+
+Operational ERP fields retain `autocomplete="off"`. Public customer sign-in is a
+scoped exception owned by the website authentication view: the login field uses
+`username` and the password field uses `current-password` so password managers can
+identify the credentials. This exception does not apply to ordinary website or ERP
+forms. Keep the field associations and native password semantics.
