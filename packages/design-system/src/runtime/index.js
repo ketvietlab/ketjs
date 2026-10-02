@@ -1,4 +1,6 @@
 // @ts-check
+import { attachPrimitives } from './primitives.js'
+import { attachDatePickers } from '../forms/date-time/runtime.js'
 
 const focusableSelector = [
   'a[href]',
@@ -140,7 +142,13 @@ const attachGlobalSearch = (root) => {
   }
 }
 
+/**
+ * Binds the interactions of every component under `root`: the whole page, or one island's element.
+ * @param {Document | HTMLElement} [root]
+ */
 export const attachDesignSystemInteractions = (root = document) => {
+  const cleanupPrimitives = attachPrimitives(root)
+  const cleanupDatePickers = attachDatePickers(root)
   const cleanupGlobalSearch = attachGlobalSearch(root)
   const activeBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const modal = root.querySelector('[data-ui="modal-layer"][data-route-modal="true"] [role="dialog"]')
@@ -167,7 +175,7 @@ export const attachDesignSystemInteractions = (root = document) => {
     return () => menu.removeEventListener('toggle', onToggle)
   })
 
-  const navigationMedia = window.matchMedia('(max-width: 48rem)')
+  const navigationMedia = window.matchMedia('(width < 48rem)')
   const navigationRoot = document.documentElement
   const priorNavigationOpen = navigationRoot.dataset.kvNavigationOpen
   const navigations = /** @type {HTMLDetailsElement[]} */ (
@@ -600,6 +608,8 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   return () => {
     cleanupGlobalSearch()
+    cleanupPrimitives()
+    cleanupDatePickers()
     document.removeEventListener('keydown', onKeydown)
     document.removeEventListener('click', onDocumentClick)
     document.removeEventListener('change', onSelectionChange)

@@ -66,7 +66,7 @@ export const functions: Record<string, FnSpec> = {
       publicationId: 'text?',
       completedAt: 'datetime?',
     },
-    effects: ['read:website.Site', 'read:website_search.SearchIndexState'],
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website_search.SearchIndexState'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const site = await servedSite(ctx, args.siteId)
@@ -74,7 +74,7 @@ export const functions: Record<string, FnSpec> = {
       const state = await stateFor(ctx, args.siteId)
       return {
         state: String(state?.state ?? 'absent'),
-        current: isCurrent(state, site),
+        current: await isCurrent(ctx, state, site),
         documentCount: Number(state?.documentCount ?? 0),
         publicationId: state?.publicationId ?? null,
         completedAt: state?.completedAt ?? null,
@@ -92,7 +92,7 @@ export const functions: Record<string, FnSpec> = {
    */
   searchIndexed: defineFn({
     anonymous: true,
-    input: { siteId: 'id', q: 'text', limit: 'int?', offset: 'int?' },
+    input: { siteId: 'id', q: 'text', type: 'text?', limit: 'int?', offset: 'int?' },
     output: { hits: 'json', total: 'int', stale: 'bool', indexed: 'bool' },
     effects: indexEffects,
     handler: async (ctx: Ctx, args) => {
@@ -100,22 +100,24 @@ export const functions: Record<string, FnSpec> = {
       const site = await servedSite(ctx, args.siteId)
       if (!site || needle.length < MIN_TERM) return { hits: [], total: 0, stale: false, indexed: false }
 
-      let state = await stateFor(ctx, args.siteId)
-      if (!isCurrent(state, site)) {
+      let current = await isCurrent(ctx, await stateFor(ctx, args.siteId), site)
+      if (!current) {
         for (let i = 0; i < INLINE_PASSES; i += 1) {
           const pass = await rebuildPass(ctx, site)
           if (pass.done) break
         }
-        state = await stateFor(ctx, args.siteId)
+        current = await isCurrent(ctx, await stateFor(ctx, args.siteId), site)
       }
 
       const Document = ctx.table('website_search.SearchDocument')
       const paging = page(args.limit, args.offset)
       // Both sides are already lowercased, so a case-sensitive LIKE is the
       // cheaper operator and means the same thing.
-      const matching = from(Document)
+      let matching = from(Document)
         .where(eq(Document.siteId, args.siteId))
         .where(like(Document.haystack, `%${likeLiteral(needle)}%`, true))
+      // One entry type, such as `website.post`; anything else searches them all.
+      if (args.type) matching = matching.where(eq(Document.type, String(args.type)))
       const rows = await ctx.db.all(
         matching.orderBy(desc(Document.publishedAt)).limit(paging.limit).offset(paging.offset),
       )
@@ -130,7 +132,7 @@ export const functions: Record<string, FnSpec> = {
         })),
         total: await ctx.db.count(matching),
         // The visitor gets an answer either way; the caller gets to say so.
-        stale: !isCurrent(state, site),
+        stale: !current,
         indexed: true,
       }
     },

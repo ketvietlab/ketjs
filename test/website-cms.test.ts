@@ -65,12 +65,8 @@ test('website backend: owns a primary application menu instead of hiding under a
   assert.equal(websiteBackend.menus?.website?.icon, 'globe')
   assert.equal(websiteBackend.menus?.website?.parent, undefined)
   assert.equal(typeof websiteBackend.menus?.website?.sequence, 'number')
-  assert.equal(websiteBackend.menus?.['website.pages']?.parent, 'website')
-  assert.equal(websiteBackend.menus?.['website.posts']?.parent, 'website')
-  assert.equal(websiteBackend.menus?.['website.pages']?.path, '/admin/website/pages')
-  assert.equal(websiteBackend.menus?.['website.posts']?.path, '/admin/website/posts')
-  assert.equal(websiteBackend.menus?.['website.configuration']?.parent, 'website')
-  assert.equal(websiteBackend.menus?.['website.sites']?.parent, 'website.configuration')
+  assert.equal(websiteBackend.menus?.website?.path, '/website')
+  assert.deepEqual(Object.keys(websiteBackend.menus ?? {}), ['website'])
   assert.equal('admin.website' in (websiteBackend.menus ?? {}), false)
 })
 
@@ -84,16 +80,16 @@ test('cms: taxonomy and media metadata support complete create, read, update and
     theme: 'theme_paper',
   })
 
-  assert.deepEqual(
-    await call(db, 'website.saveTerm', {
-      id: 'term-news',
-      siteId: 'crud-site',
-      taxonomy: 'website.category',
-      slug: 'news',
-      name: 'News',
-    }),
-    { ok: true, id: 'term-news' },
-  )
+  // Each save answers the version it wrote, which the next edit names to compare against.
+  const created = (await call(db, 'website.saveTerm', {
+    id: 'term-news',
+    siteId: 'crud-site',
+    taxonomy: 'website.category',
+    slug: 'news',
+    name: 'News',
+  })) as { ok: boolean; id: string; revisionId: string }
+  assert.deepEqual({ ok: created.ok, id: created.id }, { ok: true, id: 'term-news' })
+  assert.equal(typeof created.revisionId, 'string')
   assert.equal(
     ((await call(db, 'website.getTaxonomyTerm', { id: 'term-news' })) as { name: string }).name,
     'News',

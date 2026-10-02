@@ -30,6 +30,8 @@ const entry = (
 })
 
 export const componentRegistry: readonly ComponentRegistration[] = [
+  entry('Icon', 'Icons', 'primitives/icon', 'status', 'typography-icons'),
+  entry('Link', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('ReorderList', 'Forms', 'interactions/reorder-list', 'fields', 'reorder-list'),
   entry('ActionGroup', 'Actions', 'primitives/actions', 'actions', 'button'),
   entry('Button', 'Actions', 'primitives/actions', 'actions', 'button', 'stable', [

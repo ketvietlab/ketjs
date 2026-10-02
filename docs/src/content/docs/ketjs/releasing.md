@@ -3,7 +3,7 @@ title: Publishing packages
 description: Prepare, verify, and publish a coordinated KetJS release to npm.
 ---
 
-KetJS releases eight public packages with one version:
+KetJS releases ten public packages with one version:
 
 1. `@ketvietlab/ketjs-view`
 2. `@ketvietlab/ketjs-view-tools`
@@ -13,6 +13,8 @@ KetJS releases eight public packages with one version:
 6. `@ketvietlab/ketjs-postgres`
 7. `@ketvietlab/ketsuite`
 8. `@ketvietlab/flow-ui`
+9. `@ketvietlab/flow-client`
+10. `@ketvietlab/website-client`
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
 the package that names it.
@@ -58,7 +60,7 @@ npm run release:check
   check and integration test.
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
-embedded by the deterministic PDF renderer. The design-system package has a 350 KB ceiling for its public
+embedded by the deterministic PDF renderer. The design-system package has a 375 KB ceiling for its public
 component catalogue, machine-readable inventory and KetAtlas adapter. KetSuite has a 6.4 MB ceiling for its
 composed business modules, address catalogues, browser clients, and source maps. The 0.1.29 archive
 was inspected at 6,150,837 packed bytes across 3,623 files; the largest new entries are user/access-policy,
@@ -84,16 +86,16 @@ No publish command is part of either local script.
    authors, so a failure here is fixed on `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.1.29` at that exact `master` commit.
+4. Create and publish GitHub release `v0.1.30` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
-6. Confirm all eight packages and provenance attestations on npm.
+6. Confirm all ten packages and provenance attestations on npm.
 7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
    repository's release process. Never pin a moving branch name.
 8. Run the public smoke path without local tarballs:
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.1.29 new public_smoke
+npx -y @ketvietlab/ketjs@0.1.30 new public_smoke
 cd public_smoke
 npm install
 npm test

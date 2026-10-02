@@ -10,6 +10,7 @@ import {
   Avatar,
   Badge,
   Breadcrumbs,
+  BulkActions,
   Button,
   ContentCard,
   createRelationSelectView,
@@ -697,7 +698,16 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
           title="Đơn hàng"
           context={context}
           variant="operational"
-          actions={actions}
+          headerActions={actions}
+          actionsPlacement="header"
+          actions={
+            <BulkActions
+              form="bulk-form"
+              selectedCount={0}
+              summary={<span id="selection-summary">0 đơn được chọn</span>}
+              actions={[{ id: 'advance', name: 'intent', value: 'bulk', label: 'Chuyển bước tiếp theo' }]}
+            />
+          }
           controls={
             <ListChrome
               search={{
@@ -725,12 +735,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                   count: orders.filter((order) => order.stage === stage).length,
                 })),
               ]}
-              bulk={{
-                form: 'bulk-form',
-                selectedCount: 0,
-                summary: <span id="selection-summary">0 đơn được chọn</span>,
-                actions: [{ id: 'advance', name: 'intent', value: 'bulk', label: 'Chuyển bước tiếp theo' }],
-              }}
               pager={{
                 label: 'Trang đơn hàng',
                 summary: `${matching.length ? (pageNumber - 1) * 8 + 1 : 0}–${Math.min(pageNumber * 8, matching.length)} / ${matching.length} đơn hàng`,

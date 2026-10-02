@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased — Product list and agent skill
+
+- Add opt-in `KetTableColumn.wrap` for readable descriptive columns in server and island tables, with token-owned minimum widths and content-driven row height.
+- Normalize column labels and keep a single outside table border in flat/grouped results. Operational ListPage owns the toolbar-to-result gap and renders its result count without a second surface, on desktop and mobile.
+- Use the wrapping contract in the actual KetSuite Product list; align legacy list view controls with the shared responsive control height.
+- Consolidate repository design guidance into the independently packaged Két Design System agent skill; API documentation and engineering rules remain in place.
+
+## Unreleased — normalized primitives
+
+- Standardize Text roles, shared Lucide Icon, inline Link, independent action tone/variant and stable loading geometry.
+- Consolidate Field/FieldFrame label/help/error ownership; add supported scalar props, affixes, native search clear, textarea rows/resize, money currency/precision, and checked/value separation with mixed choice state.
+- Extend token-based responsive layouts, badge progress/icons, native removable tag commands, avatar image fallback, shared loading indicators, progress sizes and accessible tooltip triggers/Escape.
+- Preserve Két colours, Lucide, 32/36px default controls, native navigation, side labels, and compatibility aliases. CountBadge announcements now require `announce`; Notice supports an explicit announcement policy.
+- Expand `/primitives` and the normalization matrix in README, hook inventory, rendering contracts and browser interaction/geometry checks.
+
+## Unreleased — shared visual rhythm
+
+- Pin typography, spacing, button and input dimensions to Polaris React 13.9.5 / tokens 9.4.2. Default actions use large (32px desktop / 36px mobile) to align with inputs; compact is 28/32px. Preserve Két colours, weights, Lucide and field layout.
+- Apply Polaris grouping and spacing principles through Két roles: common page gutters, surface/table/modal insets, and heading gaps; retain Két colours and Lucide.
+- Keep desktop table rows at 40px across density presets, with 6px cell padding; mobile retains larger rows.
+- Remove grouped-presentation and page-body overrides of composed layout spacing.
+- Migration: grouped pages now use the same spacing as default pages. Use public Stack gap variants for deliberate grouping; remove local spacing compensations. To roll back, revert this rhythm change as a unit, not individual module overrides.
+- Catalogue: `/layering` documents the rhythm; browser checks measure both presentations.
+
+## Unreleased
+
+- Enhance DatePicker and DateRangePicker with accessible draft calendars, seven Vietnamese quick ranges, civil-date arithmetic, keyboard navigation and responsive month layouts. DatePicker retains native validation/fallback; DateRangePicker uses one visible range field with a preset select inside its calendar and two ISO form values. Both calendars fill mobile screens; ranges scroll vertically through multiple months. Add the `/dates` playground.
+
+- Add `/primitives`, a render-pure harness covering every primitive with theme, density, state and content-pressure comparisons.
+- Keep notice icons beside wrapping copy and place actions below it in narrow containers. Preserve icon, spinner, tag-removal and progress-value geometry with long content.
+- Align checkbox/radio controls with field edges and vertical option-group labels with their first option.
+- Give Select a consistent chevron inset and room for long values while retaining its native picker, keyboard and validation semantics.
+
+- Keep explicit Stack gap variants authoritative when legacy KetSuite controls CSS is loaded.
+
+- Backport the integration page-title contract (f6c5f413): shared 24px title token, 17px below tablet width, remove the compact operational list exception so every page uses the same title scale.
+
+- Keep modal titles at the xl type step and section/nested surface headings at lg so headings remain distinct from body content.
+
+- Badge and Tag now use the full pill radius, matching CountBadge across all themes and tones.
+
 ## 0.1.14 — KetSuite application navigation
 
 - Migrated the KetSuite administration shell to the public `AppNavigation` contract.

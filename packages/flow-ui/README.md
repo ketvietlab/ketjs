@@ -36,21 +36,11 @@ The shared foundations are `@ketvietlab/ketjs-view` and `@ketvietlab/design-syst
 | Private behavior | No calls to Flow APIs or storage from library components    |
 | Demo             | `demo/` owns fixtures, persistence, routing and layout      |
 
-## Design direction
+## Design authority
 
-The shared design system owns the visual language: `--kv-accent`, `--kv-font-sans`, `--kv-radius-*`, and semantic status colors. Both light and dark modes resolve from the same upstream tokens. Flow uses the existing smaller text steps and a compact density profile. Status always has text and a shape, not color alone. The demo has no custom font or independent palette.
-
-| Measure                     | Compact      | Comfortable / touch |
-| --------------------------- | ------------ | ------------------- |
-| Main content and navigation | 14px         | 14px                |
-| Controls / metadata         | 13px / 12px  | 13px / 12px         |
-| Small control               | 28px         | 32px / 44px         |
-| Normal control              | 32px         | 36px / 44px         |
-| Task row                    | 36px minimum | 44px / 48px minimum |
-
-`FlowButton` uses intrinsic width with `inline-flex`; standalone buttons in `FlowStack` align right. Use `FlowInline({ align: "end", children })` for a wrapping, right-aligned form action group (cancel before submit). Navigation rows and task cards retain their full clickable surface.
-
-Rows can grow for wrapped content; minimum heights are not clipping constraints. Focus rings, native form controls, native modal dialogs and reduced-motion support are included.
+Use [Két Design System](../../skills/ket-design-system/SKILL.md) and its Flow
+compatibility reference for all visual rules. The API descriptions below document
+the existing implementation; visual decisions are maintained only in the skill.
 
 ## Components
 
@@ -156,20 +146,6 @@ Editable timeline rows accept `rawStart`, `rawSpan` (unclipped day geometry) and
 
 `FlowContextPicker` is placed in `FlowNavigation.context`. It displays only the Workspace name in a compact single line, with Workspace choices and `onManage` in its popup. Company context is available in the user menu. `FlowUserMenu` belongs in the navigation footer; it wraps `FlowScopeMenu` with an organization selector. Outside click and Escape dismiss these disclosures. On mobile, expanding navigation also reveals the user footer. Project links open the project's existing tabs; no nested sidebar menus.
 
-## Layout spacing contract
-
-`FlowSection`, `FlowToolbar` and `FlowMetrics` default to `inset: "page"`.
-The outer page owns the horizontal gutter (`--flow-page-gutter`, shared space-5 on desktop and space-3 on phones).
-Use `inset: "none"` when embedding these surfaces in a section, card or already-padded dialog body.
-Task dialogs keep their edge-to-edge record layout: its main sections and property sidebar own their padding.
-
-`FlowSection` owns a space-3 gap between its header and content, and between direct child blocks.
-Use `FlowStack` for lists inside a fragment or form; do not add a second padded section for grouping alone.
-Cards retain their own internal padding. Toolbars wrap controls; notice actions wrap and remain right-aligned.
-The component demo includes nested sections to make the gutter contract visible.
-
-`FlowScopeTabs` provides URL-backed Workspace/Company navigation with the project underline style. Each destination is a real link with `aria-current="page"`; compact viewports scroll horizontally and the runtime reveals the active destination without moving the page.
-
 ### Responsive task properties
 
 Task dialogs keep the 440px property rail at widths of 1200px and above. Below 1200px, `FlowRecordAsideTrigger` in the dialog `headerActions` slot opens that same `FlowRecordLayout` aside as a native auto popover. The panel is positioned below the header, bounded by the dialog, independently scrollable and light-dismissible. Escape closes a nested tag picker before the properties panel, and the task remains open. Phone task dialogs still fill the screen.
@@ -188,8 +164,6 @@ The document workspace is capped at 1920px with the existing 840px reading paper
 
 Flow's command search groups authorized bootstrap tasks, projects and documents alongside curated navigation destinations. It supports accent-insensitive Vietnamese lookup and exact task IDs; it does not send data to Algolia or index a separate server. Production search completeness remains bounded by bootstrap data. References: [Apple Spotlight](https://support.apple.com/en-ph/guide/mac-help/mchlp1008/mac), [Algolia keyboard navigation](https://www.algolia.com/doc/ui-libraries/autocomplete/core-concepts/keyboard-navigation).
 
-Form hierarchy: field labels use the existing 12px metadata token, muted text and medium weight; input/select/textarea values use the 14px body token, primary text and normal weight. Placeholder text is muted and inherits normal weight. The field wrapper never supplies bold type to editable values.
-
 ### Task-focused content
 
 `FlowList` / `FlowListItem` are for ordinary lists (title, context, metadata, actions), not alert messages. `FlowDisclosure` keeps optional evidence, access sources and secondary form sections close to the task without expanding every row. `FlowHint` provides short supporting text. `FlowCalendarEvent` is a compact, named calendar action; mobile calendar renders an agenda. The shared runtime collapses mobile navigation and opens ancestor disclosures when a form field is invalid. `FlowInput.name` can differ from its unique label/id association for repeated forms. Do not replace these with route-specific copies.
@@ -203,8 +177,6 @@ Form hierarchy: field labels use the existing 12px metadata token, muted text an
 `FlowAttachment({title,meta,type,url,onPreview})` renders one attached file. Only raster images and video (`attachmentKind(type)`) get a thumbnail/preview trigger; every file with a `url` gets a download link (`?download=1`), and a file without `url` says no content is stored. `FlowMediaPreview({title,type,url})` is the body for a `FlowDialog` with `size:"media"`.
 
 `FlowToast` supports `tone: "success" | "error" | "warning"`, an optional title and recovery action. Errors use an alert announcement; success/warnings use polite status announcements. The consumer owns dismissal: success can expire, actionable failures remain until dismissed or resolved. Pass toast content through `FlowDialog.feedback` (or `FlowSpotlight.feedback`) while a modal is open so recovery buttons remain inside the dialog's interactive scope.
-
-Filter/action toolbars separate content with spacing, without a full-width bottom rule. Page toolbars use 8px vertical padding; nested `inset:"none"` toolbars rely on their section/stack gap. Metrics and task-card metadata also avoid decorative horizontal rules. Keep selected navigation-tab underlines and structural boundaries for tables, modal headers, editor tools and distinct panels.
 
 `FlowChoiceField` is a controlled single-choice field with rich selected and option content. Pass `id`, `label`, `value`, `options: {value,label,content}[]`, `onChange(value)` and optional label icon/disabled state. Task details compose it with `FlowStatus` (including project-specific label/color) and `FlowPriority`. It uses a native popover listbox, selected indicator, Arrow/Home/End navigation, Enter/Space activation and Escape dismissal; it works inside the responsive task-properties popover. Keep label icons muted without overriding semantic icons inside field values.
 

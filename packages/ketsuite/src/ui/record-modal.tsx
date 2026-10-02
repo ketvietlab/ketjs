@@ -19,6 +19,8 @@ export const HOOKS = ['record-modal-host'] as const
 export const RECORD_PARAM = 'record'
 /** Query parameter naming the open tab of the record modal. */
 export const RECORD_TAB_PARAM = 'tab'
+/** Optional entry dialog, for a pending action such as a kanban move. */
+export const RECORD_DIALOG_PARAM = 'recordDialog'
 /**
  * The id a create action names: `record=<kind>:new` opens the same modal with an
  * empty record. A kind whose ids could literally be `new` must not use this.
@@ -30,6 +32,7 @@ export type RecordModalTarget = {
   kind: string
   id: string
   tab?: string | null
+  dialog?: string | null
 }
 
 const kindPattern = /^[a-z][a-z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+$/u
@@ -49,6 +52,8 @@ export const recordModalHref = (url: URL | string, target: RecordModalTarget): s
   next.searchParams.set(RECORD_PARAM, `${target.kind}:${target.id}`)
   if (target.tab) next.searchParams.set(RECORD_TAB_PARAM, target.tab)
   else next.searchParams.delete(RECORD_TAB_PARAM)
+  if (target.dialog) next.searchParams.set(RECORD_DIALOG_PARAM, target.dialog)
+  else next.searchParams.delete(RECORD_DIALOG_PARAM)
   return `${next.pathname}${next.search}`
 }
 
@@ -70,6 +75,7 @@ export const recordModalClosedHref = (url: URL | string): string => {
   const next = new URL(String(url), 'http://ket.local')
   next.searchParams.delete(RECORD_PARAM)
   next.searchParams.delete(RECORD_TAB_PARAM)
+  next.searchParams.delete(RECORD_DIALOG_PARAM)
   return `${next.pathname}${next.search}`
 }
 
@@ -81,7 +87,14 @@ export const readRecordModalTarget = (url: URL | string): RecordModalTarget | nu
   if (split <= 0 || split === raw.length - 1) return null
   const kind = raw.slice(0, split)
   if (!isRecordKind(kind)) return null
-  return { kind, id: raw.slice(split + 1), tab: parsed.searchParams.get(RECORD_TAB_PARAM) }
+  return {
+    kind,
+    id: raw.slice(split + 1),
+    tab: parsed.searchParams.get(RECORD_TAB_PARAM),
+    ...(parsed.searchParams.get(RECORD_DIALOG_PARAM)
+      ? { dialog: parsed.searchParams.get(RECORD_DIALOG_PARAM) }
+      : {}),
+  }
 }
 
 /** The closed host. Identical on the server and in the first client render. */
