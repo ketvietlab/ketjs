@@ -46,11 +46,6 @@
     color: var(--kv-color-info);
   }
 
-  :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-mark"] svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
   :where([data-kv-design-system])
     [data-ui="notice"][data-pattern="notice"][data-tone="positive"]
     [data-ui="notice-mark"] {
@@ -83,8 +78,8 @@
     margin: 0;
     color: var(--kv-color-ink);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-semibold);
-    line-height: var(--kv-leading-normal);
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-title"]::after {
@@ -95,7 +90,7 @@
     margin: 0;
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-sm);
-    line-height: var(--kv-leading-normal);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="notice"][data-pattern="notice"] [data-ui="notice-actions"] {
@@ -123,6 +118,7 @@
     border-radius: 50%;
     color: var(--kv-color-accent);
     font-size: var(--kv-text-lg);
+    line-height: var(--kv-line-lg);
   }
 
   :where([data-kv-design-system]) [data-ui="empty-title"] {
@@ -135,6 +131,7 @@
     max-width: 34rem;
     margin-bottom: 0;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="empty-actions"] {
@@ -150,6 +147,7 @@
   :where([data-kv-design-system]) [data-ui="loading-label"] {
     color: var(--kv-color-ink-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
     font-weight: 750;
     letter-spacing: 0;
     text-transform: uppercase;

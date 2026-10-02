@@ -12,6 +12,7 @@
     border-collapse: separate;
     border-spacing: 0;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="data-grid-cap"] {

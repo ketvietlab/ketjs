@@ -99,6 +99,7 @@
   :where([data-kv-design-system]) [data-ui="pipeline-step-label"] {
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     text-decoration: none;
   }
 
@@ -110,6 +111,7 @@
   :where([data-kv-design-system]) [data-ui="pipeline-step-value"] {
     color: var(--kv-text-main);
     font-size: var(--kv-text-2xl);
+    line-height: var(--kv-line-2xl);
     font-weight: var(--kv-weight-bold);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
@@ -163,6 +165,7 @@
 
     :where([data-kv-design-system]) [data-ui="pipeline-step-value"] {
       font-size: var(--kv-text-lg);
+      line-height: var(--kv-line-lg);
     }
   }
 }

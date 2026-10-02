@@ -15,6 +15,7 @@
     background: var(--kv-interactive-bg);
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
     font-weight: var(--kv-weight-medium);
     cursor: pointer;
     list-style: none;
@@ -41,7 +42,7 @@
     background: var(--kv-color-accent);
     color: var(--kv-color-on-accent);
     font-size: var(--kv-text-xs);
-    line-height: 1.5;
+    line-height: var(--kv-line-xs);
     place-items: center;
   }
 
@@ -65,6 +66,7 @@
     color: var(--kv-text-main);
     font: inherit;
     font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
   }
 
   :where([data-kv-design-system]) [data-ui="menu-trigger"]::-webkit-details-marker {
@@ -93,6 +95,7 @@
     padding: var(--kv-space-2) var(--kv-space-3) var(--kv-space-1);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-2xs);
+    line-height: var(--kv-line-2xs);
     font-weight: var(--kv-weight-bold);
     text-transform: uppercase;
   }
@@ -164,10 +167,12 @@
     color: var(--kv-text-muted);
     font: inherit;
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
 
   :where([data-kv-design-system]) [data-ui="menu-item-copy"] small {
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
   }
 }
