@@ -52,6 +52,8 @@ export default defineModule({
       'error.formNotFound': 'Không tìm thấy biểu mẫu.',
       'error.archived': 'Biểu mẫu đã được lưu trữ, không thể sửa.',
       'error.unknownDestination': 'Nơi nhận phản hồi này không có trong hệ thống.',
+      'error.destinationNeedsContact':
+        'Biểu mẫu chuyển phản hồi sang nơi khác cần có ô email hoặc số điện thoại để liên hệ lại khách.',
       'error.notRetryable': 'Chỉ gửi lại được phản hồi chuyển không thành công.',
     },
     en: {
@@ -93,6 +95,8 @@ export default defineModule({
       'error.formNotFound': 'The form was not found.',
       'error.archived': 'This form has been archived and cannot be edited.',
       'error.unknownDestination': 'This destination is not available here.',
+      'error.destinationNeedsContact':
+        'A form that hands its submissions on needs an email or phone field, so the person can be reached.',
       'error.notRetryable': 'Only a failed hand-off can be retried.',
     },
   },

@@ -111,11 +111,16 @@ test('form routing: submissions reach CRM, report its status back, and can be se
     field('note', 'Nhu cầu', 'textarea', false),
   ]
   assert.equal((await save('form-contact', values('Tư vấn', contact, 'crm_website'))).status, 200)
-  assert.equal(
-    (await save('form-nocontact', values('Góp ý', [field('note', 'Góp ý', 'textarea', true)], 'crm_website')))
-      .status,
-    200,
+  // A routed form with no way to reach the person is refused when saved, not failed per submission.
+  const unreachable = await save(
+    'form-nocontact',
+    values('Góp ý', [field('note', 'Góp ý', 'textarea', true)], 'crm_website'),
   )
+  assert.equal(unreachable.status, 400)
+  assert.match(String(unreachable.message), /cần có ô email hoặc số điện thoại/)
+  // An optional contact field can still be left blank.
+  const feedback = [field('note', 'Góp ý', 'textarea', true), field('mail', 'Email', 'email', false)]
+  assert.equal((await save('form-nocontact', values('Góp ý', feedback, 'crm_website'))).status, 200)
   assert.equal((await save('form-plain', values('Nhận tin', contact))).status, 200)
   // A receiver this deployment does not compose is refused, not stored to wait for ever.
   const unknown = await save('form-unknown', values('Lạ', contact, 'sale'))
@@ -282,7 +287,7 @@ test('form routing: submissions reach CRM, report its status back, and can be se
     [caseId],
   )
 
-  // CRM cannot reach a person with no email or phone; the copy says why, in staff terms.
+  // A visitor who left every contact field blank cannot be reached; the copy says why, in staff terms.
   const failed = await rowOf('form-nocontact', silent)
   assert.equal(failed.destinationState, 'failed')
   const why = (
@@ -327,4 +332,37 @@ test('form routing: submissions reach CRM, report its status back, and can be se
   await pass()
   const states = await Promise.all(busy.map(async (id) => (await rowOf('form-contact', id)).destinationState))
   assert.deepEqual(new Set(states), new Set(['delivered']))
+
+  // A fault on this side - CRM's table out of reach - is tried again on later passes, then left for a person.
+  const shaky = await submit(
+    'form-contact',
+    { name: 'Lê Chi', phone: '0904 556 778' },
+    'k-shaky',
+    'visitor-shaky',
+  )
+  const destinationOf = async () =>
+    ((await call('website_studio.submissionDetail', { siteId: 'site-a', id: shaky })).submission as Row)
+      .destination as Row
+  const schema = (statement: string) =>
+    app.fixture.withTenant('', (tenant) => tenant.adapter.run(statement, []))
+  await schema('ALTER TABLE crm_case RENAME TO crm_case_away')
+  for (let attempt = 1; attempt < 5; attempt += 1) {
+    await pass()
+    const waiting = await destinationOf()
+    assert.equal(waiting.state, 'pending', `attempt ${attempt} waits for the next pass`)
+    assert.equal(waiting.attempts, attempt)
+    assert.equal(waiting.error, 'Chưa chuyển được sang CRM.')
+  }
+  await pass()
+  const given = await destinationOf()
+  assert.equal(given.state, 'failed')
+  assert.equal(given.attempts, 5)
+  await schema('ALTER TABLE crm_case_away RENAME TO crm_case')
+  // Sent again once CRM is back, it arrives and the earlier fault is cleared.
+  await call('website_form.retryDelivery', { siteId: 'site-a', id: shaky })
+  await pass()
+  const recovered = await destinationOf()
+  assert.equal(recovered.state, 'delivered')
+  assert.equal(recovered.error, null)
+  assert.equal(recovered.attempts, 1)
 })
