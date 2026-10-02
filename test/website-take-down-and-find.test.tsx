@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import type { Adapter, ServeContext, Translator } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import type { Adapter, ServeContext } from '@ketvietlab/ketjs'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
   address,
@@ -11,16 +10,14 @@ import {
   partner,
   storage,
   website,
+  livedoc,
+  user,
   websiteBackend,
   websiteForm,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
-import {
-  contentScreen,
-  entryFormScreen,
-  type EntryRow,
-} from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 
 const SCOPE = { company: 'acme', branches: null }
 const modules = [
@@ -31,8 +28,11 @@ const modules = [
   backend,
   website,
   websiteMenu,
+  websiteSearch,
   websiteSeo,
   websiteForm,
+  livedoc,
+  user,
   websiteBackend,
   paperTheme,
 ]
@@ -48,11 +48,6 @@ const boot = async (): Promise<Adapter> => {
 
 const call = async (db: Adapter, name: string, input: Record<string, unknown>) =>
   (await callFn(name, input, { adapter: db, manifest, scope: SCOPE })).value
-
-const translate = ((key: string) => key) as Translator
-translate.locale = 'en'
-translate.has = () => true
-translate.resolves = () => true
 
 const layout = [{ type: 'website.rich_text', settings: { body: 'x' } }]
 
@@ -138,80 +133,17 @@ test('unpublish: it is also how a schedule is cancelled', async () => {
   // reach into the queue and withdraw the job.
 })
 
-const entry = (over: Partial<EntryRow> = {}): EntryRow => ({
-  id: 'p1',
-  siteId: 'site1',
-  type: 'website.page',
-  slug: 'gioi-thieu',
-  path: '/gioi-thieu',
-  title: 'Gioi thieu',
-  status: 'draft',
-  ...over,
-})
-
-const form = (row: EntryRow) =>
-  renderToString(
-    entryFormScreen(
-      translate,
-      { entry: row, revision: null },
-      'site1',
-      { basePath: '/admin/website/pages', titleKey: 'pages' },
-      {},
-    ),
-  )
-
-test('publish screen: the schedule field the contract has always accepted is there', () => {
-  assert.match(form(entry()), /name="publishAt"/u)
-  assert.match(form(entry()), /publish\.atHint/u)
-})
-
-test('publish screen: a draft is offered no way down, a published page is', () => {
-  assert.equal(form(entry()).includes('/unpublish'), false)
-  assert.match(form(entry({ status: 'published' })), /action="\/admin\/website\/pages\/p1\/unpublish"/u)
-  assert.match(form(entry({ status: 'published' })), /action\.unpublish/u)
-})
-
-test('publish screen: a scheduled page is offered a cancellation, not a takedown', () => {
-  const html = form(entry({ status: 'scheduled', publishAt: '2026-10-01T09:00:00.000Z' }))
-  assert.match(html, /action\.cancelSchedule/u)
-  assert.equal(html.includes('action.unpublish'), false)
-  // The pending time comes back into the field rather than reading as empty.
-  assert.match(html, /value="2026-10-01T09:00"/u)
-})
-
-test('publish screen: the takedown says what it does not reach', () => {
-  // A page frozen into the active publication is not affected, and an editor
-  // pressing this should be told so rather than discovering it.
-  assert.match(form(entry({ status: 'published' })), /publish\.downHint/u)
-})
-
-test('content list: the site selector is what is left once the bar owns the query', () => {
-  const html = renderToString(
-    contentScreen(
-      translate,
-      [entry()],
-      [],
-      'site1',
-      {},
-      '',
-      { basePath: '/admin/website/pages', titleKey: 'pages' },
-      null,
-    ),
-  )
-  // Which site's content this is remains a choice the screen makes; the query
-  // and the publication state moved to the search-filter bar the route builds.
-  assert.match(html, /name="site"/u)
-  assert.doesNotMatch(html.slice(html.indexOf('data-ui="list-page"')), /name="q"|name="status"/u)
-})
-
 test('routes: taking a page down does not answer a GET', async () => {
-  for (const key of ['/admin/website/pages/{id}/unpublish', '/admin/website/posts/{id}/unpublish']) {
-    const composed = manifest.routes[key]
-    assert.ok(composed, `${key} must be composed`)
-    const route = composed.make({} as unknown as ServeContext)
-    const result = await route(new URL(`http://moc.example${key}`), { method: 'GET', headers: {} } as never, {
-      id: 'p1',
-    })
-    assert.equal(result.status, 405, `${key} must refuse a GET`)
-  }
+  const api = manifest.routes['/website/api/{operation}']
+  assert.ok(api, 'the Studio API must be composed')
+  const route = api.make({} as unknown as ServeContext)
+  const result = await route(
+    new URL('http://moc.example/website/api/website.unpublishEntry'),
+    {
+      method: 'GET',
+      headers: {},
+    } as never,
+    { operation: 'website.unpublishEntry' },
+  )
+  assert.equal(result.status, 405, 'unpublishing must refuse a GET')
 })

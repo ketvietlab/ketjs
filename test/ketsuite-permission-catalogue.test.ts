@@ -51,13 +51,21 @@ test('public production permission catalogue covers every function owned by its 
   // adding one does, and that is exactly the moment somebody should be made to
   // look. Raise it only with the reason written beside the exemption itself.
   assert.ok(
-    // 86: baseline 84 plus actor-bound denial telemetry and trusted directory fact import.
-    // Both are internal functions; the reasons live beside their declarations.
-    Object.keys(manifest.permissions.exemptions).length <= 86,
+    // 89: baseline 84 plus actor-bound denial telemetry and trusted directory fact import, then
+    // the three Website image functions behind the Studio upload and image file routes.
+    // 91: the public form section's fields and the form receipt, both website_form.
+    // The reasons live beside their declarations.
+    Object.keys(manifest.permissions.exemptions).length <= 91,
     'a new permission exemption was added — say why, in the declaration',
   )
 
-  for (const key of ['user.recordAccessDenial', 'user.replaceDirectoryFacts']) {
+  for (const key of [
+    'user.recordAccessDenial',
+    'user.replaceDirectoryFacts',
+    'website.stageImage',
+    'website.completeImage',
+    'website.imageForReader',
+  ]) {
     assert.equal(manifest.functions[key]?.exposure, 'internal', key)
   }
 

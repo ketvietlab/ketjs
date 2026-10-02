@@ -286,6 +286,7 @@ test('preview: the answer is the same shape the storefront already renders', asy
   const row = (await call(db, 'website.previewEntry', { token: minted.token })) as Record<string, unknown>
   // One renderer draws both, so a second shape would mean a second renderer.
   assert.deepEqual(Object.keys(row).sort(), [
+    'appearance',
     'excerpt',
     'fields',
     'id',

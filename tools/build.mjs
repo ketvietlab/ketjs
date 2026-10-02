@@ -23,6 +23,7 @@ import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
 import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
+import { buildWebsiteClient } from './build-website-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -172,6 +173,7 @@ try {
   await buildBackendClients()
   await buildChartClient()
   await buildFlowClient()
+  await buildWebsiteClient()
   await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
