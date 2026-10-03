@@ -7,10 +7,12 @@ import test from 'node:test'
 import { buildArtifactsExist } from './build-artifacts.mjs'
 import { buildCacheKey } from './ci-build-cache-key.mjs'
 
+/** @param {import('node:test').TestContext} t */
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ketjs-cache-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   execFileSync('git', ['init', '-q', root])
+  /** @param {string} path @param {string} content */
   const put = (path, content) => {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
