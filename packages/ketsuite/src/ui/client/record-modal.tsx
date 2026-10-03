@@ -257,7 +257,11 @@ export type RecordModalDialog<Data> = {
 
 export type RecordModalDefinition<Data> = {
   kind: string
-  size?: 'default' | 'large'
+  size?:
+    | 'small'
+    | 'default'
+    | 'large'
+    | ((context: RecordModalContext<Data>) => 'small' | 'default' | 'large')
   /**
    * Compatibility override for workflows with an explicitly sized tabbed surface.
    * By default the runtime holds the tallest rendered tab as a min-height,
@@ -1126,7 +1130,7 @@ export const createRecordModal =
         return (
           <>
             {Notice({
-              title: t('recordModal.errorTitle'),
+              title: t('recordModal.loadFailed'),
               message: t(failure() ?? 'recordModal.loadFailed'),
               tone: 'danger',
             })}
@@ -1209,13 +1213,20 @@ export const createRecordModal =
               id: `record-modal-${definition.kind.replaceAll('.', '-')}`,
               mode: 'client',
               presentation: 'dialog',
-              size: definition.size ?? 'default',
+              size:
+                typeof definition.size === 'function'
+                  ? context
+                    ? definition.size(context)
+                    : 'default'
+                  : (definition.size ?? 'default'),
               // The runtime measures rendered tabs and holds their largest height.
               // Start at natural height so loading/short records never fill the viewport.
               height:
                 (definition.tabs?.length ?? 0) + (definition.extensionTabs ? 1 : 0) > 1 ? 'fixed' : 'content',
               fixedHeight: definition.fixedHeight ?? 'auto',
-              title: context ? definition.title(context) : t('recordModal.loading'),
+              title: context
+                ? definition.title(context)
+                : t(status() === 'error' ? 'recordModal.loadFailed' : 'recordModal.loading'),
               description: context ? (definition.description?.(context) ?? null) : null,
               status: context ? definition.status?.(context) : undefined,
               actions: context ? definition.actions?.(context) : undefined,

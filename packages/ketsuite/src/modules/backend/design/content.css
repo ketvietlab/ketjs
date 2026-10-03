@@ -621,9 +621,6 @@
     [data-ui="notice-actions"] {
       inline-size: 100%;
     }
-    [data-ui="surface"][data-padding="default"] {
-      padding: var(--admin-gap-md);
-    }
     [data-ui="card-grid"] {
       grid-template-columns: 1fr;
     }
@@ -667,9 +664,9 @@
 
 @layer ket.app {
   [data-ui="page-context-viewer"][data-placement="topbar"] {
-    --admin-ink: var(--kv-app-topbar-text);
-    --admin-ink-secondary: var(--kv-app-topbar-text);
-    --admin-ink-muted: var(--kv-app-topbar-muted);
+    --admin-ink: var(--kv-text-main);
+    --admin-ink-secondary: var(--kv-text-main);
+    --admin-ink-muted: var(--kv-text-secondary);
     min-block-size: var(--kv-touch-target);
     max-inline-size: 24rem;
   }

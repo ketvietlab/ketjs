@@ -74,7 +74,6 @@ const lineFields = (c: Context, editing = false): FieldProps[] => {
             options: options(c, 'variants'),
             required: true,
           }),
-          field(c, 'productUomId', 'uom', { type: 'select', options: options(c, 'units'), required: true }),
         ]
       : []),
     field(c, 'productQty', 'productQty', {
@@ -83,6 +82,9 @@ const lineFields = (c: Context, editing = false): FieldProps[] => {
       required: true,
     }),
     field(c, 'priceUnit', 'priceUnit', { type: 'decimal', value: String(row?.priceUnit ?? '') }),
+    ...(!editing
+      ? [field(c, 'productUomId', 'uom', { type: 'select', options: options(c, 'units'), required: true })]
+      : []),
     field(c, 'discount', 'discount', { type: 'decimal', value: String(row?.discount ?? '0') }),
     field(c, 'taxId', 'tax', {
       type: 'select',
@@ -125,10 +127,11 @@ const summary = (c: Context) => (
       />,
       <Section
         title={t(c, 'modal.lines')}
-        actions={canEdit(c) && c.data.permissions.addLine ? dialog(c, 'addLine', 'addLine') : null}
         body={
           <DataTable
             rows={c.data.record.lines}
+            emptyTitle={t(c, 'lines.empty')}
+            emptyMessage={t(c, 'lines.emptyHint')}
             id={(row) => String(row.id)}
             responsive="scroll"
             columns={[
@@ -160,12 +163,35 @@ const summary = (c: Context) => (
           />
         }
       />,
+      ...(canEdit(c) && c.data.permissions.addLine
+        ? [
+            <Section
+              title={t(c, 'action.addLine')}
+              body={
+                <RecordModalForm
+                  kind={c.kind}
+                  command="addLine"
+                  columns={3}
+                  fields={lineFields(c)}
+                  actions={[
+                    <Button
+                      type="submit"
+                      label={t(c, 'action.addLine')}
+                      variant="primary"
+                      disabled={c.busy}
+                    />,
+                  ]}
+                />
+              }
+            />,
+          ]
+        : []),
     ]}
   />
 )
 export const purchaseOrderModalDefinition: RecordModalDefinition<PurchaseOrderModalData> = {
   kind: 'purchase.order',
-  size: 'large',
+  size: (c) => (c.creating ? 'default' : 'large'),
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {
@@ -285,11 +311,13 @@ export const purchaseOrderModalDefinition: RecordModalDefinition<PurchaseOrderMo
     ),
   dialogs: {
     addLine: {
+      size: 'large',
       title: (c) => t(c, 'action.addLine'),
       view: (c) => (
         <RecordModalForm
           kind={c.kind}
           command="addLine"
+          columns={3}
           fields={lineFields(c)}
           actions={[
             <Button type="submit" label={t(c, 'action.addLine')} variant="primary" disabled={c.busy} />,
@@ -298,10 +326,12 @@ export const purchaseOrderModalDefinition: RecordModalDefinition<PurchaseOrderMo
       ),
     },
     editLine: {
+      size: 'large',
       title: (c) => t(c, 'modal.edit'),
       view: (c) => (
         <RecordModalForm
           kind={c.kind}
+          columns={3}
           fields={lineFields(c, true)}
           actions={[
             <Button

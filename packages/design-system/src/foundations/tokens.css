@@ -234,7 +234,7 @@
     /* A surface's inset and the gap under its heading (Két Design System visual contract L6). */
     --kv-surface-inset: var(--kv-space-4);
     --kv-surface-head-gap: var(--kv-space-2);
-    /* One 16px gutter on every side of every page, so a record body lines up with its header. */
+    /* Desktop uses 16px; mobile uses 12px for page, surface and section spacing. */
     --kv-page-padding-x: var(--kv-space-4);
     --kv-page-padding-y: var(--kv-space-5);
 
@@ -398,7 +398,9 @@
       --kv-table-row-height: 3.25rem;
       --kv-input-font-size: 1rem;
       --kv-input-line-height: 1.5rem;
-      --kv-page-padding-x: var(--kv-space-4);
+      --kv-page-padding-x: var(--kv-space-3);
+      --kv-surface-inset: var(--kv-space-3);
+      --kv-gap-section: var(--kv-space-3);
       --kv-page-padding-y: var(--kv-space-2);
     }
 

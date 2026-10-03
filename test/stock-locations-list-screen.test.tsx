@@ -52,6 +52,8 @@ test('stock locations list: keeps hierarchy, columns, search and pager in ListPa
         rows: [
           {
             id: 'shelf-a-01',
+            parentLocation: 'Kho trung tâm / Tồn kho',
+            productCount: 7,
             completeName: 'Kho trung tâm / Tồn kho / Kệ A-01',
             usage: 'internal',
             warehouse: 'Kho trung tâm',
@@ -75,6 +77,9 @@ test('stock locations list: keeps hierarchy, columns, search and pager in ListPa
   )
 
   assert.match(html, /data-ui="ket-table"/)
+  assert.match(html, /data-col="parentLocation"[\s\S]*?Kho trung tâm/)
+  assert.match(html, /data-col="productCount"[\s\S]*?7/)
+
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)

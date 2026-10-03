@@ -5,7 +5,7 @@ import {
   Metric,
   Section,
   LinkButton,
-  dataTable,
+  collectionTable as dataTable,
   emptyState,
   shell,
   stack,
@@ -72,6 +72,24 @@ export const stockOverviewScreen = (
                       label: _('stock_backend.transfer.list.col.reference'),
                       cell: (r) => String(r.name),
                       priority: 'primary',
+                    },
+                    {
+                      key: 'operationType',
+                      label: _('stock_backend.transfer.list.col.operationType'),
+                      cell: (r) => String(r.operationType ?? '—'),
+                      wrap: true,
+                    },
+                    {
+                      key: 'source',
+                      label: _('stock_backend.transfer.list.col.source'),
+                      cell: (r) => `${r.source ?? '—'} → ${r.destination ?? '—'}`,
+                      wrap: true,
+                    },
+                    {
+                      key: 'scheduledDate',
+                      label: _('stock_backend.transfer.list.col.scheduledDate'),
+                      cell: (r) => String(r.scheduledDate || '—'),
+                      kind: 'date',
                     },
                     {
                       key: 'state',

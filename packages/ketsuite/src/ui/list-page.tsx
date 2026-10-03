@@ -1,8 +1,8 @@
 // The application-level ListPage composition.
 //
 // The public design-system pattern deliberately knows nothing about a viewer or
-// the application's menu. KetSuite does, so this thin boundary turns the active
-// menu branch and live company context into the standard strip above every list.
+// the application's menu. The shell owns that context; this boundary keeps
+// collection actions and explicitly requested context in the page header.
 
 import {
   LinkButton,
@@ -11,7 +11,6 @@ import {
 } from '@ketvietlab/design-system'
 import { renderToString, type JSXChild, type TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Frame } from './layout.tsx'
-import { pageContextFromFrame } from './navigation.tsx'
 import { icon } from './icons.ts'
 
 type ListPageFrame = Pick<Frame, 'menu' | 'viewer' | 'chrome'>
@@ -41,8 +40,8 @@ const hasNonBulkActions = (actions: JSXChild): boolean => {
 }
 
 /**
- * Every KetSuite collection carries navigation and organisation context. A
- * screen may supply a specialised context, otherwise its frame is authoritative.
+ * Organisation context lives in the shell. A collection may supply its own
+ * specialised context without repeating the shell navigation.
  * A frame's create link always belongs beside the title. Explicit headerActions
  * may replace it; tool and bulk actions share the same identity band.
  */
@@ -75,7 +74,7 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
       headerActions={headerActions}
       actionsHidden={actionsHidden}
       actionsPlacement="header"
-      context={pageContextFromFrame(props.title, frame)}
+      context={null}
     />
   )
 }

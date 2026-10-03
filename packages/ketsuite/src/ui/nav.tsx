@@ -106,7 +106,7 @@ const navigationItem = (node: MenuNode, root = false): NavigationItemData => {
       label: node.label,
       ...(leading === undefined ? {} : { leading }),
       children: node.children.map((child) => navigationItem(child)),
-      expanded: node.active,
+      expanded: true,
     }
   return {
     id: node.id,
@@ -171,7 +171,7 @@ const navigationModel = (
         {options.navItems ?? ''}
       </>
     ) : undefined
-  return { groups: [{ id: 'modules', items }], supplementary }
+  return { groups: [{ id: 'modules', exclusive: false, items }], supplementary }
 }
 
 /** The replaceable contents of the stable navigation scroll region. */
