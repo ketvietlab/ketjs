@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     environment: npm
     steps:
@@ -38,6 +38,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - run: npm ci
+      - uses: ./.github/actions/build
 
       - name: release tag matches package version
         env:
