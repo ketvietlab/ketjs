@@ -8,7 +8,7 @@ type Data = { record: Row; rows: Row[]; save: boolean }
 const lang = () => (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'vi')
 export const invoicingPolicyDefinition: RecordModalDefinition<Data> = {
   kind: 'sale.invoicePolicy',
-  size: 'default',
+  size: 'small',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {
@@ -21,6 +21,7 @@ export const invoicingPolicyDefinition: RecordModalDefinition<Data> = {
   body: (c) =>
     c.data.save ? (
       <RecordModalForm
+        columns={1}
         kind={c.kind}
         command="save"
         fields={[

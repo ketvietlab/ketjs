@@ -144,11 +144,13 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
       {
         id: `demo-manage-${props.active}`,
         label: 'Manage',
+        exclusive: false,
         items: [
           { id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' },
           {
             id: `${props.active}-reports`,
             label: 'Reports',
+            expanded: true,
             leading: '▤',
             children: [
               { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table', count: 7 },
@@ -161,6 +163,7 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
               {
                 id: `${props.active}-report-settings`,
                 label: 'Cấu hình',
+                expanded: true,
                 children: [
                   { id: `${props.active}-terms`, label: 'Điều khoản thanh toán', href: '#navigation-terms' },
                   {
@@ -1547,6 +1550,54 @@ export const componentGroups: readonly ComponentGroup[] = [
         ),
       },
       {
+        id: 'record-form-three-columns',
+        name: 'Record form · three peer fields',
+        description:
+          'Three columns in a wide form (56rem or more), the default layout in smaller containers, and one column on mobile. Field labels and native submission remain component-owned.',
+        render: () => (
+          <Surface
+            title="Add purchase line"
+            body={
+              <RecordForm
+                action="#record-form-three-columns"
+                columns={3}
+                fields={[
+                  {
+                    id: 'purchase-product',
+                    name: 'product',
+                    label: 'Product',
+                    type: 'select',
+                    options: [
+                      {
+                        value: 'carton',
+                        label: 'Shipping carton · 30 × 20 × 15cm',
+                      },
+                    ],
+                  },
+                  {
+                    id: 'purchase-quantity',
+                    name: 'quantity',
+                    label: 'Quantity',
+                    type: 'number',
+                    value: '1',
+                    required: true,
+                  },
+                  {
+                    id: 'purchase-price',
+                    name: 'price',
+                    label: 'Unit price',
+                    type: 'number',
+                    value: '0',
+                    required: true,
+                  },
+                ]}
+                submitLabel="Add line"
+              />
+            }
+          />
+        ),
+      },
+      {
         id: 'record-form',
         name: 'Record form',
         description: 'Application supplies translated labels and values, not form markup.',
@@ -1742,7 +1793,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'search-filter',
         name: 'Search filter',
         description:
-          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+          'Search, filter/group/favorite controls and applied chips share a component-owned 48rem maximum width and fill narrower containers. This hydrated island owns query state; mobile opens the same sections in a sheet. Try the applied facets and a long search phrase to check wrapping. The manager is omitted, so toggling a control updates its chip locally without a server round trip.',
         render: () =>
           createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
       },
@@ -2018,7 +2069,8 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="Delivery photos"
                 accept="image/*"
                 multiple
-                status="Up to 10 files · 8 MB each"
+                preview={null}
+                status="Drop images here or click to choose · Up to 10 files"
               />,
             ]}
           />

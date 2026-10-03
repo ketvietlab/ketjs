@@ -12,6 +12,8 @@ export type RecordFormProps = {
   action: string
   method?: 'get' | 'post'
   fields: readonly FieldProps[]
+  /** Three peer fields on wide forms; narrow containers retain the single-column layout. */
+  columns?: 2 | 3
   submitLabel: string
   submitVariant?: ActionVariant
   cancelHref?: string | null
@@ -41,7 +43,7 @@ export const RecordForm = (props: RecordFormProps): TemplateResult => (
         )}
       </ul>
     )}
-    <div data-ui="form-grid">
+    <div data-ui="form-grid" data-columns={props.columns === 3 ? '3' : undefined}>
       {each(
         props.fields,
         (field) => field.id,

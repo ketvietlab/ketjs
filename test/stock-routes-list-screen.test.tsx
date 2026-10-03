@@ -53,6 +53,9 @@ test('stock routes list: keeps localized create, search and row navigation in Li
             name: 'Nhận hàng hai bước',
             sequence: 10,
             ruleCount: 2,
+            sources: 'Nhà cung cấp',
+            destinations: 'Kho nhận hàng',
+            ruleActions: 'Kéo',
             href: '/admin/stock/routes/route-two-step-receipt?lang=vi',
           },
         ],
@@ -68,6 +71,9 @@ test('stock routes list: keeps localized create, search and row navigation in Li
   )
 
   assert.match(html, /data-ui="ket-table"/)
+  assert.match(html, /data-col="sources"[\s\S]*?Nhà cung cấp/)
+  assert.match(html, /data-col="destinations"[\s\S]*?Kho nhận hàng/)
+
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)

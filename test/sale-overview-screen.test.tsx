@@ -95,7 +95,7 @@ test('sales overview: remains a specialized KPI, pipeline and recent-work dashbo
   )
 
   assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
-  assert.match(html, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="dashboard-page-context"|data-ui="breadcrumbs"/)
   assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="record-workspace"/)
   assert.match(html, /Tổng quan bán hàng/)
   // The primary action opens the quotation create modal over the quotation list.

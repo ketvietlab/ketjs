@@ -7,6 +7,8 @@
     position: relative;
     container: search-filter / inline-size;
     min-inline-size: 0;
+    inline-size: 100%;
+    max-inline-size: 48rem;
     display: flex;
     flex-direction: column;
     gap: var(--kv-space-2);
@@ -202,11 +204,12 @@
     block-size: 100%;
     padding: 0 var(--kv-space-2);
     border: 1px solid var(--kv-border-default);
-    border-radius: var(--kv-radius-sm);
+    border-radius: var(--kv-control-radius);
     background: var(--kv-panel-bg);
     color: var(--kv-text-main);
     font: inherit;
     font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
     line-height: var(--kv-line-sm);
     white-space: nowrap;
     cursor: pointer;

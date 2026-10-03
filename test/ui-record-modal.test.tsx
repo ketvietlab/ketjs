@@ -319,6 +319,19 @@ test('record modal: the loading state never shows a label key', () => {
     assert.doesNotMatch(resolveRecordModalLabel(key, {}), /^recordModal\./u, `${key} resolves to words`)
 })
 
+test('record modal: read failures replace the loading title and keep retry available', () => {
+  assert.match(
+    runtime,
+    /title:\s*context\s*\? definition\.title\(context\)\s*: t\(status\(\) === 'error' \? 'recordModal.loadFailed' : 'recordModal.loading'\)/u,
+  )
+  const errorBody = runtime.slice(
+    runtime.indexOf("if (status() === 'error')"),
+    runtime.indexOf("if (status() !== 'ready'"),
+  )
+  assert.match(errorBody, /title: t\('recordModal.loadFailed'\)/u)
+  assert.match(errorBody, /value: 'retry'/u)
+})
+
 test('record modal: a created record is in the address bar before the collection refreshes', () => {
   // The shell answers `ket:records-changed` by re-fetching `location.href`; announcing
   // before the `:new` entry is replaced would reload the create form.
