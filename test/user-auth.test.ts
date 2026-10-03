@@ -341,3 +341,37 @@ test('password: hostile scrypt parameters are refused before allocating work', a
   )
   assert.ok(performance.now() - started < 50)
 })
+
+test('user-auth: profile save accepts a modal idempotency key and replays without overwriting later edits', async () => {
+  const runtime = await boot()
+  try {
+    await runtime.call('user.createUser', {
+      id: 'profile',
+      login: 'profile',
+      name: 'Before',
+    })
+    const input = {
+      id: 'profile',
+      login: 'profile',
+      name: 'First edit',
+      accessKind: 'internal',
+      active: true,
+      superuser: false,
+    }
+    const options = {
+      adapter: runtime.adapter,
+      manifest: runtime.manifest,
+      scope: { company: 'acme', branch: 'root:acme', branches: ['root:acme'] },
+      idempotencyKey: 'profile-save-1',
+    }
+    const first = await callFn('user.saveUser', input, options)
+    assert.equal((first.value as { ok: boolean }).ok, true)
+    await runtime.call('user.saveUser', { ...input, name: 'Later edit' })
+    const replay = await callFn('user.saveUser', input, options)
+    assert.deepEqual(replay.value, first.value)
+    const rows = await runtime.adapter.all('SELECT name FROM user_user WHERE id = ?', ['profile'])
+    assert.equal(rows[0].name, 'Later edit')
+  } finally {
+    await runtime.adapter.close()
+  }
+})
