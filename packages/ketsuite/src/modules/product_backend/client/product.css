@@ -1139,17 +1139,7 @@
     display: grid;
     justify-items: center;
     gap: var(--space-2, 8px);
-    inline-size: 11rem;
-    padding: var(--space-1, 4px);
-    border: 1px dashed transparent;
-    border-radius: var(--radius-md, 7px);
-  }
-  [data-ui="variant-editor-image"][data-drag="true"] {
-    border-color: var(--admin-focus-border);
-    background: var(--admin-surface-subtle);
-  }
-  [data-ui="variant-editor-image"][data-busy="true"] {
-    opacity: 0.6;
+    inline-size: 9rem;
   }
   [data-ui="variant-editor-image-actions"] {
     display: grid;
@@ -1157,17 +1147,6 @@
     gap: var(--space-2, 8px);
     inline-size: 100%;
     text-align: center;
-  }
-  /* The column is too narrow for a label beside the file control, so stack them. */
-  [data-ui="variant-editor-image-actions"] [data-ui="field"] {
-    grid-template-columns: minmax(0, 1fr);
-    inline-size: 100%;
-  }
-  [data-ui="variant-editor-image-actions"]
-    [data-ui="field"]
-    > :is([data-ui="field-label"], [data-ui="drop-zone"], [data-ui="field-help"], [data-ui="field-error"]) {
-    grid-column: 1;
-    grid-row: auto;
   }
 
   /* Footer: what Save will do, and the way back. */

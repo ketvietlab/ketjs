@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 300,
+    "publicExports": 301,
     "runtimeExports": 140,
     "registeredComponents": 135,
     "compatibilityExports": 259,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 158,
+    "publicGaps": 159,
     "runtimeGaps": 5,
-    "typeGaps": 153,
+    "typeGaps": 154,
     "cssFiles": 80,
-    "cssLines": 16789
+    "cssLines": 16871
   },
   "rows": [
     {
@@ -1610,6 +1610,24 @@
     },
     {
       "scope": "public",
+      "name": "DropZoneProps",
+      "imported": "DropZoneProps",
+      "kind": "type",
+      "source": "./forms/upload/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-023"
+    },
+    {
+      "scope": "public",
       "name": "EmptyState",
       "imported": "EmptyState",
       "kind": "runtime",
@@ -3180,6 +3198,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -6056,7 +6075,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/product-modal-view.test.tsx"],
       "gapTask": "DS-047"
     },
     {
@@ -7349,6 +7368,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -8084,6 +8104,7 @@
       "tests": "present",
       "testFiles": [
         "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-configuration-modal-view.test.tsx",
         "test/product-attribute-ui.test.tsx",
         "test/product-modal-view.test.tsx",
@@ -8108,7 +8129,11 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/commerce-modal-contract.test.tsx", "test/user-access-surfaces-view.test.tsx"],
+      "testFiles": [
+        "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
+        "test/user-access-surfaces-view.test.tsx"
+      ],
       "gapTask": "DS-015"
     },
     {
@@ -9750,6 +9775,7 @@
         "test/backend-global-search.test.ts",
         "test/backend-ui.test.ts",
         "test/collection-ket-table.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
         "test/crm-case-detail-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
@@ -10250,6 +10276,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-pipeline-screen.test.tsx",
         "test/crm-ux.test.ts",
         "test/design-system-normalization.test.tsx",
@@ -10320,6 +10347,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/company-company-form-screen.test.tsx",
         "test/crm-e2e.test.ts",
         "test/design-system-layout-audit.test.ts",
@@ -11443,6 +11471,7 @@
         "test/account-vendor-bills-screens.test.tsx",
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/company-branch-form-screen.test.tsx",
         "test/company-companies-list-screen.test.tsx",
         "test/company-company-form-http.test.ts",
@@ -11652,6 +11681,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
         "test/crm-cases-routes.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
@@ -12082,8 +12112,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/upload/styles.css",
-      "lines": 22,
-      "hooks": ["drop-zone", "file-upload", "upload-status"]
+      "lines": 78,
+      "hooks": ["drop-zone", "file-upload", "upload-caption", "upload-preview", "upload-status"]
     },
     {
       "layer": "public",
@@ -12094,7 +12124,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 421,
+      "lines": 423,
       "hooks": []
     },
     {
@@ -12233,7 +12263,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/search-filter/styles.css",
-      "lines": 583,
+      "lines": 586,
       "hooks": [
         "custom-filter",
         "custom-filter-add",
@@ -12691,7 +12721,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 256,
+      "lines": 262,
       "hooks": [
         "action",
         "modal-actions",
@@ -12712,7 +12742,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 119,
+      "lines": 120,
       "hooks": ["form-actions", "record-form"]
     },
     {
@@ -12737,7 +12767,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 115,
+      "lines": 125,
       "hooks": [
         "bulk-action-list",
         "field",
@@ -12811,7 +12841,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 399,
+      "lines": 409,
       "hooks": [
         "field",
         "field-affix",
@@ -13002,7 +13032,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/content.css",
-      "lines": 709,
+      "lines": 706,
       "hooks": [
         "action-label",
         "action-spinner",
@@ -13064,7 +13094,6 @@
         "skeleton-line",
         "sort-icon",
         "sort-link",
-        "surface",
         "tab",
         "table",
         "table-caption",
@@ -13106,7 +13135,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 926,
+      "lines": 923,
       "hooks": [
         "action",
         "action-group",

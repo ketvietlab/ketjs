@@ -93,7 +93,16 @@ export const stockConfigurationDefinition = (key: string): RecordModalDefinition
   const config = stockConfigurations[key]!
   return {
     kind: config.kind,
-    size: 'large',
+    size: (c) =>
+      key === 'location'
+        ? 'small'
+        : key === 'route'
+          ? c.creating
+            ? 'small'
+            : 'large'
+          : key === 'lot' && c.creating
+            ? 'small'
+            : 'default',
     labels: () => USER_RECORD_MODAL_LABELS[lang()],
     context: {
       route: (id, creating) => {
@@ -115,6 +124,7 @@ export const stockConfigurationDefinition = (key: string): RecordModalDefinition
         items={[
           c.data.save ? (
             <RecordModalForm
+              columns={key === 'location' || (c.creating && ['lot', 'route'].includes(key)) ? 1 : 2}
               kind={c.kind}
               command="save"
               fields={formFields(c, config.fields, c.data.record)}

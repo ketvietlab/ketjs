@@ -18,6 +18,9 @@ export type StockRouteListRow = {
   name: string
   sequence: number
   ruleCount: number
+  sources?: string
+  destinations?: string
+  ruleActions?: string
   /** Localized detail URL supplied by the route. */
   href: string
 }
@@ -50,6 +53,24 @@ export const stockRouteListColumns = (_: Translator): Array<Column<StockRouteLis
     cell: (row) => String(row.ruleCount),
     kind: 'number',
     priority: 'secondary',
+  },
+  {
+    key: 'sources',
+    label: _('stock_backend.stockRoute.list.col.sources'),
+    wrap: true,
+    cell: (row) => row.sources || '—',
+  },
+  {
+    key: 'destinations',
+    label: _('stock_backend.stockRoute.list.col.destinations'),
+    wrap: true,
+    cell: (row) => row.destinations || '—',
+  },
+  {
+    key: 'ruleActions',
+    label: _('stock_backend.stockRoute.list.col.actions'),
+    wrap: true,
+    cell: (row) => row.ruleActions || '—',
   },
 ]
 
