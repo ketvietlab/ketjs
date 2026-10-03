@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/design-system",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "K\u00e9t Vi\u1ec7t's public, server-rendered operational design system.",
   "type": "module",
   "license": "MIT",
@@ -53,7 +53,7 @@
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.35"
+    "@ketvietlab/ketjs-view": "0.1.36"
   },
   "publishConfig": {
     "access": "public",
