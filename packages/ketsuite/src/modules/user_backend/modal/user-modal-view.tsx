@@ -90,7 +90,7 @@ export type UserModalData = {
   credentialDelivery?: CredentialDelivery
   /** Verified external identity state supplied by the deployment adapter. */
   externalCredential?: {
-    state: 'pending' | 'ready' | 'failed' | 'cancelled'
+    state: 'pending' | 'ready' | 'failed' | 'cancelled' | 'unprovisioned' | 'unmanaged'
     activated: boolean
     operationId: string | null
     claimable: boolean
@@ -1416,13 +1416,21 @@ const loginTab = (c: Context): JSXChild => {
               body: RecordModalForm({
                 kind: c.kind,
                 fields: [],
-                command: c.data.permissions.retryCredential ? 'retryCredential' : 'refreshAccount',
+                command: c.data.permissions.provisionCredential
+                  ? 'provisionCredential'
+                  : c.data.permissions.retryCredential
+                    ? 'retryCredential'
+                    : 'refreshAccount',
                 actions: [
                   Button({
                     type: 'submit',
                     label: t(
                       c,
-                      c.data.permissions.retryCredential ? 'action.retryAccount' : 'action.refreshAccount',
+                      c.data.permissions.provisionCredential
+                        ? 'action.provisionAccount'
+                        : c.data.permissions.retryCredential
+                          ? 'action.retryAccount'
+                          : 'action.refreshAccount',
                     ),
                   }),
                 ],

@@ -1609,8 +1609,10 @@ export const createRecordModal =
           'ket:navigation-complete',
           () => {
             const target = readRecordModalTarget(location.href)
-            if (target?.kind === definition.kind && !open())
-              show(target.id, target.tab ?? null, 'none', undefined, target.dialog)
+            if (target?.kind === definition.kind) {
+              if (open()?.id !== target.id)
+                show(target.id, target.tab ?? null, 'none', undefined, target.dialog)
+            } else if (open()) hide('none')
           },
           { signal: lifetime },
         )
