@@ -1,7 +1,7 @@
 {
   "name": "@ketvietlab/ketjs-postgres",
-  "version": "0.1.31",
-  "description": "Postgres adapter for Ket. The one package permitted a dependency (decision D4a) — which is why it is a package.",
+  "version": "0.1.34",
+  "description": "Postgres adapter for Ket. The one package permitted a dependency (decision D4a) \u2014 which is why it is a package.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -35,7 +35,7 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "0.1.31"
+    "@ketvietlab/ketjs": "0.1.34"
   },
   "peerDependencies": {
     "postgres": "^3.4.9"
