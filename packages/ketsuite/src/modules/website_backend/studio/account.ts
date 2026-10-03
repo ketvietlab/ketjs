@@ -23,7 +23,9 @@ const signinPage =
     const publicSite = await publicSiteOf(ctx, url, req)
     if (!publicSite) return text('', { status: 404 })
     const { site } = publicSite
-    const realm = await ctx.call('website.customerRealmForSite', { siteId: site.id }, url, req)
+    const realm = (await ctx.call('website.customerRealmForSite', { siteId: site.id }, url, req)) as {
+      selfSignup?: boolean | null
+    } | null
     if (!realm) return text('', { status: 404 })
     const title = publicSite.locale === 'vi' ? 'Đăng nhập' : 'Sign in'
     return (
@@ -34,7 +36,7 @@ const signinPage =
         page: { id: 'customer-signin', path: CUSTOMER_SIGNIN_PATH, title, type: 'website.customerSignin' },
         fields: {
           seo: { title, description: '', canonical: '', indexing: 'noindex' },
-          signin: { returnTo },
+          signin: { returnTo, selfSignup: realm.selfSignup !== false },
         },
         appearance: publicSite.appearance,
         meta: {},
@@ -45,10 +47,12 @@ const signinPage =
 
 /** The customer's own pages beside the sign-in; each is the site's, in the look of its home page. */
 export const CUSTOMER_ACCOUNT_PATH = '/account'
+export const CUSTOMER_REGISTER_PATH = '/account/register'
 export const CUSTOMER_FORGOT_PATH = '/account/forgot'
 export const CUSTOMER_RESET_PATH = '/account/reset'
 const customerViews = {
   [CUSTOMER_ACCOUNT_PATH]: ['profile', 'Tài khoản của tôi', 'My account'],
+  [CUSTOMER_REGISTER_PATH]: ['register', 'Tạo tài khoản', 'Create an account'],
   [CUSTOMER_FORGOT_PATH]: ['forgot', 'Quên mật khẩu', 'Forgot password'],
   [CUSTOMER_RESET_PATH]: ['reset', 'Đặt mật khẩu mới', 'Choose a new password'],
 } as const
@@ -67,8 +71,11 @@ const customerPage =
     const publicSite = await publicSiteOf(ctx, url, req)
     if (!publicSite) return text('', { status: 404 })
     const { site } = publicSite
-    const realm = await ctx.call('website.customerRealmForSite', { siteId: site.id }, url, req)
+    const realm = (await ctx.call('website.customerRealmForSite', { siteId: site.id }, url, req)) as {
+      selfSignup?: boolean | null
+    } | null
     if (!realm) return text('', { status: 404 })
+    if (path === CUSTOMER_REGISTER_PATH && realm.selfSignup === false) return text('', { status: 404 })
     const [view, vi, en] = customerViews[path]
     const title = publicSite.locale === 'vi' ? vi : en
     return (

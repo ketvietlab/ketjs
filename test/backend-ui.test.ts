@@ -1893,7 +1893,7 @@ test('ui contract: operational inputs disable autocomplete; public sign-in names
   const tokens = readFileSync('packages/ketsuite/src/ui/website-public.ts', 'utf8').matchAll(
     /\bautocomplete: '([^']*)'/g,
   )
-  const credentials = ['username', 'current-password', 'new-password', 'name']
+  const credentials = ['username', 'current-password', 'new-password', 'name', 'email']
   for (const [, token] of tokens) assert.ok(credentials.includes(token!), `account field fills "${token}"`)
 })
 

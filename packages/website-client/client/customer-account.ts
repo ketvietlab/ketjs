@@ -7,8 +7,16 @@ const API = '/api/customer/v1'
 const SIGNED_OUT = 'ket-customer-signed-out'
 
 type Customer = { displayName?: string | null; email?: string | null; phone?: string | null }
-type Envelope<T> = { data?: T; error?: { message?: string; messageKey?: string } }
-type Session = { customer: Customer | null; csrfToken: string | null }
+type Envelope<T> = {
+  data?: T
+  error?: { message?: string; messageKey?: string }
+  meta?: { nextCursor?: string | null }
+}
+type Session = {
+  customer: Customer | null
+  csrfToken: string | null
+  capabilities: Array<{ key: string; mode: string; actions: string[] }>
+}
 type Notice = [tone: string, title: string, text: string]
 type Messages = {
   loginMissing: string
@@ -42,9 +50,13 @@ const nameOf = (customer: Customer): string =>
 const session = async (): Promise<Session> => {
   try {
     const { body } = await call<Session>('bootstrap')
-    return { customer: body.data?.customer ?? null, csrfToken: body.data?.csrfToken ?? null }
+    return {
+      customer: body.data?.customer ?? null,
+      csrfToken: body.data?.csrfToken ?? null,
+      capabilities: body.data?.capabilities ?? [],
+    }
   } catch {
-    return { customer: null, csrfToken: null }
+    return { customer: null, csrfToken: null, capabilities: [] }
   }
 }
 
@@ -198,6 +210,21 @@ type CustomerWords = {
   loginMissing: string
   passwordMissing: string
   nameMissing: string
+  emailMissing: string
+  emailInvalid: string
+  emailUsed: Notice
+  signupClosed: Notice
+  nameInvalid: Notice
+  history: {
+    empty: string
+    loading: string
+    failed: string
+    more: string
+    retry: string
+    from: string
+    to: string
+    states: Record<string, string>
+  }
   sent: Notice
   expired: Notice
   reset: Notice
@@ -292,6 +319,59 @@ const customerPage = (root: HTMLElement, current: Session) => {
   }
   const trouble = (status: number | undefined) => (status === 429 ? words.limited : words.failed)
 
+  const register = formOf('register')
+  if (register && current.customer) {
+    location.replace('/account')
+    return
+  }
+  register?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (
+      !filled(register, {
+        displayName: words.nameMissing,
+        email: words.emailMissing,
+        password: words.passwordMissing,
+      })
+    )
+      return
+    const displayName = inputOf(register, 'displayName')
+    const email = inputOf(register, 'email')
+    const password = inputOf(register, 'password')
+    if (!email.validity.valid) {
+      flag(email, words.emailInvalid)
+      email.focus()
+      return
+    }
+    if (password.value.length < 6) {
+      flag(password, words.short[2])
+      password.focus()
+      return
+    }
+    const result = await send(register, 'auth/session/register', {
+      displayName: displayName.value.trim(),
+      email: email.value.trim(),
+      password: password.value,
+    })
+    if (result?.status === 201 && result.body.data?.customer) {
+      location.assign('/account')
+      return
+    }
+    const key = result?.body.error?.messageKey
+    if (key === 'website.customer.error.emailInUse') return say(words.emailUsed)
+    if (key === 'website.customer.error.signupClosed') {
+      register.hidden = true
+      return say(words.signupClosed)
+    }
+    if (key === 'website.customer.error.invalidName') return say(words.nameInvalid)
+    if (key === 'website.customer.error.invalidEmail') {
+      flag(email, words.emailInvalid)
+      email.focus()
+      return
+    }
+    if (key === 'website.customer.error.invalidPassword') return say(words.short)
+    say(trouble(result?.status))
+  })
+
   const forgot = formOf('forgot')
   forgot?.addEventListener('submit', async (event) => {
     event.preventDefault()
@@ -344,6 +424,87 @@ const customerPage = (root: HTMLElement, current: Session) => {
       fact.textContent = String(customer[fact.dataset.customerFact as 'phone' | 'email'] ?? '') || '—'
   }
   show(current.customer)
+  if (current.customer) {
+    const locale = document.documentElement.lang || 'vi'
+    const date = (value: unknown) => {
+      const instant = new Date(String(value ?? ''))
+      return Number.isNaN(instant.getTime())
+        ? String(value ?? '')
+        : new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(instant)
+    }
+    const money = (amount: unknown, currency: unknown) => {
+      const code = String(currency || 'VND')
+      try {
+        return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(Number(amount))
+      } catch {
+        return `${String(amount ?? '')} ${code}`
+      }
+    }
+    for (const kind of ['retail', 'hospitality'] as const) {
+      const key = kind === 'retail' ? 'website_retail.orders' : 'website_hospitality.bookings'
+      if (
+        !current.capabilities.some(
+          (entry) => entry.key === key && entry.mode === 'enabled' && entry.actions.includes('read'),
+        )
+      )
+        continue
+      const section = root.querySelector<HTMLElement>(`[data-customer-history="${kind}"]`)
+      const list = section?.querySelector<HTMLOListElement>('[data-history-list]')
+      const state = section?.querySelector<HTMLElement>('[data-history-state]')
+      const more = section?.querySelector<HTMLButtonElement>('[data-history-more]')
+      if (!section || !list || !state || !more) continue
+      section.hidden = false
+      let cursor: string | null = null
+      let busy = false
+      const load = async () => {
+        if (busy) return
+        busy = true
+        more.hidden = true
+        state.textContent = words.history.loading
+        const path = kind === 'retail' ? 'retail/orders' : 'hospitality/my-bookings'
+        const query = new URLSearchParams({ limit: '10' })
+        if (cursor) query.set('cursor', cursor)
+        try {
+          const { status, body } = await call<Array<Record<string, unknown>>>(`${path}?${query}`)
+          if (status === 401) {
+            list.replaceChildren()
+            section.hidden = true
+            show(null)
+            return
+          }
+          if (status !== 200 || !Array.isArray(body.data)) throw new Error('history unavailable')
+          for (const row of body.data) {
+            const item = document.createElement('li')
+            const title = document.createElement('strong')
+            title.textContent = String(row.name ?? row.code ?? row.id ?? '')
+            const statusText = document.createElement('span')
+            statusText.textContent = words.history.states[String(row.state)] ?? String(row.state ?? '')
+            const when = document.createElement('span')
+            when.textContent =
+              kind === 'retail'
+                ? date(row.dateOrder)
+                : `${words.history.from} ${date(row.checkIn)} ${words.history.to} ${date(row.checkOut)}`
+            const total = document.createElement('span')
+            total.textContent = money(row.amountTotal, row.currency)
+            item.append(title, statusText, when, total)
+            list.append(item)
+          }
+          cursor = body.meta?.nextCursor ?? null
+          state.textContent = list.children.length ? '' : words.history.empty
+          more.textContent = words.history.more
+          more.hidden = !cursor
+        } catch {
+          state.textContent = words.history.failed
+          more.textContent = words.history.retry
+          more.hidden = false
+        } finally {
+          busy = false
+        }
+      }
+      more.addEventListener('click', load)
+      void load()
+    }
+  }
   const profile = formOf('profile')
   if (profile && current.customer) inputOf(profile, 'displayName').value = current.customer.displayName ?? ''
   profile?.addEventListener('submit', async (event) => {
