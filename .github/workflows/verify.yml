@@ -51,11 +51,17 @@ jobs:
           cache: npm
       - run: npm ci
       - name: formatting is what the formatter would write
-        run: npm run format:check
+        uses: ./.github/actions/task-cache
+        with:
+          task: format
       - name: build cache invalidation contract
-        run: node --test tools/ci-build-cache-key.test.mjs
+        uses: ./.github/actions/task-cache
+        with:
+          task: unit-cache
       - name: lint
-        run: npm run lint
+        uses: ./.github/actions/task-cache
+        with:
+          task: lint
       - name: the words are the ones the glossary settled on
         run: npm run audit:terminology
       - name: build with shared artifact cache
@@ -71,7 +77,9 @@ jobs:
       - name: architecture examples name their source location
         run: npm --prefix docs run check:snippets
       - name: types check
-        run: npm run check
+        uses: ./.github/actions/task-cache
+        with:
+          task: types
       - name: the type-level claims still hold
         run: node .build/tools/type-proof.js
 
