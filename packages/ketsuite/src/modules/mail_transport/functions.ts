@@ -1,7 +1,8 @@
 import { desc, defineFn, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { queueTemplate } from './operations.ts'
-import { jsonValue, templateKeys } from './template.ts'
+import { queueTemplate, writeTemplate } from './operations.ts'
+import type { TemplateInput } from './operations.ts'
+import { jsonValue } from './template.ts'
 import { PROVIDER_EVENT_TYPES } from './types.ts'
 
 const actor = (ctx: Ctx): string => {
@@ -25,17 +26,6 @@ const queueEffects = [
   'enqueue:mail_transport.deliver',
 ]
 
-const normalizedKeys = (value: unknown): string[] => {
-  const parsed = jsonValue<unknown>(value, [])
-  if (!Array.isArray(parsed))
-    throw new KetError({
-      code: 'E_MAIL_TEMPLATE',
-      module: 'mail_transport',
-      message: 'allowedKeys must be an array',
-    })
-  return [...new Set(parsed.map(String))].sort()
-}
-
 export const functions: Record<string, FnSpec> = {
   saveTemplate: defineFn({
     input: {
@@ -57,44 +47,7 @@ export const functions: Record<string, FnSpec> = {
     handler: (ctx: Ctx, args) =>
       ctx.tx(async (tx) => {
         actor(tx)
-        const name = String(args.name).trim()
-        const fromAddress = String(args.fromAddress).trim()
-        if (!name) throw new Error('template name cannot be empty')
-        if (!fromAddress.includes('@') || /[\r\n]/.test(fromAddress))
-          throw new Error('template sender must be a safe email address')
-        for (const value of [args.fromName, args.replyTo, args.subjectTemplate])
-          if (String(value ?? '').match(/[\r\n]/))
-            throw new Error('mail envelope values cannot contain newlines')
-        if (args.replyTo && !String(args.replyTo).includes('@'))
-          throw new Error('template reply-to must be an email address')
-        const allowedKeys = normalizedKeys(args.allowedKeys)
-        const usedKeys = templateKeys(
-          [args.subjectTemplate, args.textTemplate, args.htmlTemplate ?? ''].map(String).join('\n'),
-        )
-        const forbidden = usedKeys.filter((key) => !allowedKeys.includes(key))
-        if (forbidden.length) throw new Error(`template key(s) not allowlisted: ${forbidden.join(', ')}`)
-        const T = tx.table('mail_transport.Template')
-        const existing = await tx.db.one(from(T).where(eq(T.id, args.id)))
-        const now = new Date().toISOString()
-        const version = Number(existing?.version ?? 0) + 1
-        const row: Row = {
-          id: args.id,
-          name,
-          fromAddress,
-          ...(args.fromName ? { fromName: String(args.fromName).trim() } : {}),
-          ...(args.replyTo ? { replyTo: String(args.replyTo).trim() } : {}),
-          subjectTemplate: args.subjectTemplate,
-          textTemplate: args.textTemplate,
-          ...(args.htmlTemplate ? { htmlTemplate: args.htmlTemplate } : {}),
-          allowedKeys,
-          active: args.active,
-          version,
-          createdAt: existing?.createdAt ?? now,
-          updatedAt: now,
-        }
-        if (existing) await tx.db.update('mail_transport.Template', { id: args.id }, row)
-        else await tx.db.insert('mail_transport.Template', row)
-        return { id: args.id, version }
+        return writeTemplate(tx, args as TemplateInput)
       }),
   }),
 

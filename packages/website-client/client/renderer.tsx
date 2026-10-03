@@ -6,6 +6,7 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { FormField, Placement, ResponsiveSettings, SectionSettings, View, Viewport } from './types.ts'
+import { skinnedPreset } from './theme/presets.ts'
 
 /** What `website_form.publicForm` answered for one form placement, with the visitor's last try. */
 export type PublicFormData = {
@@ -401,7 +402,7 @@ export function renderLayout(layout: readonly Placement[], options: RenderOption
       class="wt-page"
       data-builder-drop-slot={builder ? '' : null}
       data-website-theme="default"
-      data-theme-preset={options.preset === 'cosmetics' ? 'cosmetics' : null}
+      data-theme-preset={skinnedPreset(options.preset) ? options.preset : null}
     >
       {builder && !layout.length ? options.emptySlot?.('') : null}
       {list(layout)}
