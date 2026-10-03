@@ -17,9 +17,6 @@
   [data-ui="surface"][data-padding="compact"] {
     padding: var(--admin-gap);
   }
-  [data-ui="surface"][data-padding="default"] {
-    padding: var(--admin-gap-md);
-  }
   [data-ui="surface"][data-padding="none"] {
     padding: 0;
   }

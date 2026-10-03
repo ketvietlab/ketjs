@@ -99,14 +99,15 @@
 
   @media (max-width: 42rem) {
     :where([data-kv-design-system]) [data-kv-page-identity="context"] {
-      padding-inline: var(--kv-space-4);
+      padding-inline: var(--kv-page-padding-x);
     }
 
     :where([data-kv-design-system]) [data-kv-page-identity="header"] {
-      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+      padding: var(--kv-gap-section) var(--kv-page-padding-x) var(--kv-space-3);
     }
 
     :where([data-kv-design-system]) [data-kv-page-identity="title-row"] {
+      min-block-size: 0;
       grid-template-columns: minmax(0, 1fr);
       align-items: stretch;
       gap: var(--kv-space-3);
