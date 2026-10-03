@@ -1,0 +1,38 @@
+name: Content-addressed KetJS build
+description: Restore exact compiled artifacts and run the incremental builder; tests always run separately.
+outputs:
+  cache-hit:
+    description: Whether GitHub restored the exact build artifact key.
+    value: ${{ steps.cache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: fingerprint
+      shell: bash
+      run: node tools/ci-build-cache-key.mjs >> "$GITHUB_OUTPUT"
+    - id: cache
+      uses: actions/cache/restore@v4
+      with:
+        key: ${{ steps.fingerprint.outputs.key }}
+        path: |
+          .build
+          .types
+          packages/*/dist
+    # Always re-create generated browser assets and validate the build fingerprint.
+    # An exact hit avoids TypeScript emission and copying the full workspace.
+    - shell: bash
+      run: npm run build --silent
+    - uses: actions/cache/save@v4
+      if: steps.cache.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      with:
+        key: ${{ steps.fingerprint.outputs.key }}
+        path: |
+          .build
+          .types
+          packages/*/dist
+    - shell: bash
+      env:
+        BUILD_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        BUILD_CACHE_KEY: ${{ steps.fingerprint.outputs.key }}
+      run: |
+        printf '### KetJS build cache\n- Exact hit: %s\n- Key: `%s`\n- Test results are never cached.\n' "${BUILD_CACHE_HIT:-false}" "$BUILD_CACHE_KEY" >> "$GITHUB_STEP_SUMMARY"
