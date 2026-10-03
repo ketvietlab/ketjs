@@ -1,0 +1,35 @@
+name: Content-addressed quality task
+description: Reuse only successful exact-input results for allowlisted deterministic checks.
+inputs:
+  task:
+    description: format, lint, types or unit-cache
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: fingerprint
+      shell: bash
+      env:
+        CACHE_TASK: ${{ inputs.task }}
+      run: node tools/ci-task-cache.mjs key "$CACHE_TASK" >> "$GITHUB_OUTPUT"
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        key: ${{ steps.fingerprint.outputs.key }}
+        path: .task-cache/${{ inputs.task }}
+    - shell: bash
+      env:
+        CACHE_TASK: ${{ inputs.task }}
+      run: node tools/ci-task-cache.mjs run "$CACHE_TASK"
+    - uses: actions/cache/save@v4
+      if: steps.restore.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      with:
+        key: ${{ steps.fingerprint.outputs.key }}
+        path: .task-cache/${{ inputs.task }}
+    - shell: bash
+      env:
+        CACHE_TASK: ${{ inputs.task }}
+        CACHE_KEY: ${{ steps.fingerprint.outputs.key }}
+        CACHE_RESTORED: ${{ steps.restore.outputs.cache-hit }}
+      run: |
+        printf '### Task cache: %s\n- Exact restore: %s\n- Key: `%s`\n- See runner log for validated HIT/MISS.\n' "$CACHE_TASK" "${CACHE_RESTORED:-false}" "$CACHE_KEY" >> "$GITHUB_STEP_SUMMARY"
