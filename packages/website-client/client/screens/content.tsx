@@ -24,6 +24,7 @@ import type { PublicPageData } from '../metadata.ts'
 import type { PublicMenu } from './visitor-commerce.tsx'
 import type { Entry, Screen, SiteTheme, StudioContext, TaxonomyTerm, Viewport } from '../types.ts'
 import type { EntryHistory, RevisionChange } from './builder-types.ts'
+import { skinnedPreset } from '../theme/presets.ts'
 
 /** `website_studio.preview`: one revision of a page, the site's look, and the share link if any. */
 type PreviewData = {
@@ -522,9 +523,9 @@ export function createPublicSite(ctx: StudioContext) {
           items={[
             <details
               class="website-public-search"
-              open={route.query.q || data.theme?.preset !== 'cosmetics' ? true : null}
+              open={route.query.q || !skinnedPreset(data.theme?.preset) ? true : null}
             >
-              <summary hidden={data.theme?.preset !== 'cosmetics'}>{ctx.tr('website.search.label')}</summary>
+              <summary hidden={!skinnedPreset(data.theme?.preset)}>{ctx.tr('website.search.label')}</summary>
               <form id="public-search">
                 <TextField
                   id="public-query"
@@ -624,7 +625,7 @@ export function createPublicSite(ctx: StudioContext) {
               >
                 {renderEntryBody(data.entry, {
                   headingLevel:
-                    data.theme?.preset === 'cosmetics' && data.entry.layout[0]?.type === 'website.hero'
+                    skinnedPreset(data.theme?.preset) && data.entry.layout[0]?.type === 'website.hero'
                       ? 1
                       : 2,
                   preset: data.theme?.preset,
@@ -683,7 +684,7 @@ export function createPublicSite(ctx: StudioContext) {
           resolveLink: destination,
           titleVisible:
             !!route.query.q ||
-            data.theme?.preset !== 'cosmetics' ||
+            !skinnedPreset(data.theme?.preset) ||
             data.entry?.layout[0]?.type !== 'website.hero',
         },
       ),

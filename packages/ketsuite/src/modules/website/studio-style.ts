@@ -16,7 +16,8 @@ export const styleKeys = [
   'footer',
 ] as const
 const choices: Record<string, string[]> = {
-  preset: ['default', 'cosmetics'],
+  // The bundled presets; the Studio lists the same ones in website-client's theme/presets.ts.
+  preset: ['default', 'cosmetics', 'retail', 'restaurant', 'hotel', 'services'],
   accent: ['green', 'indigo', 'orange'],
   font: ['sans', 'serif'],
   spacing: ['compact', 'comfortable', 'spacious'],

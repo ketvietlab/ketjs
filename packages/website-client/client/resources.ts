@@ -1,4 +1,5 @@
 // Core resource schemas; fixture data lives in the Atlas host.
+import { themePresets } from './theme/presets.ts'
 
 /** `text`, `area`, `number`, or `select:a,b` with its option values. */
 export type ResourceField = {
@@ -280,7 +281,7 @@ export const resourceSchemas: Record<string, ResourceSchema> = {
       {
         name: 'preset',
         label: 'website.resource.themes.preset',
-        kind: 'select:default,cosmetics',
+        kind: `select:${themePresets.join(',')}`,
         defaultValue: 'default',
       },
       {

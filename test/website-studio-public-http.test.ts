@@ -29,7 +29,7 @@ test('public Studio delivery uses the published style, native menu and server-re
   const style = await fixture('website.saveStudioStyle', {
     siteId: 'site-a',
     expectedRevisionId: 'initial',
-    values: { preset: 'cosmetics', footer: 'Published footer' },
+    values: { preset: 'hotel', footer: 'Published footer' },
   })
   const saved = await fixture('website.saveEntry', {
     id: 'public-post',
@@ -50,7 +50,7 @@ test('public Studio delivery uses the published style, native menu and server-re
   const response = await anonymous.get('/post')
   assert.equal(response.status, 200)
   const first = (await response.text()).replace(/<!--.*?-->/g, '')
-  assert.match(first, /data-theme-preset="cosmetics"/)
+  assert.match(first, /data-theme-preset="hotel"/)
   assert.match(first, /Published footer/)
   assert.match(first, /Nội dung public &lt;script&gt;not code&lt;\/script&gt;/)
   assert.match(first, /href="\/post"[^>]*>Bài viết/)
