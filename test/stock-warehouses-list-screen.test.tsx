@@ -48,6 +48,8 @@ test('stock warehouses list: keeps columns and search in the ListPage hierarchy'
             id: 'warehouse-central',
             name: 'Kho trung tâm',
             code: 'KTT',
+            locationCount: 12,
+            transferCount: 37,
             receptionSteps: 'two_steps',
             deliverySteps: 'pick_pack_ship',
           },
@@ -63,6 +65,9 @@ test('stock warehouses list: keeps columns and search in the ListPage hierarchy'
   )
 
   assert.match(html, /data-ui="ket-table"/)
+  assert.match(html, /data-col="locationCount"[\s\S]*?12/)
+  assert.match(html, /data-col="transferCount"[\s\S]*?37/)
+
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(html, /data-ui="topbar"/)

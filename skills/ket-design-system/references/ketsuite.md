@@ -5,6 +5,11 @@ permissions, native routes and form behavior while applying the visual contract.
 
 ## Collection lists
 
+- SearchFilter owns a 48rem maximum inline size for the complete search/filter
+  group, including applied facets. It fills narrower containers, stays aligned
+  to the start of the collection, and wraps long facet content. Lists and modules
+  do not override that width or stretch the input across the remaining page.
+
 - The KetSuite shell uses `AppBrand` in the sidebar header and `AppShell.location` for the
   main-column organisation context and tools. It does not show breadcrumbs or a full-width
   global topbar. Standalone page patterns retain their context contract. Do not recreate shell
@@ -30,6 +35,22 @@ permissions, native routes and form behavior while applying the visual contract.
 
 ## Record modals
 
+- `ModalSheet.size` owns width; product modules choose `small`, `default` or `large`,
+  never a private CSS width. At a 16px root, centred dialogs are capped at 34rem
+  (544px), 56rem (896px) and 75rem (1200px), respectively. Side sheets use 34rem
+  for small/default and 56rem for large. Dialogs retain the owner's 24px viewport
+  gutter on desktop; all non-embedded modals become fullscreen below 768px.
+- Choose small for a brief confirmation or a short single-column form; default
+  for ordinary record details and two-column forms; large for line-item tables,
+  rich editors or the three-column purchase form. Choose once for the record,
+  accounting for all its tabs; do not resize width as tabs change. A confirmation
+  inside an existing record keeps that record's width.
+
+- `RecordForm.columns={3}` groups three peer controls in one row when the form
+  container is at least 56rem wide on desktop. Smaller desktop containers use
+  the default two-column form; mobile stacks the fields. The form owns column
+  and row gaps; fields retain their label, help, error and full-span contracts.
+
 - Define record modals with `RecordModalDefinition`; do not build a parallel overlay, history handler, loading state, or close flow in a module.
 - Use `RecordModalForm` for forms and named record commands for mutations. Views never call `fetch`, mutate history, query the document, or refresh the collection themselves.
 - Use `context.draft(name, fallback)` for textual/select values and `context.draftChecked(name, value, fallback)` for checkbox/radio state. Any control that triggers a view-state re-render must preserve the current form draft first.
@@ -37,4 +58,3 @@ permissions, native routes and form behavior while applying the visual contract.
 - Open nested record dialogs with `RecordDialogTrigger`/`data-record-dialog`. The record beneath must be inert while the dialog is open, and closing returns focus to the opener.
 - Field refusals belong on the matching field through `context.fieldError`; only unmatched/general issues render as the layer notice. Do not erase entered values on loading, validation refusal, tab switch, or view-state change.
 - A record with more than one declared tab uses the fixed-height modal contract. A record without tabs and nested dialogs size to content unless a separate documented workflow requires otherwise.
-

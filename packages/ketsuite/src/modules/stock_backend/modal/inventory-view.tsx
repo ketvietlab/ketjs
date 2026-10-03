@@ -10,7 +10,7 @@ type Preview = { onHand: string; reserved: string; difference: string; unit: str
 const lang = () => (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'vi')
 export const inventoryCountDefinition: RecordModalDefinition<Data> = {
   kind: 'stock.count',
-  size: 'large',
+  size: 'small',
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {
@@ -39,6 +39,7 @@ export const inventoryCountDefinition: RecordModalDefinition<Data> = {
       )
     return (
       <RecordModalForm
+        columns={1}
         kind={c.kind}
         fields={(
           [

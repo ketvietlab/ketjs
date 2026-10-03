@@ -49,11 +49,12 @@ contract; never shrink text to fit. Zero default outer text margins.
 | --- | --- | --- |
 | Related actions | 8px | ActionGroup |
 | Title block to content | 8px | Surface/Section |
-| Surface/modal inset | 16px | Outer surface/overlay |
+| Surface/card inset | 16px desktop, 12px mobile | Surface/object card |
+| Modal inset | 16px | Overlay |
 | Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
 | Field groups/sections | 16px | Parent layout |
-| Page gutter | 16px | Page |
+| Page gutter | 16px desktop, 12px mobile | Page |
 | Default/prominent button and input height | 32px desktop, 36px mobile | Control |
 | Explicit compact button height | 28px desktop, 32px mobile | Button |
 | Button/input block / inline padding | 6 / 12px | Control |
@@ -65,11 +66,12 @@ uses the Button-owned 20px box and 2px inner gap; do not substitute the 8px grou
 Textarea grows by rows/content. Native and compound controls use the same type and
 geometry. Loading keeps the button's label/icon footprint and accessible name.
 
-24px is the gap between form columns; the page gutter is 16px on every side and at
-every width, including below a record body. The form-column
+24px is the gap between form columns. Page gutter, surface/card inset and default
+sibling block gaps are 16px on desktop and 12px on mobile (<768px). Form rows
+remain 16px, and title/content and related-action gaps remain 8px. The form-column
 gap is Két policy (Polaris FormLayout.Group uses 12px); it separates complete fields,
-not a label from its input. Form rows and section gaps remain 16px. Stack gap aliases
-are none=0, tight=4, compact=8, column=12, default=16, loose=16. The last two are
+not a label from its input. Form rows and field-group gaps remain 16px. Stack gap aliases
+are none=0, tight=4, compact=8, column=12, default/loose=16 desktop and 12 mobile. The last two are
 compatibility aliases, not distinct density levels. Use pattern defaults before
 choosing generic gaps. Parent presentation/theme CSS must not override a child's gap.
 
@@ -93,6 +95,10 @@ The list result footer is metadata on the canvas, not another framed surface.
 
 AppNavigation owns menu geometry, including NavigationToggle and the mobile drawer.
 These are Két navigation roles, not a requirement to give every component one size.
+Navigation groups default to exclusive accordions. Set `NavigationGroupData.exclusive`
+to `false` for independently collapsible branches, and set each branch's `expanded`
+to `true` to open all of them initially. This also applies to nested branches and
+the mobile drawer; opening the drawer remains a separate action.
 
 | Role | Desktop >=768px | Mobile <768px |
 | --- | --- | --- |
@@ -184,3 +190,13 @@ scoped exception owned by the website authentication view: the login field uses
 `username` and the password field uses `current-password` so password managers can
 identify the credentials. This exception does not apply to ordinary website or ERP
 forms. Keep the field associations and native password semantics.
+
+### Image drop zones
+
+`DropZone` owns one visible frame, its caption, hint, preview and focus/drag states.
+Pass `preview={null}` for an empty square image target or `{ src, alt }` for an image.
+The transparent native file input covers that frame and stays keyboard accessible;
+do not render a separate image placeholder and native file chooser below it.
+The application runtime owns file validation, transport and `dragging` state; it
+must ignore uploads while disabled or saving. Keep any image viewer action separate
+from the file input target. `FileUpload` remains the explicit native chooser variant.

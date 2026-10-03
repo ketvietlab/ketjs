@@ -60,7 +60,7 @@ const values = (c: Context): FieldProps[] =>
   }))
 export const vendorPricelistDefinition: RecordModalDefinition<Data> = {
   kind: 'purchase.vendorPrice',
-  size: 'large',
+  size: (c) => (c.creating ? 'default' : 'small'),
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {
@@ -74,6 +74,7 @@ export const vendorPricelistDefinition: RecordModalDefinition<Data> = {
   body: (c) =>
     c.data.save ? (
       <RecordModalForm
+        columns={c.creating ? 2 : 1}
         kind={c.kind}
         command="save"
         fields={values(c)}

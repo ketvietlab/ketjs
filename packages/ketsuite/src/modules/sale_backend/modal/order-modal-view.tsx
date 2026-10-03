@@ -178,7 +178,7 @@ const summary = (c: Context) => (
 )
 export const saleOrderModalDefinition: RecordModalDefinition<SaleOrderModalData> = {
   kind: 'sale.order',
-  size: 'large',
+  size: (c) => (c.creating ? 'default' : 'large'),
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {

@@ -164,7 +164,7 @@ export type {
   TemporalProps,
 } from './forms/date-time/index.tsx'
 export { DropZone, FileUpload } from './forms/upload/index.tsx'
-export type { FileUploadProps } from './forms/upload/index.tsx'
+export type { DropZoneProps, FileUploadProps } from './forms/upload/index.tsx'
 export { RelationPicker } from './forms/relation-picker/index.tsx'
 export type { RelationPickerProps } from './forms/relation-picker/index.tsx'
 
