@@ -309,7 +309,7 @@ test('record modal: the loading state never shows a label key', () => {
 test('record modal: read failures replace the loading title and keep retry available', () => {
   assert.match(
     runtime,
-    /title: context \? definition\.title\(context\) : t\(status\(\) === 'error' \? 'recordModal.loadFailed' : 'recordModal.loading'\)/u,
+    /title:\s*context\s*\? definition\.title\(context\)\s*: t\(status\(\) === 'error' \? 'recordModal.loadFailed' : 'recordModal.loading'\)/u,
   )
   const errorBody = runtime.slice(
     runtime.indexOf("if (status() === 'error')"),

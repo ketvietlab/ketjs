@@ -49,7 +49,14 @@ test('invoicing policies list: keeps product policies and moves editing to the d
           '/admin/sales/invoicing-policies/new?lang=vi&returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Dvi',
         total: 12,
         rows: [
-          { id: 'desk', name: 'Bàn làm việc', invoicePolicy: 'order' },
+          {
+            id: 'desk',
+            name: 'Bàn làm việc',
+            invoicePolicy: 'order',
+            sku: 'DESK-01',
+            category: 'Nội thất',
+            uom: 'Cái',
+          },
           { id: 'chair', name: 'Ghế công thái học', invoicePolicy: 'delivery' },
           { id: 'lamp', name: 'Đèn bàn' },
         ],
@@ -64,6 +71,10 @@ test('invoicing policies list: keeps product policies and moves editing to the d
   )
 
   assert.match(html, /data-ui="ket-table"/)
+  assert.match(html, /data-col="sku"[\s\S]*?DESK-01/)
+  assert.match(html, /data-col="category"[\s\S]*?Nội thất/)
+  assert.match(html, /data-col="uom"[\s\S]*?Cái/)
+
   assert.ok(html.indexOf('data-ui="page-context"') < html.indexOf('data-ui="ket-table"'))
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-ui="list-page-title"[\s\S]*?Chính sách lập hoá đơn/)

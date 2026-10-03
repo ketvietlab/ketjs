@@ -3198,6 +3198,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -7367,6 +7368,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/design-system.test.tsx",
         "test/product-modal-view.test.tsx",
         "test/search-filter-layout.test.tsx",
@@ -8102,6 +8104,7 @@
       "tests": "present",
       "testFiles": [
         "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-configuration-modal-view.test.tsx",
         "test/product-attribute-ui.test.tsx",
         "test/product-modal-view.test.tsx",
@@ -8126,7 +8129,11 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/commerce-modal-contract.test.tsx", "test/user-access-surfaces-view.test.tsx"],
+      "testFiles": [
+        "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
+        "test/user-access-surfaces-view.test.tsx"
+      ],
       "gapTask": "DS-015"
     },
     {
@@ -9768,6 +9775,7 @@
         "test/backend-global-search.test.ts",
         "test/backend-ui.test.ts",
         "test/collection-ket-table.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
         "test/crm-case-detail-screen.test.tsx",
         "test/crm-cases-screens.test.tsx",
@@ -10268,6 +10276,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-pipeline-screen.test.tsx",
         "test/crm-ux.test.ts",
         "test/design-system-normalization.test.tsx",
@@ -10338,6 +10347,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/company-company-form-screen.test.tsx",
         "test/crm-e2e.test.ts",
         "test/design-system-layout-audit.test.ts",
@@ -11461,6 +11471,7 @@
         "test/account-vendor-bills-screens.test.tsx",
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/commerce-ui-design.test.tsx",
         "test/company-branch-form-screen.test.tsx",
         "test/company-companies-list-screen.test.tsx",
         "test/company-company-form-http.test.ts",
@@ -11670,6 +11681,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/commerce-modal-contract.test.tsx",
+        "test/commerce-ui-design.test.tsx",
         "test/crm-activity-planner-screen.test.tsx",
         "test/crm-cases-routes.test.ts",
         "test/crm-configuration-modal-view.test.tsx",

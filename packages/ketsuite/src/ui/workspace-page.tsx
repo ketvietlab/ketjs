@@ -4,7 +4,6 @@ import {
 } from '@ketvietlab/design-system'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Frame } from './layout.tsx'
-import { pageContextFromFrame } from './navigation.tsx'
 
 type WorkspacePageFrame = Pick<Frame, 'menu' | 'viewer' | 'extras'>
 
@@ -31,11 +30,5 @@ export const WorkspacePage = (props: WorkspacePageProps): TemplateResult => {
   }
 
   const { frame, context: _context, ...page } = props
-  return (
-    <DesignSystemWorkspacePage
-      {...page}
-      actions={actions}
-      context={pageContextFromFrame(props.title, frame)}
-    />
-  )
+  return <DesignSystemWorkspacePage {...page} actions={actions} context={null} />
 }

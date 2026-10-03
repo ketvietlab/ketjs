@@ -36,6 +36,8 @@ export const warehouseListSearch = defineRowList({
     { key: 'deliverySteps', label: 'stock_backend.warehouse.col.delivery' },
   ],
   sortable: [
+    { key: 'locationCount', label: 'stock_backend.warehouse.col.locations' },
+    { key: 'transferCount', label: 'stock_backend.warehouse.col.transfers' },
     { key: 'name', label: 'stock_backend.warehouse.col.name' },
     { key: 'code', label: 'stock_backend.warehouse.col.code' },
   ],
@@ -158,7 +160,7 @@ const LOCATION_USAGES = [
 
 export const locationListSearch = defineRowList({
   key: 'stock.locations',
-  searchable: [{ key: 'completeName' }, { key: 'usage' }, { key: 'warehouse' }],
+  searchable: [{ key: 'parentLocation' }, { key: 'completeName' }, { key: 'usage' }, { key: 'warehouse' }],
   filterable: [
     { key: 'completeName', label: 'stock_backend.location.col.location', type: 'text' },
     {
@@ -174,6 +176,9 @@ export const locationListSearch = defineRowList({
     { key: 'warehouse', label: 'stock_backend.location.col.warehouse' },
   ],
   sortable: [
+    { key: 'parentLocation', label: 'stock_backend.location.col.parent' },
+    { key: 'productCount', label: 'stock_backend.location.col.products' },
+
     { key: 'completeName', label: 'stock_backend.location.col.location' },
     { key: 'usage', label: 'stock_backend.location.col.usage' },
   ],
@@ -279,13 +284,17 @@ export const lotListSearch = defineRowList({
 
 export const stockRouteListSearch = defineRowList({
   key: 'stock.routes',
-  searchable: [{ key: 'name' }],
+  searchable: [{ key: 'sources' }, { key: 'destinations' }, { key: 'ruleActions' }, { key: 'name' }],
   filterable: [
     { key: 'name', label: 'stock_backend.stockRoute.list.col.name', type: 'text' },
     { key: 'sequence', label: 'stock_backend.stockRoute.list.col.sequence', type: 'number' },
     { key: 'ruleCount', label: 'stock_backend.stockRoute.list.col.rules', type: 'number' },
   ],
   sortable: [
+    { key: 'sources', label: 'stock_backend.stockRoute.list.col.sources' },
+    { key: 'destinations', label: 'stock_backend.stockRoute.list.col.destinations' },
+    { key: 'ruleActions', label: 'stock_backend.stockRoute.list.col.actions' },
+
     { key: 'sequence', label: 'stock_backend.stockRoute.list.col.sequence' },
     { key: 'name', label: 'stock_backend.stockRoute.list.col.name' },
   ],
