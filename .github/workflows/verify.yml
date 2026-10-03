@@ -52,12 +52,14 @@ jobs:
       - run: npm ci
       - name: formatting is what the formatter would write
         run: npm run format:check
+      - name: build cache invalidation contract
+        run: node --test tools/ci-build-cache-key.test.mjs
       - name: lint
         run: npm run lint
       - name: the words are the ones the glossary settled on
         run: npm run audit:terminology
-      - name: build
-        run: npm run build --silent
+      - name: build with shared artifact cache
+        uses: ./.github/actions/build
       - name: dependencies stay where they are declared
         run: node .build/tools/zero-dep-audit.js
       - name: no module writes its own markup
@@ -91,8 +93,9 @@ jobs:
           node-version: "26"
           cache: npm
       - run: npm ci
+      - uses: ./.github/actions/build
       - name: every production function has an exact bundle or exemption
-        run: npm run test:permission-coverage
+        run: npm run test:permission-coverage:built
 
   tests:
     name: sqlite / ${{ matrix.group }}
@@ -126,7 +129,7 @@ jobs:
           done
           docker logs ketjs-minio
           exit 1
-      - run: npm run build --silent
+      - uses: ./.github/actions/build
       - name: run selected tests
         run: npm run test:group:built -- ${{ matrix.group }}
 
@@ -161,7 +164,7 @@ jobs:
           node-version: "26"
           cache: npm
       - run: npm ci
-      - run: npm run build --silent
+      - uses: ./.github/actions/build
       - name: run selected tests against a real Postgres
         env:
           DATABASE_URL: postgres://dev:devpassword@127.0.0.1:5432/ketjs_ci

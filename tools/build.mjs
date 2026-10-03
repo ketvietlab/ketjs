@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildArtifactsExist } from './build-artifacts.mjs'
 import { buildBackendClients } from './build-backend-client.mjs'
 import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
 import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
@@ -129,16 +130,6 @@ const sourceFingerprint = () => {
   return hash.digest('hex')
 }
 
-const artifactsExist = () =>
-  existsSync(join(BUILD, 'ket.workspace.js')) &&
-  packageNames.every((name) =>
-    ['index.js', 'index.mjs'].some(
-      (entry) =>
-        existsSync(join(BUILD, 'packages', name, 'src', entry)) &&
-        existsSync(join(PACKAGES, name, 'dist', entry)),
-    ),
-  )
-
 /**
  * @param {string} source
  * @param {string[]} destinations
@@ -177,7 +168,7 @@ try {
   await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
-  if (current === fingerprint && artifactsExist()) {
+  if (current === fingerprint && buildArtifactsExist(ROOT, packageNames)) {
     console.log('build artifacts already match this source revision')
   } else {
     const stage = join(ROOT, `.ket-build-stage-${process.pid}`)
