@@ -24,13 +24,22 @@ export type Domain = {
   state?: string
   tls?: string
   checkedAt?: string | null
-  /** The DNS record that proves ownership; every saved domain has one. */
-  challenge?: { type: string; name: string; value: string }
+  /** What the last check found: matched, missing, mismatch or unreachable. */
+  reason?: string | null
+  /** The DNS record that proves ownership; a host Két Việt connected before needs none. */
+  challenge?: { type: string; name: string; value: string } | null
   attempts?: { id: string; at: string; result: string; reason: string }[]
 }
 type DomainList = { rows: Domain[] }
 
 const tones: Record<string, Tone> = { verified: 'positive', pending: 'warning', failed: 'danger' }
+/** HTTPS follows ownership: Két Việt switches it on once the host is proven. */
+const tlsLabel = (row: Pick<Domain, 'state' | 'tls'>) =>
+  row.tls === 'ready'
+    ? 'website.domain.tlsReady'
+    : row.state === 'verified'
+      ? 'website.domain.tlsActivating'
+      : 'website.domain.tlsPending'
 export function domainList(ctx: StudioContext, data: DomainList) {
   const tr = ctx.tr
   const state = (row: Pick<Domain, 'state'>) => (
@@ -49,12 +58,7 @@ export function domainList(ctx: StudioContext, data: DomainList) {
       cell: (row: Domain) => tr(`website.domain.role.${row.role}`),
     },
     { key: 'state', label: tr('website.domain.ownership'), cell: state },
-    {
-      key: 'tls',
-      label: tr('website.domain.https'),
-      cell: (row: Domain) =>
-        tr(row.tls === 'ready' ? 'website.domain.tlsReady' : 'website.domain.tlsPending'),
-    },
+    { key: 'tls', label: tr('website.domain.https'), cell: (row: Domain) => tr(tlsLabel(row)) },
   ]
   return (
     <Stack
@@ -153,14 +157,14 @@ export function createDomainScreens(ctx: StudioContext) {
                           {
                             id: 'tls',
                             label: tr('website.domain.https'),
-                            value: tr(
-                              data.tls === 'ready' ? 'website.domain.tlsReady' : 'website.domain.tlsPending',
-                            ),
+                            value: tr(tlsLabel(data)),
                           },
                           {
                             id: 'checked',
                             label: tr('website.domain.lastChecked'),
-                            value: data.checkedAt ?? tr('website.domain.notChecked'),
+                            value: data.checkedAt
+                              ? formatTime(data.checkedAt)
+                              : tr('website.domain.notChecked'),
                           },
                         ]}
                       />
@@ -184,7 +188,7 @@ export function createDomainScreens(ctx: StudioContext) {
                     )
                   }
                 />,
-                data.revisionId ? (
+                data.revisionId && data.challenge ? (
                   <Surface
                     title={tr('website.domain.verify')}
                     body={
@@ -192,8 +196,8 @@ export function createDomainScreens(ctx: StudioContext) {
                         divided
                         items={[
                           <Notice
-                            title={tr('website.domain.simulation')}
-                            message={tr('website.domain.simulationHelp')}
+                            title={tr('website.domain.howTo')}
+                            message={tr('website.domain.howToHelp')}
                             tone="info"
                           />,
                           <DescriptionList
@@ -201,43 +205,35 @@ export function createDomainScreens(ctx: StudioContext) {
                               {
                                 id: 'type',
                                 label: tr('website.domain.recordType'),
-                                value: data.challenge!.type,
+                                value: data.challenge.type,
                               },
                               {
                                 id: 'name',
                                 label: tr('website.domain.recordName'),
-                                value: data.challenge!.name,
+                                value: data.challenge.name,
                               },
                               {
                                 id: 'value',
                                 label: tr('website.domain.recordValue'),
-                                value: data.challenge!.value,
+                                value: data.challenge.value,
                               },
                             ]}
                           />,
                           data.state === 'failed' ? (
                             <Notice
                               title={tr('website.domain.failed')}
-                              message={tr('website.domain.failedHelp')}
+                              message={tr(`website.domain.reason.${data.reason}`)}
                               tone="danger"
                             />
                           ) : null,
-                          <form id="domain-verify">
-                            <TextField
-                              id="domain-proof"
-                              name="observedTxt"
-                              label={tr('website.domain.proof')}
-                              help={tr('website.domain.proofHelp')}
-                            />
+                          data.state === 'verified' ? null : (
                             <CommandButton
                               label={tr('website.domain.check')}
                               command="domain.verify"
-                              type="submit"
-                              form="domain-verify"
                               variant="primary"
                               disabled={ctx.busy()}
                             />
-                          </form>,
+                          ),
                         ]}
                       />
                     }
@@ -287,7 +283,6 @@ export function createDomainScreens(ctx: StudioContext) {
                             cell: (row) => formatTime(row.at),
                             kind: 'date',
                           },
-                          { key: 'id', label: tr('website.domain.operation'), cell: (row) => row.id },
                           {
                             key: 'result',
                             label: tr('website.domain.ownership'),
@@ -296,12 +291,7 @@ export function createDomainScreens(ctx: StudioContext) {
                           {
                             key: 'reason',
                             label: tr('website.domain.reason'),
-                            cell: (row) =>
-                              tr(
-                                row.reason === 'matched'
-                                  ? 'website.domain.matched'
-                                  : 'website.domain.failedHelp',
-                              ),
+                            cell: (row) => tr(`website.domain.reason.${row.reason}`),
                           },
                         ]}
                         emptyTitle={tr('website.domain.notChecked')}
@@ -331,12 +321,11 @@ export function createDomainScreens(ctx: StudioContext) {
           pendingId = null
           await ctx.navigate('domains-edit', { id: row.id })
         },
-        'domain.verify': async (_args, form) => {
+        'domain.verify': async () => {
           await ctx.call('website_studio.verifyDomain', {
             siteId: ctx.site().id,
             id: current.id,
             expectedRevisionId: current.revisionId,
-            observedTxt: String(form!.get('observedTxt') ?? ''),
           })
           await ctx.refresh()
         },

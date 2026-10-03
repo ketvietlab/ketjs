@@ -240,6 +240,9 @@ and require `website.site.manage`. Generic domain saves accept only `title`; rol
 are refused. The first domain becomes primary when no primary exists; subsequent domains are redirects.
 Hostname changes require a new domain. DNS/TLS are simulated, not checked on the network.
 
+On the host this is superseded: see "SEO, domains and customer passwords on the host (2026-10-03)".
+`observedTxt` is mock-only; the host looks the record up itself.
+
 ## Red-screen parity additions (mock BFF, all NEW)
 
 These handlers are domain simulators, not production payment, stock, identity or booking adapters.
@@ -675,5 +678,50 @@ Atlas mock is unchanged and does not answer these functions.
   values: { displayName, phone, email, password } }` refuses a partner who already has an account
   (`conflict`), because issuing again would silently reset the password.
 - NEW `website_studio.saveCustomerSettings` `{ siteId, selfSignup }` opens or closes self sign-up.
-- Not built: password recovery, and the public "my account" pages. The visitor-account simulation
-  screens above remain mock-only.
+- Password recovery and the public "my account" pages: see the next section. The visitor-account
+  simulation screens above remain mock-only.
+
+## SEO, domains and customer passwords on the host (2026-10-03)
+
+The Atlas mock is unchanged and does not answer the host behaviour below.
+
+- Real Δ `website_studio.listResources` / `getResource` / `saveResource` with `kind: 'seo'` read and
+  write the SEO of each page and post that is not in the trash, through `website.saveEntry`. Rows are
+  `{ id, siteId, kind: 'seo', title, path, description, image, indexing, canonical, state, revisionId }`.
+  A save takes `{ title, path, description, image, indexing, canonical }`; a title equal to the page's
+  own is stored empty so the page title keeps driving it. A stale `expectedRevisionId` fails `conflict`;
+  SEO cannot be created or archived. The list `audit` is `{ publicationId, indexState, rows }` and lists
+  only published entries missing a description or image, or whose draft differs from what is served.
+- Real Δ `kind: 'domains'`: adding a host goes through `website.saveDomain`; the site's first host is
+  primary. Each host has its own proof: a TXT record at `_ketviet.<host>` with the value
+  `ketviet-verify=<token>`, returned as `challenge: { type: 'TXT', name, value }` until it is proven.
+  Retrying an add with the same host answers the same domain; another host under that id is refused.
+  A host renamed outside the Studio gets a new token and must be proven again.
+- NEW `website.verifyDomain` `{ id }` (configure) looks the record up from the server. The result is
+  `matched | missing | mismatch | unreachable`; the first match stamps `verifiedAt`, which a later failed
+  lookup does not take away. `WEBSITE_DNS_SERVERS` (comma-separated `host:port`) overrides the system
+  resolvers. `website_studio.verifyDomain` `{ siteId, id, expectedRevisionId }` wraps it; `observedTxt`
+  is gone. Domain rows carry `state: pending | verified | failed`, `tls: pending | ready`, `checkedAt`,
+  `reason` and the last check as `attempts`. Hosts saved before proofs existed count as proven and served.
+- NEW internal `website.markDomainServing` `{ id, serving }` is how Két Việt records that a host answers
+  over HTTPS. No Studio role reaches it; it refuses a host that is not proven.
+- `website_studio.setPrimaryDomain` needs the host proven **and** served: every other host redirects to
+  the primary, so an unserved primary would take the site down. Until then the Studio shows
+  "Két Việt đang kích hoạt".
+- Customer pages: `/account` (my account), `/account/forgot` and `/account/reset` render on the site's own
+  look, `noindex`, and are filled by `customer-account.mjs` from the customer API. The reset token stays
+  in the address and is never written into the page.
+- Customer API (`/api/customer/v1`, see `docs/public/api/customer-v1.openapi.json`):
+  - `PATCH me/profile` `{ displayName }` (signed in; a cookie session needs its CSRF token).
+  - `POST auth/password` `{ currentPassword, newPassword }` signs every device out; a cookie session
+    answers a fresh `csrfToken` and cookie.
+  - `POST auth/password/forgot` `{ email } | { phone }` answers `202 { accepted: true }` whatever the
+    account, so it cannot be used to find who has one. An active account with an email gets a link good
+    once for 30 minutes; one without is told to ask the shop. Spending a link voids every other.
+  - `POST auth/password/reset` `{ token, password }` sets the password and signs every device out, or
+    fails `website.customer.error.resetExpired`.
+  - Both are same-origin only and rate limited, per sender and per account.
+- The mail is queued by the bridge `website_customer_mail` on `mail_transport`, from the company's own
+  template named `website.customer.password-reset` with the keys `siteTitle`, `displayName` and
+  `resetUrl`. Without an active template, or without a mail provider, nothing is sent; the visitor sees
+  the same answer. The delivery body keeps the link, which lapses within 30 minutes.

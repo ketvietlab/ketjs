@@ -95,6 +95,17 @@ export const models: Record<string, ModelDef> = {
       primary: 'bool',
       primaryKey: 'text?',
       redirectToPrimary: 'bool',
+      /**
+       * The TXT value that proves whoever adds the host controls its DNS. Hosts from before
+       * it existed were connected by Két Việt and carry none.
+       */
+      verifyToken: 'text?',
+      verifiedAt: 'datetime?',
+      checkedAt: 'datetime?',
+      /** The last check: matched, missing, mismatch or unreachable. */
+      checkResult: 'text?',
+      /** Set by Két Việt once the host answers over HTTPS; until then it cannot become primary. */
+      servingAt: 'datetime?',
     },
     indexes: {
       host_company: { fields: ['companyId', 'host'], unique: true },
@@ -325,6 +336,26 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       token: { fields: ['tokenDigest'], unique: true },
       account_expiry: { fields: ['accountId', 'absoluteExpiresAt'] },
+    },
+  },
+  /**
+   * A mailed link to choose a new password. Only the digest is kept; the link works once, for a
+   * short while, and only while the account stays open.
+   */
+  CustomerPasswordReset: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      accountId: 'ref:website.CustomerAccount',
+      tokenDigest: 'text',
+      createdAt: 'datetime',
+      expiresAt: 'datetime',
+      usedAt: 'datetime?',
+    },
+    indexes: {
+      token: { fields: ['tokenDigest'], unique: true },
+      account: { fields: ['accountId'] },
     },
   },
   /** Rotating bearer credentials for headless and native customer clients. */

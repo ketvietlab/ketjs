@@ -6,7 +6,7 @@ const author = [...read, 'website.author', 'website_menu.configure', 'website_fo
 /** ERP-managed roles; Website owns no parallel member or role assignment store. */
 export const websiteRoleTemplates = {
   'website.designer': {
-    version: 4,
+    version: 5,
     labels: { vi: 'Website · Thiết kế và cấu hình', en: 'Website · Designer' },
     bundles: [...author, 'website.configure'],
   },

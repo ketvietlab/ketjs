@@ -10894,6 +10894,7 @@
         "test/user-provision-user.test.ts",
         "test/user-set-workplaces.test.ts",
         "test/user-users-list-http.test.ts",
+        "test/website-customer-password-reset-http.test.ts",
         "test/website-customer-signin-http.test.ts",
         "test/website-form-crm-routing.test.ts",
         "test/website-site-tokens.test.ts",
