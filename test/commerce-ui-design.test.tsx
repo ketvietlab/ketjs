@@ -2,7 +2,7 @@ import { vendorPricelistsListScreen } from '../packages/ketsuite/src/modules/pur
 import { stockOverviewScreen } from '../packages/ketsuite/src/modules/stock_backend/screens/overview.tsx'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { MenuNode, Translator } from '@ketvietlab/ketjs'
+import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { ModalSheet } from '@ketvietlab/design-system'
 import { shell } from '../packages/ketsuite/src/ui/index.ts'
 import purchaseBackend from '../packages/ketsuite/src/modules/purchase_backend/index.ts'
@@ -11,6 +11,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { purchaseOrderModalDefinition } from '../packages/ketsuite/src/modules/purchase_backend/modal/order-modal-view.tsx'
+import { templateModalDefinition } from '../packages/ketsuite/src/modules/product_backend/modal/product-modal-view.tsx'
+import { routes as productRoutes } from '../packages/ketsuite/src/modules/product_backend/routes.ts'
 import { saleOrderModalDefinition } from '../packages/ketsuite/src/modules/sale_backend/modal/order-modal-view.tsx'
 import { vendorPricelistDefinition } from '../packages/ketsuite/src/modules/purchase_backend/modal/pricelist-view.tsx'
 import { invoicingPolicyDefinition } from '../packages/ketsuite/src/modules/sale_backend/modal/policy-view.tsx'
@@ -61,8 +63,33 @@ const context = <T,>(definition: RecordModalDefinition<T>, creating = false): Re
 const size = <T,>(definition: RecordModalDefinition<T>, creating: boolean) =>
   typeof definition.size === 'function' ? definition.size(context(definition, creating)) : definition.size
 
+test('Commerce favorite redirect retains the list query and its explicit or inherited locale', async () => {
+  const entry = productRoutes['/admin/product/templates/favorites/new']
+  assert.equal(typeof entry, 'function')
+  if (typeof entry !== 'function') throw new Error('Expected favorite route factory')
+  const route = entry({
+    localeOf: () => 'vi',
+    translate: () => (key: string) => key,
+  } as unknown as ServeContext)
+  for (const [returnTo, expected] of [
+    ['/admin/product/templates?q=AO', '/admin/product/templates?q=AO&lang=vi&modal=favorite'],
+    ['/admin/product/templates?q=AO&lang=en', '/admin/product/templates?q=AO&lang=en&modal=favorite'],
+    ['/elsewhere', '/admin/product/templates?lang=vi&modal=favorite'],
+  ]) {
+    const url = new URL('http://commerce.test/admin/product/templates/favorites/new?lang=vi')
+    url.searchParams.set('returnTo', returnTo!)
+    const result = await route(url, { method: 'GET' } as Parameters<Route>[1], {})
+    assert.ok(result && typeof result === 'object' && 'headers' in result)
+    assert.equal(result.headers?.location, expected)
+  }
+})
+
 test('Commerce modal width depends on record purpose, not active tab', () => {
-  for (const definition of [purchaseOrderModalDefinition, saleOrderModalDefinition]) {
+  for (const definition of [
+    purchaseOrderModalDefinition,
+    saleOrderModalDefinition,
+    templateModalDefinition,
+  ]) {
     assert.equal(size(definition as RecordModalDefinition<unknown>, true), 'default')
     assert.equal(size(definition as RecordModalDefinition<unknown>, false), 'large')
   }

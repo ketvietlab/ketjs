@@ -711,10 +711,12 @@ export const routes: Record<string, RouteEntry> = {
       const form = req.method === 'POST' ? await readForm(req) : null
       const rawReturn = form?.returnTo ?? url.searchParams.get('returnTo') ?? '/admin/product/templates'
       const source = new URL(rawReturn, 'http://ket.local')
-      const returnTo =
+      const target =
         source.pathname === '/admin/product/templates'
-          ? `${source.pathname}${source.search}`
-          : '/admin/product/templates'
+          ? source
+          : new URL('/admin/product/templates', 'http://ket.local')
+      if (!target.searchParams.has('lang')) target.searchParams.set('lang', lang)
+      const returnTo = `${target.pathname}${target.search}`
       const modalHref = (invalid = false) => {
         const target = new URL(returnTo, 'http://ket.local')
         target.searchParams.set('modal', 'favorite')
