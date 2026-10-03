@@ -459,3 +459,5 @@ The automatic-role collection uses the shared list/search composition and a URL-
 ### Managed catalogue boundary
 
 `/admin/roles` lists managed roles and has no create or clone action. Its modal reads `user.managedRoleModalContext`, which refuses custom records and strips authoring permissions on the server. The older role-context and migration APIs remain available as explicit compatibility boundaries; they do not create a parallel product workflow. Assignment still validates managed-role health and security/self-edit restrictions independently of disabled UI controls. User-list create actions are also omitted when the actor cannot create an account.
+
+Profile saves through `user.saveUser` accept an idempotency key. Retrying the same save replays the original result without overwriting a later edit. User function handlers are organized by capability under `user/functions/`.

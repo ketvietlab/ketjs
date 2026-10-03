@@ -400,3 +400,29 @@ test('user tabs and nested dialogs never ask for a change reason', () => {
     assert.doesNotMatch(html, /name="(?:reason|workplaceReason|breakGlassReason)"|field.reason/u, name)
   }
 })
+
+test('unprovisioned external users offer an explicit provision action, without password reset', () => {
+  const html = render(
+    tabView('login')(
+      contextOf(
+        dataOf({
+          externalCredential: {
+            state: 'unprovisioned',
+            activated: false,
+            operationId: null,
+            claimable: false,
+            emailState: null,
+          },
+          permissions: {
+            ...dataOf().permissions,
+            provisionCredential: true,
+            resetPassword: false,
+            sendLink: false,
+          },
+        }),
+      ),
+    ),
+  )
+  assert.match(html, /provisionCredential/u)
+  assert.doesNotMatch(html, /data-record-command="resetPassword"/u)
+})
