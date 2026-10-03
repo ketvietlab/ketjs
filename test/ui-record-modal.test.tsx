@@ -165,7 +165,15 @@ test('record modal: cross-collection navigation opens its target without resetti
   const listener =
     /'ket:navigation-complete',\s*\(\) => \{([\s\S]*?)\n          \},\s*\{ signal: lifetime \}/u.exec(runtime)
   assert.ok(listener, 'the persistent island follows completed fragment navigation')
-  const run = new Function('readRecordModalTarget', 'location', 'definition', 'open', 'show', listener[1]!)
+  const run = new Function(
+    'readRecordModalTarget',
+    'location',
+    'definition',
+    'open',
+    'show',
+    'hide',
+    listener[1]!,
+  )
   const calls: unknown[][] = []
   const show = (...args: unknown[]) => calls.push(args)
   const target = { kind: 'product.template', id: 'one', tab: 'variants' }
@@ -176,6 +184,7 @@ test('record modal: cross-collection navigation opens its target without resetti
       { kind },
       () => current,
       show,
+      () => calls.push(['closed']),
     )
   invoke('product.template', null)
   assert.deepEqual(calls, [['one', 'variants', 'none', undefined, undefined]])
@@ -183,6 +192,10 @@ test('record modal: cross-collection navigation opens its target without resetti
   invoke('partner.record', null)
   invoke('product.template', null, null)
   assert.equal(calls.length, 1, 'refreshes and unrelated navigation leave the current draft alone')
+  invoke('product.template', { id: 'old', tab: 'general' })
+  assert.deepEqual(calls.at(-1), ['one', 'variants', 'none', undefined, undefined])
+  invoke('product.template', { id: 'one' }, null)
+  assert.deepEqual(calls.at(-1), ['closed'])
 })
 
 test("record modal: opening a record saves the list page's scroll position before pushing, so closing restores it", () => {
