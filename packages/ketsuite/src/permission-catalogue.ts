@@ -1529,6 +1529,18 @@ const sources = {
       submissionReceipt: ['internal-route', 'website_form.public-submit-route'],
     },
   },
+  website_customer_mail: {
+    posture: 'projection/bridge',
+    bundles: ['configure', 'view'],
+    functions: {
+      passwordResetTemplate: ['read', 'view'],
+      savePasswordResetTemplate: ['configure', 'configure', 'website_customer_mail.configuration-audit'],
+    },
+    exemptions: {
+      // Only the customer API's forgot-password route, after it recorded the reset.
+      mailPasswordReset: ['internal-route', 'channel_api.customer-password-forgot-route'],
+    },
+  },
   website_form_mail: {
     posture: 'projection/bridge',
     bundles: ['operate'],
@@ -1618,11 +1630,13 @@ const sources = {
       resetCustomerPassword: ['security', 'security', 'website.security-audit'],
       setCustomerSelfSignup: ['security', 'security', 'website.security-audit'],
       customerAccessForSite: ['read', 'security'],
+      listCustomerAccounts: ['read', 'security'],
       restoreRevision: ['operate', ['operate', 'author']],
       unpublishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       // Whoever can share a draft can take the link back.
       revokePreviewTokens: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
+      verifyDomain: ['configure', 'configure', 'website.configuration-audit'],
       saveEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       savePage: ['configure', ['configure', 'author'], 'website.configuration-audit'],
@@ -1640,11 +1654,15 @@ const sources = {
     exemptions: {
       // Only the Studio upload route, after it has checked `website.saveEntry` and the entry's site.
       stageImage: ['internal-route', 'website_backend.image-upload'],
+      // Két Việt sets it once a host answers over HTTPS; no tenant role reaches it.
+      markDomainServing: ['internal-route', 'website.domain-serving-operator'],
       completeImage: ['internal-route', 'website_backend.image-upload'],
       // Only the image file route; the handler serves published images and otherwise needs site access.
       imageForReader: ['internal-route', 'website_backend.image-download'],
       authenticateCustomer: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       changeCustomerPassword: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      completeCustomerPasswordReset: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      requestCustomerPasswordReset: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       claimChannelRateSlot: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       customerRealmByKey: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       customerRealmForSite: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],

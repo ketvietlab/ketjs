@@ -1,6 +1,7 @@
 import { CardGrid, ContentCard, Status, LinkButton, EmptyState } from '@ketvietlab/design-system'
 import type { ResourceRecord } from '../resources.ts'
 import type { StudioContext } from '../types.ts'
+import { presetCover, skinnedPreset } from '../theme/presets.ts'
 
 // Covers use the same bundled illustrations as the corresponding public theme presets.
 export function themeCards(ctx: StudioContext, rows: readonly ResourceRecord[]) {
@@ -27,11 +28,7 @@ export function themeCards(ctx: StudioContext, rows: readonly ResourceRecord[]) 
           media={
             <img
               class="website-theme-cover"
-              src={
-                row.preset === 'cosmetics'
-                  ? '/website-client/theme/cosmetics/collection.svg'
-                  : '/website-client/theme/garden.svg'
-              }
+              src={presetCover(row.preset)}
               alt={tr('website.theme.cover', { title: row.title ?? '' })}
               width="640"
               height="360"
@@ -46,7 +43,7 @@ export function themeCards(ctx: StudioContext, rows: readonly ResourceRecord[]) 
               tone={row.state === 'published' ? 'positive' : 'neutral'}
             />
           }
-          summary={tr(row.preset === 'cosmetics' ? 'website.option.cosmetics' : 'website.option.default')}
+          summary={tr(`website.option.${skinnedPreset(row.preset) ? row.preset : 'default'}`)}
           meta={
             row.version ? (
               <span>

@@ -48,6 +48,8 @@ export default defineModule({
       'error.payloadTooLarge': 'Dữ liệu vượt quá giới hạn cho phép.',
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
+      'error.domainNotFound': 'Không tìm thấy tên miền.',
+      'error.domainUnverified': 'Tên miền chưa được xác minh.',
       'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
       'error.invalidLogo': 'Logo phải là ảnh tải lên hoặc một đường dẫn https://.',
       'error.invalidTokenValue':
@@ -118,6 +120,7 @@ export default defineModule({
       'customer.error.csrf': 'Yêu cầu bảo mật không hợp lệ. Vui lòng tải lại trang.',
       'customer.error.originMismatch': 'Nguồn gửi yêu cầu không được phép.',
       'customer.error.invalidRequest': 'Yêu cầu không hợp lệ.',
+      'customer.error.resetExpired': 'Liên kết đặt lại mật khẩu đã hết hạn hoặc đã được dùng.',
     },
     en: {
       'app.title': 'Website',
@@ -143,6 +146,8 @@ export default defineModule({
       'error.payloadTooLarge': 'The payload exceeds the allowed size.',
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
+      'error.domainNotFound': 'The domain was not found.',
+      'error.domainUnverified': 'The domain has not been verified.',
       'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
       'error.invalidLogo': 'The logo has to be an uploaded image or an https:// address.',
       'error.invalidTokenValue':
@@ -212,6 +217,7 @@ export default defineModule({
       'customer.error.csrf': 'The security token is invalid. Reload the page and try again.',
       'customer.error.originMismatch': 'The request origin is not allowed.',
       'customer.error.invalidRequest': 'The request is invalid.',
+      'customer.error.resetExpired': 'This password reset link has expired or was already used.',
     },
   },
   requires: ['layout', 'website.page'],

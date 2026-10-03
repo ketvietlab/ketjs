@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import { defineFn, desc, eq, from, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { normalizePhone } from '../../phone.ts'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
@@ -126,6 +126,10 @@ const accountByPhone = async (ctx: Ctx, realmId: unknown, phone: string): Promis
   const Account = ctx.table('website.CustomerAccount')
   return ctx.db.one(from(Account).where(eq(Account.realmId, realmId), eq(Account.phoneNormalized, phone)))
 }
+
+/** A mailed reset link is good for half an hour. */
+const RESET_TTL_MS = 30 * 60 * 1000
+const RESET_WINDOW_MS = 60 * 60 * 1000
 
 /** The unique email key of an account that has only a phone number. No email sign-in can produce it. */
 const phoneEmailKey = (phone: string): string => `phone:${phone}`
@@ -412,6 +416,68 @@ export const customerAccessForSite = async (ctx: Ctx, input: { siteId: string; p
   }
 }
 
+const CUSTOMER_STATUSES = ['active', 'disabled']
+
+/**
+ * The accounts that sign in to a site, newest first, with how the site takes them: whether visitors
+ * may open one themselves and the host they sign in on. Search reads the name, phone and email.
+ * Like {@link customerAccessForSite}, never a password or a session.
+ */
+export const listCustomerAccounts = async (
+  ctx: Ctx,
+  input: { siteId: string; search?: string | null; status?: string | null; limit?: number; offset?: number },
+) => {
+  const realm = await realmForSite(ctx, input.siteId)
+  if (!realm) return { realm: null, rows: [], total: 0 }
+  const domains = await ctx.db.select('website.SiteDomain', { siteId: input.siteId })
+  const domain = domains.find((row) => row.primary === true) ?? domains[0]
+  const Account = ctx.table('website.CustomerAccount')
+  let query = from(Account).where(eq(Account.realmId, realm.id))
+  if (input.status && CUSTOMER_STATUSES.includes(input.status))
+    query = query.where(eq(Account.status, input.status))
+  const search = String(input.search ?? '')
+    .normalize('NFKC')
+    .trim()
+  if (search) {
+    // A whole number matches its E.164 form; a fragment matches its digits, which E.164 keeps
+    // after the country code. Without digits there is no phone to look for.
+    const digits = normalizePhone(search) ?? search.replace(/\D/g, '').replace(/^0/, '')
+    query = query.where(
+      or(
+        like(Account.displayName, `%${search}%`),
+        like(Account.emailNormalized, `%${normalizeCustomerEmail(search)}%`),
+        ...(digits ? [like(Account.phoneNormalized, `%${digits}%`)] : []),
+      ),
+    )
+  }
+  const total = await ctx.db.count(query)
+  const limit = Math.min(Math.max(Number(input.limit ?? 50), 1), 200)
+  const offset = Math.max(Number(input.offset ?? 0), 0)
+  const now = new Date()
+  const rows = (await ctx.db.all(query.orderBy(desc(Account.createdAt)).limit(limit).offset(offset))).map(
+    (held) => ({
+      id: String(held.id),
+      partnerId: String(held.partnerId),
+      displayName: String(held.displayName),
+      phone: held.phone ?? held.phoneNormalized ?? null,
+      email: held.email ? String(held.email) : null,
+      status: String(held.status),
+      lockedUntil: held.lockedUntil && new Date(String(held.lockedUntil)) > now ? held.lockedUntil : null,
+      createdAt: held.createdAt ?? null,
+      lastLoginAt: held.lastLoginAt ?? null,
+    }),
+  )
+  return {
+    realm: {
+      id: String(realm.id),
+      selfSignup: realm.selfSignup !== false,
+      signInHost: domain ? String(domain.host) : null,
+    },
+    rows,
+    total,
+  }
+}
+
 /** Open or close self sign-up on the realm a site's customers sign in to. */
 export const setCustomerSelfSignup = async (ctx: Ctx, input: { siteId: string; open: boolean }) => {
   const realm = await realmForSite(ctx, input.siteId)
@@ -426,6 +492,7 @@ const sessionOutput = {
   accountId: 'id',
   partnerId: 'id',
   email: 'text',
+  phone: 'text?',
   displayName: 'text',
   securityVersion: 'int',
   idleExpiresAt: 'datetime',
@@ -471,6 +538,7 @@ export const customerFunctions: Record<string, FnSpec> = {
       name: 'text',
       sessionIdleSeconds: 'int',
       sessionAbsoluteSeconds: 'int',
+      selfSignup: 'bool?',
     },
     effects: ['read:website.CustomerRealmSite', 'read:website.CustomerRealm'],
     handler: (ctx: Ctx, args) => realmForSite(ctx, args.siteId),
@@ -683,6 +751,7 @@ export const customerFunctions: Record<string, FnSpec> = {
         accountId: account.id,
         partnerId: account.partnerId,
         email: account.email,
+        phone: account.phone ?? null,
         displayName: account.displayName,
         securityVersion: account.securityVersion,
         idleExpiresAt,
@@ -739,6 +808,7 @@ export const customerFunctions: Record<string, FnSpec> = {
         accountId: account.id,
         partnerId: account.partnerId,
         email: account.email,
+        phone: account.phone ?? null,
         displayName: account.displayName,
         securityVersion: account.securityVersion,
         idleExpiresAt,
@@ -1031,6 +1101,146 @@ export const customerFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Start a password reset for whoever owns this email or phone. The answer never says whether
+   * there is such an account: the caller tells every visitor the same thing, and only an open
+   * account with an email gets a reset, since the link can only be mailed.
+   */
+  requestCustomerPasswordReset: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { id: 'id', realmId: 'id', email: 'text?', phone: 'text?', tokenDigest: 'text', rateKey: 'text?' },
+    output: { ok: 'bool', resetId: 'id?', email: 'text?', displayName: 'text?', expiresAt: 'datetime?' },
+    effects: [
+      'read:website.CustomerRealm',
+      'read:website.CustomerAccount',
+      'read:website.CustomerPasswordReset',
+      'write:website.CustomerPasswordReset',
+      'read:website.CustomerAuthRateLimit',
+      'write:website.CustomerAuthRateLimit',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const realm = (await ctx.db.select('website.CustomerRealm', { id: args.realmId }))[0]
+      if (realm?.active !== true) return { ok: true }
+      const phone = args.phone ? (normalizePhone(args.phone) ?? String(args.phone).trim()) : null
+      const email = phone ? '' : normalizeCustomerEmail(args.email)
+      if (!phone && !email) return { ok: true }
+      const now = new Date()
+      // Per sender and per account, so neither a script nor a grudge fills someone's inbox.
+      if (
+        !(await claimRateSlot(
+          ctx,
+          String(args.realmId),
+          'reset',
+          String(args.rateKey ?? 'anonymous').slice(0, 256),
+          10,
+          RESET_WINDOW_MS,
+          now,
+        )) ||
+        !(await claimRateSlot(
+          ctx,
+          String(args.realmId),
+          'reset-account',
+          phone ?? email,
+          3,
+          RESET_WINDOW_MS,
+          now,
+        ))
+      )
+        return { ok: true }
+      const account = phone
+        ? await accountByPhone(ctx, args.realmId, phone)
+        : email.startsWith('phone:')
+          ? null
+          : await accountByEmail(ctx, args.realmId, email)
+      if (account?.status !== 'active' || !String(account.email ?? '').trim()) return { ok: true }
+      const expiresAt = new Date(now.getTime() + RESET_TTL_MS).toISOString()
+      await ctx.db.insert('website.CustomerPasswordReset', {
+        id: args.id,
+        realmId: args.realmId,
+        accountId: account.id,
+        tokenDigest: args.tokenDigest,
+        createdAt: now.toISOString(),
+        expiresAt,
+        usedAt: null,
+      })
+      return {
+        ok: true,
+        resetId: args.id,
+        email: account.email,
+        displayName: account.displayName,
+        expiresAt,
+      }
+    },
+  }),
+
+  /** Choose a new password from a mailed link; every device is signed out, and the link is spent. */
+  completeCustomerPasswordReset: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { realmId: 'id', tokenDigest: 'text', password: 'text' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: [
+      'read:website.CustomerPasswordReset',
+      'write:website.CustomerPasswordReset',
+      'read:website.CustomerAccount',
+      'write:website.CustomerAccount',
+      'read:website.CustomerCredential',
+      'write:website.CustomerCredential',
+      'read:website.CustomerSession',
+      'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      if (!validPassword(args.password)) return invalid('password', 'website.customer.error.invalidPassword')
+      const passwordHash = await hashCustomerPassword(String(args.password))
+      const now = new Date().toISOString()
+      return ctx.tx(async (tx) => {
+        const reset = (
+          await tx.db.select('website.CustomerPasswordReset', { tokenDigest: args.tokenDigest })
+        )[0]
+        const account = reset
+          ? (await tx.db.select('website.CustomerAccount', { id: reset.accountId }))[0]
+          : null
+        if (
+          !reset ||
+          !account ||
+          reset.realmId !== args.realmId ||
+          reset.usedAt ||
+          String(reset.expiresAt) <= now ||
+          account.status !== 'active'
+        )
+          return invalid('token', 'website.customer.error.resetExpired')
+        // Every link the account was sent is spent with this one.
+        for (const other of await tx.db.select('website.CustomerPasswordReset', { accountId: account.id }))
+          if (!other.usedAt)
+            await tx.db.update('website.CustomerPasswordReset', { id: other.id }, { usedAt: now })
+        const credential = (await tx.db.select('website.CustomerCredential', { accountId: account.id }))[0]
+        if (credential)
+          await tx.db.update(
+            'website.CustomerCredential',
+            { id: credential.id },
+            { passwordHash, changedAt: now },
+          )
+        else
+          await tx.db.insert('website.CustomerCredential', {
+            id: account.id,
+            accountId: account.id,
+            passwordHash,
+            changedAt: now,
+          })
+        await tx.db.update(
+          'website.CustomerAccount',
+          { id: account.id },
+          { securityVersion: Number(account.securityVersion) + 1, failedLoginCount: 0, lockedUntil: null },
+        )
+        await revokeAccountAccess(tx, account.id, 'password-reset', now)
+        return { ok: true }
+      })
+    },
+  }),
+
   updateCustomerProfile: defineFn({
     anonymous: true,
     exposure: 'internal',
@@ -1160,6 +1370,26 @@ export const customerFunctions: Record<string, FnSpec> = {
     ],
     handler: (ctx: Ctx, args) =>
       customerAccessForSite(ctx, { siteId: String(args.siteId), partnerId: String(args.partnerId) }),
+  }),
+
+  /** Staff: the accounts that sign in to a site. See {@link listCustomerAccounts}. */
+  listCustomerAccounts: defineFn({
+    input: { siteId: 'id', search: 'text?', status: 'text?', limit: 'int?', offset: 'int?' },
+    output: { realm: 'json?', rows: 'json', total: 'int' },
+    effects: [
+      'read:website.CustomerRealmSite',
+      'read:website.CustomerRealm',
+      'read:website.SiteDomain',
+      'read:website.CustomerAccount',
+    ],
+    handler: (ctx: Ctx, args) =>
+      listCustomerAccounts(ctx, {
+        siteId: String(args.siteId),
+        search: args.search as string | null,
+        status: args.status as string | null,
+        limit: args.limit as number | undefined,
+        offset: args.offset as number | undefined,
+      }),
   }),
 
   /** Staff: open or close self sign-up for a site's customers. */
