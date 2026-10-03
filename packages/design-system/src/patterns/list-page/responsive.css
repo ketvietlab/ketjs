@@ -88,7 +88,7 @@
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
       :is([data-ui="list-page-body"], [data-ui="list-page-footer"]) {
-      margin-inline: var(--kv-space-4);
+      margin-inline: var(--kv-page-padding-x);
       padding-inline: 0;
     }
 
