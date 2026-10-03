@@ -338,7 +338,7 @@ test('variant editor: rows price from list price plus value extras, and a shared
   assert.doesNotMatch(html, /name="combo\|/, 'a collapsed row shows its combination as text, not selects')
 })
 
-test('variant editor: ticking values, generating the missing combinations and fixing extras keep one draft', () => {
+test('variant editor: ticking values, generating the missing combinations and fixing extras keep one draft', async () => {
   class FakeElement {
     button: unknown
     constructor(button: unknown = null) {
@@ -502,12 +502,51 @@ test('variant editor: ticking values, generating the missing combinations and fi
 
     // A saved row takes its image through the design-system drop zone, with the drop hint inside it.
     press('toggleRow|black-l')
+    assert.match(html(), /data-ui="drop-zone" data-preview="true"/)
     assert.match(
       html(),
-      /<div data-ui="drop-zone">(?:<!--k\[-->)*<input data-ui="field-control" id="editor-row-black-l-image" type="file" name="image\|black-l"/,
+      /<div data-ui="upload-status" id="editor-row-black-l-image-status">(?:<!--k\[-->)*dropImage</,
     )
-    assert.match(html(), /<div data-ui="upload-status">(?:<!--k\[-->)*dropImage</)
-    assert.doesNotMatch(html(), /data-ui="file-upload"/)
+    assert.doesNotMatch(html(), /data-ui="file-upload"|data-ui="lightbox-empty" data-size="large"/)
+    assert.match(html(), /id="editor-row-black-l-image" type="file" name="image\|black-l"/)
+    const descendants = (node: HostNode): HostNode[] => [node, ...(node.children ?? []).flatMap(descendants)]
+    const target = () => descendants(root).find((node) => node.attrs?.['data-ui'] === 'variant-editor-image')!
+    let requests = 0
+    const originalFetch = globalThis.fetch
+    let finish!: (response: Response) => void
+    globalThis.fetch = (() => {
+      requests++
+      return new Promise<Response>((resolve) => {
+        finish = resolve
+      })
+    }) as typeof fetch
+    try {
+      let prevented = 0
+      const drop = (file: File) =>
+        host.fire(target(), 'drop', {
+          preventDefault: () => {
+            prevented++
+          },
+          dataTransfer: { files: [file] },
+        })
+      drop(new File(['text'], 'notes.txt', { type: 'text/plain' }))
+      assert.equal(requests, 0, 'non-image drops do not upload')
+      host.fire(target(), 'dragover', { preventDefault() {} })
+      assert.match(html(), /data-ui="drop-zone" data-preview="true" data-drag="true"/)
+      const photo = new File(['image'], 'photo.png', { type: 'image/png' })
+      drop(photo)
+      assert.equal(requests, 1, 'dropping on the image frame starts upload')
+      assert.match(html(), /data-ui="drop-zone" data-preview="true" data-disabled="true"/)
+      drop(photo)
+      assert.equal(requests, 1, 'a second drop is ignored while uploading')
+      assert.equal(prevented, 3, 'drop never navigates away from the form')
+      finish(new Response('{}', { status: 400 }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      assert.match(html(), /imageFailed/)
+      assert.doesNotMatch(html(), /data-ui="drop-zone" data-preview="true" data-disabled="true"/)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   } finally {
     mounted.dispose()
     for (const [key, value] of Object.entries(previous)) {

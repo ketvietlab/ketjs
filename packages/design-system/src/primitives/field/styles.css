@@ -13,6 +13,16 @@
 
   :where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"] {
     min-height: var(--kv-control-height);
+    grid-template-columns: 1rem minmax(0, 1fr);
+    column-gap: var(--kv-gap-control);
+  }
+
+  :where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"] > [data-ui="field-label"] {
+    grid-column: 2;
+  }
+
+  :where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"] > [data-ui="field-control"] {
+    grid-column: 1;
   }
 
   :where([data-kv-design-system]) [data-ui="field"][data-kind="group"] {
