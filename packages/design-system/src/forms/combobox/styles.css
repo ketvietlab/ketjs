@@ -53,6 +53,13 @@
     background: var(--kv-interactive-hover);
   }
 
+  :where([data-kv-design-system]) [data-ui="combobox-option-leading"] {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-inline-end: var(--kv-space-2);
+  }
+
   :where([data-kv-design-system]) [data-ui="combobox-empty"] {
     margin: 0;
     padding: var(--kv-space-2);
