@@ -142,9 +142,18 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
             createdLabel: receipt.createdLabel,
           }
         : signin
-          ? { kind: 'signin', title: record.title, returnTo: customerReturnPath(signin.returnTo) }
-          : customer && ['profile', 'forgot', 'reset'].includes(String(customer.view))
-            ? { kind: 'customer', title: record.title, view: customer.view as 'profile' | 'forgot' | 'reset' }
+          ? {
+              kind: 'signin',
+              title: record.title,
+              returnTo: customerReturnPath(signin.returnTo),
+              selfSignup: signin.selfSignup === true,
+            }
+          : customer && ['profile', 'register', 'forgot', 'reset'].includes(String(customer.view))
+            ? {
+                kind: 'customer',
+                title: record.title,
+                view: customer.view as 'profile' | 'register' | 'forgot' | 'reset',
+              }
             : null
   // The header offers the sign-in only where the site chose to; the sign-in page needs no link to itself.
   const here = customerReturnPath(record.path)

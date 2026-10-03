@@ -1,9 +1,9 @@
 # Website Studio browser contract
 
-The Studio is a client-rendered island. Every read and write goes through `client/api.mjs` as
-`POST /_ket/fn/<name>`; Atlas answers the same requests from `atlas/store.mjs` with fixture data.
-`test/store.test.mjs` fails when the client calls a function this file does not name in backticks, or
-one the mock does not answer.
+The Studio is a client-rendered island. Current client calls are in `client/api.ts` and the host
+implementation is in KetSuite's `modules/website_backend`. The former Website Atlas mock
+(`atlas/store.mjs`) and its `test/store.test.mjs` are no longer in this package. Historical fixture
+sections below describe design proposals, not callable host routes.
 
 This is a design contract, not a record of production. Each function carries a status:
 
@@ -190,7 +190,7 @@ The Studio has no visitor view of its own. "Xem website" and a page preview's in
 site at `bootstrap.site.url`: this origin when the ERP and the site share a host, else the primary
 domain, and empty until the site has one (the button is then hidden). `website_studio.publicSite`
 and the simulated shop, stay, account and adapter screens were removed from the client on
-2026-10-03; they remain in the Atlas mock only.
+2026-10-03. Their fixture routes are no longer present.
 
 ## Form journeys (NEW BFF)
 
@@ -210,24 +210,6 @@ All require site.manage and a valid site. `website_studio.operations` `{siteId}`
 `website_studio.applyImport` `{siteId,id,content}` validates again inside the mutation transaction and imports new
 drafts only; duplicate paths refuse the entire package. The id is its idempotency key.
 `website_studio.runHealthCheck` `{siteId,id}` records fixture domain findings; it performs no external probes.
-
-## Visitor account simulation (NEW BFF)
-
-`website_studio.visitorAccount` `{siteId}` returns the current simulated account without credentials.
-`website_studio.visitorAccountCommand` handles register/verify/login/logout/reset/erase in the fixture.
-The fixed displayed code 123456 is exclusively a mock interaction; never bind this endpoint to production.
-Production must delegate to website_accounts/identity with one-time, expiring tokens. Erasure requires a
-current simulated session and explicit confirmation. Reset always gives a non-enumerating response.
-
-## Industry adapter fixture BFF (NEW)
-
-`website_studio.adapterList` `{siteId}` supplies installed experience descriptors.
-`website_studio.adapterContext` `{siteId,adapter}` supplies typed items, cart quantities, fields and receipt.
-`website_studio.adapterCart` `{siteId,adapter,itemId,quantity}` validates integer quantity against availability.
-`website_studio.adapterSubmit` `{siteId,adapter,id,consent,fields}` validates a nonempty cart and contact data,
-then records a simulated receipt. Create retries use key=id. No payment/order/booking/lead backend is called.
-Healthcare is deferred; its private deployment owns booking and clinical data.
-Production registries must supply actual adapter queries/actions; the core screen contains no industry keys.
 
 ## Domain verification (NEW BFF, F-01)
 
@@ -287,7 +269,6 @@ The public journey is shop → product → cart → checkout → receipt → own
 - **NEW** `website_studio.archiveResource` (`{siteId, kind, id, expectedRevisionId, confirmed}`): capability-checked, transactional soft archive. Rejects stale revision, active/scheduled publication references, draft references and taxonomy children. Sites/domains use their own lifecycle instead. `getResource` includes `usage`. Archived resources are excluded from future publication preparation; old snapshots remain immutable.
 - `saveResource` checks duplicate redirect sources, normalized member emails, taxonomy slugs and parent cycles. Form field rows accept a fourth `required | optional` column (legacy rows default to required).
 - `submitVisitorForm` accepts honeypot/challenge, returns an opaque receipt, stores immutable form revision/labels/delivery destination; the mock does not send email.
-- `visitorAccountCommand` supports `profile` with `expectedRevision`, `reset` with a 60-second resend window and 15-minute expiry, and one-time `recover` with a simulated code/password rule. No real credential is stored. Login by simulation code remains the agreed mock behavior.
 
 - Import review: `website_studio.previewImport` returns every row with `accepted`, `reason`, `media`, and a digest `checkpoint`. `website_studio.applyImport` requires the same checkpoint, revalidates destination paths, imports accepted rows only and records rejects. Replaying the completed job returns its result. This mock models a preview checkpoint, not a production resumable worker.
 - Public metadata is applied by the client after reading the active publication. The Atlas host still serves the island bootstrap, not a production SEO delivery server.
@@ -341,9 +322,6 @@ failed may run; accepted/uncertain cannot resend. Recipient is frozen with the s
   visibility changed. Missing SEO is a warning; unsafe links/private media are blockers.
 - Media batch retry retains completed file IDs in the editor session. Metadata/scan comes from server
   bytes; it is not a production file-scanning service. Reload resets that batch record.
-- CRM contact is `/visit/contact/sales`; `/visit/contact` redirects there. `adapterSubmit` simulates
-  unavailable service and a limit of three distinct requests per minute per fixture owner; idempotent
-  replays remain stable. `state=contact-unavailable` opens that scenario directly.
 
 ## Core cosmetics preset (2026-09-30)
 
@@ -667,8 +645,7 @@ the request stands, and the Studio shows that beside the copy.
 
 ## Customer sign-in accounts and real Settings (2026-10-02)
 
-The Studio now runs on the host BFF for its Settings page and for the customer accounts of a site. The
-Atlas mock is unchanged and does not answer these functions.
+The Studio runs on the host BFF for its Settings page and for the customer accounts of a site.
 
 - Real Δ `website_studio.siteReadiness` `{ siteId }` answers `{ site: { id, title, code, defaultLocale,
   revisionId }, publicUrl, bindings, blockers: [], customers }`. `customers` is `{ available, selfSignup,
@@ -699,7 +676,7 @@ Atlas mock is unchanged and does not answer these functions.
 
 ## SEO, domains and customer passwords on the host (2026-10-03)
 
-The Atlas mock is unchanged and does not answer the host behaviour below.
+The host owns the behaviour below.
 
 - Real Δ `website_studio.listResources` / `getResource` / `saveResource` with `kind: 'seo'` read and
   write the SEO of each page and post that is not in the trash, through `website.saveEntry`. Rows are
@@ -724,7 +701,7 @@ The Atlas mock is unchanged and does not answer the host behaviour below.
 - `website_studio.setPrimaryDomain` needs the host proven **and** served: every other host redirects to
   the primary, so an unserved primary would take the site down. Until then the Studio shows
   "Két Việt đang kích hoạt".
-- Customer pages: `/account` (my account), `/account/forgot` and `/account/reset` render on the site's own
+- Customer pages: `/account` (my account), `/account/register`, `/account/forgot` and `/account/reset` render on the site's own
   look, `noindex`, and are filled by `customer-account.mjs` from the customer API. The reset token stays
   in the address and is never written into the page.
 - Customer API (`/api/customer/v1`, see `docs/public/api/customer-v1.openapi.json`):
@@ -758,3 +735,18 @@ preset, then `host` as its primary domain. Sending the same create again answers
 A deployment chooses the preset by composing `websiteBackendWith({ defaultPreset })` from
 `@ketvietlab/ketsuite` in place of `websiteBackend`; without it a new site starts on `default`. Sites
 that already exist keep the look they render with.
+
+## Customer portal on the public site (2026-10-03)
+
+- `/account/login` offers `/account/register` only while the site's realm allows self sign-up.
+  `/account/register` then renders a `noindex` form in the site's look, asks for display name, email
+  and password, and posts to `POST /api/customer/v1/auth/session/register`. A successful response
+  creates a customer cookie session and opens `/account`. Closing self sign-up removes the link,
+  makes the page 404 and makes the API refuse registration; a page already open handles that refusal.
+- Signed-in `/account` reads customer capabilities from `GET /api/customer/v1/bootstrap`. It loads
+  `GET retail/orders` when `website_retail.orders:read` is served, and
+  `GET hospitality/my-bookings` when `website_hospitality.bookings:read` is served. Each section shows
+  its first 10 records, an empty or error state, and a button to follow `meta.nextCursor`. These are
+  the customer channel's own partner-scoped endpoints; the public page does not accept a partner ID.
+- Két Việt composes `website_retail` in commerce and cosmetic, and `website_hospitality` in hospitality.
+  F&B and office do not show either history section unless they later compose a matching channel.

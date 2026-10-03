@@ -538,6 +538,7 @@ export const customerFunctions: Record<string, FnSpec> = {
       name: 'text',
       sessionIdleSeconds: 'int',
       sessionAbsoluteSeconds: 'int',
+      selfSignup: 'bool?',
     },
     effects: ['read:website.CustomerRealmSite', 'read:website.CustomerRealm'],
     handler: (ctx: Ctx, args) => realmForSite(ctx, args.siteId),
