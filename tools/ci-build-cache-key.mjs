@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/** @param {string} root @param {{ node: string, platform: string, arch: string }} [runtime] */
 export function buildCacheKey(
   root,
   runtime = { node: process.version, platform: process.platform, arch: process.arch },

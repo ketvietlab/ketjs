@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+/** @param {string} root @param {string[]} packageNames */
 export function buildArtifactsExist(root, packageNames) {
   if (!existsSync(join(root, '.build/ket.workspace.js')) || !existsSync(join(root, '.types'))) return false
   return packageNames.every((name) => {
