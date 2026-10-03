@@ -47,5 +47,6 @@ jobs:
           node-version: "26"
           cache: npm
       - run: npm ci
+      - uses: ./.github/actions/build
       - name: every production function has an exact bundle or exemption
-        run: npm run test:permission-coverage
+        run: npm run test:permission-coverage:built
