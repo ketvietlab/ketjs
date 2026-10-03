@@ -1,7 +1,7 @@
 {
   "name": "ketjs-monorepo",
   "private": true,
-  "version": "0.1.34",
+  "version": "0.1.35",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -63,7 +63,7 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "lint": "biome lint",
-    "verify": "npm run format:check && npm run lint && npm run design:inventory:check && npm run design:governance:check && npm run design:release:check && npm run audit:terminology && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run audit:staff-channel && npm run check:api && npm run check && npm run test:built && node .build/tools/type-proof.js",
+    "verify": "node tools/ci-task-cache.mjs run format && node tools/ci-task-cache.mjs run lint && npm run design:inventory:check && npm run design:governance:check && npm run design:release:check && npm run audit:terminology && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run audit:staff-channel && npm run check:api && node tools/ci-task-cache.mjs run types && npm run test:built && node .build/tools/type-proof.js",
     "design": "npm run build --silent && node .build/apps/admin/serve.js",
     "design:inventory": "node tools/design-system-inventory.mjs",
     "design:inventory:check": "node tools/design-system-inventory.mjs --check",
@@ -75,7 +75,8 @@
     "start:pg": "npm run build --silent && DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
     "ket": "npm run build --silent && node packages/ketjs/dist/cli.js",
     "dev": "tsx watch --clear-screen=false --exclude \"packages/*/dist/**/*\" --include \"packages/*/src/**/*.css\" --include \"packages/*/src/**/*.ktl\" --include \"packages/*/src/**/*.tmpl\" tools/dev.mjs serve --workspace ket.workspace.ts",
-    "test:one": "npm run build --silent && node tools/test-one.mjs"
+    "test:one": "npm run build --silent && node tools/test-one.mjs",
+    "ci:task": "node tools/ci-task-cache.mjs run"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",

@@ -50,6 +50,19 @@ jobs:
           if (process.env.RELEASE_TAG !== 'v' + version)
           throw new Error('release tag ' + process.env.RELEASE_TAG + ' does not match v' + version)"
 
+      - uses: ./.github/actions/task-cache
+        with:
+          task: format
+      - uses: ./.github/actions/task-cache
+        with:
+          task: lint
+      - uses: ./.github/actions/task-cache
+        with:
+          task: types
+      - uses: ./.github/actions/task-cache
+        with:
+          task: unit-cache
+
       - name: verify packages and clean-room scaffold
         run: npm run release:check
 
