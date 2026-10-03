@@ -40,6 +40,7 @@ export const commonBusinessModules = [
   suite.mailStaffChannel,
   suite.mailBackend,
   suite.mailTransport,
+  suite.websiteCustomerMail,
   suite.activity,
   suite.calendar,
   suite.uom,

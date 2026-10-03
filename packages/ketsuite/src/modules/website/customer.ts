@@ -127,6 +127,10 @@ const accountByPhone = async (ctx: Ctx, realmId: unknown, phone: string): Promis
   return ctx.db.one(from(Account).where(eq(Account.realmId, realmId), eq(Account.phoneNormalized, phone)))
 }
 
+/** A mailed reset link is good for half an hour. */
+const RESET_TTL_MS = 30 * 60 * 1000
+const RESET_WINDOW_MS = 60 * 60 * 1000
+
 /** The unique email key of an account that has only a phone number. No email sign-in can produce it. */
 const phoneEmailKey = (phone: string): string => `phone:${phone}`
 
@@ -488,6 +492,7 @@ const sessionOutput = {
   accountId: 'id',
   partnerId: 'id',
   email: 'text',
+  phone: 'text?',
   displayName: 'text',
   securityVersion: 'int',
   idleExpiresAt: 'datetime',
@@ -745,6 +750,7 @@ export const customerFunctions: Record<string, FnSpec> = {
         accountId: account.id,
         partnerId: account.partnerId,
         email: account.email,
+        phone: account.phone ?? null,
         displayName: account.displayName,
         securityVersion: account.securityVersion,
         idleExpiresAt,
@@ -801,6 +807,7 @@ export const customerFunctions: Record<string, FnSpec> = {
         accountId: account.id,
         partnerId: account.partnerId,
         email: account.email,
+        phone: account.phone ?? null,
         displayName: account.displayName,
         securityVersion: account.securityVersion,
         idleExpiresAt,
@@ -1090,6 +1097,146 @@ export const customerFunctions: Record<string, FnSpec> = {
             )
       })
       return { ok: true, securityVersion }
+    },
+  }),
+
+  /**
+   * Start a password reset for whoever owns this email or phone. The answer never says whether
+   * there is such an account: the caller tells every visitor the same thing, and only an open
+   * account with an email gets a reset, since the link can only be mailed.
+   */
+  requestCustomerPasswordReset: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { id: 'id', realmId: 'id', email: 'text?', phone: 'text?', tokenDigest: 'text', rateKey: 'text?' },
+    output: { ok: 'bool', resetId: 'id?', email: 'text?', displayName: 'text?', expiresAt: 'datetime?' },
+    effects: [
+      'read:website.CustomerRealm',
+      'read:website.CustomerAccount',
+      'read:website.CustomerPasswordReset',
+      'write:website.CustomerPasswordReset',
+      'read:website.CustomerAuthRateLimit',
+      'write:website.CustomerAuthRateLimit',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const realm = (await ctx.db.select('website.CustomerRealm', { id: args.realmId }))[0]
+      if (realm?.active !== true) return { ok: true }
+      const phone = args.phone ? (normalizePhone(args.phone) ?? String(args.phone).trim()) : null
+      const email = phone ? '' : normalizeCustomerEmail(args.email)
+      if (!phone && !email) return { ok: true }
+      const now = new Date()
+      // Per sender and per account, so neither a script nor a grudge fills someone's inbox.
+      if (
+        !(await claimRateSlot(
+          ctx,
+          String(args.realmId),
+          'reset',
+          String(args.rateKey ?? 'anonymous').slice(0, 256),
+          10,
+          RESET_WINDOW_MS,
+          now,
+        )) ||
+        !(await claimRateSlot(
+          ctx,
+          String(args.realmId),
+          'reset-account',
+          phone ?? email,
+          3,
+          RESET_WINDOW_MS,
+          now,
+        ))
+      )
+        return { ok: true }
+      const account = phone
+        ? await accountByPhone(ctx, args.realmId, phone)
+        : email.startsWith('phone:')
+          ? null
+          : await accountByEmail(ctx, args.realmId, email)
+      if (account?.status !== 'active' || !String(account.email ?? '').trim()) return { ok: true }
+      const expiresAt = new Date(now.getTime() + RESET_TTL_MS).toISOString()
+      await ctx.db.insert('website.CustomerPasswordReset', {
+        id: args.id,
+        realmId: args.realmId,
+        accountId: account.id,
+        tokenDigest: args.tokenDigest,
+        createdAt: now.toISOString(),
+        expiresAt,
+        usedAt: null,
+      })
+      return {
+        ok: true,
+        resetId: args.id,
+        email: account.email,
+        displayName: account.displayName,
+        expiresAt,
+      }
+    },
+  }),
+
+  /** Choose a new password from a mailed link; every device is signed out, and the link is spent. */
+  completeCustomerPasswordReset: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { realmId: 'id', tokenDigest: 'text', password: 'text' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: [
+      'read:website.CustomerPasswordReset',
+      'write:website.CustomerPasswordReset',
+      'read:website.CustomerAccount',
+      'write:website.CustomerAccount',
+      'read:website.CustomerCredential',
+      'write:website.CustomerCredential',
+      'read:website.CustomerSession',
+      'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      if (!validPassword(args.password)) return invalid('password', 'website.customer.error.invalidPassword')
+      const passwordHash = await hashCustomerPassword(String(args.password))
+      const now = new Date().toISOString()
+      return ctx.tx(async (tx) => {
+        const reset = (
+          await tx.db.select('website.CustomerPasswordReset', { tokenDigest: args.tokenDigest })
+        )[0]
+        const account = reset
+          ? (await tx.db.select('website.CustomerAccount', { id: reset.accountId }))[0]
+          : null
+        if (
+          !reset ||
+          !account ||
+          reset.realmId !== args.realmId ||
+          reset.usedAt ||
+          String(reset.expiresAt) <= now ||
+          account.status !== 'active'
+        )
+          return invalid('token', 'website.customer.error.resetExpired')
+        // Every link the account was sent is spent with this one.
+        for (const other of await tx.db.select('website.CustomerPasswordReset', { accountId: account.id }))
+          if (!other.usedAt)
+            await tx.db.update('website.CustomerPasswordReset', { id: other.id }, { usedAt: now })
+        const credential = (await tx.db.select('website.CustomerCredential', { accountId: account.id }))[0]
+        if (credential)
+          await tx.db.update(
+            'website.CustomerCredential',
+            { id: credential.id },
+            { passwordHash, changedAt: now },
+          )
+        else
+          await tx.db.insert('website.CustomerCredential', {
+            id: account.id,
+            accountId: account.id,
+            passwordHash,
+            changedAt: now,
+          })
+        await tx.db.update(
+          'website.CustomerAccount',
+          { id: account.id },
+          { securityVersion: Number(account.securityVersion) + 1, failedLoginCount: 0, lockedUntil: null },
+        )
+        await revokeAccountAccess(tx, account.id, 'password-reset', now)
+        return { ok: true }
+      })
     },
   }),
 

@@ -54,6 +54,12 @@ export type WebsitePublicListing =
       /** A same-site path, already checked; where a signed-in visitor goes next. */
       returnTo: string
     }
+  | {
+      /** The customer's own pages: their account, asking for a reset link, and using one. */
+      kind: 'customer'
+      title: unknown
+      view: 'profile' | 'forgot' | 'reset'
+    }
 export type WebsitePublicPage = {
   locale: string
   head: {
@@ -124,11 +130,12 @@ const signinWords = (vi: boolean, site: string) =>
         password: 'Mật khẩu',
         show: 'Hiện mật khẩu',
         submit: 'Đăng nhập',
-        forgot: ['Quên mật khẩu?', 'Liên hệ cửa hàng để được cấp lại.'],
+        forgot: ['Quên mật khẩu?', 'Đặt lại mật khẩu'],
         noAccount: ['Chưa có tài khoản?', 'Tài khoản được cấp khi bạn bắt đầu dùng dịch vụ của cửa hàng.'],
         secure: 'Thông tin chỉ dùng để cửa hàng phục vụ bạn.',
         signedAs: 'Bạn đang đăng nhập với tên ',
         continue: 'Tiếp tục',
+        account: 'Tài khoản của tôi',
         signout: 'Đăng xuất',
         noscript: 'Cần bật JavaScript trên trình duyệt để đăng nhập.',
         script: {
@@ -169,11 +176,12 @@ const signinWords = (vi: boolean, site: string) =>
         password: 'Password',
         show: 'Show password',
         submit: 'Sign in',
-        forgot: ['Forgot your password?', 'Contact the shop to get a new one.'],
+        forgot: ['Forgot your password?', 'Reset it'],
         noAccount: ['No account yet?', 'The shop gives you one when you start using its services.'],
         secure: 'Only used by the shop to serve you.',
         signedAs: 'You are signed in as ',
         continue: 'Continue',
+        account: 'My account',
         signout: 'Sign out',
         noscript: 'Signing in needs JavaScript in your browser.',
         script: {
@@ -205,7 +213,135 @@ const signin = (
     ([name]) => name,
     ([name, title, text]) =>
       html`<li>${icon(name as keyof typeof ICON_PATHS)}<span><strong>${title}</strong>${text}</span></li>`,
-  )}</ul></div><div class="wt-public-signin__panel"><div class="wt-public-signin__card"><h1>${value.title}</h1><p class="wt-public-signin__lead" data-signin-guest>${w.lead}</p><div class="wt-public-signin__notice" role="alert" hidden><strong></strong><span></span></div><div class="wt-public-signin__guest" data-signin-guest><form class="wt-public-signin__form" method="post" novalidate><label class="wt-public-signin__field"><span id="wt-signin-login-label">${w.login}</span><input name="login" aria-labelledby="wt-signin-login-label" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" placeholder=${w.loginHint} aria-describedby="wt-signin-login-error" required><small class="wt-public-signin__error" id="wt-signin-login-error" hidden></small></label><label class="wt-public-signin__field"><span id="wt-signin-password-label">${w.password}</span><span class="wt-public-signin__password"><input type="password" name="password" aria-labelledby="wt-signin-password-label" autocomplete="current-password" maxlength="128" aria-describedby="wt-signin-password-error" required><button class="wt-public-signin__reveal" type="button" aria-label=${w.show} aria-pressed="false">${icon('eye')}</button></span><small class="wt-public-signin__error" id="wt-signin-password-error" hidden></small></label><button class="wt-button" type="submit">${w.submit}</button></form><div class="wt-public-signin__help"><p><strong>${w.forgot[0]}</strong> ${w.forgot[1]}</p><p><strong>${w.noAccount[0]}</strong> ${w.noAccount[1]}</p></div></div><div class="wt-public-signin__signed" hidden><p>${w.signedAs}<strong data-customer-name></strong>.</p><div class="wt-public-signin__actions"><a class="wt-button" href=${value.returnTo}>${w.continue}</a><button class="wt-public-signin__signout" type="button">${w.signout}</button></div></div><p class="wt-public-signin__secure">${icon('lock')}<span>${w.secure}</span></p><noscript><p>${w.noscript}</p></noscript></div></div></section>`
+  )}</ul></div><div class="wt-public-signin__panel"><div class="wt-public-signin__card"><h1>${value.title}</h1><p class="wt-public-signin__lead" data-signin-guest>${w.lead}</p><div class="wt-public-signin__notice" role="alert" hidden><strong></strong><span></span></div><div class="wt-public-signin__guest" data-signin-guest><form class="wt-public-signin__form" method="post" novalidate><label class="wt-public-signin__field"><span id="wt-signin-login-label">${w.login}</span><input name="login" aria-labelledby="wt-signin-login-label" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" placeholder=${w.loginHint} aria-describedby="wt-signin-login-error" required><small class="wt-public-signin__error" id="wt-signin-login-error" hidden></small></label><label class="wt-public-signin__field"><span id="wt-signin-password-label">${w.password}</span><span class="wt-public-signin__password"><input type="password" name="password" aria-labelledby="wt-signin-password-label" autocomplete="current-password" maxlength="128" aria-describedby="wt-signin-password-error" required><button class="wt-public-signin__reveal" type="button" aria-label=${w.show} aria-pressed="false">${icon('eye')}</button></span><small class="wt-public-signin__error" id="wt-signin-password-error" hidden></small></label><button class="wt-button" type="submit">${w.submit}</button></form><div class="wt-public-signin__help"><p><strong>${w.forgot[0]}</strong> <a href="/account/forgot">${w.forgot[1]}</a></p><p><strong>${w.noAccount[0]}</strong> ${w.noAccount[1]}</p></div></div><div class="wt-public-signin__signed" hidden><p>${w.signedAs}<strong data-customer-name></strong>.</p><div class="wt-public-signin__actions"><a class="wt-button" href=${value.returnTo}>${w.continue}</a><a href="/account">${w.account}</a><button class="wt-public-signin__signout" type="button">${w.signout}</button></div></div><p class="wt-public-signin__secure">${icon('lock')}<span>${w.secure}</span></p><noscript><p>${w.noscript}</p></noscript></div></div></section>`
+}
+
+/** What the customer's own pages say; the script reads the words it shows from here. */
+const customerWords = (vi: boolean) =>
+  vi
+    ? {
+        login: 'Số điện thoại hoặc email',
+        loginHint: '0900 000 000 hoặc email',
+        forgotLead:
+          'Nhập số điện thoại hoặc email của tài khoản. Nếu tài khoản có email, chúng tôi gửi liên kết đặt lại mật khẩu.',
+        forgotSubmit: 'Gửi liên kết',
+        noEmail: ['Tài khoản không có email?', 'Liên hệ cửa hàng để được cấp lại mật khẩu.'],
+        backToSignin: 'Quay lại đăng nhập',
+        resetLead: 'Chọn mật khẩu mới từ 6 ký tự trở lên. Mọi thiết bị đang đăng nhập sẽ được đăng xuất.',
+        newPassword: 'Mật khẩu mới',
+        resetSubmit: 'Lưu mật khẩu mới',
+        askAgain: 'Gửi lại liên kết',
+        guestLead: 'Đăng nhập để xem và sửa thông tin tài khoản của bạn.',
+        signin: 'Đăng nhập',
+        phone: 'Số điện thoại',
+        email: 'Email',
+        displayName: 'Tên hiển thị',
+        saveName: 'Lưu tên',
+        changePassword: 'Đổi mật khẩu',
+        currentPassword: 'Mật khẩu hiện tại',
+        signout: 'Đăng xuất',
+        noscript: 'Cần bật JavaScript trên trình duyệt để dùng trang này.',
+        script: {
+          loginMissing: 'Nhập số điện thoại hoặc email.',
+          passwordMissing: 'Nhập mật khẩu.',
+          nameMissing: 'Nhập tên hiển thị.',
+          sent: [
+            'info',
+            'Đã ghi nhận yêu cầu',
+            'Nếu thông tin khớp với một tài khoản có email, liên kết đặt lại đã được gửi và dùng được trong 30 phút.',
+          ],
+          expired: [
+            'danger',
+            'Liên kết không còn dùng được',
+            'Liên kết đã hết hạn hoặc đã được dùng. Bạn gửi lại liên kết mới nhé.',
+          ],
+          reset: ['info', 'Đã đổi mật khẩu', 'Bạn đăng nhập bằng mật khẩu mới nhé.'],
+          short: ['danger', 'Mật khẩu chưa hợp lệ', 'Mật khẩu cần từ 6 đến 128 ký tự.'],
+          wrongPassword: ['danger', 'Mật khẩu hiện tại chưa đúng', 'Bạn kiểm tra lại rồi thử lần nữa.'],
+          saved: ['info', 'Đã lưu', 'Thông tin tài khoản đã được cập nhật.'],
+          changed: ['info', 'Đã đổi mật khẩu', 'Các thiết bị khác đã được đăng xuất.'],
+          limited: ['warning', 'Bạn đã thử quá nhiều lần', 'Vui lòng chờ ít phút rồi thử lại.'],
+          failed: ['danger', 'Chưa kết nối được', 'Vui lòng kiểm tra mạng rồi thử lại.'],
+          show: 'Hiện mật khẩu',
+          hide: 'Ẩn mật khẩu',
+          busy: 'Đang gửi…',
+        },
+      }
+    : {
+        login: 'Phone number or email',
+        loginHint: '0900 000 000 or email',
+        forgotLead:
+          'Enter the phone number or email of your account. If the account has an email, we send a link to reset the password.',
+        forgotSubmit: 'Send the link',
+        noEmail: ['No email on your account?', 'Contact the shop to get a new password.'],
+        backToSignin: 'Back to sign in',
+        resetLead: 'Choose a new password of 6 characters or more. Every device signed in is signed out.',
+        newPassword: 'New password',
+        resetSubmit: 'Save the new password',
+        askAgain: 'Send a new link',
+        guestLead: 'Sign in to see and edit your account.',
+        signin: 'Sign in',
+        phone: 'Phone number',
+        email: 'Email',
+        displayName: 'Display name',
+        saveName: 'Save name',
+        changePassword: 'Change password',
+        currentPassword: 'Current password',
+        signout: 'Sign out',
+        noscript: 'This page needs JavaScript in your browser.',
+        script: {
+          loginMissing: 'Enter your phone number or email.',
+          passwordMissing: 'Enter a password.',
+          nameMissing: 'Enter a display name.',
+          sent: [
+            'info',
+            'Request received',
+            'If it matches an account with an email, a reset link is on its way and works for 30 minutes.',
+          ],
+          expired: [
+            'danger',
+            'This link no longer works',
+            'It has expired or was already used. Ask for a new one.',
+          ],
+          reset: ['info', 'Password changed', 'Sign in with your new password.'],
+          short: ['danger', 'That password will not do', 'Use 6 to 128 characters.'],
+          wrongPassword: ['danger', 'The current password did not match', 'Check it and try again.'],
+          saved: ['info', 'Saved', 'Your account is up to date.'],
+          changed: ['info', 'Password changed', 'Your other devices are signed out.'],
+          limited: ['warning', 'Too many attempts', 'Wait a few minutes and try again.'],
+          failed: ['danger', 'Could not connect', 'Check your connection and try again.'],
+          show: 'Show password',
+          hide: 'Hide password',
+          busy: 'Sending…',
+        },
+      }
+
+/** A labelled input with its own error line; the script finds both by the form's field name. */
+const field = (
+  form: string,
+  name: string,
+  label: unknown,
+  attributes: { type?: string; autocomplete: string; hint?: string; reveal?: string },
+) => {
+  const id = `wt-${form}-${name}`
+  const input = html`<input type=${attributes.type ?? 'text'} name=${name} id=${id} autocomplete=${attributes.autocomplete} maxlength=${attributes.type === 'password' ? '128' : '254'} placeholder=${attributes.hint ?? ''} aria-describedby=${`${id}-error`} required>`
+  return html`<label class="wt-public-signin__field"><span>${label}</span>${attributes.reveal ? html`<span class="wt-public-signin__password">${input}<button class="wt-public-signin__reveal" type="button" aria-label=${attributes.reveal} aria-pressed="false">${icon('eye')}</button></span>` : input}<small class="wt-public-signin__error" id=${`${id}-error`} hidden></small></label>`
+}
+
+/**
+ * The customer's own pages, in the sign-in's card. Who is signed in, and whether a reset link
+ * still works, are the customer API's to say, so the script fills the card in.
+ */
+const customerCard = (value: Extract<WebsitePublicListing, { kind: 'customer' }>, vi: boolean) => {
+  const w = customerWords(vi)
+  const notice = html`<div class="wt-public-signin__notice" role="alert" hidden><strong></strong><span></span></div>`
+  const body =
+    value.view === 'forgot'
+      ? html`<p class="wt-public-signin__lead">${w.forgotLead}</p>${notice}<form class="wt-public-signin__form" data-customer-form="forgot" novalidate>${field('forgot', 'login', w.login, { autocomplete: 'username', hint: w.loginHint })}<button class="wt-button" type="submit">${w.forgotSubmit}</button></form><div class="wt-public-signin__help"><p><strong>${w.noEmail[0]}</strong> ${w.noEmail[1]}</p><p><a href="/account/login">${w.backToSignin}</a></p></div>`
+      : value.view === 'reset'
+        ? html`<p class="wt-public-signin__lead">${w.resetLead}</p>${notice}<form class="wt-public-signin__form" data-customer-form="reset" novalidate>${field('reset', 'password', w.newPassword, { type: 'password', autocomplete: 'new-password', reveal: w.script.show })}<button class="wt-button" type="submit">${w.resetSubmit}</button></form><div class="wt-public-signin__help"><p><a href="/account/login">${w.backToSignin}</a></p><p><a href="/account/forgot">${w.askAgain}</a></p></div>`
+        : html`${notice}<div data-customer-guest hidden><p class="wt-public-signin__lead">${w.guestLead}</p><a class="wt-button" href="/account/login?returnTo=%2Faccount">${w.signin}</a></div><div class="wt-public-signin__signed" data-customer-signed hidden><dl class="wt-public-account__facts"><div><dt>${w.phone}</dt><dd data-customer-fact="phone"></dd></div><div><dt>${w.email}</dt><dd data-customer-fact="email"></dd></div></dl><form class="wt-public-signin__form" data-customer-form="profile" novalidate>${field('profile', 'displayName', w.displayName, { autocomplete: 'name' })}<button class="wt-button" type="submit">${w.saveName}</button></form><h2 class="wt-public-account__heading">${w.changePassword}</h2><form class="wt-public-signin__form" data-customer-form="password" novalidate>${field('password', 'currentPassword', w.currentPassword, { type: 'password', autocomplete: 'current-password' })}${field('password', 'newPassword', w.newPassword, { type: 'password', autocomplete: 'new-password', reveal: w.script.show })}<button class="wt-button" type="submit">${w.changePassword}</button></form><div class="wt-public-signin__actions"><button class="wt-public-signin__signout" type="button">${w.signout}</button></div></div>`
+  return html`<section class="wt-public-signin wt-public-signin--single" data-customer-view=${value.view} data-messages=${JSON.stringify(w.script)}><div class="wt-public-signin__panel"><div class="wt-public-signin__card"><h1>${value.title}</h1>${body}<noscript><p>${w.noscript}</p></noscript></div></div></section>`
 }
 
 const listing = (
@@ -215,6 +351,7 @@ const listing = (
 ): TemplateResult | null => {
   if (!value) return null
   if (value.kind === 'signin') return signin(value, vi, brand)
+  if (value.kind === 'customer') return customerCard(value, vi)
   if (value.kind === 'archive')
     return html`<section class="wt-public-archive"><h1>${value.title}</h1>${value.descriptionHtml != null ? html`<div data-ui="flow-editor-content">${trustedMarkup(value.descriptionHtml)}</div>` : value.description ? html`<p>${value.description}</p>` : null}${
       value.entries.length
@@ -269,7 +406,7 @@ export function websitePublicDocument(p: WebsitePublicPage): TemplateResult {
   const { head, theme } = p
   // Shared links read Open Graph; a crawler that finds none guesses from the page.
   const openGraph = html`<meta property="og:type" content=${head.ogType}><meta property="og:title" content=${head.title}>${head.description ? html`<meta property="og:description" content=${head.description}>` : null}<meta property="og:site_name" content=${head.siteName}>${head.ogImage ? html`<meta property="og:image" content=${head.ogImage}>` : null}${head.ogUrl ? html`<meta property="og:url" content=${head.ogUrl}>` : null}`
-  return html`<html lang=${p.locale}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${head.title}</title>${head.description ? html`<meta name="description" content=${head.description}>` : null}${openGraph}${head.noindex ? html`<meta name="robots" content="noindex">` : null}${head.canonical ? html`<link rel="canonical" href=${head.canonical}>` : null}<link rel="stylesheet" href="/_ket/asset/website_backend/public.css">${p.account || p.listing?.kind === 'signin' ? html`<script type="module" src="/_ket/asset/website_backend/customer-account.mjs"></script>` : null}</head><body class="wt-public"><div class="wt-site" data-website-theme="default" data-theme-preset=${theme.preset} data-accent=${theme.accent} data-font=${theme.font} data-spacing=${theme.spacing} data-buttons=${theme.buttons}><header class="wt-theme-header"><a href="/">${p.brand.logo ? html`<img class="wt-public-logo" src=${p.brand.logo} alt=${p.brand.title}>` : html`<strong>${p.brand.title}</strong>`}</a><nav aria-label=${vi ? 'Điều hướng chính' : 'Main navigation'}>${navigation(p.navigation)}</nav>${p.listing?.kind === 'search' ? null : html`<form class="wt-public-search-box" role="search" action="/search" method="get"><input type="search" name="q" maxlength="100" autocomplete="off" aria-label=${searchLabel} placeholder=${searchLabel}><button type="submit">${vi ? 'Tìm' : 'Search'}</button></form>`}${p.account ? html`<a class="wt-public-account" href=${p.account.href} data-customer-account>${vi ? 'Đăng nhập' : 'Sign in'}</a>` : null}</header><main>${listing(p.listing, vi, p.brand)}${p.article ? html`<article class="wt-public-post"><h1>${p.article.title}</h1><div data-ui="flow-editor-content">${trustedMarkup(p.article.bodyHtml)}</div></article>` : null}${p.sections}</main><footer class="wt-theme-footer">${p.footer}</footer></div></body></html>`
+  return html`<html lang=${p.locale}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${head.title}</title>${head.description ? html`<meta name="description" content=${head.description}>` : null}${openGraph}${head.noindex ? html`<meta name="robots" content="noindex">` : null}${head.canonical ? html`<link rel="canonical" href=${head.canonical}>` : null}<link rel="stylesheet" href="/_ket/asset/website_backend/public.css">${p.account || p.listing?.kind === 'signin' || p.listing?.kind === 'customer' ? html`<script type="module" src="/_ket/asset/website_backend/customer-account.mjs"></script>` : null}</head><body class="wt-public"><div class="wt-site" data-website-theme="default" data-theme-preset=${theme.preset} data-accent=${theme.accent} data-font=${theme.font} data-spacing=${theme.spacing} data-buttons=${theme.buttons}><header class="wt-theme-header"><a href="/">${p.brand.logo ? html`<img class="wt-public-logo" src=${p.brand.logo} alt=${p.brand.title}>` : html`<strong>${p.brand.title}</strong>`}</a><nav aria-label=${vi ? 'Điều hướng chính' : 'Main navigation'}>${navigation(p.navigation)}</nav>${p.listing?.kind === 'search' ? null : html`<form class="wt-public-search-box" role="search" action="/search" method="get"><input type="search" name="q" maxlength="100" autocomplete="off" aria-label=${searchLabel} placeholder=${searchLabel}><button type="submit">${vi ? 'Tìm' : 'Search'}</button></form>`}${p.account ? html`<a class="wt-public-account" href=${p.account.href} data-customer-account>${vi ? 'Đăng nhập' : 'Sign in'}</a>` : null}</header><main>${listing(p.listing, vi, p.brand)}${p.article ? html`<article class="wt-public-post"><h1>${p.article.title}</h1><div data-ui="flow-editor-content">${trustedMarkup(p.article.bodyHtml)}</div></article>` : null}${p.sections}</main><footer class="wt-theme-footer">${p.footer}</footer></div></body></html>`
 }
 
 /** The empty page the Studio client mounts into; `props` is its serialized starting state. */

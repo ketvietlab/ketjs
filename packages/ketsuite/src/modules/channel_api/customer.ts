@@ -38,6 +38,17 @@ const registerBody = schema(
   ['displayName', 'email', 'password'],
 )
 const envelope = schema({ data: {}, error: {}, meta: { type: 'object' } })
+const forgotBody = schema({
+  email: { type: 'string', format: 'email' },
+  phone: { type: 'string', maxLength: 32 },
+})
+const resetBody = schema({ token: { type: 'string', maxLength: 128 }, password: string }, [
+  'token',
+  'password',
+])
+/** Where a mailed link lands: the reset page of the site the visitor asked from. */
+const RESET_PATH = '/account/reset'
+const RESET_WINDOW_MS = 60 * 60_000
 
 const hostnameOf = (req: Req): string => {
   try {
@@ -65,6 +76,17 @@ const cookieHeader = (req: Req, token: string, maxAge: number): string => {
     `Max-Age=${Math.max(0, Math.floor(maxAge))}`,
   ].join('; ')
 }
+/** The site's own address as the visitor reached it, so a mailed link leads back to the same site. */
+const originOf = (req: Req): string => {
+  const forwarded = String(req.headers['x-forwarded-proto'] ?? '')
+    .split(',')[0]!
+    .trim()
+    .toLowerCase()
+  const secure = forwarded === 'https' || (req.socket as { encrypted?: boolean }).encrypted === true
+  return `${secure ? 'https' : 'http'}://${hostOf(req)}`
+}
+const rateKeyOf = (req: Req): string =>
+  sha256(`${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`)
 const publicAccount = (account: Account) => ({
   id: account.id,
   displayName: account.displayName,
@@ -264,9 +286,7 @@ const authenticate = async (
   const context = await channelRealmContext(ctx, url, req)
   if (!context)
     return { status: 404, error: channelError(ctx, url, req, 'website.customer.error.realmUnavailable') }
-  const rateKey = sha256(
-    `${req.socket.remoteAddress ?? 'unknown'}\n${String(req.headers['user-agent'] ?? '')}`,
-  )
+  const rateKey = rateKeyOf(req)
   const result = (await ctx.callUnchecked(
     register ? 'website.registerCustomer' : 'website.authenticateCustomer',
     register
@@ -487,5 +507,133 @@ export const customerRoutes = routesOf(
     handler: (_ctx, _url, _req, _params, request) => ({
       data: { customer: publicAccount(request.identity!.account) },
     }),
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'PATCH',
+    path: 'me/profile',
+    operationId: 'customer.me.update',
+    auth: 'customer',
+    request: { body: schema({ displayName: string }, ['displayName']) },
+    responses: { '200': envelope },
+    capability: { key: 'channel_api.customer_account', action: 'update' },
+    handler: async (ctx, url, req, _params, request) => {
+      const result = (await ctx.callUnchecked(
+        'website.updateCustomerProfile',
+        { accountId: request.identity!.accountId, displayName: request.body.displayName },
+        url,
+        req,
+      )) as { ok?: boolean; account?: Account }
+      if (!result.ok || !result.account) return authFailure(ctx, url, req, result)
+      return { data: { customer: publicAccount(result.account) } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'POST',
+    path: 'auth/password',
+    operationId: 'customer.auth.password.change',
+    auth: 'customer',
+    request: {
+      body: schema({ currentPassword: string, newPassword: string }, ['currentPassword', 'newPassword']),
+    },
+    responses: { '200': envelope },
+    rateLimit: { action: 'auth.password', limit: 10, windowMs: 15 * 60_000 },
+    handler: async (ctx, url, req, _params, request) => {
+      const identity = request.identity!
+      const result = (await ctx.callUnchecked(
+        'website.changeCustomerPassword',
+        {
+          accountId: identity.accountId,
+          currentPassword: request.body.currentPassword,
+          newPassword: request.body.newPassword,
+        },
+        url,
+        req,
+      )) as { ok?: boolean; account?: Account }
+      if (!result.ok || !result.account) return authFailure(ctx, url, req, result)
+      // Every device is signed out; the browser that changed it stays in on a fresh session.
+      if (identity.presentation !== 'cookie') return { data: { customer: publicAccount(result.account) } }
+      const session = await startCookieSession(ctx, url, req, result.account)
+      if (!session) return authFailure(ctx, url, req, {}, 401)
+      return {
+        data: { customer: publicAccount(result.account), csrfToken: session.csrfToken },
+        headers: { 'set-cookie': session.cookie },
+      }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'POST',
+    path: 'auth/password/forgot',
+    operationId: 'customer.auth.password.forgot',
+    request: { body: forgotBody },
+    responses: { '202': envelope },
+    rateLimit: { action: 'auth.forgot', limit: 10, windowMs: RESET_WINDOW_MS },
+    /**
+     * Every visitor hears the same, whether or not the email or phone has an account, has an email
+     * to mail, or the company has a message to send: anything else tells a stranger who signs in here.
+     */
+    handler: async (ctx, url, req, _params, request) => {
+      if (!sameOrigin(req))
+        return { status: 403, error: channelError(ctx, url, req, 'website.customer.error.originMismatch') }
+      const context = await channelRealmContext(ctx, url, req)
+      if (!context?.siteId)
+        return { status: 404, error: channelError(ctx, url, req, 'website.customer.error.realmUnavailable') }
+      const token = randomBytes(32).toString('base64url')
+      const reset = (await ctx.callUnchecked(
+        'website.requestCustomerPasswordReset',
+        {
+          id: randomUUID(),
+          realmId: context.realmId,
+          email: request.body.email,
+          phone: request.body.phone,
+          tokenDigest: sha256(token),
+          rateKey: rateKeyOf(req),
+        },
+        url,
+        req,
+      )) as { resetId?: string } | null
+      if (reset?.resetId && (await ctx.live(req)).functions['website_customer_mail.mailPasswordReset'])
+        await ctx.callUnchecked(
+          'website_customer_mail.mailPasswordReset',
+          {
+            resetId: reset.resetId,
+            siteId: context.siteId,
+            resetUrl: `${originOf(req)}${RESET_PATH}?${new URLSearchParams({ token })}`,
+          },
+          url,
+          req,
+        )
+      return { status: 202, data: { accepted: true } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'customer',
+    method: 'POST',
+    path: 'auth/password/reset',
+    operationId: 'customer.auth.password.reset',
+    request: { body: resetBody },
+    responses: { '200': envelope },
+    rateLimit: { action: 'auth.reset', limit: 20, windowMs: RESET_WINDOW_MS },
+    handler: async (ctx, url, req, _params, request) => {
+      if (!sameOrigin(req))
+        return { status: 403, error: channelError(ctx, url, req, 'website.customer.error.originMismatch') }
+      const context = await channelRealmContext(ctx, url, req)
+      if (!context)
+        return { status: 404, error: channelError(ctx, url, req, 'website.customer.error.realmUnavailable') }
+      const result = (await ctx.callUnchecked(
+        'website.completeCustomerPasswordReset',
+        {
+          realmId: context.realmId,
+          tokenDigest: sha256(String(request.body.token ?? '')),
+          password: request.body.password,
+        },
+        url,
+        req,
+      )) as { ok?: boolean }
+      if (!result.ok) return authFailure(ctx, url, req, result)
+      return { data: { reset: true } }
+    },
   }),
 )

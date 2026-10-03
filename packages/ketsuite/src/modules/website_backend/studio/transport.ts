@@ -1,5 +1,6 @@
 import { styleKeys, studioStyleDefaults } from '../../website/studio-style.ts'
 import { pageTemplates } from '../../website/studio-content.ts'
+import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
 import { entryProjection } from './context.ts'
 import { CUSTOMER_SIGNIN_PATH } from './public.ts'
@@ -207,6 +208,64 @@ const termResource = (term: Row, entries: Row[]) => {
     postCount: postsNaming(term, entries).length,
     revisionId: term.revisionId,
     archived: !!term.archivedAt,
+  }
+}
+/**
+ * A host as the domain screens read it. One without a proof value was connected by Két Việt
+ * before verification existed, so it is taken as verified and serving.
+ */
+const domainResource = (d: Row) => {
+  const connected = !d.verifyToken
+  const result = d.checkResult == null ? null : String(d.checkResult)
+  return {
+    id: d.id,
+    siteId: d.siteId,
+    title: d.host,
+    host: d.host,
+    role: d.primary ? 'primary' : 'redirect',
+    state: connected || d.verifiedAt ? 'verified' : result && result !== 'matched' ? 'failed' : 'pending',
+    tls: connected || d.servingAt ? 'ready' : 'pending',
+    checkedAt: d.checkedAt ?? null,
+    reason: result,
+    challenge: connected
+      ? null
+      : {
+          type: 'TXT',
+          name: domainProofName(String(d.host)),
+          value: domainProofValue(String(d.verifyToken)),
+        },
+    attempts: d.checkedAt
+      ? [
+          {
+            id: `${d.id}:${d.checkedAt}`,
+            at: d.checkedAt,
+            result: result === 'matched' ? 'verified' : 'failed',
+            reason: result,
+          },
+        ]
+      : [],
+    // Domains keep no revision of their own; what a decision rests on stands in for one.
+    revisionId: [d.id, d.primary, d.verifiedAt, d.checkedAt, d.servingAt].join(':'),
+  }
+}
+/** Pages and posts are what search engines index; their SEO lives in the entry's own fields. */
+const seoEntries = (entries: Row[]) =>
+  entries.filter((e) => !e.trashed && ['page', 'post'].includes(String(e.type)))
+/** An entry's search and sharing metadata. An unset title reads as the page's own, as served. */
+const seoResource = (entry: Row) => {
+  const seo = row(entry.seo)
+  return {
+    id: entry.id,
+    siteId: entry.siteId,
+    kind: 'seo',
+    title: seo.title || entry.title,
+    path: entry.path,
+    description: seo.description ?? '',
+    image: seo.image ?? '',
+    indexing: seo.indexing === 'noindex' ? 'noindex' : 'index',
+    canonical: seo.canonical ?? '',
+    state: entry.state,
+    revisionId: entry.revisionId,
   }
 }
 export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
@@ -628,6 +687,14 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
           })),
         }
       }
+      if (input.kind === 'domains') {
+        const domain = data.domains.find((d) => d.id === input.id)
+        return domain ? domainResource(domain) : fail('notFound', 'Không tìm thấy tên miền.')
+      }
+      if (input.kind === 'seo') {
+        const entry = seoEntries(data.entries).find((e) => e.id === input.id)
+        return entry ? seoResource(entry) : fail('notFound', 'Không tìm thấy trang.')
+      }
       if (input.kind !== 'themes' || input.id !== data.site!.id)
         return fail('notFound', 'Không tìm thấy giao diện.')
       return {
@@ -736,6 +803,48 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         })
         return siteRecord((await snapshot(input.siteId)).site!)
       }
+      if (input.kind === 'domains') {
+        const data = await snapshot(input.siteId)
+        const host = String(row(input.values).title ?? '')
+          .trim()
+          .toLowerCase()
+        const existing = data.domains.find((d) => d.id === input.id)
+        // A retried add answers with what it made; another name is another domain to prove.
+        if (existing && existing.host === host) return domainResource(existing)
+        if (existing) fail('validation', 'Muốn đổi tên miền thì thêm tên miền mới.')
+        await call('website.saveDomain', {
+          id: input.id,
+          siteId: data.site!.id,
+          host,
+          // The first host is the site's address; later ones redirect to it until switched.
+          primary: !data.domains.some((d) => d.primary),
+        })
+        const saved = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!
+        return domainResource(saved)
+      }
+      if (input.kind === 'seo') {
+        const entry = seoEntries((await snapshot(input.siteId)).entries).find((e) => e.id === input.id)
+        if (!entry) return fail('notFound', 'Không tìm thấy trang.')
+        if (input.expectedRevisionId !== entry.revisionId)
+          fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi lưu.')
+        const values = row(input.values)
+        const text = (key: string) => String(values[key] ?? '').trim()
+        await queries['website.saveEntry']!({
+          ...entry,
+          path: text('path') || entry.path,
+          seo: {
+            // The page's own title is the fallback; storing it would freeze it against later renames.
+            title: text('title') === entry.title ? '' : text('title'),
+            description: text('description'),
+            image: text('image'),
+            canonical: text('canonical'),
+            indexing: values.indexing === 'noindex' ? 'noindex' : 'index',
+          },
+          expectedRevisionId: entry.revisionId,
+        })
+        const saved = (await snapshot(input.siteId)).entries.find((e) => e.id === entry.id)!
+        return seoResource(saved)
+      }
       if (input.kind !== 'themes')
         return fail('unavailable', 'Chức năng này chưa được kết nối với dữ liệu hệ thống.')
       const data = await snapshot(input.siteId)
@@ -757,16 +866,38 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
       if (input.kind === 'templates') return { rows: pageTemplates }
       if (input.kind === 'themes') return { rows: [themeResource(data.site!)] }
       if (input.kind === 'menus') return { rows: [await menuOf(data.site!)], creatable: false }
-      if (input.kind === 'domains')
-        return {
-          rows: data.domains.map((d) => ({
-            ...d,
-            title: d.host,
-            role: d.primary ? 'primary' : 'redirect',
-            state: d.verifiedAt ? 'verified' : 'pending',
-          })),
-        }
+      if (input.kind === 'domains') return { rows: data.domains.map(domainResource) }
       if (input.kind === 'sites') return { rows: data.sites.map((s) => publicSite(s, data.domains)) }
+      if (input.kind === 'seo') {
+        const entries = seoEntries(data.entries)
+        const search = String(input.search ?? '')
+          .trim()
+          .toLocaleLowerCase('vi')
+        // The audit reads what visitors are served: the published revision, not the draft.
+        const live = entries.flatMap((e) => {
+          const revision = data.revisions.find((r) => r.id === e.publishedRevisionId)
+          return revision ? [{ entry: e, seo: row(row(revision.fields).seo) }] : []
+        })
+        return {
+          rows: entries
+            .map(seoResource)
+            .filter((r) => !search || `${r.title} ${r.path}`.toLocaleLowerCase('vi').includes(search)),
+          // A page is written from its Builder, so there is no SEO record to create on its own.
+          creatable: false,
+          audit: {
+            publicationId: data.site!.activePublicationId ?? null,
+            indexState: live.length ? 'ready' : 'empty',
+            rows: live
+              .map(({ entry, seo }) => ({
+                id: entry.id,
+                title: entry.title,
+                missing: ['description', 'image'].filter((key) => !String(seo[key] ?? '').trim()),
+                indexLag: entry.state === 'changed',
+              }))
+              .filter((r) => r.missing.length || r.indexLag),
+          },
+        }
+      }
       if (input.kind === 'form-editor') {
         const forms = (await call('website_form.listForms', { siteId: data.site!.id })) as Row[]
         return { rows: forms.map((form) => formResource(form, [], [], [])) }
@@ -878,6 +1009,39 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         ...termResource({ ...term, archivedAt: true, revisionId: result.revisionId }, []),
         archived: true,
       }
+    },
+    'website_studio.verifyDomain': async (input) => {
+      const domain = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)
+      if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
+      if (input.expectedRevisionId !== domainResource(domain).revisionId)
+        fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi kiểm tra.')
+      // The lookup is the server's own; nothing the browser sends counts as proof.
+      await call('website.verifyDomain', { id: domain.id })
+      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+    },
+    'website_studio.setPrimaryDomain': async (input) => {
+      const data = await snapshot(input.siteId)
+      const domain = data.domains.find((d) => d.id === input.id)
+      if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
+      const current = domainResource(domain)
+      const primary = data.domains.find((d) => d.primary)
+      if (
+        input.expectedRevisionId !== current.revisionId ||
+        (input.expectedPrimaryId ?? null) !== (primary?.id ?? null)
+      )
+        fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi chuyển.')
+      if (input.confirmed !== true) fail('validation', 'Xác nhận chuyển địa chỉ chính trước khi tiếp tục.')
+      // Every other host redirects to the primary: one that does not answer yet takes the site down.
+      if (current.state !== 'verified' || current.tls !== 'ready')
+        fail('validation', 'Tên miền cần được xác minh và có HTTPS trước khi làm địa chỉ chính.')
+      await call('website.saveDomain', {
+        id: domain.id,
+        siteId: data.site!.id,
+        host: domain.host,
+        primary: true,
+        redirectToPrimary: domain.redirectToPrimary,
+      })
+      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
     },
     'website_studio.savePageSettings': async (input) => {
       const { entry } = await forEntry(input.id)

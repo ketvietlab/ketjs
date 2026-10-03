@@ -358,6 +358,32 @@
   font: inherit;
   cursor: pointer;
 }
+/* The customer's own pages: the sign-in's card, alone. */
+.wt-public-signin--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wt-public-account__facts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+.wt-public-account__facts div {
+  display: grid;
+  gap: 0.125rem;
+}
+.wt-public-account__facts dt {
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+.wt-public-account__facts dd {
+  margin: 0;
+}
+.wt-public-account__heading {
+  margin: 2rem 0 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 1.125rem;
+}
 @media (max-width: 54rem) {
   .wt-public-signin {
     grid-template-columns: minmax(0, 1fr);

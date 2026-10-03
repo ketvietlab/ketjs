@@ -111,6 +111,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   // A form's receipt, after the visitor posted: the form's own thanks, the code and the time.
   const receipt = record.type === 'website.formReceipt' ? object(fields.receipt) : null
   const signin = record.type === 'website.customerSignin' ? object(fields.signin) : null
+  const customer = record.type === 'website.customerAccount' ? object(fields.customer) : null
   const listing: WebsitePublicListing | null = archive
     ? {
         kind: 'archive',
@@ -142,11 +143,13 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
           }
         : signin
           ? { kind: 'signin', title: record.title, returnTo: customerReturnPath(signin.returnTo) }
-          : null
+          : customer && ['profile', 'forgot', 'reset'].includes(String(customer.view))
+            ? { kind: 'customer', title: record.title, view: customer.view as 'profile' | 'forgot' | 'reset' }
+            : null
   // The header offers the sign-in only where the site chose to; the sign-in page needs no link to itself.
   const here = customerReturnPath(record.path)
   const account =
-    appearance.account === 'shown' && !signin
+    appearance.account === 'shown' && !signin && !customer
       ? {
           href:
             here === '/'

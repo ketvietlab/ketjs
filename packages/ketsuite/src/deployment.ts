@@ -74,6 +74,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.mailStaffChannel,
       suite.mailBackend,
       suite.mailTransport,
+      suite.websiteCustomerMail,
       suite.mailTransportBackend,
       suite.mailInbound,
       suite.mailInboundBackend,
