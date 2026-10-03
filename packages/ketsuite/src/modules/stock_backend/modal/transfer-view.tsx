@@ -98,7 +98,7 @@ const saveButton = (c: Context) => (
 )
 export const transferModalDefinition: RecordModalDefinition<Data> = {
   kind: 'stock.transfer',
-  size: 'large',
+  size: (c) => (c.creating ? 'small' : 'default'),
   labels: () => USER_RECORD_MODAL_LABELS[lang()],
   context: {
     route: (id, creating) => {
@@ -111,7 +111,13 @@ export const transferModalDefinition: RecordModalDefinition<Data> = {
   status: (c) => (c.creating ? null : <Badge label={t(c, `state.${c.data.record.state}`)} />),
   body: (c) =>
     c.creating ? (
-      <RecordModalForm kind={c.kind} command="create" fields={editFields(c)} actions={[saveButton(c)]} />
+      <RecordModalForm
+        kind={c.kind}
+        command="create"
+        columns={1}
+        fields={editFields(c)}
+        actions={[saveButton(c)]}
+      />
     ) : (
       <Stack
         items={[

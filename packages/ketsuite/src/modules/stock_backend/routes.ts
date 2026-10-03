@@ -229,12 +229,25 @@ export const routes: Record<string, RouteEntry> = {
     (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const rows = (await ctx.call('stock.listPickings', {}, url, req)) as AnyRow[]
+      const [rows, locations, pickingTypes] = await Promise.all([
+        ctx.call('stock.listPickings', {}, url, req) as Promise<AnyRow[]>,
+        optionalRead<AnyRow[]>(ctx, 'stock.listLocations', {}, url, req, []),
+        optionalRead<AnyRow[]>(ctx, 'stock.listPickingTypes', {}, url, req, []),
+      ])
       return adminPage(ctx, url, req, {
         title: 'stock_backend.overview.title',
         body: async (_, frame) =>
           stockOverviewScreen(_, frame, {
-            rows,
+            rows: rows.map((row) => ({
+              ...row,
+              operationType:
+                localizeGeneratedRecords(_, pickingTypes, 'pickingType').find(
+                  (item) => item.id === row.pickingTypeId,
+                )?.name ?? '—',
+              source: locations.find((item) => item.id === row.locationId)?.name ?? '—',
+              destination: locations.find((item) => item.id === row.locationDestId)?.name ?? '—',
+              scheduledDate: dateTimeLabel(row.scheduledDate, _.locale),
+            })),
             at: (path) => inLocale(url, path),
             rowHref: (row) => recordModalHref(url, { kind: 'stock.transfer', id: String(row.id) }),
             createHref: (await ctx.allows('stock.createPicking', url, req))
@@ -662,6 +675,14 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       if (!(await ctx.allows('stock.listWarehouses', url, req))) return text('Forbidden', { status: 403 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
+      const [locations, pickings, pickingTypes] = await Promise.all([
+        optionalRead<AnyRow[] | null>(ctx, 'stock.listLocations', {}, url, req, null),
+        optionalRead<AnyRow[] | null>(ctx, 'stock.listPickings', {}, url, req, null),
+        optionalRead<AnyRow[] | null>(ctx, 'stock.listPickingTypes', {}, url, req, null),
+      ])
+      const pickingWarehouse = new Map(
+        (pickingTypes ?? []).map((type) => [String(type.id), type.warehouseId]),
+      )
       return adminPage(ctx, url, req, {
         title: 'stock_backend.warehouses',
         body: async (_, frame) => {
@@ -675,6 +696,13 @@ export const routes: Record<string, RouteEntry> = {
               code: String(row.code),
               receptionSteps: String(row.receptionSteps),
               deliverySteps: String(row.deliverySteps),
+              locationCount: locations?.filter((location) => location.warehouseId === row.id).length ?? null,
+              transferCount:
+                pickings && pickingTypes
+                  ? pickings.filter(
+                      (picking) => pickingWarehouse.get(String(picking.pickingTypeId)) === row.id,
+                    ).length
+                  : null,
             })),
             name: 'stock-warehouse-filter',
             bodyId: 'stock-warehouse-list',
@@ -765,6 +793,7 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       if (!(await ctx.allows('stock.listLocations', url, req))) return text('Forbidden', { status: 403 })
       const data = await common(ctx, url, req)
+      const quants = await optionalRead<AnyRow[] | null>(ctx, 'stock.listQuants', {}, url, req, null)
       const nameById = new Map(data.locations.map((row) => [String(row.id), String(row.name)]))
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
@@ -777,6 +806,22 @@ export const routes: Record<string, RouteEntry> = {
             rows: data.locations.map((row) => ({
               id: String(row.id),
               completeName: completeLocationName(row, nameById),
+              parentLocation: row.parentId
+                ? completeLocationName(
+                    data.locations.find((location) => location.id === row.parentId) ?? {
+                      parentPath: '',
+                      name: '',
+                    },
+                    nameById,
+                  )
+                : '',
+              productCount: quants
+                ? new Set(
+                    quants
+                      .filter((quant) => quant.locationId === row.id && Number(quant.quantity) > 0)
+                      .map((quant) => quant.productId),
+                  ).size
+                : null,
               usage: String(row.usage),
               warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
             })),
@@ -1234,6 +1279,22 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listRoutes', {}, url, req),
         ctx.call('stock.listRules', {}, url, req),
       ])) as [AnyRow[], AnyRow[]]
+      const locations = await optionalRead<AnyRow[]>(ctx, 'stock.listLocations', {}, url, req, [])
+      const locationNames = new Map(locations.map((location) => [String(location.id), String(location.name)]))
+      const ruleValues = (routeId: string, key: string) =>
+        [
+          ...new Set(
+            rules
+              .filter((rule) => String(rule.routeId) === routeId)
+              .map((rule) => {
+                const value = String(rule[key] ?? '')
+                return key === 'action'
+                  ? selectionLabel(_, 'ruleAction', value)
+                  : (locationNames.get(value) ?? '')
+              })
+              .filter(Boolean),
+          ),
+        ].join(' · ')
       const ruleCountByRoute = new Map<string, number>()
       for (const rule of rules) {
         const routeId = String(rule.routeId)
@@ -1250,6 +1311,9 @@ export const routes: Record<string, RouteEntry> = {
               id: String(row.id),
               name: localizedGeneratedRouteName(_, row),
               sequence: Number(row.sequence),
+              sources: ruleValues(String(row.id), 'locationSrcId'),
+              destinations: ruleValues(String(row.id), 'locationDestId'),
+              ruleActions: ruleValues(String(row.id), 'action'),
               ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
               href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
             })),

@@ -20,6 +20,8 @@ export type LocationListRow = {
   completeName: string
   usage: string
   warehouse: string
+  parentLocation?: string
+  productCount?: number | null
 }
 
 export type LocationsListScreenOptions = {
@@ -60,6 +62,19 @@ export const locationListColumns = (_: Translator): Array<Column<LocationListRow
     key: 'warehouse',
     label: _('stock_backend.location.col.warehouse'),
     cell: (row) => row.warehouse || '—',
+  },
+  {
+    key: 'parentLocation',
+    label: _('stock_backend.location.col.parent'),
+    cell: (row) => row.parentLocation || '—',
+    wrap: true,
+  },
+  {
+    key: 'productCount',
+    label: _('stock_backend.location.col.products'),
+    cell: (row) => (row.productCount == null ? '—' : String(row.productCount)),
+    kind: 'number',
+    align: 'end',
   },
 ]
 
