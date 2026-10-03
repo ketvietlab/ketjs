@@ -651,7 +651,14 @@ export function createResourceScreens(ctx: StudioContext) {
             throw Object.assign(new Error(ctx.tr('website.resource.validation')), { code: 'validation' })
           await ctx.call(
             'website_studio.saveResource',
-            { siteId: ctx.site().id, kind, id: record.id, expectedRevisionId: record.revisionId, values },
+            {
+              // The first site is made before there is one to stand in.
+              siteId: kind === 'sites' ? (ctx.boot().site?.id ?? null) : ctx.site().id,
+              kind,
+              id: record.id,
+              expectedRevisionId: record.revisionId,
+              values,
+            },
             record.revisionId ? {} : { key: record.id },
           )
           pendingId = null

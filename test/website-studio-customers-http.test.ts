@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
+import { websiteBackendWith } from '@ketvietlab/ketsuite'
 import { bootWebsiteStudio } from './fixtures/website-studio.ts'
 
 /**
@@ -264,4 +265,110 @@ test('Studio settings read and save the site itself, refusing a stale save', asy
   const stale = await save(site.revisionId, 'Lành cũ')
   assert.equal(stale.status, 400)
   assert.match(String(stale.message), /đã thay đổi/)
+})
+
+test('a site made in the Studio starts with the look its deployment chose; the others keep theirs', async (t) => {
+  assert.throws(() => websiteBackendWith({ defaultPreset: 'spa' as never }), /unknown Studio preset/)
+  const { app } = await bootWebsiteStudio(undefined, { studio: { defaultPreset: 'hotel' } })
+  t.after(() => app.close())
+  const client = app.client.anonymous()
+  await client.login({ login: 'studio-designer', password: 'studio-local' })
+  const call = async (name: string, input: Row) => {
+    const response = await client.post('/website/api/' + name, JSON.stringify(input), {
+      headers: { 'content-type': 'application/json' },
+    })
+    return { status: response.status, ...((await response.json()) as { value: Row; message?: string }) }
+  }
+  const preset = async (siteId: string) =>
+    ((await call('website_studio.listResources', { siteId, kind: 'themes' })).value.rows as Row[])[0]!.preset
+  // The form sends no site to stand in when it makes the first one.
+  const create = () =>
+    call('website_studio.saveResource', {
+      siteId: null,
+      kind: 'sites',
+      id: 'site-an-tru',
+      expectedRevisionId: null,
+      values: { title: 'An Trú', code: 'an-tru', defaultLocale: 'vi', host: 'an-tru.example' },
+    })
+  const made = await create()
+  assert.equal(made.status, 200, String(made.message))
+  assert.deepEqual([made.value.id, made.value.title, made.value.code], ['site-an-tru', 'An Trú', 'an-tru'])
+  assert.equal(await preset('site-an-tru'), 'hotel')
+  const boot = (await call('website_studio.bootstrap', { site: 'site-an-tru' })).value
+  assert.equal((boot.site as Row).host, 'an-tru.example')
+  // A site made before keeps the look it renders with now.
+  assert.equal(await preset('site-a'), 'default')
+  // Sending the same create again answers with the site it made.
+  const again = await create()
+  assert.equal(again.status, 200, String(again.message))
+  assert.equal(again.value.id, 'site-an-tru')
+})
+
+test('the password-reset mail is written in the Studio by whoever holds its role, and must carry the link', async (t) => {
+  const { app, fixture, revision } = await bootWebsiteStudio()
+  t.after(() => app.close())
+  const client = app.client.anonymous()
+  await client.login({ login: 'studio-designer', password: 'studio-local' })
+  const call = async (name: string, input: Row) => {
+    const response = await client.post('/website/api/' + name, JSON.stringify(input), {
+      headers: { 'content-type': 'application/json' },
+    })
+    return { status: response.status, ...((await response.json()) as { value: Row; message?: string }) }
+  }
+  const capabilities = async () =>
+    ((await call('website_studio.bootstrap', { site: 'site-a' })).value.actor as Row).capabilities as string[]
+  // Designing the site is not wording the company's security mail.
+  assert.ok(!(await capabilities()).includes('website.customer.mail'))
+  assert.equal((await call('website_studio.customerMail', {})).status, 403)
+
+  await fixture('user.applyRoleTemplate', {
+    roleId: 'studio-customer-mail',
+    templateKey: 'website.customer-mail',
+    expectedRoleRevision: 0,
+    expectedAuthorizationRevision: await revision(),
+    idempotencyKey: 'apply-customer-mail',
+  })
+  await fixture('user.assignScopedRole', {
+    id: 'designer-customer-mail',
+    userId: 'studio-designer',
+    roleId: 'studio-customer-mail',
+    scopeKind: 'company',
+    companyId: 'studio-a',
+    expectedAuthorizationRevision: await revision(),
+    idempotencyKey: 'designer-customer-mail',
+  })
+  assert.ok((await capabilities()).includes('website.customer.mail'))
+  const empty = (await call('website_studio.customerMail', {})).value
+  assert.equal(empty.template, null)
+  assert.deepEqual(empty.keys, ['siteTitle', 'displayName', 'resetUrl'])
+
+  const save = (expectedVersion: number | null, text: string) =>
+    call('website_studio.saveCustomerMail', {
+      expectedVersion,
+      values: {
+        fromAddress: 'cskh@lanh.example',
+        fromName: 'Lành',
+        replyTo: '',
+        subject: 'Đặt lại mật khẩu tại {{siteTitle}}',
+        text,
+        active: true,
+      },
+    })
+  const noLink = await save(null, 'Chào {{displayName}}, hãy liên hệ cửa hàng.')
+  assert.equal(noLink.status, 400)
+  assert.match(String(noLink.message), /\{\{resetUrl\}\}/)
+  const unknown = await save(null, '{{resetUrl}} {{password}}')
+  assert.equal(unknown.status, 400)
+  assert.match(String(unknown.message), /biến/)
+
+  const saved = await save(null, 'Chào {{displayName}}, mở {{resetUrl}} để chọn mật khẩu mới.')
+  assert.equal(saved.status, 200, String(saved.message))
+  const template = saved.value.template as Row
+  assert.deepEqual(
+    [template.fromAddress, template.fromName, template.active, template.version],
+    ['cskh@lanh.example', 'Lành', true, 1],
+  )
+  const stale = await save(null, 'Mở {{resetUrl}}.')
+  assert.equal(stale.status, 400)
+  assert.match(String(stale.message), /người khác sửa/)
 })

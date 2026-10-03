@@ -40,11 +40,9 @@ export function createOverview(ctx: StudioContext): Screen<Overview> {
           title={site.name}
           layout="flow"
           actions={
-            <LinkButton
-              label={tr('website.overview.openSite')}
-              href={ctx.href('public')}
-              variant="secondary"
-            />
+            site.url ? (
+              <LinkButton label={tr('website.overview.openSite')} href={site.url} variant="secondary" />
+            ) : null
           }
           body={
             <Stack
