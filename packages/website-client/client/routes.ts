@@ -7,80 +7,6 @@ import type { WebsiteRoute } from './extensions.ts'
 export const navGroups = Object.freeze(['home', 'content', 'experience', 'settings'])
 
 export const coreRoutes: Record<string, WebsiteRoute> = {
-  'shop-receipt': { title: 'website.visitor.receipt', path: 'visit/checkout/result/:id', frame: 'workspace' },
-  shop: {
-    title: 'website.visitor.shop',
-    path: 'visit/shop',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'shop-product': {
-    title: 'website.visitor.product',
-    path: 'visit/shop/products/:id',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'shop-cart': {
-    title: 'website.visitor.cart',
-    path: 'visit/cart',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'shop-checkout': {
-    title: 'website.visitor.checkout',
-    path: 'visit/checkout',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'own-orders': {
-    title: 'website.visitor.orders',
-    path: 'visit/account/orders',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'own-order': {
-    title: 'website.visitor.order',
-    path: 'visit/account/orders/:id',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  stays: {
-    title: 'website.visitor.stays',
-    path: 'visit/stays',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'stay-property': {
-    title: 'website.visitor.property',
-    path: 'visit/stays/:id',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'stay-checkout': {
-    title: 'website.visitor.booking',
-    path: 'visit/booking',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'own-bookings': {
-    title: 'website.visitor.bookings',
-    path: 'visit/account/bookings',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'own-booking': {
-    title: 'website.visitor.bookingDetail',
-    path: 'visit/account/bookings/:id',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-  'public-blog': {
-    title: 'website.visitor.blog',
-    path: 'visit/blog',
-    frame: 'workspace',
-    query: ['q', 'category', 'page', 'quote'],
-  },
-
   overview: {
     title: 'website.route.overview',
     path: 'overview',
@@ -107,7 +33,7 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
   posts: {
     title: 'website.route.posts',
     path: 'posts',
-    nav: { group: 'content', icon: 'list' },
+    nav: { group: 'content', icon: 'newspaper' },
     query: ['q', 'status'],
   },
   'post-new': {
@@ -132,43 +58,11 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
     path: 'visit/forms/receipt/:id',
     frame: 'workspace',
   },
-  'visitor-table': { title: 'website.adapter.chooseSlot', path: 'visit/table-booking', frame: 'workspace' },
-  'visitor-contact': {
-    title: 'website.adapter.choosePurpose',
-    path: 'visit/contact/sales',
-    frame: 'workspace',
+  forms: {
+    title: 'website.route.forms',
+    path: 'forms',
+    nav: { group: 'experience', icon: 'clipboard-list' },
   },
-  'visitor-account': {
-    title: 'website.route.visitorAccount',
-    path: 'visit/account',
-    frame: 'workspace',
-    query: ['returnTo'],
-  },
-  'visitor-register': {
-    title: 'website.account.register',
-    path: 'visit/account/register',
-    frame: 'workspace',
-    query: ['returnTo'],
-  },
-  'visitor-login': {
-    title: 'website.account.login',
-    path: 'visit/account/login',
-    frame: 'workspace',
-    query: ['returnTo'],
-  },
-  'visitor-recovery': {
-    title: 'website.account.recovery',
-    path: 'visit/account/recovery',
-    frame: 'workspace',
-    query: ['returnTo'],
-  },
-  public: {
-    title: 'website.route.public',
-    path: 'visit',
-    query: ['path', 'q', 'type', 'page'],
-    frame: 'workspace',
-  },
-  forms: { title: 'website.route.forms', path: 'forms', nav: { group: 'experience', icon: 'mail' } },
   submissions: { title: 'website.route.submissions', path: 'forms/:id/submissions', query: ['status'] },
   'submission-detail': {
     title: 'website.route.submissions',
@@ -176,15 +70,10 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
     capability: 'website.submission.manage',
   },
   'visitor-form': { title: 'website.route.forms', path: 'visit/forms/:id', frame: 'workspace' },
-  adapters: {
-    title: 'website.route.adapters',
-    path: 'adapters',
-  },
-  adapter: { title: 'website.route.adapters', path: 'adapters/:id', frame: 'workspace' },
   settings: {
     title: 'website.route.settings',
     path: 'settings',
-    nav: { group: 'settings', icon: 'sliders-horizontal' },
+    nav: { group: 'settings', icon: 'settings' },
     capability: 'website.site.manage',
   },
   customers: {
@@ -210,7 +99,7 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
 }
 
 for (const [key, type, icon] of [
-  ['categories', 'category', 'list'],
+  ['categories', 'category', 'folder-tree'],
   ['tags', 'tag', 'tag'],
 ]) {
   coreRoutes[key] = {
@@ -231,10 +120,10 @@ for (const [key, schema] of Object.entries(resourceSchemas)) {
   const icons: Record<string, string> = {
     taxonomy: 'tag',
     'taxonomy-sets': 'tag',
-    menus: 'list',
+    menus: 'menu',
     domains: 'globe',
     seo: 'search',
-    themes: 'settings',
+    themes: 'palette',
     sites: 'globe',
     templates: 'layout-dashboard',
   }

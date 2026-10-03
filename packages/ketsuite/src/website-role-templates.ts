@@ -34,3 +34,15 @@ export const websiteRoleTemplates = {
     bundles: [...author, 'website.publish', 'website_form.operate', 'website_form.sensitive'],
   },
 } satisfies Record<string, RoleTemplateDef>
+
+/**
+ * The wording and sender of the customer password-reset mail. Separate from `websiteRoleTemplates`
+ * because only a deployment that composes `website_customer_mail` has these bundles.
+ */
+export const websiteCustomerMailRoleTemplates = {
+  'website.customer-mail': {
+    version: 1,
+    labels: { vi: 'Website · Email tài khoản khách', en: 'Website · Customer account email' },
+    bundles: [...read, 'website_customer_mail.view', 'website_customer_mail.configure'],
+  },
+} satisfies Record<string, RoleTemplateDef>

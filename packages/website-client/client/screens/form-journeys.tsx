@@ -12,8 +12,8 @@ import {
   Status,
 } from '@ketvietlab/design-system'
 import { CommandButton } from '../ui.tsx'
-import { publicFrame } from './visitor-commerce.tsx'
 import { destinationStatus, formatDate, formatTime, newId } from './format.ts'
+import type { JSXChild } from '@ketvietlab/ketjs-view/jsx-runtime'
 import type { FormField, Screen, StudioContext } from '../types.ts'
 
 /** Where an ERP-routed submission went and where it stands there. */
@@ -38,12 +38,6 @@ type SubmissionDetail = {
     formRevisionId?: string | null
     consentVersion?: string | null
     retentionUntil?: string | null
-    delivery?: {
-      attempt?: number
-      state?: string
-      recipient?: string | null
-      attempts?: { attempt: number; at: string; state: string }[]
-    } | null
     destination?: Destination | null
     audit?: { at: string; action: string }[]
   }
@@ -58,6 +52,32 @@ type VisitorFormData = {
  * The ERP module this submission was handed to, in that module's words. The Website keeps its own
  * copy; this says where the request went and where it stands there.
  */
+/** A form and its receipt as the visitor meets them, under the site's name. */
+const visitorFrame = (ctx: StudioContext, title: string, body: JSXChild) => {
+  const site = ctx.site()
+  return (
+    <div class="website-visitor" data-theme-preset="default">
+      <header class="website-visitor-header">
+        {site.url ? (
+          <a class="website-visitor-brand" href={site.url}>
+            {site.name}
+          </a>
+        ) : (
+          <span class="website-visitor-brand">{site.name}</span>
+        )}
+      </header>
+      <main class="website-visitor-main">
+        <header class="website-visitor-title">
+          <div>
+            <h1>{title}</h1>
+          </div>
+        </header>
+        {body}
+      </main>
+    </div>
+  )
+}
+
 const destinationBlock = (ctx: StudioContext, destination: Destination | null | undefined) =>
   destination ? (
     <Stack
@@ -180,67 +200,8 @@ export function createSubmissionDetail(ctx: StudioContext) {
                         label: ctx.tr('website.formJourney.retention'),
                         value: formatDate(data.submission.retentionUntil),
                       },
-                      {
-                        id: 'delivery',
-                        label: ctx.tr('website.formJourney.delivery'),
-                        value: data.submission.delivery
-                          ? ctx.tr(`website.delivery.${data.submission.delivery.state ?? 'pending'}`)
-                          : '—',
-                      },
-                      {
-                        id: 'recipient',
-                        label: ctx.tr('website.resource.form-editor.recipient'),
-                        value: data.submission.delivery?.recipient ?? '—',
-                      },
                     ]}
                   />,
-                  // Only the fixture host simulates a delivery; a real one reports none here.
-                  data.submission.delivery ? (
-                    <Notice
-                      title={ctx.tr('website.formJourney.deliveryMock')}
-                      message={ctx.tr('website.formJourney.deliveryMockHelp')}
-                      tone="info"
-                      actions={
-                        ['pending', 'failed'].includes(data.submission.delivery?.state ?? '') ? (
-                          <CommandButton
-                            label={ctx.tr(
-                              data.submission.delivery.state === 'failed'
-                                ? 'website.formJourney.retry'
-                                : 'website.formJourney.process',
-                            )}
-                            command="submission.process"
-                            disabled={ctx.busy() || !ctx.can('website.submission.manage')}
-                          />
-                        ) : null
-                      }
-                    />
-                  ) : null,
-                  data.submission.delivery ? (
-                    <DataTable
-                      emptyTitle={ctx.tr('website.formJourney.attemptsEmpty')}
-                      emptyMessage={ctx.tr('website.formJourney.attemptsEmptyHelp')}
-                      rows={data.submission.delivery.attempts ?? []}
-                      id={(r) => String(r.attempt)}
-                      columns={[
-                        {
-                          key: 'attempt',
-                          label: ctx.tr('website.formJourney.attempt'),
-                          cell: (r) => r.attempt,
-                        },
-                        {
-                          key: 'at',
-                          label: ctx.tr('website.formJourney.at'),
-                          cell: (r) => formatTime(r.at),
-                          kind: 'date',
-                        },
-                        {
-                          key: 'state',
-                          label: ctx.tr('website.formJourney.delivery'),
-                          cell: (r) => ctx.tr(`website.delivery.${r.state}`),
-                        },
-                      ]}
-                    />
-                  ) : null,
                   destinationBlock(ctx, data.submission.destination),
                   <DataTable
                     emptyTitle={ctx.tr('website.formJourney.auditEmpty')}
@@ -270,14 +231,6 @@ export function createSubmissionDetail(ctx: StudioContext) {
       />
     ),
     commands: {
-      'submission.process': async () => {
-        await ctx.call('website_studio.processSubmissionDelivery', {
-          siteId: ctx.site().id,
-          id: current.submission.id,
-          expectedAttempt: current.submission.delivery?.attempt ?? 0,
-        })
-        await ctx.refresh()
-      },
       'submission.retryDestination': async () => {
         await ctx.call('website_form.retryDelivery', { siteId: ctx.site().id, id: current.submission.id })
         ctx.notify(ctx.tr('website.formJourney.destinationQueued'))
@@ -310,7 +263,7 @@ export function createVisitorForm(ctx: StudioContext) {
       return { ...loaded, sent }
     },
     view: (data) =>
-      publicFrame(
+      visitorFrame(
         ctx,
         data.form.title,
         <Surface
@@ -423,7 +376,7 @@ export function createVisitorReceipt(ctx: StudioContext) {
         { signal },
       ),
     view: (data) =>
-      publicFrame(
+      visitorFrame(
         ctx,
         ctx.tr('website.formJourney.sent'),
         <Surface
@@ -432,7 +385,11 @@ export function createVisitorReceipt(ctx: StudioContext) {
               title={data.receipt}
               message={`${ctx.tr('website.formJourney.next')} · ${data.createdAt}`}
               tone="positive"
-              actions={<LinkButton label={ctx.tr('website.overview.openSite')} href={ctx.href('public')} />}
+              actions={
+                ctx.site().url ? (
+                  <LinkButton label={ctx.tr('website.overview.openSite')} href={ctx.site().url!} />
+                ) : null
+              }
             />
           }
         />,

@@ -1,9 +1,6 @@
 import { renderEntryBody } from '../post-document.tsx'
-import { LiveDescription } from '../live-description.tsx'
 import { ArchiveActions } from '../archive-actions.tsx'
 import { postFields, readPostFields } from './post-fields.tsx'
-import { publicFrame } from './visitor-commerce.tsx'
-import { publicMetadata } from '../metadata.ts'
 import {
   WorkspacePage,
   RecordPage,
@@ -20,46 +17,14 @@ import {
 import { CommandButton, fragments } from '../ui.tsx'
 import { safeHref } from '../renderer.tsx'
 import { formatTime } from './format.ts'
-import type { PublicPageData } from '../metadata.ts'
-import type { PublicMenu } from './visitor-commerce.tsx'
 import type { Entry, Screen, SiteTheme, StudioContext, TaxonomyTerm, Viewport } from '../types.ts'
 import type { EntryHistory, RevisionChange } from './builder-types.ts'
-import { skinnedPreset } from '../theme/presets.ts'
 
 /** `website_studio.preview`: one revision of a page, the site's look, and the share link if any. */
 type PreviewData = {
   entry: Entry
   theme?: SiteTheme | null
   preview?: { audience: string; expiresAt: string; url?: string | null; token: string } | null
-}
-/** A category or tag page: its own images and description above the posts it holds. */
-type PublicArchive = {
-  id: string
-  title: string
-  path?: string
-  cover?: string
-  coverAlt?: string
-  thumbnail?: string
-  thumbnailAlt?: string
-  descriptionDoc?: string
-  description?: string
-}
-type PublicRow = { id: string; title: string; excerpt?: string; path: string }
-/** `website_studio.publicSite`: what one visitor address shows. */
-type PublicSite = PublicPageData & {
-  entry?: Entry | null
-  archive?: PublicArchive | null
-  theme?: SiteTheme | null
-  menus?: PublicMenu[] | null
-  profile?: string
-  publicationId?: string
-  total: number
-  indexState: string
-  rows: PublicRow[]
-  page: number
-  pageCount: number
-  related: { title: string; path: string }[]
-  forms: { id: string; title: string }[]
 }
 
 export function createEntryDetails(ctx: StudioContext) {
@@ -447,8 +412,13 @@ export function createPreview(ctx: StudioContext) {
                     profile: route.query.profile ?? 'guest',
                     viewport: (route.query.device ?? 'desktop') as Viewport,
                     preset: data.theme?.preset,
+                    // A site address opens the published page; there is no visitor view in the Studio.
                     href: (path) =>
-                      path.startsWith('/') ? ctx.href('public', {}, { path }) : safeHref(path),
+                      path.startsWith('/')
+                        ? ctx.site().url
+                          ? `${ctx.site().url}${path}`
+                          : '#'
+                        : safeHref(path),
                   })}
                 </div>
               </div>,
@@ -484,217 +454,4 @@ export function createPreview(ctx: StudioContext) {
       },
     },
   } satisfies Screen<PreviewData>
-}
-
-export function createPublicSite(ctx: StudioContext) {
-  const destination = (path: string) => {
-    const key = (
-      { '/shop': 'shop', '/stays': 'stays', '/blog': 'public-blog', '/account': 'visitor-account' } as Record<
-        string,
-        string
-      >
-    )[path]
-    if (key) return ctx.href(key)
-    if (path === '/dat-ban') return ctx.href('visitor-table')
-    return path?.startsWith('/') ? ctx.href('public', {}, { path }) : safeHref(path)
-  }
-  return {
-    readKey: (route) => [route.query.path, route.query.q, route.query.type, route.query.page],
-    metadata: publicMetadata,
-    read: (route, signal) =>
-      ctx.call<PublicSite>(
-        'website_studio.publicSite',
-        {
-          siteId: ctx.site().id,
-          path: route.query.path ?? '/',
-          search: route.query.q ?? '',
-          type: route.query.type ?? 'all',
-          page: route.query.page ?? 1,
-        },
-        { signal },
-      ),
-    view: (data, route) =>
-      publicFrame(
-        ctx,
-        route.query.q
-          ? ctx.tr('website.search.label')
-          : (data.entry?.title ?? data.archive?.title ?? data.site.name),
-        <Stack
-          items={[
-            <details
-              class="website-public-search"
-              open={route.query.q || !skinnedPreset(data.theme?.preset) ? true : null}
-            >
-              <summary hidden={!skinnedPreset(data.theme?.preset)}>{ctx.tr('website.search.label')}</summary>
-              <form id="public-search">
-                <TextField
-                  id="public-query"
-                  name="q"
-                  label={ctx.tr('website.search.label')}
-                  value={route.query.q ?? ''}
-                />
-                <Select
-                  id="public-type"
-                  name="type"
-                  label={ctx.tr('website.search.type')}
-                  value={route.query.type ?? 'all'}
-                  options={['all', 'page', 'post'].map((value) => ({
-                    value,
-                    label: ctx.tr(`website.search.type.${value}`),
-                  }))}
-                />
-                <CommandButton
-                  label={ctx.tr('website.search.submit')}
-                  command="public.search"
-                  type="submit"
-                  form="public-search"
-                />
-              </form>
-            </details>,
-            route.query.q ? (
-              <p>
-                {ctx.tr('website.list.results', { count: data.total })} ·{' '}
-                {ctx.tr(`website.search.index.${data.indexState}`)}
-              </p>
-            ) : null,
-            data.entry?.type === 'post' && !route.query.q ? (
-              <>
-                <p>
-                  {data.entry.author || data.entry.updatedBy} ·{' '}
-                  {data.entry.publishedAt || data.entry.updatedAt}
-                </p>
-                {data.entry.cover ? (
-                  <figure class="website-media-preview">
-                    <img src={safeHref(data.entry.cover)} alt={data.entry.coverAlt || data.entry.title} />
-                  </figure>
-                ) : null}
-                <p>{data.entry.excerpt ?? ''}</p>
-              </>
-            ) : null,
-            data.archive?.cover ? (
-              <figure class="website-media-preview">
-                <img src={safeHref(data.archive.cover)} alt={data.archive.coverAlt ?? ''} />
-              </figure>
-            ) : null,
-            data.archive?.thumbnail ? (
-              <img
-                class="website-taxonomy-image-thumbnail"
-                src={safeHref(data.archive.thumbnail)}
-                alt={data.archive.thumbnailAlt ?? ''}
-              />
-            ) : null,
-            data.archive && (data.archive.descriptionDoc || data.archive.description) ? (
-              <LiveDescription
-                id={data.archive.id}
-                revision={data.publicationId}
-                value={data.archive.descriptionDoc}
-                text={data.archive.description}
-                label={ctx.tr('website.taxonomy.description')}
-                readOnly
-              />
-            ) : null,
-            route.query.q || data.archive ? (
-              <DataTable
-                rows={data.rows}
-                id={(r) => r.id}
-                rowHref={(r) => ctx.href('public', {}, { path: r.path })}
-                columns={[
-                  {
-                    key: 'title',
-                    label: ctx.tr('website.entry.title'),
-                    cell: (r) => (
-                      <>
-                        <strong>{r.title}</strong>
-                        <p>{r.excerpt}</p>
-                      </>
-                    ),
-                    priority: 'primary',
-                  },
-                ]}
-                emptyTitle={ctx.tr('website.visitor.empty')}
-                emptyMessage={ctx.tr('website.visitor.emptyHelp')}
-              />
-            ) : data.entry ? (
-              <div
-                class="wt-site"
-                data-theme-preset={data.theme?.preset ?? 'default'}
-                data-accent={data.theme?.accent ?? 'green'}
-                data-font={data.theme?.font ?? 'sans'}
-                data-spacing={data.theme?.spacing ?? 'comfortable'}
-                data-buttons={data.theme?.buttons ?? 'rounded'}
-              >
-                {renderEntryBody(data.entry, {
-                  headingLevel:
-                    skinnedPreset(data.theme?.preset) && data.entry.layout[0]?.type === 'website.hero'
-                      ? 1
-                      : 2,
-                  preset: data.theme?.preset,
-                  locale: data.entry.locale,
-                  profile: data.profile,
-                  href: destination,
-                })}
-              </div>
-            ) : (
-              <Notice
-                title={ctx.tr('website.content.notFound')}
-                message={ctx.tr('website.content.notFoundHelp')}
-                tone="warning"
-              />
-            ),
-            route.query.q || data.archive ? (
-              <nav aria-label={ctx.tr('website.search.pagination')}>
-                {data.page > 1 ? (
-                  <LinkButton
-                    label={ctx.tr('website.search.previous')}
-                    href={ctx.href('public', {}, { ...route.query, page: String(data.page - 1) })}
-                  />
-                ) : null}
-                <span>
-                  {data.page}/{data.pageCount}
-                </span>
-                {data.page < data.pageCount ? (
-                  <LinkButton
-                    label={ctx.tr('website.search.next')}
-                    href={ctx.href('public', {}, { ...route.query, page: String(data.page + 1) })}
-                  />
-                ) : null}
-              </nav>
-            ) : null,
-            data.entry?.type === 'post' && !route.query.q ? (
-              <Surface
-                title={ctx.tr('website.post.related')}
-                body={fragments(
-                  data.related.map((r) => (
-                    <LinkButton label={r.title} href={ctx.href('public', {}, { path: r.path })} />
-                  )),
-                )}
-              />
-            ) : null,
-            fragments(
-              data.forms.map((form) => (
-                <LinkButton label={form.title} href={ctx.href('visitor-form', { id: form.id })} />
-              )),
-            ),
-          ]}
-        />,
-        {
-          brand: data.site.name,
-          menus: data.menus,
-          theme: data.theme,
-          resolveLink: destination,
-          titleVisible:
-            !!route.query.q ||
-            !skinnedPreset(data.theme?.preset) ||
-            data.entry?.layout[0]?.type !== 'website.hero',
-        },
-      ),
-    commands: {
-      'public.search': async (_, form) =>
-        ctx.navigate(
-          'public',
-          {},
-          { q: String(form!.get('q') ?? '').trim(), type: String(form!.get('type') ?? 'all') },
-        ),
-    },
-  } satisfies Screen<PublicSite>
 }

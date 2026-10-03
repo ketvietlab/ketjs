@@ -1,4 +1,5 @@
 import { styleKeys, studioStyleDefaults } from '../../website/studio-style.ts'
+import type { StudioPreset } from '../../website/studio-style.ts'
 import { pageTemplates } from '../../website/studio-content.ts'
 import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
@@ -6,6 +7,11 @@ import { entryProjection } from './context.ts'
 import { CUSTOMER_SIGNIN_PATH } from './public.ts'
 import type { Route, ServeContext, Row } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
+/** What a deployment decides about its Studio. */
+export type StudioOptions = {
+  /** The look a site made in the Studio starts with. Sites that already exist keep theirs. */
+  defaultPreset?: StudioPreset
+}
 export type Snapshot = {
   sites: Row[]
   site: Row | null
@@ -64,6 +70,11 @@ const capabilities: Record<string, string[]> = {
   ],
   // Issuing finds the customer among the company's partners first.
   'website.customer.issue': ['website.issueCustomerAccess', 'partner.listPartners'],
+  // Absent where the deployment does not compose website_customer_mail: there is no mail to word.
+  'website.customer.mail': [
+    'website_customer_mail.passwordResetTemplate',
+    'website_customer_mail.savePasswordResetTemplate',
+  ],
 }
 /** Optional modules a site can be bound to, by the prefix of their functions. */
 const bindingModules: [string, string][] = [
@@ -268,7 +279,7 @@ const seoResource = (entry: Row) => {
     revisionId: entry.revisionId,
   }
 }
-export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
+export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: StudioOptions = {}) {
   const call = async (name: string, input: Row = {}) => {
     const result = await ctx.call(name, input, url, req, {
       idempotencyKey:
@@ -384,9 +395,14 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         if ((await Promise.all(functions.map((fn) => ctx.allows(fn, url, req)))).every(Boolean))
           allowed.push(key)
       }
+      const site = data.site ? publicSite(data.site, data.domains) : null
       return {
         actor: { id: identity?.userId, name: identity?.userId, role: '', capabilities: allowed },
-        site: data.site ? publicSite(data.site, data.domains) : null,
+        // Where visitors open the site: this origin when the ERP and the site share a host.
+        site: site && {
+          ...site,
+          url: site.host ? (url.hostname === site.host ? url.origin : `${url.protocol}//${site.host}`) : '',
+        },
         sites: data.sites.map((s) => ({
           id: s.id,
           name: s.title || s.name,
@@ -786,11 +802,46 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         return menuOf(data.site!)
       }
       if (input.kind === 'sites') {
-        const site = (await snapshot(input.siteId)).site!
-        if (input.id !== site.id) return fail('notFound', 'Không tìm thấy website.')
+        const data = await snapshot(input.siteId)
+        const values = row(input.values)
+        const site = data.sites.find((s) => s.id === input.id)
+        if (!site) {
+          if (input.expectedRevisionId) fail('notFound', 'Không tìm thấy website.')
+          const title = String(values.title ?? '').trim()
+          // The new site renders with the theme module the others use, or the one this deployment composes.
+          const theme =
+            data.site?.theme ??
+            ctx.manifest.order.find((name) => ctx.manifest.modules[name]?.kind === 'theme') ??
+            fail('validation', 'Chưa có giao diện nào để tạo website.')
+          await call('website.saveSite', {
+            id: input.id,
+            name: String(values.code || title).trim(),
+            title,
+            defaultLocale: String(values.defaultLocale || 'vi'),
+            theme,
+          })
+          if (options.defaultPreset)
+            await call('website.saveStudioStyle', {
+              siteId: input.id,
+              expectedRevisionId: 'initial',
+              values: { preset: options.defaultPreset },
+            })
+          const host = String(values.host ?? '')
+            .trim()
+            .toLowerCase()
+          if (host)
+            await call('website.saveDomain', {
+              id: `${input.id}-domain`,
+              siteId: input.id,
+              host,
+              primary: true,
+            })
+          return siteRecord((await snapshot(input.id)).site!)
+        }
+        // A retried create answers with what it made.
+        if (!input.expectedRevisionId) return siteRecord(site)
         if (input.expectedRevisionId !== siteRecord(site).revisionId)
           fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi lưu.')
-        const values = row(input.values)
         await call('website.saveSite', {
           id: site.id,
           name: String(values.code ?? site.name).trim(),
@@ -801,7 +852,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
           siteGroup: site.siteGroup ?? null,
           active: site.active,
         })
-        return siteRecord((await snapshot(input.siteId)).site!)
+        return siteRecord((await snapshot(site.id)).site!)
       }
       if (input.kind === 'domains') {
         const data = await snapshot(input.siteId)
@@ -1110,6 +1161,22 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
       if (typeof input.selfSignup !== 'boolean') fail('validation', 'Chọn có cho khách tự đăng ký hay không.')
       await call('website.setCustomerSelfSignup', { siteId: data.site!.id, open: input.selfSignup })
       return { selfSignup: input.selfSignup }
+    },
+    // One mail for the company: every site's customers are sent the same wording, with its own title.
+    'website_studio.customerMail': async () =>
+      row(await call('website_customer_mail.passwordResetTemplate', {})),
+    'website_studio.saveCustomerMail': async (input) => {
+      const values = row(input.values)
+      await call('website_customer_mail.savePasswordResetTemplate', {
+        fromAddress: String(values.fromAddress ?? ''),
+        fromName: String(values.fromName ?? '') || null,
+        replyTo: String(values.replyTo ?? '') || null,
+        subject: String(values.subject ?? ''),
+        text: String(values.text ?? ''),
+        active: values.active === true,
+        expectedVersion: input.expectedVersion ?? null,
+      })
+      return row(await call('website_customer_mail.passwordResetTemplate', {}))
     },
     'website_studio.customers': async (input) => {
       const data = await snapshot(input.siteId)

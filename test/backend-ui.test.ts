@@ -1880,13 +1880,21 @@ test('ui contract: operational inputs disable autocomplete; public sign-in names
           /type="password" name="password"/.test(match[0]) &&
           /aria-labelledby="wt-signin-password-label"/.test(match[0]) &&
           /autocomplete="current-password"/.test(match[0])
-        if (login || password) continue
+        // The account pages' field helper takes the token as a required argument; the
+        // tokens it is given are checked below, so a field cannot quietly fill anything else.
+        const accountField = /autocomplete=\$\{attributes\.autocomplete\}/.test(match[0])
+        if (login || password || accountField) continue
       }
       const line = source.slice(0, match.index).split('\n').length
       missing.push(`${file}:${line}`)
     }
   }
   assert.deepEqual(missing, [], 'new inputs must not restore browser autocomplete')
+  const tokens = readFileSync('packages/ketsuite/src/ui/website-public.ts', 'utf8').matchAll(
+    /\bautocomplete: '([^']*)'/g,
+  )
+  const credentials = ['username', 'current-password', 'new-password', 'name']
+  for (const [, token] of tokens) assert.ok(credentials.includes(token!), `account field fills "${token}"`)
 })
 
 test('table selection: the checkbox cell is a navigation dead zone', () => {

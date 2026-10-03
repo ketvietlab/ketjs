@@ -186,8 +186,11 @@ Domain states simulate DNS/TLS. Member/account records do not send real invitati
 `website_studio.setEntryArchived` `{siteId,id,archived,expectedRevisionId}` toggles the trash state.
 Both mutations require content.write and use the extension mutation boundary.
 `website_studio.preview` `{siteId,id,revisionId?,token?}` returns `{entry}` from the requested snapshot.
-`website_studio.publicSite` `{siteId,path,search}` reads only revisions in the active manifest.
-The visitor screen is a fixture journey within Studio; it is not production public delivery.
+The Studio has no visitor view of its own. "Xem website" and a page preview's internal links open the
+site at `bootstrap.site.url`: this origin when the ERP and the site share a host, else the primary
+domain, and empty until the site has one (the button is then hidden). `website_studio.publicSite`
+and the simulated shop, stay, account and adapter screens were removed from the client on
+2026-10-03; they remain in the Atlas mock only.
 
 ## Form journeys (NEW BFF)
 
@@ -692,8 +695,7 @@ Atlas mock is unchanged and does not answer these functions.
   values: { displayName, phone, email, password } }` refuses a partner who already has an account
   (`conflict`), because issuing again would silently reset the password.
 - NEW `website_studio.saveCustomerSettings` `{ siteId, selfSignup }` opens or closes self sign-up.
-- Password recovery and the public "my account" pages: see the next section. The visitor-account
-  simulation screens above remain mock-only.
+- Password recovery and the public "my account" pages: see the next section.
 
 ## SEO, domains and customer passwords on the host (2026-10-03)
 
@@ -739,3 +741,20 @@ The Atlas mock is unchanged and does not answer the host behaviour below.
   template named `website.customer.password-reset` with the keys `siteTitle`, `displayName` and
   `resetUrl`. Without an active template, or without a mail provider, nothing is sent; the visitor sees
   the same answer. The delivery body keeps the link, which lapses within 30 minutes.
+- `website_studio.customerMail` `{}` answers `{ template, keys }`, where `template` is `{ fromAddress,
+  fromName, replyTo, subject, text, active, version }` or null until saved. `website_studio.saveCustomerMail`
+  `{ expectedVersion, values: { fromAddress, fromName, replyTo, subject, text, active } }` writes it under
+  the fixed name and keys; the body must carry `{{resetUrl}}`, and a stale `expectedVersion` is a
+  `conflict`. Both need the capability `website.customer.mail` (role template `website.customer-mail`,
+  registered only where `website_customer_mail` is composed). The mail is one per company: Settings
+  shows it on every site.
+
+## Creating a site and its first look (2026-10-03)
+
+`website_studio.saveResource` `{ kind: 'sites', siteId: <current or null>, id: <new>, expectedRevisionId:
+null, values: { title, code, defaultLocale, host } }` creates a site on the host: `website.saveSite` with
+the current site's theme module (or the first composed theme), then the deployment's default Studio
+preset, then `host` as its primary domain. Sending the same create again answers with the site it made.
+A deployment chooses the preset by composing `websiteBackendWith({ defaultPreset })` from
+`@ketvietlab/ketsuite` in place of `websiteBackend`; without it a new site starts on `default`. Sites
+that already exist keep the look they render with.

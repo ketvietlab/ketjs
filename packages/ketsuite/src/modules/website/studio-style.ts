@@ -15,9 +15,11 @@ export const styleKeys = [
   'logo',
   'footer',
 ] as const
-const choices: Record<string, string[]> = {
-  // The bundled presets; the Studio lists the same ones in website-client's theme/presets.ts.
-  preset: ['default', 'cosmetics', 'retail', 'restaurant', 'hotel', 'services'],
+// The bundled presets; the Studio lists the same ones in website-client's theme/presets.ts.
+export const studioPresets = ['default', 'cosmetics', 'retail', 'restaurant', 'hotel', 'services'] as const
+export type StudioPreset = (typeof studioPresets)[number]
+const choices: Record<string, readonly string[]> = {
+  preset: studioPresets,
   accent: ['green', 'indigo', 'orange'],
   font: ['sans', 'serif'],
   spacing: ['compact', 'comfortable', 'spacious'],
