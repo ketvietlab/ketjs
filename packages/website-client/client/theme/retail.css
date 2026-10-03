@@ -1,0 +1,123 @@
+/*
+ * Phố: the bundled Core retail preset. White shelves, ink and a marigold tag; a heavy grotesque display
+ * over a plain sans body, the call-to-action band and footer in ink. Fonts are named, never fetched.
+ * The structure is skin.css; load this after it.
+ */
+:is(.wt-site, .wt-page, .website-visitor)[data-theme-preset="retail"],
+[data-theme-preset="retail"] .wt-page {
+  --wt-ink: #16181a;
+  --wt-muted: #5d6166;
+  --wt-paper: #fff;
+  --wt-accent: #1f6f54;
+  --wt-tint: #f3f3f0;
+  --wt-tint-deep: #e9e8e3;
+  --wt-line: #e3e2dd;
+  --wt-ornament: #e8b53d;
+  --wt-ornament-deep: #8f6510;
+  --wt-ornament-light: #f6d98e;
+  --wt-heading: var(--wt-ink);
+  --wt-band: var(--wt-ink);
+  --wt-footer: var(--wt-ink);
+  --wt-display: Archivo, "Be Vietnam Pro", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wt-body: "Be Vietnam Pro", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wt-display-weight: 800;
+  --wt-display-weight-strong: 700;
+  --wt-radius: 6px;
+  --wt-button-radius: 6px;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="retail"][data-accent="indigo"],
+:is(.wt-site, .website-visitor)[data-theme-preset="retail"][data-accent="indigo"] .wt-page {
+  --wt-accent: #2b3fa8;
+}
+:is(.wt-site, .website-visitor)[data-theme-preset="retail"][data-accent="orange"],
+:is(.wt-site, .website-visitor)[data-theme-preset="retail"][data-accent="orange"] .wt-page {
+  --wt-accent: #c2410c;
+}
+
+[data-theme-preset="retail"] .wt-theme-header > a:first-child strong,
+.website-visitor[data-theme-preset="retail"] .website-visitor-brand {
+  font-size: 1.375rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wt-ink);
+}
+[data-theme-preset="retail"] :is(.wt-theme-header, .website-visitor-header) nav a {
+  font-weight: 500;
+}
+[data-theme-preset="retail"] :is(.wt-theme-header, .website-visitor-header) nav a:hover {
+  text-decoration-thickness: 3px;
+}
+
+/* A flat shelf: the product stands on a framed tile instead of bleeding to the edge. */
+[data-theme-preset="retail"] .wt-page .wt-hero:not(.wt-callout) {
+  background: var(--wt-tint);
+}
+[data-theme-preset="retail"] .wt-page .wt-cover {
+  width: calc(100% - var(--wt-gutter));
+  height: calc(100% - 4rem);
+  min-height: 30rem;
+  margin-block: 2rem;
+  margin-inline-end: var(--wt-gutter);
+  border-radius: var(--wt-radius);
+  background: var(--wt-tint-deep);
+}
+[data-theme-preset="retail"] .wt-page .wt-hero__title {
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+}
+[data-theme-preset="retail"] :is(.wt-page .wt-text__title, .wt-page .wt-text > h2, .wt-page .wt-callout h2) {
+  font-size: clamp(1.875rem, 3vw, 2.625rem);
+  letter-spacing: -0.025em;
+}
+/* The price tag under a centred title. */
+[data-theme-preset="retail"] .wt-page .wt-text[data-align="center"] .wt-text__title::after {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 2px;
+}
+[data-theme-preset="retail"] .wt-page .wt-button {
+  letter-spacing: 0;
+}
+[data-theme-preset="retail"] .wt-page .wt-callout .wt-button:hover {
+  background: var(--wt-ornament-light);
+}
+[data-theme-preset="retail"] .wt-page .wt-columns .wt-image img {
+  background: var(--wt-tint);
+}
+[data-theme-preset="retail"] .wt-page .wt-columns .wt-callout h2 {
+  font-size: 1.5rem;
+}
+[data-theme-preset="retail"] .wt-page .wt-columns .wt-callout .wt-button {
+  border-color: var(--wt-ink);
+  color: var(--wt-ink);
+}
+[data-theme-preset="retail"] .wt-page .wt-columns .wt-callout .wt-button:hover {
+  background: var(--wt-ink);
+  color: var(--wt-paper);
+}
+[data-theme-preset="retail"] .wt-page details.wt-text summary {
+  font: 600 1.25rem / 1.35 var(--wt-body);
+}
+[data-theme-preset="retail"] .wt-page details.wt-text summary::after {
+  color: var(--wt-ink);
+}
+[data-theme-preset="retail"] .wt-page blockquote.wt-text p {
+  font: 700 clamp(1.5rem, 2.4vw, 2rem) / 1.3 var(--wt-display);
+  letter-spacing: -0.02em;
+}
+[data-theme-preset="retail"] :is(.wt-theme-footer, .website-visitor-footer) {
+  border-top: 4px solid var(--wt-ornament);
+}
+
+@container (max-width: 48rem) {
+  /* This file comes after skin.css, so the tile's own size has to be undone here too. */
+  [data-theme-preset="retail"] .wt-page .wt-cover {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    margin: 1.5rem 0 0;
+  }
+  [data-theme-preset="retail"] .wt-page .wt-hero:not(.wt-callout) {
+    padding-top: 0;
+  }
+}

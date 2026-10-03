@@ -23,7 +23,12 @@ export async function buildWebsiteClient() {
       contents: [
         'packages/ketsuite/src/ui/client/live-doc.css',
         'packages/website-client/client/theme/default.css',
+        'packages/website-client/client/theme/skin.css',
         'packages/website-client/client/theme/cosmetics.css',
+        'packages/website-client/client/theme/retail.css',
+        'packages/website-client/client/theme/restaurant.css',
+        'packages/website-client/client/theme/hotel.css',
+        'packages/website-client/client/theme/services.css',
         'packages/website-client/client/theme/public.css',
       ]
         .map((p) => `@import "./${p}";`)
@@ -76,7 +81,12 @@ export async function buildWebsiteClient() {
         'packages/website-client/client/ds-gaps.css',
         'packages/website-client/client/styles.css',
         'packages/website-client/client/theme/default.css',
+        'packages/website-client/client/theme/skin.css',
         'packages/website-client/client/theme/cosmetics.css',
+        'packages/website-client/client/theme/retail.css',
+        'packages/website-client/client/theme/restaurant.css',
+        'packages/website-client/client/theme/hotel.css',
+        'packages/website-client/client/theme/services.css',
       ]
         .map((p) => `@import "./${p}";`)
         .join('\n'),

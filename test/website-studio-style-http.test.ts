@@ -98,4 +98,27 @@ test('Studio site style uses real configuration grants and revision CAS without 
     ),
   )
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 400])
+  // One bundled preset per trade; anything else is refused by the resource schema.
+  let revisionId = String(
+    (await call('website_studio.getResource', { siteId: 'site-a', kind: 'themes', id: 'site-a' })).revisionId,
+  )
+  for (const preset of ['retail', 'restaurant', 'hotel', 'services']) {
+    const next = await call('website_studio.saveResource', {
+      ...request,
+      expectedRevisionId: revisionId,
+      values: { preset },
+    })
+    assert.equal(next.preset, preset)
+    revisionId = String(next.revisionId)
+  }
+  assert.equal(
+    (
+      await send(designer, 'website_studio.saveResource', {
+        ...request,
+        expectedRevisionId: revisionId,
+        values: { preset: 'spa' },
+      })
+    ).status,
+    400,
+  )
 })

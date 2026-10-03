@@ -355,6 +355,20 @@ settings. The opt-in `cosmetics` Atlas scenario seeds `site-cosmetics`; it does 
 The host loads both `theme/default.css` and `theme/cosmetics.css`. No theme script execution or KTL
 contract change is introduced.
 
+### Bundled trade presets (2026-10-03)
+
+`preset` is now `default | cosmetics | retail | restaurant | hotel | services`; the list lives in
+`client/theme/presets.ts` and is mirrored by the host schema in `website/studio-style.ts`. Unknown values
+are still rejected. Every preset except `default` shares one structure, `theme/skin.css` (extracted
+from the former cosmetics stylesheet), and adds its own token file: `cosmetics.css` (Lành),
+`retail.css` (Phố), `restaurant.css` (Bếp Nhà), `hotel.css` (An Trú) and `services.css` (Vững). Each
+file sets colours, type and radius, plus a small signature (hero composition, title ornament, card
+shape). Accent, font, spacing and button choices apply to all of them. Lành renders pixel-identical
+to before the split. The theme card shows `theme/<preset>.svg`, a local vector illustration.
+
+The presets are named after trades, not deployments, and any site may pick any of them; a new site still
+starts on `default`.
+
 ### Review 2: canonical saved revision comparison
 
 `website.diffRevisions` — **Real**: `{ entryId, fromRevisionId, toRevisionId }` →

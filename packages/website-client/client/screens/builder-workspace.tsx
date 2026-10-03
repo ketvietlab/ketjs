@@ -36,6 +36,7 @@ import type {
   SharedMenu,
   SharedTheme,
 } from './builder-types.ts'
+import { themePresets } from '../theme/presets.ts'
 
 /** A page or post in the site's list, for the page switcher and the shared-scope notice. */
 type EntryRow = { id: string; title: string }
@@ -370,7 +371,7 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
                       ''
                     }
                     options={{
-                      preset: ['default', 'cosmetics'],
+                      preset: [...themePresets],
                       accent: ['green', 'indigo', 'orange'],
                       font: ['sans', 'serif'],
                       spacing: ['compact', 'comfortable', 'spacious'],
