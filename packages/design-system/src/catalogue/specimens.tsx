@@ -34,6 +34,7 @@ import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 import { ActionMenu, Menu } from '../interactions/menu/index.tsx'
+import { ContextButton } from '../interactions/context-button/index.tsx'
 import { Popover } from '../interactions/popover/index.tsx'
 import { Tooltip } from '../interactions/tooltip/index.tsx'
 import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
@@ -1705,6 +1706,21 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="More actions"
                 items={[{ id: 'export', label: 'Export report', href: '#data-table' }]}
               />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'context-button',
+        name: 'Context button',
+        description:
+          'Two-line workspace context with server-owned selection and an optional count; it is not a record card.',
+        render: () => (
+          <Inline
+            items={[
+              <ContextButton label="Personal inbox" description="Messaging account" count={5} pressed />,
+              <ContextButton label="Store inbox" description="Official account" count={3} pressed={false} />,
+              <ContextButton label="Unavailable workspace" description="Access required" disabled />,
             ]}
           />
         ),
