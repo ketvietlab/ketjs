@@ -2017,7 +2017,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                   label="Owner"
                   query="Ngọc"
                   value="linh"
-                  options={options}
+                  options={options.map((option) => ({ ...option, leading: <Icon name="user-round" /> }))}
                   open
                   openHref="#comboboxes"
                   closeHref="#comboboxes"

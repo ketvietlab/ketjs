@@ -10,6 +10,12 @@ own the ribbon layout, context visibility, overflow and submitted state. Long
 names truncate within 15rem; the full native button name remains accessible.
 Disabled contexts do not change the server's authorization.
 
+`ComboboxOption.leading` is an additive public decorative slot for identity or
+label color beside the option name. Combobox owns the 8px separation; consumers
+supply the marker without adding another gap. The native option value, name,
+description and disabled state remain unchanged. Options without the slot keep
+their existing DOM and layout.
+
 `attachClientModalInteractions(root)` owns initial focus, Tab containment,
 background inertness, Escape and focus return for `ModalSheet` in `client` mode.
 It delegates closing to the native close button. Opening, server event binding,
@@ -26,7 +32,7 @@ covers selected, unselected and unavailable contexts.
 
 Focused verification for the KétChat consuming deployment:
 
-- `node --import tsx --test test/design-system-context-controls.test.tsx`: 2 pass.
+- `node --import tsx --test test/design-system-context-controls.test.tsx`: 3 pass.
 - `node --test test/design-system-client-modal.test.mjs`: focus lifetime assertions.
 - Scoped JavaScript type check of `runtime/client-modal.js`, inventory and governance.
 - KetPlus Chromium, 1024×768, light: two-line context measured 48px; opening the

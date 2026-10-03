@@ -17,7 +17,7 @@
     "runtimeGaps": 6,
     "typeGaps": 155,
     "cssFiles": 81,
-    "cssLines": 16913
+    "cssLines": 16920
   },
   "rows": [
     {
@@ -966,7 +966,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-context-controls.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-021"
     },
     {
@@ -12116,13 +12116,14 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/combobox/styles.css",
-      "lines": 77,
+      "lines": 84,
       "hooks": [
         "combobox",
         "combobox-empty",
         "combobox-input-row",
         "combobox-listbox",
         "combobox-option",
+        "combobox-option-leading",
         "combobox-toggle",
         "field-control",
         "tag-picker"
