@@ -1,7 +1,7 @@
 {
   "name": "@ketvietlab/ketsuite",
-  "version": "0.1.33",
-  "description": "KetSuite — business modules built on Ket, using only the contract a third-party module has.",
+  "version": "0.1.34",
+  "description": "KetSuite \u2014 business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -63,12 +63,16 @@
     "./ui/icons": {
       "types": "./dist/ui/icons.d.ts",
       "default": "./dist/ui/icons.js"
+    },
+    "./record-modal-client": {
+      "types": "./dist/ui/client/record-modal.d.ts",
+      "default": "./dist/ui/client/record-modal.js"
     }
   },
   "dependencies": {
-    "@ketvietlab/design-system": "0.1.33",
-    "@ketvietlab/ketjs": "0.1.33",
-    "@ketvietlab/ketjs-view": "0.1.33",
+    "@ketvietlab/design-system": "0.1.34",
+    "@ketvietlab/ketjs": "0.1.34",
+    "@ketvietlab/ketjs-view": "0.1.34",
     "chart.js": "4.5.1",
     "ioredis": "^6.0.0",
     "sharp": "0.35.4",
