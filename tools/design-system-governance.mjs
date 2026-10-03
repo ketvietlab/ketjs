@@ -31,7 +31,14 @@ const runtimeExports = [...publicIndex.matchAll(/export\s+\{([\s\S]*?)\}\s+from\
   .filter(Boolean)
   .filter(
     (name) =>
-      !['HOOKS', 'OWNERS', 'attachDesignSystemInteractions', 'initials', 'withQueryState'].includes(name),
+      ![
+        'HOOKS',
+        'OWNERS',
+        'attachDesignSystemInteractions',
+        'attachClientModalInteractions',
+        'initials',
+        'withQueryState',
+      ].includes(name),
   )
   .sort()
 const publicSources = [...publicIndex.matchAll(/from\s+['"]([^'"]+)['"]/gu)]

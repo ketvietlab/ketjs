@@ -1,6 +1,20 @@
 {
   "schemaVersion": "ketjs.design-system-inventory-policy.v1",
   "publicModules": {
+    "./interactions/context-button/index.tsx": {
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 4,
+      "gapTask": null
+    },
+    "./runtime/client-modal.js": {
+      "owner": "Interactions",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 4,
+      "gapTask": null
+    },
     "./data-operations/timeframe-filter/index.tsx": {
       "owner": "Data operations",
       "maturity": "stable",
