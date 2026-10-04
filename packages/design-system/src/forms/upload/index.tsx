@@ -5,8 +5,6 @@ import type { FieldIssue } from '../shared.tsx'
 export const HOOKS = [
   'file-upload',
   'drop-zone',
-  'upload-preview',
-  'upload-caption',
   'upload-status',
   'image-drop-zone',
   'image-drop-preview',
