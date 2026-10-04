@@ -401,7 +401,10 @@ test('design system: a label sits beside its control from tablet width and above
   // Két Design System visual contract L7. The browser check measures this on /layering at 1440 and 390 px;
   // this keeps the rule from being dropped where CI does not run a browser.
   const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
+  assert.match(
+    css,
+    /:has\(> \[data-ui="field"\]\):not\(\[data-ui="date-inputs"\]\):not\(\[data-ui="date-range"\]\):not\(\s*\[data-ui="date-time-picker"\]\s*\) \{\s+container-type: inline-size;/u,
+  )
   for (const query of ['@media (max-width: 47.9375rem)', '@container (max-width: 28rem)']) {
     const start = css.indexOf(query)
     assert.notEqual(start, -1, query)

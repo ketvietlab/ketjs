@@ -67,3 +67,12 @@ period; rolling 7/30/90-day ranges include today. Consumers preserve unrelated q
 and remove obsolete custom `from`/`to` values when changing a fixed period. Keep the 11
 public choices (today, yesterday, last 7 days, this/last week, last 30 days, this/last month,
 last 90 days, this/last year) and translate their labels through the component.
+
+## Temporal record fields
+
+Record `Field` specifications with type `date` use DatePicker; `datetime-local`
+uses DateTimePicker. A date popup anchors to its whole control, commits valid
+selection on close, and discards an incomplete selection. Short scheduling dialogs
+use ModalSheet small. DateTimePicker progressively enhances one native wall-time
+field into date/time controls; its disposable runtime owns synchronization and
+validation. Preserve the canonical name, permission state, help and validation.
