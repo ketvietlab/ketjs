@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
-import { DatePicker, DateRangePicker } from '@ketvietlab/design-system'
+import { DatePicker, DateRangePicker, Field } from '@ketvietlab/design-system'
 import type { DatePickerProps, DatePickerLabels, DateRangePreset } from '@ketvietlab/design-system'
 import { DatePickerExamples, componentRegistry } from '@ketvietlab/design-system/catalogue'
 import { HOOKS } from '../packages/design-system/src/forms/date-time/index.tsx'
@@ -195,4 +195,44 @@ test('automatic range filter omits apply/cancel commands while retaining native 
   assert.doesNotMatch(html, /value="apply"|value="cancel"/)
   assert.match(html, /name="from"/)
   assert.match(html, /name="to"/)
+})
+
+test('single date closes without an Apply command and keeps explicit mode compatible', () => {
+  const props = { id: 'visit-day', name: 'visitDay', label: 'Ngày hẹn', required: true, value: '2026-10-04' }
+  const html = render(<DatePicker {...props} />)
+  assert.match(html, /data-date-apply-on-close="true"/)
+  assert.match(html, /aria-label="Đóng lịch"/)
+  assert.doesNotMatch(html, /value="apply"/)
+  assert.match(render(<DatePicker {...props} applyOnClose={false} />), /value="apply"/)
+})
+
+test('record date fields dispatch to the shared picker; datetime keeps one native submitted value', () => {
+  const html = render(
+    <Field
+      id="due"
+      name="dueAt"
+      label="Hạn"
+      type="datetime-local"
+      value="2026-10-04T09:00"
+      span="full"
+      required
+    />,
+  )
+  assert.match(html, /data-date-mode="datetime"/)
+  assert.match(html, /type="datetime-local" name="dueAt" value="2026-10-04T09:00"/)
+  assert.equal((html.match(/name="dueAt"/g) ?? []).length, 1)
+  assert.match(html, /data-ui="date-time-parts" hidden/)
+  assert.match(html, /type="date" name="" value="2026-10-04"[^>]*disabled/)
+  assert.match(html, /type="time" name="" value="09:00"[^>]*disabled/)
+  assert.match(render(<Field id="day" name="day" label="Ngày" type="date" />), /data-date-mode="single"/)
+})
+
+// A compound control spans a form row, while its children own their internal grid.
+test('record form full-span rules do not reach into date/time parts', () => {
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.doesNotMatch(css, /\[data-ui="form-grid"\] \[data-ui="field"\]/)
+  const auth = readFileSync('packages/ketsuite/src/modules/backend/design/auth.css', 'utf8')
+  assert.doesNotMatch(auth, /^  \[data-ui="field"\]/m)
+  const forms = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
+  assert.doesNotMatch(forms, /\[data-ui="date-picker"\](?!:not\(\[data-date-mode\]\))/)
 })
