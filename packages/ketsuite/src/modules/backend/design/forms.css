@@ -374,14 +374,14 @@
     font-weight: 600;
   }
 
-  [data-ui="date-picker"] {
+  [data-ui="date-picker"]:not([data-date-mode]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: var(--admin-gap-sm);
     min-inline-size: 0;
   }
-  [data-ui="date-picker"] fieldset {
+  [data-ui="date-picker"]:not([data-date-mode]) fieldset {
     display: grid;
     min-inline-size: 0;
     margin: 0;
@@ -400,7 +400,7 @@
     grid-template-columns: repeat(2, minmax(10rem, 1fr));
     gap: var(--admin-gap-sm);
   }
-  [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+  [data-ui="date-picker"]:not([data-date-mode])[data-range="false"] [data-ui="date-picker-fields"] {
     grid-template-columns: minmax(10rem, 18rem);
   }
   [data-ui="date-picker-field"] {
@@ -599,12 +599,12 @@
   }
 
   @media (max-width: 47.9375rem) {
-    [data-ui="date-picker"] {
+    [data-ui="date-picker"]:not([data-date-mode]) {
       grid-template-columns: minmax(0, 1fr);
       align-items: stretch;
     }
     [data-ui="date-picker-fields"],
-    [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+    [data-ui="date-picker"]:not([data-date-mode])[data-range="false"] [data-ui="date-picker-fields"] {
       grid-template-columns: minmax(0, 1fr);
     }
     [data-ui="date-picker-actions"],
