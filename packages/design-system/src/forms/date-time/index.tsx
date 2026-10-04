@@ -72,6 +72,10 @@ export type TemporalProps = Omit<FieldProps, 'type' | 'fields' | 'control' | 'er
 }
 export type DatePickerProps = TemporalProps & CalendarOptions
 export type DateRangePickerProps = CalendarOptions & {
+  /** Compact labelled control for page-heading filters; label remains accessible. */
+  variant?: 'field' | 'filter'
+  /** Commit a valid draft and submit its GET filter when the calendar closes. */
+  applyOnClose?: boolean
   id: string
   label: string
   start: Omit<TemporalProps, 'label' | 'span'>
@@ -171,6 +175,7 @@ const CalendarPanel = (props: {
   id: string
   labels: DatePickerLabels
   presets?: readonly DateRangePreset[]
+  applyOnClose?: boolean
 }): TemplateResult => (
   <div
     data-ui="date-calendar"
@@ -225,12 +230,14 @@ const CalendarPanel = (props: {
     </div>
     <footer data-ui="date-calendar-footer">
       <p data-ui="date-calendar-status" role="status" aria-live="polite" aria-atomic="true" />
-      <ActionGroup
-        actions={[
-          <Button label={props.labels.cancel} name="kv-date-command" value="cancel" />,
-          <Button label={props.labels.apply} name="kv-date-command" value="apply" variant="primary" />,
-        ]}
-      />
+      {!props.applyOnClose && (
+        <ActionGroup
+          actions={[
+            <Button label={props.labels.cancel} name="kv-date-command" value="cancel" />,
+            <Button label={props.labels.apply} name="kv-date-command" value="apply" variant="primary" />,
+          ]}
+        />
+      )}
     </footer>
   </div>
 )
@@ -313,6 +320,8 @@ export const DateRangePicker = (props: DateRangePickerProps): TemplateResult => 
   return (
     <div
       data-ui="date-range"
+      data-variant={props.variant}
+      data-date-apply-on-close={props.applyOnClose ? 'true' : null}
       id={props.id}
       data-date-mode="range"
       data-span={props.span ?? 'full'}
@@ -325,6 +334,7 @@ export const DateRangePicker = (props: DateRangePickerProps): TemplateResult => 
         id={id}
         label={props.label}
         kind="date-range"
+        labelHidden={props.variant === 'filter'}
         required={props.start.required || props.end.required}
         span={props.span ?? 'full'}
         help={help}
@@ -368,7 +378,7 @@ export const DateRangePicker = (props: DateRangePickerProps): TemplateResult => 
       />
       <DateBoundary {...props.start} label={props.startLabel} />
       <DateBoundary {...props.end} label={props.endLabel} />
-      <CalendarPanel id={props.id} labels={labels} presets={ranges} />
+      <CalendarPanel id={props.id} labels={labels} presets={ranges} applyOnClose={props.applyOnClose} />
     </div>
   )
 }

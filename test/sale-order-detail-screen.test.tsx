@@ -82,7 +82,7 @@ const collaboration = (
 
 const editor = <div data-island="sale.editor" data-scope="sale-order" />
 
-test('sale quotation detail: FormPage keeps editable lines, header actions and collaboration rail', () => {
+test('sale quotation detail: RecordPage keeps editable lines, header actions and collaboration rail', () => {
   const html = renderToString(
     orderDetailScreen(
       translate,
@@ -135,25 +135,25 @@ test('sale quotation detail: FormPage keeps editable lines, header actions and c
     ),
   )
 
-  assert.match(html, /data-ui="form-page" data-scope="sale-order-form-page" data-has-aside="true"/)
+  assert.match(html, /data-ui="record-page" data-scope="sale-order-form-page" data-has-aside="true"/)
   assert.match(html, /data-ket-slot="sale\.order-header"/)
   assert.match(html, /data-ket-slot="sale\.order-body"/)
-  assert.match(html, /data-ui="form-page-title"[\s\S]*?S00001/)
+  assert.match(html, /data-ui="record-page-title"[\s\S]*?S00001/)
   assert.match(html, /Báo giá · Khách hàng Minh Anh/)
-  assert.match(html, /data-ui="form-page-status"[\s\S]*?Bản nháp/)
-  assert.match(html, /data-ui="form-page-meta"[\s\S]*?Trước thuế: 1\.000\.000/)
+  assert.match(html, /data-ui="record-page-status"[\s\S]*?Bản nháp/)
+  assert.match(html, /data-ui="record-page-meta"[\s\S]*?Trước thuế: 1\.000\.000/)
   assert.match(html, /Thuế: 100\.000[\s\S]*?Tổng cộng: 1\.100\.000[\s\S]*?Chưa cần lập/)
-  assert.match(html, /data-ui="form-page-actions"[\s\S]*?name="action" value="send"/)
+  assert.match(html, /data-ui="record-page-actions"[\s\S]*?name="action" value="send"/)
   assert.match(html, /name="action" value="confirm"/)
   assert.match(html, /name="action" value="cancel"/)
   assert.match(html, /href="\/reports\/sale\.quotation\/quotation-1\?lang=vi"/)
-  assert.match(html, /data-ui="form-page-controller"[\s\S]*?data-island="sale\.editor"/)
+  assert.match(html, /data-ui="record-page-controller"[\s\S]*?data-island="sale\.editor"/)
   assert.match(html, /data-island="sale\.loyalty"/)
   assert.match(html, /data-col="product"[\s\S]*?Ghế công thái học/)
   assert.match(html, /name="action" value="remove-line"[\s\S]*?name="lineId" value="line-1"/)
   assert.match(html, /id="sale-order-line-form"[\s\S]*?name="productId"[\s\S]*?name="productUomQty"/)
   assert.match(html, /Dữ liệu chưa hợp lệ|productId/)
-  assert.match(html, /data-ui="form-page-aside"[\s\S]*?data-island="mail\.chatter"/)
+  assert.match(html, /data-ui="record-page-aside"[\s\S]*?data-island="mail\.chatter"/)
   assert.match(html, /data-island="activity\.record"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="record-aside"/)
 })
@@ -215,7 +215,7 @@ test('sale order detail: keeps invoice, delivery and locale-aware accounting wor
   )
 
   assert.match(html, /Đơn bán hàng · Công ty An Nhiên/)
-  assert.match(html, /data-ui="form-page-status"[\s\S]*?data-tone="positive"[\s\S]*?Đã khoá/)
+  assert.match(html, /data-ui="record-page-status"[\s\S]*?data-tone="positive"[\s\S]*?Đã khoá/)
   assert.match(html, /name="action" value="sync"/)
   assert.match(html, /name="action" value="unlock"/)
   assert.match(html, /name="action" value="cancel"/)
@@ -225,10 +225,10 @@ test('sale order detail: keeps invoice, delivery and locale-aware accounting wor
   assert.match(html, /href="\/admin\/stock\/transfers\/delivery-1\?lang=vi"[\s\S]*?WH\/OUT\/00001/)
   assert.match(html, /href="\/admin\/accounting\/customer-invoices\/invoice-1\?lang=vi"/)
   assert.match(html, /INV\/2026\/001[\s\S]*?1\.100\.000/)
-  assert.match(html, /data-ui="form-page-aside"[\s\S]*?data-island="mail\.chatter"/)
+  assert.match(html, /data-ui="record-page-aside"[\s\S]*?data-island="mail\.chatter"/)
 })
 
-test('sale order partial keeps stable FormPage slots without duplicating collaboration', () => {
+test('sale order partial keeps stable RecordPage slots without duplicating collaboration', () => {
   const html = renderToString(
     orderDetailScreen(
       translate,
@@ -259,21 +259,7 @@ test('sale order partial keeps stable FormPage slots without duplicating collabo
   assert.match(html, /<template data-ket-slot="sale\.order-header">/)
   assert.match(html, /<template data-ket-slot="sale\.order-body">/)
   assert.match(html, /name="action" value="reset"/)
-  assert.doesNotMatch(html, /data-ui="shell"|data-ui="form-page-aside"|mail\.chatter|activity\.record/)
+  assert.doesNotMatch(html, /data-ui="shell"|data-ui="record-page-aside"|mail\.chatter|activity\.record/)
 })
 
-test('FormPage keeps a two-to-one rail and adds a gap after responsive wrapping', async () => {
-  const css = await readFile(
-    new URL('../packages/design-system/src/patterns/form-page/styles.css', import.meta.url),
-    'utf8',
-  )
-
-  assert.match(
-    css,
-    /\[data-ui="form-page-layout"\][^{]*\{[^}]*grid-template-columns:\s*minmax\(0, 2fr\) minmax\(0, 1fr\)/,
-  )
-  assert.match(
-    css,
-    /@media \(max-width: 63\.9375rem\)[\s\S]*?\[data-ui="form-page-layout"\][^{]*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*row-gap:\s*var\(--kv-space-5\)/,
-  )
-})
+// Responsive rail geometry is covered by design-system.test.tsx against the current RecordPage contract.

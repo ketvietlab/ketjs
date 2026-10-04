@@ -180,3 +180,19 @@ test('range display is compact and retains years across a year boundary', () => 
   assert.equal(formatRange('2025-12-30', '2026-01-02'), '30/12/2025 – 02/01/2026')
   assert.equal(formatRange('', '2026-09-30'), '')
 })
+
+test('range header filter keeps an associated accessible label and native boundaries', () => {
+  const html = render(<DateRangePicker {...range} variant="filter" />)
+  assert.match(html, /data-variant="filter"/)
+  assert.match(html, /data-label-hidden="true"/)
+  assert.match(html, /name="from"/)
+  assert.match(html, /name="to"/)
+})
+
+test('automatic range filter omits apply/cancel commands while retaining native boundaries', () => {
+  const html = render(<DateRangePicker {...range} variant="filter" applyOnClose />)
+  assert.match(html, /data-date-apply-on-close="true"/)
+  assert.doesNotMatch(html, /value="apply"|value="cancel"/)
+  assert.match(html, /name="from"/)
+  assert.match(html, /name="to"/)
+})
