@@ -16,6 +16,8 @@ export const HOOKS = [
   'image-drop-error',
 ] as const
 
+export type DropZoneProps = FileUploadProps
+
 export type FileUploadProps = {
   id: string
   name: string

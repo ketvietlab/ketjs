@@ -1,5 +1,10 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { DatePresetPicker } from '../forms/date-presets/index.tsx'
+import {
+  DatePresetPicker,
+  datePresetIds,
+  datePresetLabel,
+  resolveDatePreset,
+} from '../forms/date-presets/index.tsx'
 import { DatePicker, DateRangePicker, DateTimePicker } from '../forms/date-time/index.tsx'
 import { Disclosure, Stack } from '../layouts/index.tsx'
 
@@ -8,6 +13,24 @@ export const DatePickerExamples = (props: { showStates?: boolean } = {}): Templa
   <Stack
     gap="loose"
     items={[
+      <Disclosure
+        summary="Khoảng ngày cố định · 04/10/2026"
+        body={
+          <dl>
+            {datePresetIds.map((preset) => {
+              const range = resolveDatePreset(preset, '2026-10-04')
+              return (
+                <div>
+                  <dt>{datePresetLabel(preset, 'vi')}</dt>
+                  <dd>
+                    {range.start} → {range.end}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        }
+      />,
       <DatePresetPicker
         id="dashboard-period"
         label="Kỳ báo cáo"
