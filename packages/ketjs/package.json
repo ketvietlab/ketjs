@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketjs",
-  "version": "0.1.37",
+  "version": "0.1.38",
   "description": "Ket \u2014 a zero-dependency, module-composable, theme-driven fullstack framework for Node.",
   "type": "module",
   "license": "MIT",
@@ -51,7 +51,7 @@
     "ket": "dist/cli.js"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.37"
+    "@ketvietlab/ketjs-view": "0.1.38"
   },
   "publishConfig": {
     "access": "public",

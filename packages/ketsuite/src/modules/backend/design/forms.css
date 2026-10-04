@@ -17,9 +17,6 @@
   [data-ui="surface"][data-padding="compact"] {
     padding: var(--admin-gap);
   }
-  [data-ui="surface"][data-padding="default"] {
-    padding: var(--admin-gap-md);
-  }
   [data-ui="surface"][data-padding="none"] {
     padding: 0;
   }
@@ -377,14 +374,14 @@
     font-weight: 600;
   }
 
-  [data-ui="date-picker"] {
+  [data-ui="date-picker"]:not([data-date-mode]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: var(--admin-gap-sm);
     min-inline-size: 0;
   }
-  [data-ui="date-picker"] fieldset {
+  [data-ui="date-picker"]:not([data-date-mode]) fieldset {
     display: grid;
     min-inline-size: 0;
     margin: 0;
@@ -403,7 +400,7 @@
     grid-template-columns: repeat(2, minmax(10rem, 1fr));
     gap: var(--admin-gap-sm);
   }
-  [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+  [data-ui="date-picker"]:not([data-date-mode])[data-range="false"] [data-ui="date-picker-fields"] {
     grid-template-columns: minmax(10rem, 18rem);
   }
   [data-ui="date-picker-field"] {
@@ -602,12 +599,12 @@
   }
 
   @media (max-width: 47.9375rem) {
-    [data-ui="date-picker"] {
+    [data-ui="date-picker"]:not([data-date-mode]) {
       grid-template-columns: minmax(0, 1fr);
       align-items: stretch;
     }
     [data-ui="date-picker-fields"],
-    [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+    [data-ui="date-picker"]:not([data-date-mode])[data-range="false"] [data-ui="date-picker-fields"] {
       grid-template-columns: minmax(0, 1fr);
     }
     [data-ui="date-picker-actions"],
@@ -845,72 +842,6 @@
     justify-items: center;
     gap: var(--space-1, 4px);
     inline-size: var(--record-image-size, 6rem);
-  }
-  [data-ui="record-image-frame"] {
-    position: relative;
-    display: grid;
-    place-items: center;
-    inline-size: var(--record-image-size, 6rem);
-    block-size: var(--record-image-size, 6rem);
-    overflow: hidden;
-    border: 1px solid var(--admin-divider-subtle);
-    border-radius: var(--radius-md, 7px);
-    background: var(--admin-surface-subtle);
-  }
-  [data-ui="record-image-frame"] [data-ui="lightbox-thumb"] {
-    --lightbox-thumb-size: var(--record-image-size, 6rem);
-    border: 0;
-    border-radius: 0;
-  }
-  [data-ui="record-image-empty"] {
-    padding: var(--space-2, 8px);
-    color: var(--admin-ink-muted);
-    font-size: var(--font-size-xs, 0.8125rem);
-    text-align: center;
-  }
-  [data-ui="record-image"][data-record-dropzone] [data-ui="record-image-empty"] {
-    align-self: stretch;
-    justify-self: stretch;
-    display: grid;
-    place-items: center;
-    border: 1px dashed var(--admin-line-strong);
-    border-radius: inherit;
-  }
-  [data-ui="record-image"][data-drag="1"] [data-ui="record-image-frame"] {
-    outline: 2px dashed var(--admin-focus-border);
-    outline-offset: 2px;
-    background: var(--admin-card);
-  }
-  [data-ui="record-image"][data-busy="true"] [data-ui="record-image-frame"] {
-    opacity: 0.6;
-  }
-  [data-ui="record-image-actions"] {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0 var(--space-2, 8px);
-    font-size: var(--font-size-xs, 0.8125rem);
-  }
-  [data-ui="record-image-upload"] {
-    position: relative;
-    color: var(--admin-accent-text);
-    cursor: pointer;
-  }
-  [data-ui="record-image-upload"] input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  [data-ui="record-image-upload"]:focus-within {
-    outline: 2px solid var(--admin-focus-border);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm, 5px);
-  }
-  [data-ui="record-image-actions"] [data-ui="action"] {
-    min-block-size: 0;
-    padding: 0;
-    font-size: inherit;
   }
 
   @media (max-width: 47.9375rem) {

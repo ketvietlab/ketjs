@@ -26,9 +26,10 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    // 0.1.30 packs 385,621 bytes (480 files): the 133-component catalogue, primitive
-    // harness and date runtime; audited archive contains only dist, docs and metadata.
-    maxPackedBytes: 410_000,
+    // 0.1.38 packs 417,142 bytes: 137 catalogue components, fixed date presets,
+    // temporal record fields and image dropzones. Audited archive contains only
+    // dist, docs and metadata; no tests, dependencies or build caches.
+    maxPackedBytes: 430_000,
   },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.

@@ -256,3 +256,32 @@ test('layout exposes token roles and tooltip associates the actual focus target 
   assert.match(tooltip, /<button[^>]*aria-describedby="hint"/)
   assert.doesNotMatch(tooltip, /<span data-ui="tooltip-trigger" aria-describedby/)
 })
+
+test('stacked data tables override desktop fixed row height at the owning selector', () => {
+  const css = readFileSync('packages/design-system/src/patterns/data-table/styles.css', 'utf8')
+  const row = css
+    .replace(/\s+/g, ' ')
+    .split('}')
+    .find((rule) =>
+      rule.includes(
+        '[data-ui="table-scroll"][data-pattern="data-table"][data-responsive="stack"] [data-ui="row"] {',
+      ),
+    )
+  assert.ok(row, 'mobile selector must outrank the desktop data-table row selector')
+  assert.match(row, /height: auto;/)
+  assert.match(row, /display: grid;/)
+  const legacy = readFileSync('packages/ketsuite/src/modules/backend/design/lists.css', 'utf8')
+  assert.ok(
+    legacy.includes('[data-ui="table-scroll"]:not([data-pattern="data-table"]):not([data-gutter="compact"])'),
+  )
+})
+
+test('page gutter and card gaps share the responsive layout token', () => {
+  const css = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const declarations = [...css.matchAll(/--kv-page-padding-x:\s*([^;]+);/g)]
+  assert.ok(declarations.length > 0)
+  for (const match of declarations) assert.equal(match[1], 'var(--kv-layout-gap)')
+  assert.match(css, /--kv-layout-gap: 0\.5rem;/)
+  assert.match(css, /--kv-layout-gap: 0\.75rem;/)
+  assert.match(css, /--kv-gap-section: var\(--kv-layout-gap\);/)
+})

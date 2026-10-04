@@ -69,7 +69,14 @@
     gap: var(--kv-gap-form-row) var(--kv-gap-form-column);
   }
 
-  :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"][data-span="full"] {
+  :where([data-kv-design-system])
+    [data-ui="form-grid"]
+    > :is(
+      [data-ui="field"],
+      [data-ui="date-inputs"],
+      [data-ui="date-range"],
+      [data-ui="date-time-picker"]
+    )[data-span="full"] {
     grid-column: 1 / -1;
   }
 
@@ -108,7 +115,14 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
-    :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"] {
+    :where([data-kv-design-system])
+      [data-ui="form-grid"]
+      > :is(
+        [data-ui="field"],
+        [data-ui="date-inputs"],
+        [data-ui="date-range"],
+        [data-ui="date-time-picker"]
+      ) {
       grid-column: 1;
     }
   }
