@@ -1,3 +1,4 @@
+import { orderPage } from './order-page.ts'
 import {
   dateBucket,
   defineFn,
@@ -370,6 +371,11 @@ export const functions: Record<string, FnSpec> = {
   listOrders: defineFn({
     input: {
       state: 'text?',
+      listState: 'json?',
+      listMode: 'text?',
+      path: 'json?',
+      cursor: 'text?',
+      timezone: 'text?',
       states: 'json?',
       partnerId: 'id?',
       search: 'text?',
@@ -382,12 +388,13 @@ export const functions: Record<string, FnSpec> = {
       limit: 'int?',
       offset: 'int?',
     },
-    effects: ['read:sale.Order'],
+    effects: ['read:sale.Order', 'read:partner.Partner'],
     agent: true,
     // Bounded and newest-first. Unbounded, a tenant with an imported order
     // history handed the whole table to every caller — the quotations screen
     // was loading six figures of rows to show a page.
     handler: async (ctx, args) => {
+      if (args.listState) return orderPage(ctx, args)
       const O = ctx.table('sale.Order')
       const states = Array.isArray(args.states) ? args.states.map(String) : []
       const limit = Math.max(1, Math.min(Math.trunc(Number(args.limit) || 500), 2_000))

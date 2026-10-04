@@ -58,10 +58,14 @@ export type MenuProps = {
   id: string
   label: string
   items: readonly MenuEntry[]
+  /** Checked items represent one selection when single; default preserves checkbox menus. */
+  selectionMode?: 'single' | 'multiple'
   /** Replaces the label inside the trigger — an icon, say. The label still names it. */
   trigger?: JSXChild
   open?: boolean
   align?: 'start' | 'end'
+  /** Optional alignment below 768px when page actions wrap to the leading edge. */
+  mobileAlign?: 'start' | 'end'
   /** `compact` sits in a row of list facets at their height. */
   size?: 'default' | 'compact'
   /** How many choices are in effect, shown on the trigger. Zero shows nothing. */
@@ -80,6 +84,7 @@ export const Menu = (props: MenuProps): TemplateResult => (
   <details
     data-ui="menu"
     data-align={props.align ?? 'start'}
+    data-mobile-align={props.mobileAlign}
     data-size={props.size === 'compact' ? 'compact' : null}
     data-active={props.count ? 'true' : null}
     data-placement={props.placement ?? 'bottom'}
@@ -88,6 +93,7 @@ export const Menu = (props: MenuProps): TemplateResult => (
     {/* `details` exposes the open state natively; the runtime mirrors it into aria-expanded on toggle. */}
     <summary
       data-ui="menu-trigger"
+      role="button"
       aria-haspopup="menu"
       aria-controls={`${props.id}-panel`}
       // A trigger that is only an icon still needs a name, and a pointer needs a hint.
@@ -129,7 +135,12 @@ export const Menu = (props: MenuProps): TemplateResult => (
                 {item.label}
               </span>
             )
-          const role = item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'
+          const role =
+            item.checked === undefined
+              ? 'menuitem'
+              : props.selectionMode === 'single'
+                ? 'menuitemradio'
+                : 'menuitemcheckbox'
           const content = (
             <>
               {item.checked !== undefined && (

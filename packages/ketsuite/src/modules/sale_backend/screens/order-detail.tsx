@@ -7,7 +7,7 @@ import {
   emptyState,
   formatMoney,
   FormCluster,
-  FormPage,
+  RecordPage,
   icon,
   inline,
   linkButton,
@@ -16,7 +16,6 @@ import {
   Section,
   shell,
   stack,
-  Surface,
 } from '../../../ui/index.ts'
 import type { ActionVariant, FormField, Frame } from '../../../ui/index.ts'
 import { labelOf } from './shared.tsx'
@@ -345,7 +344,7 @@ export const orderDetailScreen = (
   ]
   const documentKind = state === 'sale' ? _('sale_backend.order.kicker') : _('sale_backend.quotation.kicker')
   const page = (
-    <FormPage
+    <RecordPage
       variant="operational"
       frame={frame}
       scope="sale-order-form-page"
@@ -384,7 +383,7 @@ export const orderDetailScreen = (
           <Section
             title={_('sale_backend.order.information.title')}
             description={_('sale_backend.order.information.hint')}
-            body={<Surface padding="compact" body={orderInformation(_, order)} />}
+            body={orderInformation(_, order)}
           />,
           <Section
             title={_('sale_backend.lines.title')}
@@ -396,20 +395,15 @@ export const orderDetailScreen = (
               title={_('sale_backend.lines.add')}
               description={_('sale_backend.lines.addHint')}
               body={
-                <Surface
-                  padding="compact"
-                  body={
-                    <RecordForm
-                      id="sale-order-line-form"
-                      scope="sale-order"
-                      action={options.action}
-                      submit={_('sale_backend.action.addLine')}
-                      submitVariant="secondary"
-                      hidden={{ action: 'add-line' }}
-                      fields={options.lineFields}
-                      errors={options.errors}
-                    />
-                  }
+                <RecordForm
+                  id="sale-order-line-form"
+                  scope="sale-order"
+                  action={options.action}
+                  submit={_('sale_backend.action.addLine')}
+                  submitVariant="secondary"
+                  hidden={{ action: 'add-line' }}
+                  fields={options.lineFields}
+                  errors={options.errors}
                 />
               }
             />
@@ -419,20 +413,15 @@ export const orderDetailScreen = (
               title={_('sale_backend.invoice.title')}
               description={_('sale_backend.invoice.hint')}
               body={
-                <Surface
-                  padding="compact"
-                  body={
-                    <RecordForm
-                      id="sale-order-invoice-form"
-                      scope="sale-order"
-                      action={options.action}
-                      submit={_('sale_backend.action.createInvoice')}
-                      submitVariant="primary"
-                      hidden={{ action: 'invoice' }}
-                      fields={options.invoiceFields}
-                      errors={options.errors}
-                    />
-                  }
+                <RecordForm
+                  id="sale-order-invoice-form"
+                  scope="sale-order"
+                  action={options.action}
+                  submit={_('sale_backend.action.createInvoice')}
+                  submitVariant="primary"
+                  hidden={{ action: 'invoice' }}
+                  fields={options.invoiceFields}
+                  errors={options.errors}
                 />
               }
             />

@@ -868,7 +868,7 @@
   [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])):not(
       :has(> [data-ui="form-page"])
     )
-    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
+    [data-ui="table-scroll"]:not([data-pattern="data-table"]):not([data-gutter="compact"]) {
     border-radius: 0;
     border-block-start: 0;
     border-inline: 0;
@@ -877,7 +877,7 @@
 
   [data-ui="content"]
     [data-ui="list-page"][data-variant="operational"]
-    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
+    [data-ui="table-scroll"]:not([data-pattern="data-table"]):not([data-gutter="compact"]) {
     border: 1px solid var(--admin-table-line);
     border-radius: var(--admin-radius) var(--admin-radius) 0 0;
     box-shadow: none;
