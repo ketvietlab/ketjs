@@ -1641,6 +1641,7 @@ export {
 
 export {
   RecordModalForm,
+  RecordImageField,
   RecordActionForm,
   RecordCloseTrigger,
   RecordDialogTrigger,

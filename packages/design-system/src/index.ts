@@ -155,6 +155,13 @@ export type {
   ComboboxProps,
   MultiComboboxProps,
 } from './forms/combobox/index.tsx'
+export {
+  DatePresetPicker,
+  datePresetIds,
+  datePresetLabel,
+  resolveDatePreset,
+} from './forms/date-presets/index.tsx'
+export type { DatePreset, DatePresetRange, DatePresetPickerProps } from './forms/date-presets/index.tsx'
 export { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from './forms/date-time/index.tsx'
 export type {
   DatePickerProps,
@@ -163,8 +170,8 @@ export type {
   DateRangePickerProps,
   TemporalProps,
 } from './forms/date-time/index.tsx'
-export { DropZone, FileUpload } from './forms/upload/index.tsx'
-export type { FileUploadProps } from './forms/upload/index.tsx'
+export { DropZone, FileUpload, ImageDropZone } from './forms/upload/index.tsx'
+export type { DropZoneProps, FileUploadProps } from './forms/upload/index.tsx'
 export { RelationPicker } from './forms/relation-picker/index.tsx'
 export type { RelationPickerProps } from './forms/relation-picker/index.tsx'
 

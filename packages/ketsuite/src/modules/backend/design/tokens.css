@@ -287,7 +287,7 @@
     --admin-gap-xs: 0.25rem;
     --admin-gap-sm: 0.5rem;
     --admin-gap: 0.75rem;
-    --admin-gap-md: 1rem;
+    --admin-gap-md: var(--kv-layout-gap);
     --admin-gap-lg: 1.5rem;
     --admin-gap-xl: 2rem;
 

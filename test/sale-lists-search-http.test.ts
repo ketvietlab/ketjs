@@ -142,3 +142,70 @@ test('sale lists HTTP: every sales list carries the bar', async (t) => {
     assert.doesNotMatch(html, /name="q"[^>]*data-ui="chrome-search-input"/, path)
   }
 })
+
+test('sales orders page is bounded and customer search finds orders beyond the first page', async (t) => {
+  const app = await boot(t)
+  for (let i = 0; i < 61; i++)
+    await app.client.call('sale.createOrder', {
+      id: `paged-${String(i).padStart(3, '0')}`,
+      partnerId: i === 0 ? 'lan' : 'minh',
+      warehouseId: 'wh',
+    })
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    await adapter.run(
+      "UPDATE sale_order SET state = 'sale', \"dateOrder\" = '2026-10-04T00:00:00.000Z' WHERE id LIKE 'paged-%'",
+    )
+  })
+  const state = {
+    presets: [],
+    filters: [],
+    groupBy: [],
+    sort: [{ key: 'dateOrder', dir: 'desc' }],
+    openGroups: [],
+    groupPages: {},
+    page: 1,
+    includeArchived: false,
+  }
+  const page = await app.client.call('sale.listOrders', { state: 'sale', listState: state })
+  assert.equal((page.value as { rows: Array<{ id: string }>; total: number }).rows.length, 50)
+  assert.equal((page.value as { rows: Array<{ id: string }>; total: number }).total, 61)
+  const last = await app.client.call('sale.listOrders', { state: 'sale', listState: { ...state, page: 2 } })
+  assert.equal((last.value as { rows: Array<{ id: string }>; total: number }).rows.length, 11)
+  const search = await app.client.call('sale.listOrders', {
+    state: 'sale',
+    listState: { ...state, q: 'Lan Chi' },
+  })
+  assert.equal((search.value as { rows: Array<{ id: string }>; total: number }).total, 1)
+  assert.equal((search.value as { rows: Array<{ id: string }>; total: number }).rows[0].id, 'paged-000')
+  const filtered = await app.client.call('sale.listOrders', {
+    state: 'sale',
+    listState: {
+      ...state,
+      filters: [{ kind: 'rule', field: 'partnerName', operator: 'contains', value: 'Lan' }],
+    },
+  })
+  assert.equal((filtered.value as { rows: Array<{ id: string }>; total: number }).total, 1)
+  const groupState = { ...state, groupBy: [{ key: 'partnerName' }] }
+  const grouped = await app.client.call('sale.listOrders', {
+    state: 'sale',
+    listState: groupState,
+    listMode: 'groups',
+  })
+  assert.equal((grouped.value as unknown[]).length, 2)
+  const child = await app.client.call('sale.listOrders', {
+    state: 'sale',
+    listState: groupState,
+    path: ['lan'],
+  })
+  assert.equal((child.value as { total: number }).total, 1)
+  const locked = await app.client.call('sale.listOrders', {
+    state: 'sale',
+    listState: { ...state, presets: ['locked'] },
+  })
+  assert.equal((locked.value as { total: number }).total, 0)
+  const response = await app.client.get('/admin/sales/orders?lang=vi')
+  assert.equal(response.status, 200)
+  const html = await response.text()
+  assert.match(html, /page=2/)
+  assert.doesNotMatch(html, /data-row="paged-000"/)
+})

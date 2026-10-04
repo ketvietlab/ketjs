@@ -621,9 +621,6 @@
     [data-ui="notice-actions"] {
       inline-size: 100%;
     }
-    [data-ui="surface"][data-padding="default"] {
-      padding: var(--admin-gap-md);
-    }
     [data-ui="card-grid"] {
       grid-template-columns: 1fr;
     }

@@ -1,4 +1,20 @@
 @layer ket.app {
+  /* Header filter owns a readable range width; surrounding page owns wrapping. */
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] {
+    font-size: var(--kv-input-font-size);
+    inline-size: calc(18ch + var(--kv-control-height-md));
+    min-inline-size: calc(18ch + var(--kv-control-height-md));
+    max-inline-size: 100%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] > [data-ui="field"] {
+    display: block;
+  }
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] input[type="text"] {
+    field-sizing: content;
+    inline-size: auto;
+    min-inline-size: 14ch;
+  }
   :where([data-kv-design-system]) [data-ui="date-picker"] {
     min-width: 0;
   }

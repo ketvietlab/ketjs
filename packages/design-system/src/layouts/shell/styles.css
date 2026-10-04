@@ -147,7 +147,7 @@
 
     :where([data-kv-design-system]) [data-ui="page-body"],
     :where([data-kv-design-system]) [data-ui="record-canvas"] {
-      padding-inline: var(--kv-space-4);
+      padding-inline: var(--kv-page-padding-x);
     }
   }
 }

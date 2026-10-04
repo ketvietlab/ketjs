@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 300,
-    "runtimeExports": 140,
-    "registeredComponents": 135,
+    "publicExports": 309,
+    "runtimeExports": 145,
+    "registeredComponents": 137,
     "compatibilityExports": 259,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 158,
-    "runtimeGaps": 5,
-    "typeGaps": 153,
+    "publicGaps": 165,
+    "runtimeGaps": 8,
+    "typeGaps": 157,
     "cssFiles": 80,
-    "cssLines": 16789
+    "cssLines": 16829
   },
   "rows": [
     {
@@ -1423,6 +1423,81 @@
     },
     {
       "scope": "public",
+      "name": "DatePreset",
+      "imported": "DatePreset",
+      "kind": "type",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DatePresetPicker",
+      "imported": "DatePresetPicker",
+      "kind": "runtime",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "present",
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/date-pickers.tsx",
+        "packages/design-system/src/catalogue/registry.ts"
+      ],
+      "tests": "present",
+      "testFiles": ["test/design-system-date-presets.test.tsx", "test/design-system.test.tsx"],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DatePresetPickerProps",
+      "imported": "DatePresetPickerProps",
+      "kind": "type",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "DatePresetRange",
+      "imported": "DatePresetRange",
+      "kind": "type",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
       "name": "DateRangePicker",
       "imported": "DateRangePicker",
       "kind": "runtime",
@@ -1606,6 +1681,24 @@
       ],
       "tests": "present",
       "testFiles": ["test/design-system.test.tsx"],
+      "gapTask": "DS-023"
+    },
+    {
+      "scope": "public",
+      "name": "DropZoneProps",
+      "imported": "DropZoneProps",
+      "kind": "type",
+      "source": "./forms/upload/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
       "gapTask": "DS-023"
     },
     {
@@ -1832,7 +1925,6 @@
         "test/product-favorite-screen.test.tsx",
         "test/purchase-order-detail-screen.test.tsx",
         "test/purchase-order-lists-screen.test.tsx",
-        "test/sale-order-detail-screen.test.tsx",
         "test/stock-location-create-screen.test.tsx",
         "test/stock-lot-create-screen.test.tsx",
         "test/stock-lot-detail-screen.test.tsx",
@@ -2095,6 +2187,27 @@
       "tests": "gap",
       "testFiles": [],
       "gapTask": "Maintain shared Lucide geometry, tone and accessible naming."
+    },
+    {
+      "scope": "public",
+      "name": "ImageDropZone",
+      "imported": "ImageDropZone",
+      "kind": "runtime",
+      "source": "./forms/upload/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "present",
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/registry.ts",
+        "packages/design-system/src/catalogue/specimens.tsx"
+      ],
+      "tests": "present",
+      "testFiles": ["test/design-system.test.tsx", "test/image-drop-zone.test.tsx"],
+      "gapTask": "DS-023"
     },
     {
       "scope": "public",
@@ -3040,6 +3153,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/design-system-date-presets.test.tsx",
         "test/design-system.test.tsx",
         "test/ui-refactor.test.tsx",
         "test/website-studio-menu-http.test.ts"
@@ -4018,7 +4132,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-page-header.test.tsx",
+        "test/design-system.test.tsx",
+        "test/sale-order-detail-screen.test.tsx"
+      ],
       "gapTask": "DS-009"
     },
     {
@@ -6000,6 +6118,42 @@
     },
     {
       "scope": "public",
+      "name": "datePresetIds",
+      "imported": "datePresetIds",
+      "kind": "runtime",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "gap",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-date-presets.test.tsx"],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
+      "name": "datePresetLabel",
+      "imported": "datePresetLabel",
+      "kind": "runtime",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "gap",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-022"
+    },
+    {
+      "scope": "public",
       "name": "initials",
       "imported": "initials",
       "kind": "runtime",
@@ -6056,7 +6210,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system.test.tsx", "test/product-modal-view.test.tsx"],
       "gapTask": "DS-047"
     },
     {
@@ -6076,6 +6230,24 @@
       "tests": "present",
       "testFiles": ["test/design-system.test.tsx", "test/relation-select-e2e.test.ts"],
       "gapTask": "DS-044"
+    },
+    {
+      "scope": "public",
+      "name": "resolveDatePreset",
+      "imported": "resolveDatePreset",
+      "kind": "runtime",
+      "source": "./forms/date-presets/index.tsx",
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "target": "@ketvietlab/design-system",
+      "wave": 3,
+      "consumers": 0,
+      "specimen": "gap",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-date-presets.test.tsx"],
+      "gapTask": "DS-022"
     },
     {
       "scope": "public",
@@ -6829,7 +7001,7 @@
       "decision": "recipe",
       "target": "Public recipes",
       "wave": 1,
-      "consumers": 51,
+      "consumers": 50,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -6873,7 +7045,6 @@
         "test/product-favorite-screen.test.tsx",
         "test/purchase-order-detail-screen.test.tsx",
         "test/purchase-order-lists-screen.test.tsx",
-        "test/sale-order-detail-screen.test.tsx",
         "test/stock-location-create-screen.test.tsx",
         "test/stock-lot-create-screen.test.tsx",
         "test/stock-lot-detail-screen.test.tsx",
@@ -6898,7 +7069,7 @@
       "decision": "recipe",
       "target": "Public recipes",
       "wave": 1,
-      "consumers": 51,
+      "consumers": 50,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8212,11 +8383,15 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 1,
+      "consumers": 2,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system-page-header.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-page-header.test.tsx",
+        "test/design-system.test.tsx",
+        "test/sale-order-detail-screen.test.tsx"
+      ],
       "gapTask": "DS-007"
     },
     {
@@ -8230,7 +8405,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 1,
+      "consumers": 2,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -9796,7 +9971,6 @@
         "test/purchase-vendor-pricelists-screen.test.tsx",
         "test/report.test.ts",
         "test/sale-invoicing-policy-screens.test.tsx",
-        "test/sale-order-detail-screen.test.tsx",
         "test/sale-orders-list-screen.test.tsx",
         "test/sale-overview-screen.test.tsx",
         "test/sale-quotations-list-screen.test.tsx",
@@ -11376,6 +11550,7 @@
         "test/design-system-atlas.test.ts",
         "test/design-system-demo.test.ts",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-normalization.test.tsx",
         "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
         "test/events.test.ts",
@@ -11586,6 +11761,7 @@
         "test/backend-ui.test.ts",
         "test/collection-ket-table.test.tsx",
         "test/design-system-layout-audit.test.ts",
+        "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/joints.test.ts",
         "test/ktl.render.test.ts",
@@ -12037,7 +12213,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/date-time/styles.css",
-      "lines": 273,
+      "lines": 289,
       "hooks": [
         "date-boundary",
         "date-calendar",
@@ -12060,7 +12236,8 @@
         "date-range-error",
         "date-range-preset",
         "date-tools",
-        "date-weekday"
+        "date-weekday",
+        "field"
       ]
     },
     {
@@ -12078,8 +12255,18 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/upload/styles.css",
-      "lines": 22,
-      "hooks": ["drop-zone", "file-upload", "upload-status"]
+      "lines": 101,
+      "hooks": [
+        "drop-zone",
+        "file-upload",
+        "image-drop-actions",
+        "image-drop-error",
+        "image-drop-help",
+        "image-drop-picker",
+        "image-drop-preview",
+        "image-drop-zone",
+        "upload-status"
+      ]
     },
     {
       "layer": "public",
@@ -12090,7 +12277,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/foundations/tokens.css",
-      "lines": 421,
+      "lines": 422,
       "hooks": []
     },
     {
@@ -12157,7 +12344,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/menu/styles.css",
-      "lines": 178,
+      "lines": 191,
       "hooks": [
         "menu",
         "menu-item",
@@ -12998,7 +13185,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/content.css",
-      "lines": 709,
+      "lines": 706,
       "hooks": [
         "action-label",
         "action-spinner",
@@ -13060,7 +13247,6 @@
         "skeleton-line",
         "sort-icon",
         "sort-link",
-        "surface",
         "tab",
         "table",
         "table-caption",
@@ -13102,7 +13288,7 @@
     {
       "layer": "compatibility",
       "file": "packages/ketsuite/src/modules/backend/design/forms.css",
-      "lines": 926,
+      "lines": 860,
       "hooks": [
         "action",
         "action-group",
@@ -13143,7 +13329,6 @@
         "form-page",
         "form-page-aside",
         "form-required",
-        "lightbox-thumb",
         "loading",
         "media",
         "media-actions",
@@ -13159,10 +13344,6 @@
         "record-form",
         "record-form-with-image",
         "record-image",
-        "record-image-actions",
-        "record-image-empty",
-        "record-image-frame",
-        "record-image-upload",
         "relation-chips",
         "relation-dialog-actions",
         "relation-dialog-row",

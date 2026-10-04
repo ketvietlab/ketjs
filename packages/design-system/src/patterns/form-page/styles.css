@@ -175,11 +175,11 @@
       [data-ui="form-page"][data-variant="operational"]
       [data-ui="form-page-context"] {
       min-height: 2.75rem;
-      padding-inline: var(--kv-space-4);
+      padding-inline: var(--kv-page-padding-x);
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-header"] {
-      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+      padding: var(--kv-space-4) var(--kv-page-padding-x) var(--kv-space-3);
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-title-row"] {
@@ -203,13 +203,13 @@
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-navigation"] {
-      padding-inline: var(--kv-space-4);
+      padding-inline: var(--kv-page-padding-x);
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-body"],
     :where([data-kv-design-system]) [data-ui="form-page-aside"],
     :where([data-kv-design-system]) [data-ui="form-page-controller"] {
-      padding-inline: var(--kv-space-4);
+      padding-inline: var(--kv-page-padding-x);
     }
   }
 
