@@ -347,7 +347,7 @@ const enhance = (picker) => {
         command === 'previous' ? -1 : range && isMobile() ? 1 : monthCount(),
       )
     }
-    apply.disabled = !valid()
+    if (apply) apply.disabled = !valid()
     status.textContent = draft[0]
       ? range && !draft[1]
         ? `${short.format(civil(draft[0]))} · ${labels.chooseEnd}`
@@ -502,10 +502,22 @@ const enhance = (picker) => {
       paint(target.dataset.date)
   }
   const leave = () => paint()
+  let disposing = false
+  const autoApply = picker.dataset.dateApplyOnClose === 'true'
   const toggle = () => {
     syncPresentation()
     opener.setAttribute('aria-expanded', String(isOpen()))
-    if (!isOpen()) draft = []
+    if (!isOpen()) {
+      if (autoApply && !disposing && draft.length) {
+        const changed = valid() && inputs.some((input, index) => input.value !== draft[index])
+        if (changed) {
+          commit([...draft])
+          const form = inputs[0].form
+          if (form?.method.toLowerCase() === 'get') form.requestSubmit()
+        } else validate()
+      }
+      draft = []
+    }
   }
   /** @param {FocusEvent} event */
   const focusout = (event) => {
@@ -530,8 +542,13 @@ const enhance = (picker) => {
       const period = presetRange(preset.value, today)
       if (period && allowed(inputs[0], period[0]) && allowed(end, period[1])) {
         preferredPreset = preset.value
-        close(true)
-        commit(period)
+        if (autoApply) {
+          draft = [...period]
+          close(true)
+        } else {
+          close(true)
+          commit(period)
+        }
       } else {
         validate()
         open(preset)
@@ -550,6 +567,7 @@ const enhance = (picker) => {
     }
   }
   const reset = () => {
+    draft = []
     close()
     setTimeout(() => {
       if (range)
@@ -574,6 +592,7 @@ const enhance = (picker) => {
   inputs[0].form?.addEventListener('reset', reset)
   inputs[0].form?.addEventListener('submit', submit)
   return () => {
+    disposing = true
     close()
     delete picker.dataset.dateEnhanced
     picker.removeEventListener('click', click)
