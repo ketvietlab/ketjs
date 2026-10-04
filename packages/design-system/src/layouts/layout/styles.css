@@ -1,6 +1,6 @@
 @layer ket.app {
   :where([data-kv-design-system]) [data-ui="stack"][data-pattern="stack"] {
-    --kv-stack-gap: var(--kv-gap-section);
+    --kv-stack-gap: var(--kv-layout-gap);
     display: grid;
     gap: var(--kv-stack-gap);
   }
@@ -32,7 +32,7 @@
     display: grid;
     align-items: start;
     grid-template-columns: repeat(var(--kv-grid-columns, 3), minmax(0, 1fr));
-    gap: var(--kv-gap-section);
+    gap: var(--kv-layout-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="grid"][data-align="stretch"] {
@@ -56,7 +56,7 @@
     min-width: 0;
     grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
     align-items: stretch;
-    gap: var(--kv-gap-section);
+    gap: var(--kv-layout-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="card-grid"][data-minimum="compact"] {
@@ -105,14 +105,14 @@
   }
 
   :where([data-kv-design-system]) [data-ui="surface"][data-padding="none"][data-has-heading="true"] {
-    padding: var(--kv-surface-inset);
+    padding: 0;
   }
 
   :where([data-kv-design-system])
     [data-ui="surface"][data-padding="none"][data-has-heading="true"]
     > [data-ui="surface-head"] {
-    padding: 0;
-    margin-bottom: var(--kv-surface-head-gap);
+    padding: var(--kv-surface-inset);
+    margin-bottom: 0;
   }
 
   :where([data-kv-design-system]) [data-ui="surface-title"] {
@@ -201,7 +201,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: var(--kv-space-4);
+    gap: var(--kv-layout-gap);
   }
 
   :where([data-kv-design-system]) [data-ui="section-eyebrow"] {
@@ -385,7 +385,7 @@
     min-block-size: 12rem;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: var(--kv-space-4);
+    gap: var(--kv-layout-gap);
     border-radius: var(--kv-radius-md);
   }
 
@@ -628,12 +628,12 @@
   }
   :where([data-kv-design-system])
     :is([data-ui="stack"][data-pattern="stack"], [data-ui="inline"], [data-ui="grid"])[data-gap="default"] {
-    --kv-stack-gap: var(--kv-gap-section);
+    --kv-stack-gap: var(--kv-layout-gap);
     gap: var(--kv-stack-gap);
   }
   :where([data-kv-design-system])
     :is([data-ui="stack"][data-pattern="stack"], [data-ui="inline"], [data-ui="grid"])[data-gap="loose"] {
-    --kv-stack-gap: var(--kv-gap-section);
+    --kv-stack-gap: var(--kv-layout-gap);
     gap: var(--kv-stack-gap);
   }
   :where([data-kv-design-system]) [data-ui="stack"][data-inline-align="start"] {
@@ -721,7 +721,7 @@
         [data-ui="inline"],
         [data-ui="grid"]
       )[data-mobile-gap="default"] {
-      --kv-stack-gap: var(--kv-gap-section);
+      --kv-stack-gap: var(--kv-layout-gap);
       gap: var(--kv-stack-gap);
     }
     :where([data-kv-design-system])
@@ -730,7 +730,7 @@
         [data-ui="inline"],
         [data-ui="grid"]
       )[data-mobile-gap="loose"] {
-      --kv-stack-gap: var(--kv-gap-section);
+      --kv-stack-gap: var(--kv-layout-gap);
       gap: var(--kv-stack-gap);
     }
     :where([data-kv-design-system]) [data-ui="grid"][data-mobile-columns="1"] {
