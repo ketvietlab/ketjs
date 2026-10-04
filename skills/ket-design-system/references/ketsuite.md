@@ -38,3 +38,41 @@ permissions, native routes and form behavior while applying the visual contract.
 - Field refusals belong on the matching field through `context.fieldError`; only unmatched/general issues render as the layer notice. Do not erase entered values on loading, validation refusal, tab switch, or view-state change.
 - A record with more than one declared tab uses the fixed-height modal contract. A record without tabs and nested dialogs size to content unless a separate documented workflow requires otherwise.
 
+
+## Image upload fields
+
+Always use the public `ImageDropZone` thumbnail surface for image upload fields.
+In record modals use `RecordImageField`, which adapts it to the disposable record
+runtime. Reuse this for product template/variant images and care checkpoint photos.
+Keep the native file input accessible but visually hidden. Show the existing image
+in the same tile, with choose/replace and remove actions inside its boundary; allow
+dropping onto that tile. Preserve upload validation, permission checks, busy/errors,
+and keyboard file selection. Generic FileUpload/DropZone remain for non-image files.
+The DS owns thumbnail geometry, picker visibility and action spacing; product code
+supplies image URLs, translated labels and commands. Never substitute a “has image”
+badge for the actual preview. Do not display that badge as proof the file loaded.
+
+## Fixed dashboard periods
+
+For CRM/customer-care dashboards that only allow reporting presets, use the public
+`DatePresetPicker`. Do not compose a date input or a DateRangePicker with hidden calendar controls.
+The trigger displays only the selected preset, has an accessible label, sizes to its
+content, and sits immediately before the primary action in the page title row.
+Selecting a native menu link applies that period immediately; there is no Apply command.
+The menu owns popup spacing, control height, single-selection semantics and keyboard behavior.
+
+Pass `today` as a civil YYYY-MM-DD in the business timezone. `resolveDatePreset` returns
+inclusive boundaries: weeks start Monday; this week/month/year covers the full calendar
+period; rolling 7/30/90-day ranges include today. Consumers preserve unrelated query filters
+and remove obsolete custom `from`/`to` values when changing a fixed period. Keep the 11
+public choices (today, yesterday, last 7 days, this/last week, last 30 days, this/last month,
+last 90 days, this/last year) and translate their labels through the component.
+
+## Temporal record fields
+
+Record `Field` specifications with type `date` use DatePicker; `datetime-local`
+uses DateTimePicker. A date popup anchors to its whole control, commits valid
+selection on close, and discards an incomplete selection. Short scheduling dialogs
+use ModalSheet small. DateTimePicker progressively enhances one native wall-time
+field into date/time controls; its disposable runtime owns synchronization and
+validation. Preserve the canonical name, permission state, help and validation.

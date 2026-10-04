@@ -1426,7 +1426,12 @@ test('record workspace: compact identity and actions share the global record hea
 test('record workspace: floating form controls can extend beyond the sheet', () => {
   const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
-  assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
+  const relationCss = readFileSync(
+    'packages/design-system/src/interactions/relation-select/styles.css',
+    'utf8',
+  )
+  assert.match(relationCss, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: absolute/)
+  assert.match(css, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: fixed/)
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {

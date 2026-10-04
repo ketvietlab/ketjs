@@ -1,4 +1,20 @@
 @layer ket.app {
+  /* Header filter owns a readable range width; surrounding page owns wrapping. */
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] {
+    font-size: var(--kv-input-font-size);
+    inline-size: calc(18ch + var(--kv-control-height-md));
+    min-inline-size: calc(18ch + var(--kv-control-height-md));
+    max-inline-size: 100%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] > [data-ui="field"] {
+    display: block;
+  }
+  :where([data-kv-design-system]) [data-ui="date-range"][data-variant="filter"] input[type="text"] {
+    field-sizing: content;
+    inline-size: auto;
+    min-inline-size: 14ch;
+  }
   :where([data-kv-design-system]) [data-ui="date-picker"] {
     min-width: 0;
   }
@@ -269,5 +285,33 @@
       grid-column: 1 / -1;
       grid-row: auto;
     }
+  }
+}
+
+@layer ket.app {
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"]
+    > [data-ui="date-field-control"],
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"]
+    > [data-ui="date-time-controls"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="date-time-picker"],
+  :where([data-kv-design-system]) [data-ui="date-time-controls"] {
+    min-width: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-time-controls"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  :where([data-kv-design-system]) [data-ui="date-time-parts"]:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: var(--kv-space-2);
   }
 }

@@ -401,7 +401,10 @@ test('design system: a label sits beside its control from tablet width and above
   // Két Design System visual contract L7. The browser check measures this on /layering at 1440 and 390 px;
   // this keeps the rule from being dropped where CI does not run a browser.
   const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
+  assert.match(
+    css,
+    /:has\(> \[data-ui="field"\]\):not\(\[data-ui="date-inputs"\]\):not\(\[data-ui="date-range"\]\):not\(\s*\[data-ui="date-time-picker"\]\s*\) \{\s+container-type: inline-size;/u,
+  )
   for (const query of ['@media (max-width: 47.9375rem)', '@container (max-width: 28rem)']) {
     const start = css.indexOf(query)
     assert.notEqual(start, -1, query)
@@ -456,11 +459,11 @@ test('design system: titled tables use the shared surface inset', () => {
   const patterns = patternCss
   assert.match(
     layouts,
-    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: var\(--kv-surface-inset\)/,
+    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: 0;/,
   )
   assert.match(
     layouts,
-    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-surface-head-gap\)/,
+    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: var\(--kv-surface-inset\);\s*margin-bottom: 0;/,
   )
   assert.match(
     patterns,
@@ -742,7 +745,7 @@ test('design system: operational ListPage owns one toolbar-to-result gap and an 
   assert.match(footer, /border: 0/)
   assert.match(footer, /background: transparent/)
   const mobile = readFileSync('packages/design-system/src/patterns/list-page/responsive.css', 'utf8')
-  assert.match(mobile, /padding: var\(--kv-space-3\) var\(--kv-space-4\) 0/)
+  assert.match(mobile, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\) 0/)
   assert.match(mobile, /\[data-ui="list-page-footer"\]\s*\{\s*padding: 0/)
 })
 
@@ -832,7 +835,8 @@ test('design system: responsive control dimensions are owned by tokens', () => {
 
 test('design system: canonical page headers share compact responsive padding', () => {
   const patterns = patternCss
-  const compactPadding = /padding: var\(--kv-space-4\) var\(--kv-space-4\) var\(--kv-space-3\)/g
+  const compactPadding =
+    /padding: var\(--kv-(?:space-4|gap-section)\) var\(--kv-page-padding-x\) var\(--kv-space-3\)/g
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
@@ -2156,7 +2160,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 135)
+  assert.equal(names.length, 137)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2193,8 +2197,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 300)
-  assert.equal(designSystemInventory.summary.runtimeExports, 140)
+  assert.equal(designSystemInventory.summary.publicExports, 309)
+  assert.equal(designSystemInventory.summary.runtimeExports, 145)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
@@ -2309,10 +2313,18 @@ test('design system: data table status, date and title cells stay readable', () 
   )
 })
 
-test('design system: pages keep one 16px gutter on every side of a record body', () => {
+test('design system: pages share the responsive layout gutter on every side of a record body', () => {
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const root = tokens.match(/:root \{[^}]*\}/u)?.[0] ?? ''
-  assert.match(root, /--kv-page-padding-x: var\(--kv-space-4\);/u)
+  assert.match(root, /--kv-page-padding-x: var\(--kv-layout-gap\);/u)
+  const mobile = tokens.slice(tokens.indexOf('@media (max-width: 47.9375rem)'))
+  assert.match(mobile, /--kv-layout-gap: 0\.5rem;/u)
+  assert.match(mobile, /--kv-surface-inset: var\(--kv-space-3\);/u)
+  // KetSuite compatibility styles must leave default Surface spacing to the DS.
+  for (const name of ['forms', 'content']) {
+    const css = readFileSync(`packages/ketsuite/src/modules/backend/design/${name}.css`, 'utf8')
+    assert.doesNotMatch(css, /\[data-ui="surface"\]\[data-padding="default"\]/u, name)
+  }
   for (const pattern of ['record-page', 'form-page']) {
     const css = readFileSync(`packages/design-system/src/patterns/${pattern}/styles.css`, 'utf8')
     const body = css.match(new RegExp(`\\[data-ui="${pattern}-body"\\] \\{[^}]*\\}`, 'u'))?.[0] ?? ''

@@ -1134,29 +1134,10 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* A variant's image beside its fields: drop a file on it, or choose one. */
+  /* The row owns the image column; ImageDropZone owns its frame and actions. */
   [data-ui="variant-editor-image"] {
-    display: grid;
-    justify-items: center;
-    gap: var(--space-2, 8px);
     inline-size: 11rem;
-    padding: var(--space-1, 4px);
-    border: 1px dashed transparent;
-    border-radius: var(--radius-md, 7px);
-  }
-  [data-ui="variant-editor-image"][data-drag="true"] {
-    border-color: var(--admin-focus-border);
-    background: var(--admin-surface-subtle);
-  }
-  [data-ui="variant-editor-image"][data-busy="true"] {
-    opacity: 0.6;
-  }
-  [data-ui="variant-editor-image-actions"] {
-    display: grid;
-    justify-items: center;
-    gap: var(--space-2, 8px);
-    inline-size: 100%;
-    text-align: center;
+    max-inline-size: 100%;
   }
   /* The column is too narrow for a label beside the file control, so stack them. */
   [data-ui="variant-editor-image-actions"] [data-ui="field"] {
@@ -1218,9 +1199,9 @@
     [data-ui="variant-editor-row-body"] {
       grid-template-columns: minmax(0, 1fr);
     }
-    /* Stacked above the fields, the image takes the row so the drop zone fits its file control. */
+    /* Keep a bounded thumbnail when the row stacks above its fields. */
     [data-ui="variant-editor-image"] {
-      inline-size: auto;
+      inline-size: 11rem;
     }
   }
 }
