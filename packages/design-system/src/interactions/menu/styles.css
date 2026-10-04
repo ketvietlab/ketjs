@@ -176,3 +176,16 @@
     line-height: var(--kv-line-xs);
   }
 }
+
+@layer ket.app {
+  @media (max-width: 767px) {
+    :where([data-kv-design-system]) [data-ui="menu"][data-mobile-align="start"] [data-ui="menu-panel"] {
+      left: 0;
+      right: auto;
+    }
+    :where([data-kv-design-system]) [data-ui="menu"][data-mobile-align="end"] [data-ui="menu-panel"] {
+      left: auto;
+      right: 0;
+    }
+  }
+}

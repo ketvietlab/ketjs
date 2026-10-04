@@ -21,6 +21,8 @@ export type WarehouseListRow = {
   code: string
   receptionSteps: string
   deliverySteps: string
+  locationCount?: number | null
+  transferCount?: number | null
 }
 
 export type WarehousesListScreenOptions = {
@@ -60,6 +62,20 @@ export const warehouseListColumns = (_: Translator): Array<Column<WarehouseListR
     key: 'deliverySteps',
     label: _('stock_backend.warehouse.col.delivery'),
     cell: (row) => badge(selectionLabel(_, 'deliverySteps', row.deliverySteps)),
+  },
+  {
+    key: 'locationCount',
+    label: _('stock_backend.warehouse.col.locations'),
+    kind: 'number',
+    align: 'end',
+    cell: (row) => (row.locationCount == null ? '—' : String(row.locationCount)),
+  },
+  {
+    key: 'transferCount',
+    label: _('stock_backend.warehouse.col.transfers'),
+    kind: 'number',
+    align: 'end',
+    cell: (row) => (row.transferCount == null ? '—' : String(row.transferCount)),
   },
 ]
 

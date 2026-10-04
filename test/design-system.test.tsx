@@ -33,6 +33,7 @@ import {
   Disclosure,
   Field,
   FileUpload,
+  DropZone,
   FilterBar,
   FormPage,
   FormattedDate,
@@ -401,7 +402,10 @@ test('design system: a label sits beside its control from tablet width and above
   // Két Design System visual contract L7. The browser check measures this on /layering at 1440 and 390 px;
   // this keeps the rule from being dropped where CI does not run a browser.
   const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
+  assert.match(
+    css,
+    /:has\(> \[data-ui="field"\]\):not\(\[data-ui="date-inputs"\]\):not\(\[data-ui="date-range"\]\):not\(\s*\[data-ui="date-time-picker"\]\s*\) \{\s+container-type: inline-size;/u,
+  )
   for (const query of ['@media (max-width: 47.9375rem)', '@container (max-width: 28rem)']) {
     const start = css.indexOf(query)
     assert.notEqual(start, -1, query)
@@ -415,6 +419,28 @@ test('design system: a label sits beside its control from tablet width and above
   // Label stacking belongs to Field; form columns may align their label tracks.
   const recordForm = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
   assert.doesNotMatch(recordForm, /\[data-ui="field-label"\]/u)
+})
+
+test('design system: single checkboxes keep the box beside a full-width label', () => {
+  const field = renderToString(
+    <Field id="default-filter" name="default" type="checkbox" label="Đặt làm bộ lọc mặc định" span="full" />,
+  )
+  assert.match(field, /for="default-filter"/u)
+  assert.match(field, /type="checkbox"[^>]*name="default"/u)
+  const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(css, /\[data-kind="checkbox"\] \{[^}]*grid-template-columns: 1rem minmax\(0, 1fr\);/u)
+  const form = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.equal(
+    (form.match(/\[data-span="full"\]:not\(\[data-kind="group"\]\):not\(\[data-kind="checkbox"\]\)/gu) ?? [])
+      .length,
+    2,
+  )
+})
+
+test('design system: mobile page titles do not reserve an empty action row', () => {
+  const css = readFileSync('packages/design-system/src/patterns/page-shell/styles.css', 'utf8')
+  const mobile = css.slice(css.indexOf('@media (max-width: 42rem)'))
+  assert.match(mobile, /\[data-kv-page-identity="title-row"\] \{\s+min-block-size: 0;/u)
 })
 
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
@@ -456,11 +482,11 @@ test('design system: titled tables use the shared surface inset', () => {
   const patterns = patternCss
   assert.match(
     layouts,
-    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: var\(--kv-surface-inset\)/,
+    /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: 0;/,
   )
   assert.match(
     layouts,
-    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: 0;\s*margin-bottom: var\(--kv-surface-head-gap\)/,
+    /\[data-padding="none"\]\[data-has-heading="true"\]\s*>\s*\[data-ui="surface-head"\] \{\s*padding: var\(--kv-surface-inset\);\s*margin-bottom: 0;/,
   )
   assert.match(
     patterns,
@@ -742,7 +768,7 @@ test('design system: operational ListPage owns one toolbar-to-result gap and an 
   assert.match(footer, /border: 0/)
   assert.match(footer, /background: transparent/)
   const mobile = readFileSync('packages/design-system/src/patterns/list-page/responsive.css', 'utf8')
-  assert.match(mobile, /padding: var\(--kv-space-3\) var\(--kv-space-4\) 0/)
+  assert.match(mobile, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\) 0/)
   assert.match(mobile, /\[data-ui="list-page-footer"\]\s*\{\s*padding: 0/)
 })
 
@@ -832,7 +858,8 @@ test('design system: responsive control dimensions are owned by tokens', () => {
 
 test('design system: canonical page headers share compact responsive padding', () => {
   const patterns = patternCss
-  const compactPadding = /padding: var\(--kv-space-4\) var\(--kv-space-4\) var\(--kv-space-3\)/g
+  const compactPadding =
+    /padding: var\(--kv-(?:space-4|gap-section)\) var\(--kv-page-padding-x\) var\(--kv-space-3\)/g
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
@@ -2156,7 +2183,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 135)
+  assert.equal(names.length, 137)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2193,8 +2220,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 300)
-  assert.equal(designSystemInventory.summary.runtimeExports, 140)
+  assert.equal(designSystemInventory.summary.publicExports, 309)
+  assert.equal(designSystemInventory.summary.runtimeExports, 145)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
@@ -2309,10 +2336,18 @@ test('design system: data table status, date and title cells stay readable', () 
   )
 })
 
-test('design system: pages keep one 16px gutter on every side of a record body', () => {
+test('design system: pages share the responsive layout gutter on every side of a record body', () => {
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const root = tokens.match(/:root \{[^}]*\}/u)?.[0] ?? ''
-  assert.match(root, /--kv-page-padding-x: var\(--kv-space-4\);/u)
+  assert.match(root, /--kv-page-padding-x: var\(--kv-layout-gap\);/u)
+  const mobile = tokens.slice(tokens.indexOf('@media (max-width: 47.9375rem)'))
+  assert.match(mobile, /--kv-layout-gap: 0\.5rem;/u)
+  assert.match(mobile, /--kv-surface-inset: var\(--kv-space-3\);/u)
+  // KetSuite compatibility styles must leave default Surface spacing to the DS.
+  for (const name of ['forms', 'content']) {
+    const css = readFileSync(`packages/ketsuite/src/modules/backend/design/${name}.css`, 'utf8')
+    assert.doesNotMatch(css, /\[data-ui="surface"\]\[data-padding="default"\]/u, name)
+  }
   for (const pattern of ['record-page', 'form-page']) {
     const css = readFileSync(`packages/design-system/src/patterns/${pattern}/styles.css`, 'utf8')
     const body = css.match(new RegExp(`\\[data-ui="${pattern}-body"\\] \\{[^}]*\\}`, 'u'))?.[0] ?? ''
@@ -2440,4 +2475,110 @@ test('design system: empty Kanban lanes retain an accessible drop target', () =>
   assert.doesNotMatch(populated, /data-ui="kanban-empty"/)
   const readOnly = renderToString(<KanbanCard id="readonly" title="Read only" href="#record" />)
   assert.doesNotMatch(readOnly, /draggable="true"/)
+})
+
+test('design system: three-column RecordForm preserves native field and submit semantics', () => {
+  const props = {
+    action: '/purchase/lines',
+    submitLabel: 'Add line',
+    fields: ['product', 'quantity', 'price'].map((name) => ({
+      id: `purchase-${name}`,
+      name,
+      label: name,
+      required: true,
+    })),
+  }
+  const body = renderToString(<RecordForm {...props} columns={3} />)
+  assert.match(body, /<form[^>]*action="\/purchase\/lines"[^>]*method="post"/u)
+  assert.match(body, /data-ui="form-grid" data-columns="3"/u)
+  for (const name of ['product', 'quantity', 'price']) {
+    assert.match(body, new RegExp(`for="purchase-${name}"`, 'u'))
+    assert.match(body, new RegExp(`name="${name}"`, 'u'))
+  }
+  assert.match(body, /type="submit"/u)
+  assert.doesNotMatch(renderToString(<RecordForm {...props} />), /data-columns="3"/u)
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.match(css, /@container record-form \(min-width: 56rem\)/u)
+  assert.match(css, /\[data-ui="form-grid"\]\[data-columns="3"\] \{[^}]*repeat\(3, minmax\(0, 1fr\)\)/u)
+})
+
+test('design system: SearchFilter bounds the whole group and lets narrow content wrap', () => {
+  const css = readFileSync('packages/design-system/src/interactions/search-filter/styles.css', 'utf8')
+  const root = css.match(/\[data-ui="search-filter"\] \{[^}]*\}/u)?.[0] ?? ''
+  assert.match(root, /inline-size: 100%;/u)
+  assert.match(root, /max-inline-size: 48rem;/u)
+  assert.match(root, /min-inline-size: 0;/u)
+  assert.match(css, /\[data-ui="search-filter-facets"\] \{[^}]*flex-wrap: wrap;/u)
+  assert.match(css, /\[data-ui="search-filter-facet"\] \{[^}]*max-inline-size: 100%;/u)
+})
+
+test('design system: image DropZone keeps one focusable native target over its preview', () => {
+  const html = String(
+    renderToString(
+      DropZone({
+        id: 'photo',
+        name: 'photo',
+        label: 'Upload image',
+        preview: { src: '/photo.png', alt: 'Product' },
+        accept: 'image/*',
+        status: 'Drop image here',
+        error: 'Too large',
+        disabled: true,
+        dragging: true,
+      }),
+    ),
+  )
+  assert.match(html, /data-kind="drop-zone"[^>]*data-label-hidden="true"/)
+  assert.match(html, /data-ui="drop-zone" data-preview="true" data-drag="true" data-disabled="true"/)
+  assert.match(html, /data-ui="upload-preview" src="\/photo.png" alt="Product"/)
+  assert.match(html, /type="file" name="photo" accept="image\/\*" disabled/)
+  assert.match(html, /aria-invalid="true" aria-describedby="photo-error photo-status"/)
+  assert.doesNotMatch(html, /type="file"[^>]*(?:hidden|tabindex="-1")/)
+  const uploadCss = readFileSync('packages/design-system/src/forms/upload/styles.css', 'utf8')
+  assert.match(
+    uploadCss,
+    /input\[type="file"\] \{[^}]*position: absolute;[^}]*inset: 0;[^}]*inline-size: 100%;[^}]*block-size: 100%;[^}]*opacity: 0;/,
+  )
+  assert.match(uploadCss, /:has\(input:focus-visible\)/)
+  assert.match(uploadCss, /\[data-preview="true"\] \{[^}]*aspect-ratio: 1;/)
+  const native = String(renderToString(FileUpload({ id: 'file', name: 'file', label: 'File' })))
+  assert.match(native, /data-ui="file-upload"/)
+  assert.doesNotMatch(native, /upload-preview|upload-caption/)
+})
+
+test('design system: navigation groups can expand all branches independently', () => {
+  const items = [
+    {
+      id: 'sales',
+      label: 'Sales',
+      expanded: true,
+      children: [
+        {
+          id: 'reports',
+          label: 'Reports',
+          expanded: true,
+          children: [{ id: 'report', label: 'Report', href: '/report' }],
+        },
+      ],
+    },
+    {
+      id: 'stock',
+      label: 'Stock',
+      expanded: true,
+      children: [{ id: 'inventory', label: 'Inventory', href: '/stock', active: true }],
+    },
+  ]
+  const navigation = renderToString(
+    <AppNavigation id="all" label="Menu" groups={[{ id: 'work', exclusive: false, items }]} />,
+  )
+  const branches = [...navigation.matchAll(/<details data-ui="navigation-branch"[^>]*>/g)].map(
+    (match) => match[0],
+  )
+  assert.equal(branches.length, 3)
+  assert.ok(branches.every((tag) => tag.includes('open="true"') && !tag.includes('name=')))
+  assert.match(navigation, /href="\/stock"[^>]*aria-current="page"/)
+  const defaultNavigation = renderToString(
+    <AppNavigation id="single" label="Menu" groups={[{ id: 'work', items }]} />,
+  )
+  assert.match(defaultNavigation, /name="single-drawer-branches"/)
 })

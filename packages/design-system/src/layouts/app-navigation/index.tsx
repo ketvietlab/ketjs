@@ -47,6 +47,8 @@ export type NavigationItemData = NavigationItemBase &
   )
 
 export type NavigationGroupData = {
+  /** False allows multiple branches to remain open, including nested branches. */
+  exclusive?: boolean
   id: string
   label?: string
   items: readonly NavigationItemData[]
@@ -129,7 +131,7 @@ const hasActiveItem = (item: NavigationItemData): boolean =>
 
 const renderNavigationItem = (
   props: NavigationItemData,
-  branchGroup: string,
+  branchGroup: string | null,
   level: number,
 ): TemplateResult => {
   if (props.children !== undefined) {
@@ -143,7 +145,8 @@ const renderNavigationItem = (
           {each(
             props.children,
             (item) => item.id,
-            (item) => renderNavigationItem(item, `${props.id}-branches`, level + 1),
+            (item) =>
+              renderNavigationItem(item, branchGroup === null ? null : `${props.id}-branches`, level + 1),
           )}
         </div>
       </details>
@@ -177,7 +180,12 @@ export const NavigationGroup = (props: NavigationGroupData & { branchGroup?: str
       {each(
         props.items,
         (item) => item.id,
-        (item) => renderNavigationItem(item, props.branchGroup ?? `${props.id}-branches`, 1),
+        (item) =>
+          renderNavigationItem(
+            item,
+            props.exclusive === false ? null : (props.branchGroup ?? `${props.id}-branches`),
+            1,
+          ),
       )}
     </div>
   </section>

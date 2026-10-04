@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { Resolver } from 'node:dns/promises'
 import {
   asc,
   defineFn,
@@ -94,6 +95,35 @@ const cleanPath = (value: unknown): string | null => {
 }
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+/** The record a host's owner adds to prove it: `TXT _ketviet.<host>` holding this value. */
+export const domainProofName = (host: string) => `_ketviet.${host}`
+export const domainProofValue = (token: string) => `ketviet-verify=${token}`
+const unverifiedDomain = () => ({
+  verifyToken: randomBytes(16).toString('hex'),
+  verifiedAt: null,
+  checkedAt: null,
+  checkResult: null,
+  servingAt: null,
+})
+/**
+ * Asks DNS for the proof. `WEBSITE_DNS_SERVERS` points the lookup at chosen resolvers; without it
+ * the system's own answer. Nothing a person types is taken as proof.
+ */
+const lookupDomainProof = async (host: string, token: string) => {
+  const resolver = new Resolver({ timeout: 3000, tries: 2 })
+  const servers = String(process.env.WEBSITE_DNS_SERVERS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (servers.length) resolver.setServers(servers)
+  try {
+    const records = await resolver.resolveTxt(domainProofName(host))
+    return records.some((chunks) => chunks.join('') === domainProofValue(token)) ? 'matched' : 'mismatch'
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    return code === 'ENODATA' || code === 'ENOTFOUND' ? 'missing' : 'unreachable'
+  }
+}
 // Keep offsets exact: clamping a large offset repeats an earlier page and can
 // make a caller collecting pages report duplicated rows as a complete total.
 const page = (limit: unknown, offset: unknown, defaultLimit = 50) => ({
@@ -794,6 +824,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
         primary: args.primary === true,
         primaryKey: args.primary === true ? String(args.siteId) : null,
         redirectToPrimary: args.redirectToPrimary !== false,
+        // A new host, or a host renamed, proves its DNS afresh; the old proof was for another name.
+        ...(existing?.host === host ? {} : unverifiedDomain()),
       }
       await ctx.tx(async (tx) => {
         if (row.primary) {
@@ -839,6 +871,59 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Looks up the host's TXT record and compares it with the value it was given. A proof stays
+   * once made: a later failed lookup is reported, but does not take the domain away.
+   */
+  verifyDomain: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', result: 'text?', errors: 'json?' },
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website.SiteDomain',
+      'write:website.SiteDomain',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
+      if (!domain) return invalid('id', 'website.error.domainNotFound')
+      if (!(await canAdministerSite(ctx, domain.siteId))) return forbidden()
+      if (!domain.verifyToken) return { ok: true, id: args.id, result: 'matched' }
+      const result = await lookupDomainProof(String(domain.host), String(domain.verifyToken))
+      const now = new Date().toISOString()
+      await ctx.db.update(
+        'website.SiteDomain',
+        { id: args.id },
+        {
+          checkedAt: now,
+          checkResult: result,
+          ...(result === 'matched' && !domain.verifiedAt ? { verifiedAt: now } : {}),
+        },
+      )
+      return { ok: true, id: args.id, result }
+    },
+  }),
+
+  /** Két Việt marks a verified host as answering over HTTPS once its certificate is in place. */
+  markDomainServing: defineFn({
+    exposure: 'internal',
+    input: { id: 'id', serving: 'bool' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.SiteDomain', 'write:website.SiteDomain'],
+    handler: async (ctx: Ctx, args) => {
+      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
+      if (!domain) return invalid('id', 'website.error.domainNotFound')
+      if (args.serving && domain.verifyToken && !domain.verifiedAt)
+        return invalid('id', 'website.error.domainUnverified')
+      await ctx.db.update(
+        'website.SiteDomain',
+        { id: args.id },
+        { servingAt: args.serving ? new Date().toISOString() : null },
+      )
+      return { ok: true, id: args.id }
+    },
+  }),
+
   listDomains: defineFn({
     input: { siteId: 'id', limit: 'int?', offset: 'int?' },
     output: {
@@ -847,6 +932,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
       host: 'text',
       primary: 'bool',
       redirectToPrimary: 'bool',
+      verifyToken: 'text?',
+      verifiedAt: 'datetime?',
+      checkedAt: 'datetime?',
+      checkResult: 'text?',
+      servingAt: 'datetime?',
     },
     effects: ['read:website.Site', 'read:website.SiteMember', 'read:website.SiteDomain'],
     agent: true,

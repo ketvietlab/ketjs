@@ -358,6 +358,78 @@
   font: inherit;
   cursor: pointer;
 }
+/* The customer's own pages: the sign-in's card, alone. */
+.wt-public-signin--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wt-public-signin--account .wt-public-signin__card {
+  inline-size: min(100%, 42rem);
+}
+.wt-public-account__history {
+  margin: 0 0 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+.wt-public-account__history h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+}
+.wt-public-account__history [data-history-state] {
+  margin: 0;
+}
+.wt-public-account__history ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wt-public-account__history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 1rem;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+.wt-public-account__history li span:nth-child(2),
+.wt-public-account__history li span:nth-child(4) {
+  text-align: end;
+}
+.wt-public-account__history li span:nth-child(3) {
+  opacity: 0.75;
+}
+.wt-public-account__history [data-history-more] {
+  margin-top: 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.wt-public-account__facts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+.wt-public-account__facts div {
+  display: grid;
+  gap: 0.125rem;
+}
+.wt-public-account__facts dt {
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+.wt-public-account__facts dd {
+  margin: 0;
+}
+.wt-public-account__heading {
+  margin: 2rem 0 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 1.125rem;
+}
 @media (max-width: 54rem) {
   .wt-public-signin {
     grid-template-columns: minmax(0, 1fr);

@@ -121,3 +121,12 @@ control alignment, surface boundaries, overflow, and supported interactions.
 Report what changed, checks actually run, and any unmet contract. Show the affected
 screen with a local URL and screenshot when a browser is available. A screenshot
 alone does not prove permissions, keyboard behavior or native form submission.
+
+## Shared page and card spacing
+
+Use `--kv-layout-gap` (desktop 12px / 0.75rem; mobile 8px / 0.5rem below 768px) as the single
+source for the gap between cards and the content inset from the shell, on desktop
+and mobile. `--kv-page-padding-x`, `--kv-gap-section` and compatibility aliases
+must reference it; never give these roles independent numeric values. Only `--kv-layout-gap` changes at the mobile breakpoint. Parent page/layout owns this gap exactly once. Do not add child margins
+or empty blocks that accumulate it. Internal field/control padding remains owned
+by its component. Measure both shell-to-content edges and card-to-card edges.

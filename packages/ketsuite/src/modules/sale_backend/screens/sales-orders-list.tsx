@@ -2,6 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  designSystem,
   collectionActions,
   collectionControls,
   collectionTable,
@@ -45,10 +46,9 @@ export const salesOrderColumns = (
     priority: 'primary',
     width: 'wide',
     cell: (row) =>
-      linkButton({
+      designSystem.Link({
         label: String(row.name),
-        href: `/admin/sales/orders/${String(row.id)}${detailSuffix}`,
-        variant: 'tertiary',
+        href: `/admin/sales/orders/${encodeURIComponent(String(row.id))}${detailSuffix}`,
       }),
   },
   {
@@ -98,10 +98,9 @@ export const salesOrderColumns = (
           label: _('backend.print.label'),
           align: 'end' as const,
           cell: (row: SalesOrderRow) =>
-            linkButton({
+            designSystem.Link({
               label: _('backend.print.label'),
               href: `/reports/${encodeURIComponent(printReport.id)}/${encodeURIComponent(String(row.id))}${detailSuffix}`,
-              variant: 'tertiary',
             }),
         },
       ]
@@ -131,9 +130,13 @@ export const salesOrdersListScreen = (
   const selection = options.table?.selection ?? collection.frame.chrome?.selection
   const summary = [
     `${_('sale_backend.orderList.summary.total')}: ${String(total)}`,
-    `${_('sale_backend.orderList.summary.toInvoice')}: ${String(toInvoice)}`,
-    `${_('sale_backend.orderList.summary.invoiced')}: ${String(invoiced)}`,
-    `${_('sale_backend.orderList.summary.locked')}: ${String(locked)}`,
+    ...(options.total === undefined
+      ? [
+          `${_('sale_backend.orderList.summary.toInvoice')}: ${String(toInvoice)}`,
+          `${_('sale_backend.orderList.summary.invoiced')}: ${String(invoiced)}`,
+          `${_('sale_backend.orderList.summary.locked')}: ${String(locked)}`,
+        ]
+      : []),
   ].join(' · ')
 
   return shell(

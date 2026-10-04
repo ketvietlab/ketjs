@@ -90,18 +90,18 @@
   }
 
   /* A field is a label wrapping its input, so the whole thing is a click target. */
-  [data-ui="field"] {
+  [data-ui="login"] [data-ui="field"] {
     display: grid;
     gap: var(--admin-gap-xs);
   }
 
-  [data-ui="field-label"] {
+  [data-ui="login"] [data-ui="field-label"] {
     color: var(--admin-ink-secondary);
     font-size: var(--admin-size-sm);
     font-weight: 500;
   }
 
-  [data-ui="field-input"] {
+  [data-ui="login"] [data-ui="field-input"] {
     min-block-size: var(--admin-field-height);
     padding-inline: 0.625rem;
     border: 1px solid var(--admin-control-border);
@@ -115,14 +115,14 @@
       box-shadow var(--admin-motion-fast);
   }
 
-  [data-ui="field-input"]:focus-visible {
+  [data-ui="login"] [data-ui="field-input"]:focus-visible {
     border-color: var(--admin-focus-border);
     background: var(--admin-control-focus);
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
     outline: none;
   }
 
-  [data-ui="field-input"]:hover:not(:focus-visible) {
+  [data-ui="login"] [data-ui="field-input"]:hover:not(:focus-visible) {
     border-color: var(--admin-control-border-hover);
     background: var(--admin-control-hover);
   }

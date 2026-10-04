@@ -6,7 +6,7 @@
 // feeds view state before anything is submitted, and a trigger that opens a dialog
 // of the same record.
 
-import { ActionGroup, Field } from '@ketvietlab/design-system'
+import { ActionGroup, Field, ImageDropZone } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { RECORD_COMMAND_FIELD } from './record-modal.tsx'
@@ -18,6 +18,7 @@ import { RECORD_COMMAND_FIELD } from './record-modal.tsx'
 export const RecordModalForm = (props: {
   kind: string
   fields: readonly FieldProps[]
+  columns?: 1 | 2 | 3
   body?: JSXChild
   /** Structural edits and retained drafts remain dirty after a view-state render. */
   dirty?: boolean
@@ -49,7 +50,11 @@ export const RecordModalForm = (props: {
     {Object.entries(props.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
-    {props.fields.length ? <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div> : null}
+    {props.fields.length ? (
+      <div data-ui="form-grid" data-columns={props.columns === 3 ? '3' : undefined}>
+        {props.fields.map((item) => Field(props.columns === 1 ? { ...item, span: 'full' } : item))}
+      </div>
+    ) : null}
     {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>
@@ -170,6 +175,10 @@ export const RecordImageField = (props: {
   id: string
   /** The viewer island (`backend.lightbox`), or null when there is no image yet. */
   viewer: JSXChild | null
+  hidden?: Record<string, string>
+  accept?: string
+  help?: string | null
+  error?: string | null
   uploadCommand?: string | null
   removeCommand?: string | null
   labels: { empty: string; upload: string; replace: string; remove: string; drop: string }
@@ -193,27 +202,33 @@ export const RecordImageField = (props: {
       ) : (
         ''
       )}
-      <div data-ui="record-image-frame" title={editable ? props.labels.drop : undefined}>
-        {hasImage ? props.viewer : <span data-ui="record-image-empty">{props.labels.empty}</span>}
-      </div>
-      {editable || (hasImage && props.removeCommand) ? (
-        <div data-ui="record-image-actions">
-          {editable ? (
-            <label data-ui="record-image-upload" data-variant="tertiary">
+      {Object.entries(props.hidden ?? {}).map(([name, value]) => (
+        <input type="hidden" autocomplete="off" name={name} value={value} />
+      ))}
+      <ImageDropZone
+        label={props.labels.empty}
+        viewer={props.viewer}
+        help={props.help}
+        error={props.error}
+        busy={props.busy}
+        picker={
+          editable ? (
+            <label data-ui="image-drop-picker" title={props.labels.drop}>
               <input
                 type="file"
                 autocomplete="off"
                 name="file"
-                accept="image/avif,image/gif,image/jpeg,image/png,image/webp"
+                accept={props.accept ?? 'image/avif,image/gif,image/jpeg,image/png,image/webp'}
+                aria-label={hasImage ? props.labels.replace : props.labels.upload}
                 data-record-submit="true"
                 disabled={props.busy === true}
               />
               <span>{hasImage ? props.labels.replace : props.labels.upload}</span>
             </label>
-          ) : (
-            ''
-          )}
-          {hasImage && props.removeCommand ? (
+          ) : null
+        }
+        actions={
+          hasImage && props.removeCommand ? (
             <button
               type="submit"
               data-ui="action"
@@ -226,13 +241,9 @@ export const RecordImageField = (props: {
             >
               {props.labels.remove}
             </button>
-          ) : (
-            ''
-          )}
-        </div>
-      ) : (
-        ''
-      )}
+          ) : null
+        }
+      />
     </form>
   )
 }
