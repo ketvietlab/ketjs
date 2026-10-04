@@ -1,6 +1,6 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { DatePresetPicker } from '../forms/date-presets/index.tsx'
-import { DatePicker, DateRangePicker } from '../forms/date-time/index.tsx'
+import { DatePicker, DateRangePicker, DateTimePicker } from '../forms/date-time/index.tsx'
 import { Disclosure, Stack } from '../layouts/index.tsx'
 
 /** Fixed civil today makes catalogue and browser checks reproducible. */
@@ -22,6 +22,14 @@ export const DatePickerExamples = (props: { showStates?: boolean } = {}): Templa
         value="2026-09-30"
         today="2026-09-30"
         help="Chọn trên lịch hoặc nhập ngày trực tiếp."
+      />,
+      <DateTimePicker
+        id="appointment"
+        name="appointment"
+        label="Ngày và giờ hẹn"
+        value="2026-09-30T09:00"
+        today="2026-09-30"
+        required
       />,
       <DateRangePicker
         id="range"

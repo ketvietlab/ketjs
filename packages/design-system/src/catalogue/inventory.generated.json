@@ -17,7 +17,7 @@
     "runtimeGaps": 8,
     "typeGaps": 157,
     "cssFiles": 80,
-    "cssLines": 16829
+    "cssLines": 16874
   },
   "rows": [
     {
@@ -1567,6 +1567,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/date-pickers.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1746,6 +1747,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/design-system-dates.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/search-filter-layout.test.tsx"
@@ -12213,7 +12215,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/date-time/styles.css",
-      "lines": 289,
+      "lines": 317,
       "hooks": [
         "date-boundary",
         "date-calendar",
@@ -12235,6 +12237,9 @@
         "date-range",
         "date-range-error",
         "date-range-preset",
+        "date-time-controls",
+        "date-time-parts",
+        "date-time-picker",
         "date-tools",
         "date-weekday",
         "field"
@@ -12920,9 +12925,12 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 115,
+      "lines": 129,
       "hooks": [
         "bulk-action-list",
+        "date-inputs",
+        "date-range",
+        "date-time-picker",
         "field",
         "form-actions",
         "form-errors",
@@ -12994,8 +13002,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 399,
+      "lines": 402,
       "hooks": [
+        "date-inputs",
+        "date-range",
+        "date-time-picker",
         "field",
         "field-affix",
         "field-clear",
