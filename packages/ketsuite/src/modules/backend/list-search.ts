@@ -206,13 +206,21 @@ export const loadListGroups = async (
     groupFunction: string
     listFunction: string
     listArgs?: AnyRow
+    groupArgs?: AnyRow
     label: (field: string, value: unknown) => string
   },
   path: unknown[] = [],
 ): Promise<TableGroup<AnyRow>[]> => {
   const groups = (await ctx.call(
     options.groupFunction,
-    { ...(options.listArgs ?? {}), listState: state, path, timezone, limit: LIST_PAGE_SIZE },
+    {
+      ...(options.listArgs ?? {}),
+      ...(options.groupArgs ?? {}),
+      listState: state,
+      path,
+      timezone,
+      limit: LIST_PAGE_SIZE,
+    },
     url,
     req,
   )) as SavedGroup[]

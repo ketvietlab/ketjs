@@ -59,7 +59,7 @@ import {
 import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
 import { DatePickerExamples } from './date-pickers.tsx'
 import { DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
-import { DropZone, FileUpload } from '../forms/upload/index.tsx'
+import { DropZone, FileUpload, ImageDropZone } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
 import {
   AppliedFilters,
@@ -2062,6 +2062,15 @@ export const componentGroups: readonly ComponentGroup[] = [
         render: () => (
           <Stack
             items={[
+              <ImageDropZone
+                label="Product photo"
+                picker={
+                  <label data-ui="image-drop-picker">
+                    <input type="file" accept="image/*" aria-label="Choose product photo" />
+                    <span>Choose or drop photo</span>
+                  </label>
+                }
+              />,
               <FileUpload id="invoice" name="invoice" label="Invoice" accept="application/pdf" />,
               <DropZone
                 id="photos"
