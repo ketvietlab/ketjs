@@ -287,3 +287,31 @@
     }
   }
 }
+
+@layer ket.app {
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"]
+    > [data-ui="date-field-control"],
+  :where([data-kv-design-system])
+    [data-ui="field"][data-label-hidden="true"]
+    > [data-ui="date-time-controls"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="date-time-picker"],
+  :where([data-kv-design-system]) [data-ui="date-time-controls"] {
+    min-width: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="date-time-controls"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  :where([data-kv-design-system]) [data-ui="date-time-parts"]:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: var(--kv-space-2);
+  }
+}
