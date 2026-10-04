@@ -1,9 +1,17 @@
 import { styleKeys, studioStyleDefaults } from '../../website/studio-style.ts'
+import type { StudioPreset } from '../../website/studio-style.ts'
 import { pageTemplates } from '../../website/studio-content.ts'
+import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
 import { entryProjection } from './context.ts'
+import { CUSTOMER_SIGNIN_PATH } from './public.ts'
 import type { Route, ServeContext, Row } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
+/** What a deployment decides about its Studio. */
+export type StudioOptions = {
+  /** The look a site made in the Studio starts with. Sites that already exist keep theirs. */
+  defaultPreset?: StudioPreset
+}
 export type Snapshot = {
   sites: Row[]
   site: Row | null
@@ -52,7 +60,28 @@ const capabilities: Record<string, string[]> = {
     'website_form.exportSubmissions',
     'website_form.retryDelivery',
   ],
+  'website.customer.manage': [
+    'website.listCustomerAccounts',
+    'website.customerAccessForSite',
+    'website.disableCustomerAccess',
+    'website.enableCustomerAccess',
+    'website.resetCustomerPassword',
+    'website.setCustomerSelfSignup',
+  ],
+  // Issuing finds the customer among the company's partners first.
+  'website.customer.issue': ['website.issueCustomerAccess', 'partner.listPartners'],
+  // Absent where the deployment does not compose website_customer_mail: there is no mail to word.
+  'website.customer.mail': [
+    'website_customer_mail.passwordResetTemplate',
+    'website_customer_mail.savePasswordResetTemplate',
+  ],
 }
+/** Optional modules a site can be bound to, by the prefix of their functions. */
+const bindingModules: [string, string][] = [
+  ['retail', 'website_retail.'],
+  ['hospitality', 'website_hospitality.'],
+  ['crm', 'crm_website.'],
+]
 /**
  * The function that opens a receiver's record, by destination. A link the viewer cannot open
  * only leads to a refusal, so the Studio shows it to those who may follow it.
@@ -192,7 +221,65 @@ const termResource = (term: Row, entries: Row[]) => {
     archived: !!term.archivedAt,
   }
 }
-export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
+/**
+ * A host as the domain screens read it. One without a proof value was connected by Két Việt
+ * before verification existed, so it is taken as verified and serving.
+ */
+const domainResource = (d: Row) => {
+  const connected = !d.verifyToken
+  const result = d.checkResult == null ? null : String(d.checkResult)
+  return {
+    id: d.id,
+    siteId: d.siteId,
+    title: d.host,
+    host: d.host,
+    role: d.primary ? 'primary' : 'redirect',
+    state: connected || d.verifiedAt ? 'verified' : result && result !== 'matched' ? 'failed' : 'pending',
+    tls: connected || d.servingAt ? 'ready' : 'pending',
+    checkedAt: d.checkedAt ?? null,
+    reason: result,
+    challenge: connected
+      ? null
+      : {
+          type: 'TXT',
+          name: domainProofName(String(d.host)),
+          value: domainProofValue(String(d.verifyToken)),
+        },
+    attempts: d.checkedAt
+      ? [
+          {
+            id: `${d.id}:${d.checkedAt}`,
+            at: d.checkedAt,
+            result: result === 'matched' ? 'verified' : 'failed',
+            reason: result,
+          },
+        ]
+      : [],
+    // Domains keep no revision of their own; what a decision rests on stands in for one.
+    revisionId: [d.id, d.primary, d.verifiedAt, d.checkedAt, d.servingAt].join(':'),
+  }
+}
+/** Pages and posts are what search engines index; their SEO lives in the entry's own fields. */
+const seoEntries = (entries: Row[]) =>
+  entries.filter((e) => !e.trashed && ['page', 'post'].includes(String(e.type)))
+/** An entry's search and sharing metadata. An unset title reads as the page's own, as served. */
+const seoResource = (entry: Row) => {
+  const seo = row(entry.seo)
+  return {
+    id: entry.id,
+    siteId: entry.siteId,
+    kind: 'seo',
+    title: seo.title || entry.title,
+    path: entry.path,
+    description: seo.description ?? '',
+    image: seo.image ?? '',
+    indexing: seo.indexing === 'noindex' ? 'noindex' : 'index',
+    canonical: seo.canonical ?? '',
+    state: entry.state,
+    revisionId: entry.revisionId,
+  }
+}
+export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: StudioOptions = {}) {
   const call = async (name: string, input: Row = {}) => {
     const result = await ctx.call(name, input, url, req, {
       idempotencyKey:
@@ -284,6 +371,21 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
       await destinationOptions(),
     )
   }
+  /** What Settings edits of a site. The revision is the last save, which saveSite does not compare. */
+  const siteRecord = (site: Row) => ({
+    id: String(site.id),
+    title: site.title,
+    code: site.name,
+    defaultLocale: site.defaultLocale,
+    revisionId: String(site.updatedAt ?? site.id),
+  })
+  const signInUrl = (host: unknown) => (host ? `https://${String(host)}${CUSTOMER_SIGNIN_PATH}` : null)
+  /** A sign-in account of this site's customers; one that signs in elsewhere, or nowhere, is not found. */
+  const customerOf = async (siteId: unknown, partnerId: unknown) => {
+    const access = row(await call('website.customerAccessForSite', { siteId, partnerId }))
+    if (!access.account) fail('notFound', 'Không tìm thấy tài khoản đăng nhập.')
+    return { ...row(access.account), partnerId: String(partnerId), signInUrl: signInUrl(access.signInHost) }
+  }
   const queries: Record<string, (input: Row) => Promise<unknown>> = {
     'website_studio.bootstrap': async (input) => {
       const data = await snapshot(input.site)
@@ -293,9 +395,14 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         if ((await Promise.all(functions.map((fn) => ctx.allows(fn, url, req)))).every(Boolean))
           allowed.push(key)
       }
+      const site = data.site ? publicSite(data.site, data.domains) : null
       return {
         actor: { id: identity?.userId, name: identity?.userId, role: '', capabilities: allowed },
-        site: data.site ? publicSite(data.site, data.domains) : null,
+        // Where visitors open the site: this origin when the ERP and the site share a host.
+        site: site && {
+          ...site,
+          url: site.host ? (url.hostname === site.host ? url.origin : `${url.protocol}//${site.host}`) : '',
+        },
         sites: data.sites.map((s) => ({
           id: s.id,
           name: s.title || s.name,
@@ -596,6 +703,14 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
           })),
         }
       }
+      if (input.kind === 'domains') {
+        const domain = data.domains.find((d) => d.id === input.id)
+        return domain ? domainResource(domain) : fail('notFound', 'Không tìm thấy tên miền.')
+      }
+      if (input.kind === 'seo') {
+        const entry = seoEntries(data.entries).find((e) => e.id === input.id)
+        return entry ? seoResource(entry) : fail('notFound', 'Không tìm thấy trang.')
+      }
       if (input.kind !== 'themes' || input.id !== data.site!.id)
         return fail('notFound', 'Không tìm thấy giao diện.')
       return {
@@ -686,6 +801,101 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         })
         return menuOf(data.site!)
       }
+      if (input.kind === 'sites') {
+        const data = await snapshot(input.siteId)
+        const values = row(input.values)
+        const site = data.sites.find((s) => s.id === input.id)
+        if (!site) {
+          if (input.expectedRevisionId) fail('notFound', 'Không tìm thấy website.')
+          const title = String(values.title ?? '').trim()
+          // The new site renders with the theme module the others use, or the one this deployment composes.
+          const theme =
+            data.site?.theme ??
+            ctx.manifest.order.find((name) => ctx.manifest.modules[name]?.kind === 'theme') ??
+            fail('validation', 'Chưa có giao diện nào để tạo website.')
+          await call('website.saveSite', {
+            id: input.id,
+            name: String(values.code || title).trim(),
+            title,
+            defaultLocale: String(values.defaultLocale || 'vi'),
+            theme,
+          })
+          if (options.defaultPreset)
+            await call('website.saveStudioStyle', {
+              siteId: input.id,
+              expectedRevisionId: 'initial',
+              values: { preset: options.defaultPreset },
+            })
+          const host = String(values.host ?? '')
+            .trim()
+            .toLowerCase()
+          if (host)
+            await call('website.saveDomain', {
+              id: `${input.id}-domain`,
+              siteId: input.id,
+              host,
+              primary: true,
+            })
+          return siteRecord((await snapshot(input.id)).site!)
+        }
+        // A retried create answers with what it made.
+        if (!input.expectedRevisionId) return siteRecord(site)
+        if (input.expectedRevisionId !== siteRecord(site).revisionId)
+          fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi lưu.')
+        await call('website.saveSite', {
+          id: site.id,
+          name: String(values.code ?? site.name).trim(),
+          title: String(values.title ?? site.title).trim(),
+          defaultLocale: String(values.defaultLocale || site.defaultLocale),
+          theme: site.theme,
+          tokens: site.tokens ?? null,
+          siteGroup: site.siteGroup ?? null,
+          active: site.active,
+        })
+        return siteRecord((await snapshot(site.id)).site!)
+      }
+      if (input.kind === 'domains') {
+        const data = await snapshot(input.siteId)
+        const host = String(row(input.values).title ?? '')
+          .trim()
+          .toLowerCase()
+        const existing = data.domains.find((d) => d.id === input.id)
+        // A retried add answers with what it made; another name is another domain to prove.
+        if (existing && existing.host === host) return domainResource(existing)
+        if (existing) fail('validation', 'Muốn đổi tên miền thì thêm tên miền mới.')
+        await call('website.saveDomain', {
+          id: input.id,
+          siteId: data.site!.id,
+          host,
+          // The first host is the site's address; later ones redirect to it until switched.
+          primary: !data.domains.some((d) => d.primary),
+        })
+        const saved = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!
+        return domainResource(saved)
+      }
+      if (input.kind === 'seo') {
+        const entry = seoEntries((await snapshot(input.siteId)).entries).find((e) => e.id === input.id)
+        if (!entry) return fail('notFound', 'Không tìm thấy trang.')
+        if (input.expectedRevisionId !== entry.revisionId)
+          fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi lưu.')
+        const values = row(input.values)
+        const text = (key: string) => String(values[key] ?? '').trim()
+        await queries['website.saveEntry']!({
+          ...entry,
+          path: text('path') || entry.path,
+          seo: {
+            // The page's own title is the fallback; storing it would freeze it against later renames.
+            title: text('title') === entry.title ? '' : text('title'),
+            description: text('description'),
+            image: text('image'),
+            canonical: text('canonical'),
+            indexing: values.indexing === 'noindex' ? 'noindex' : 'index',
+          },
+          expectedRevisionId: entry.revisionId,
+        })
+        const saved = (await snapshot(input.siteId)).entries.find((e) => e.id === entry.id)!
+        return seoResource(saved)
+      }
       if (input.kind !== 'themes')
         return fail('unavailable', 'Chức năng này chưa được kết nối với dữ liệu hệ thống.')
       const data = await snapshot(input.siteId)
@@ -707,16 +917,38 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
       if (input.kind === 'templates') return { rows: pageTemplates }
       if (input.kind === 'themes') return { rows: [themeResource(data.site!)] }
       if (input.kind === 'menus') return { rows: [await menuOf(data.site!)], creatable: false }
-      if (input.kind === 'domains')
-        return {
-          rows: data.domains.map((d) => ({
-            ...d,
-            title: d.host,
-            role: d.primary ? 'primary' : 'redirect',
-            state: d.verifiedAt ? 'verified' : 'pending',
-          })),
-        }
+      if (input.kind === 'domains') return { rows: data.domains.map(domainResource) }
       if (input.kind === 'sites') return { rows: data.sites.map((s) => publicSite(s, data.domains)) }
+      if (input.kind === 'seo') {
+        const entries = seoEntries(data.entries)
+        const search = String(input.search ?? '')
+          .trim()
+          .toLocaleLowerCase('vi')
+        // The audit reads what visitors are served: the published revision, not the draft.
+        const live = entries.flatMap((e) => {
+          const revision = data.revisions.find((r) => r.id === e.publishedRevisionId)
+          return revision ? [{ entry: e, seo: row(row(revision.fields).seo) }] : []
+        })
+        return {
+          rows: entries
+            .map(seoResource)
+            .filter((r) => !search || `${r.title} ${r.path}`.toLocaleLowerCase('vi').includes(search)),
+          // A page is written from its Builder, so there is no SEO record to create on its own.
+          creatable: false,
+          audit: {
+            publicationId: data.site!.activePublicationId ?? null,
+            indexState: live.length ? 'ready' : 'empty',
+            rows: live
+              .map(({ entry, seo }) => ({
+                id: entry.id,
+                title: entry.title,
+                missing: ['description', 'image'].filter((key) => !String(seo[key] ?? '').trim()),
+                indexLag: entry.state === 'changed',
+              }))
+              .filter((r) => r.missing.length || r.indexLag),
+          },
+        }
+      }
       if (input.kind === 'form-editor') {
         const forms = (await call('website_form.listForms', { siteId: data.site!.id })) as Row[]
         return { rows: forms.map((form) => formResource(form, [], [], [])) }
@@ -829,6 +1061,39 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         archived: true,
       }
     },
+    'website_studio.verifyDomain': async (input) => {
+      const domain = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)
+      if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
+      if (input.expectedRevisionId !== domainResource(domain).revisionId)
+        fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi kiểm tra.')
+      // The lookup is the server's own; nothing the browser sends counts as proof.
+      await call('website.verifyDomain', { id: domain.id })
+      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+    },
+    'website_studio.setPrimaryDomain': async (input) => {
+      const data = await snapshot(input.siteId)
+      const domain = data.domains.find((d) => d.id === input.id)
+      if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
+      const current = domainResource(domain)
+      const primary = data.domains.find((d) => d.primary)
+      if (
+        input.expectedRevisionId !== current.revisionId ||
+        (input.expectedPrimaryId ?? null) !== (primary?.id ?? null)
+      )
+        fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi chuyển.')
+      if (input.confirmed !== true) fail('validation', 'Xác nhận chuyển địa chỉ chính trước khi tiếp tục.')
+      // Every other host redirects to the primary: one that does not answer yet takes the site down.
+      if (current.state !== 'verified' || current.tls !== 'ready')
+        fail('validation', 'Tên miền cần được xác minh và có HTTPS trước khi làm địa chỉ chính.')
+      await call('website.saveDomain', {
+        id: domain.id,
+        siteId: data.site!.id,
+        host: domain.host,
+        primary: true,
+        redirectToPrimary: domain.redirectToPrimary,
+      })
+      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+    },
     'website_studio.savePageSettings': async (input) => {
       const { entry } = await forEntry(input.id)
       if (entry.siteId !== input.siteId) fail('notFound', 'Không tìm thấy nội dung.')
@@ -863,6 +1128,142 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req) {
         id: input.id,
         expectedRevisionId: input.expectedRevisionId,
       })
+    },
+    'website_studio.siteReadiness': async (input) => {
+      const data = await snapshot(input.siteId)
+      const site = data.site!
+      const host = data.domains.find((d) => d.primary)?.host ?? data.domains[0]?.host
+      const functions = Object.keys((await ctx.live(req)).functions)
+      // How the site takes customer accounts is shown to those who look after them.
+      const customers = (await ctx.allows('website.listCustomerAccounts', url, req))
+        ? row(await call('website.listCustomerAccounts', { siteId: site.id, limit: 1 }))
+        : null
+      const realm = row(customers?.realm)
+      return {
+        site: siteRecord(site),
+        publicUrl: host ? `https://${String(host)}` : '',
+        bindings: bindingModules
+          .filter(([, prefix]) => functions.some((name) => name.startsWith(prefix)))
+          .map(([key]) => key),
+        blockers: [],
+        customers: customers
+          ? {
+              available: !!realm.id,
+              selfSignup: realm.selfSignup === true,
+              signInUrl: signInUrl(realm.signInHost),
+              total: Number(customers.total ?? 0),
+            }
+          : null,
+      }
+    },
+    'website_studio.saveCustomerSettings': async (input) => {
+      const data = await snapshot(input.siteId)
+      if (typeof input.selfSignup !== 'boolean') fail('validation', 'Chọn có cho khách tự đăng ký hay không.')
+      await call('website.setCustomerSelfSignup', { siteId: data.site!.id, open: input.selfSignup })
+      return { selfSignup: input.selfSignup }
+    },
+    // One mail for the company: every site's customers are sent the same wording, with its own title.
+    'website_studio.customerMail': async () =>
+      row(await call('website_customer_mail.passwordResetTemplate', {})),
+    'website_studio.saveCustomerMail': async (input) => {
+      const values = row(input.values)
+      await call('website_customer_mail.savePasswordResetTemplate', {
+        fromAddress: String(values.fromAddress ?? ''),
+        fromName: String(values.fromName ?? '') || null,
+        replyTo: String(values.replyTo ?? '') || null,
+        subject: String(values.subject ?? ''),
+        text: String(values.text ?? ''),
+        active: values.active === true,
+        expectedVersion: input.expectedVersion ?? null,
+      })
+      return row(await call('website_customer_mail.passwordResetTemplate', {}))
+    },
+    'website_studio.customers': async (input) => {
+      const data = await snapshot(input.siteId)
+      const list = row(
+        await call('website.listCustomerAccounts', {
+          siteId: data.site!.id,
+          search: String(input.search ?? '').trim() || null,
+          status: ['active', 'disabled'].includes(String(input.status)) ? input.status : null,
+          limit: 50,
+          offset: Math.max(Number(input.offset ?? 0) || 0, 0),
+        }),
+      )
+      const realm = row(list.realm)
+      return {
+        available: !!realm.id,
+        selfSignup: realm.selfSignup === true,
+        signInUrl: signInUrl(realm.signInHost),
+        rows: list.rows ?? [],
+        total: Number(list.total ?? 0),
+      }
+    },
+    'website_studio.customer': async (input) => {
+      const data = await snapshot(input.siteId)
+      return customerOf(data.site!.id, input.partnerId)
+    },
+    'website_studio.customerCommand': async (input) => {
+      const data = await snapshot(input.siteId)
+      // The account is checked against this site first: the functions below take a partner alone.
+      await customerOf(data.site!.id, input.partnerId)
+      const partnerId = String(input.partnerId)
+      let password: unknown = null
+      if (input.action === 'disable') await call('website.disableCustomerAccess', { partnerId })
+      else if (input.action === 'enable') await call('website.enableCustomerAccess', { partnerId })
+      else if (input.action === 'reset')
+        password = row(
+          await call('website.resetCustomerPassword', {
+            partnerId,
+            password: String(input.password ?? '') || null,
+          }),
+        ).password
+      else fail('validation', 'Thao tác không hợp lệ.')
+      return { account: await customerOf(data.site!.id, partnerId), password: password ?? null }
+    },
+    'website_studio.customerCandidates': async (input) => {
+      const data = await snapshot(input.siteId)
+      const search = String(input.search ?? '').trim()
+      if (search.length < 2) return { rows: [] }
+      const partners = (await call('partner.listPartners', { search, limit: 10 })) as Row[]
+      const rows = []
+      for (const partner of partners) {
+        const access = row(
+          await call('website.customerAccessForSite', { siteId: data.site!.id, partnerId: partner.id }),
+        )
+        rows.push({
+          id: String(partner.id),
+          name: String(partner.name),
+          // Partners keep E.164; staff and customers write the national 0… form.
+          phone: typeof partner.phone === 'string' ? partner.phone.replace(/^\+84(?=\d{9,10}$)/, '0') : null,
+          email: partner.email ?? null,
+          account: access.account ? String(row(access.account).status) : null,
+        })
+      }
+      return { rows }
+    },
+    'website_studio.issueCustomer': async (input) => {
+      const data = await snapshot(input.siteId)
+      const values = row(input.values)
+      // Issuing again would reset the password unasked; that is the account's own reset action.
+      const held = row(
+        await call('website.customerAccessForSite', { siteId: data.site!.id, partnerId: input.partnerId }),
+      )
+      if (held.account) fail('conflict', 'Khách này đã có tài khoản đăng nhập.')
+      const issued = row(
+        await call('website.issueCustomerAccess', {
+          siteId: data.site!.id,
+          partnerId: String(input.partnerId ?? ''),
+          displayName: String(values.displayName ?? '').trim() || null,
+          phone: String(values.phone ?? '').trim() || null,
+          email: String(values.email ?? '').trim() || null,
+          password: String(values.password ?? '') || null,
+        }),
+      )
+      return {
+        account: await customerOf(data.site!.id, input.partnerId),
+        password: issued.password ?? null,
+        created: issued.created === true,
+      }
     },
     'website.saveEntry': async (input) => {
       if (!(await ctx.allows('website.saveEntry', url, req)))

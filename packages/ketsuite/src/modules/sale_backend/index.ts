@@ -1,3 +1,6 @@
+import { listSearchChrome } from '../backend/search-filter.ts'
+import { loadListGroups } from '../backend/list-search.ts'
+import { pager } from '../backend/paging.ts'
 import { invoicingPolicyContext } from './modal/policy-context.ts'
 import { defineRecordModalIsland, recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
 import { saleOrderContext } from './modal/context.ts'
@@ -642,6 +645,8 @@ const vi = {
   'field.amountTotal': 'Tổng tiền',
   'field.notes': 'Điều khoản và ghi chú',
   'field.product': 'Sản phẩm',
+  'field.sku': 'Mã SKU',
+  'field.category': 'Danh mục',
   'field.quantity': 'Số lượng đặt',
   'field.delivered': 'Đã giao',
   'field.invoiced': 'Đã lập hoá đơn',
@@ -799,6 +804,8 @@ const en = {
   'field.amountTotal': 'Total',
   'field.notes': 'Terms and Conditions',
   'field.product': 'Product',
+  'field.sku': 'SKU',
+  'field.category': 'Category',
   'field.quantity': 'Ordered',
   'field.delivered': 'Delivered',
   'field.invoiced': 'Invoiced',
@@ -1046,37 +1053,73 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const detailSuffix = localeQuery(url)
-        const rows = await loadSaleOrderCollection(
-          (page) => ctx.call('sale.listOrders', { state: 'sale', ...page }, url, req) as Promise<AnyRow[]>,
-        )
-        const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.orders.title',
           body: async (_, shell) => {
-            const search = await rowListSearch(ctx, url, req, {
+            const search = await listSearchChrome(ctx, url, req, {
               spec: saleOrderListSearch,
-              rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
               frame: shell,
               name: 'sale-order-filter',
               bodyId: 'sale-order-list',
               functions: saleSearchFunctions,
               labels: { searchPlaceholder: _('sale_backend.orders.title') },
-              groupLabel: (key, value) => saleGroupLabel(_, key, value),
             })
+            const grouped = search.state.groupBy.length > 0
+            const result = (await ctx.call(
+              'sale.listOrders',
+              {
+                state: 'sale',
+                listState: search.state,
+                listMode: grouped ? 'count' : 'rows',
+              },
+              url,
+              req,
+            )) as { rows: AnyRow[]; total: number }
+            const groups = grouped
+              ? await loadListGroups(ctx, url, req, search.state, 'Asia/Ho_Chi_Minh', {
+                  groupFunction: 'sale.listOrders',
+                  listFunction: 'sale.listOrders',
+                  listArgs: { state: 'sale' },
+                  groupArgs: { listMode: 'groups' },
+                  label: (key, value) => saleGroupLabel(_, key, value),
+                })
+              : undefined
+            // Group keys stay stable partner IDs; labels remain customer names.
+            if (groups) {
+              const flatten = (items: ReadonlyArray<(typeof groups)[number]>): typeof groups =>
+                items.flatMap((item) => [item, ...flatten(item.children ?? [])])
+              const customerGroups = flatten(groups).filter(
+                (item) => search.state.groupBy[item.depth ?? 0]?.key === 'partnerName',
+              )
+              const ids = customerGroups.map((item) => String(JSON.parse(item.id).at(-1)))
+              const names = await loadSalePartnerNames(
+                ids,
+                (ids) => ctx.call('partner.listPartners', { ids }, url, req) as Promise<AnyRow[]>,
+              )
+              for (const item of customerGroups)
+                item.label = String(names.get(String(JSON.parse(item.id).at(-1))) ?? '—')
+            }
             return salesOrdersListScreen(
               _,
               {
                 printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
                   (report) => report.id === 'sale.salesOrder',
                 ),
-                rows: search.rows,
+                rows: result.rows,
+                total: result.total,
                 table: {
-                  ...(search.groups ? { groups: search.groups } : {}),
+                  ...(groups ? { groups } : {}),
                   rowHref: (row) => recordModalHref(url, { kind: 'sale.order', id: String(row.id) }),
                 },
                 detailSuffix,
               },
-              search.frame,
+              {
+                ...search.frame,
+                chrome: {
+                  ...search.frame.chrome,
+                  pager: grouped ? null : pager(url, search.state.page, result.rows.length, result.total),
+                },
+              },
             )
           },
         })
@@ -1094,7 +1137,24 @@ export default defineModule({
           return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[]
+        const [policies, variants, categories, units] = await Promise.all([
+          ctx.call('sale.listInvoicePolicies', {}, url, req) as Promise<AnyRow[]>,
+          optionalRead<AnyRow[]>(ctx, 'product.listVariants', { saleOk: true }, url, req, []),
+          optionalRead<AnyRow[]>(ctx, 'product.listCategories', {}, url, req, []),
+          optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []),
+        ])
+        const categoryNames = new Map(categories.map((row) => [row.id, String(row.name)]))
+        const unitNames = new Map(units.map((row) => [row.id, String(row.name)]))
+        const rows = policies.map((row) => ({
+          ...row,
+          sku: variants
+            .filter((variant) => variant.templateId === row.id)
+            .map((variant) => String(variant.defaultCode ?? ''))
+            .filter(Boolean)
+            .join(' · '),
+          category: categoryNames.get(row.categoryId) ?? '',
+          uom: unitNames.get(row.uomId) ?? '',
+        }))
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
           body: async (_, shell) => {

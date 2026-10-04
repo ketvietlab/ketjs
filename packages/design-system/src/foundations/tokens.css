@@ -230,12 +230,12 @@
     --kv-gap-form-row: var(--kv-space-4);
     --kv-gap-field-group: var(--kv-space-4);
     --kv-gap-form-column: var(--kv-space-6);
-    --kv-gap-section: var(--kv-space-4);
+    --kv-layout-gap: 0.75rem;
+    --kv-gap-section: var(--kv-layout-gap);
     /* A surface's inset and the gap under its heading (Két Design System visual contract L6). */
     --kv-surface-inset: var(--kv-space-4);
     --kv-surface-head-gap: var(--kv-space-2);
-    /* One 16px gutter on every side of every page, so a record body lines up with its header. */
-    --kv-page-padding-x: var(--kv-space-4);
+    --kv-page-padding-x: var(--kv-layout-gap);
     --kv-page-padding-y: var(--kv-space-5);
 
     /* Dimensions and shape. */
@@ -398,7 +398,8 @@
       --kv-table-row-height: 3.25rem;
       --kv-input-font-size: 1rem;
       --kv-input-line-height: 1.5rem;
-      --kv-page-padding-x: var(--kv-space-4);
+      --kv-layout-gap: 0.5rem;
+      --kv-surface-inset: var(--kv-space-3);
       --kv-page-padding-y: var(--kv-space-2);
     }
 

@@ -651,7 +651,7 @@ const actions = (c: Context): JSXChild | undefined => {
 
 const createView = (c: Context): JSXChild =>
   Section({
-    title: t(c, 'create.title'),
+    title: t(c, 'tabs.general'),
     description: t(c, 'create.subtitle'),
     body: RecordModalForm({
       kind: c.kind,
@@ -689,10 +689,7 @@ const createView = (c: Context): JSXChild =>
 
 export const templateModalDefinition: RecordModalDefinition<TemplateModalData> = {
   kind: 'product.template',
-  size: 'large',
-  // General's own fields fit well inside this; a shorter screen still shrinks it
-  // instead of overflowing (see `ModalSheet.fixedHeight`).
-  fixedHeight: 'min(48rem, calc(100dvh - var(--kv-space-12)))',
+  size: (c) => (c.creating ? 'default' : 'large'),
   context: {
     fn: 'product.templateModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),

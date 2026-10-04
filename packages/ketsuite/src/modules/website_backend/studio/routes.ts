@@ -7,6 +7,7 @@ import { formRoutes } from './forms.ts'
 import { accountRoutes } from './account.ts'
 import { studioPaths } from './paths.ts'
 import { studioTransport } from './transport.ts'
+import type { StudioOptions } from './transport.ts'
 const redirect = (location: string) => withHeaders(text('', { status: 303 }), { location })
 const canOpenStudio = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   !!(await ctx.scopeOf(url, req)).company &&
@@ -32,6 +33,7 @@ const screen =
     )
   }
 const api =
+  (options: StudioOptions) =>
   (ctx: ServeContext): Route =>
   async (url, req) => {
     if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -62,7 +64,7 @@ const api =
       if (!input || typeof input !== 'object' || Array.isArray(input))
         return json({ ok: false, code: 'validation' }, { status: 400 })
       const name = decodeURIComponent(url.pathname.slice('/website/api/'.length))
-      const value = await studioTransport(ctx, url, req)(name, input)
+      const value = await studioTransport(ctx, url, req, options)(name, input)
       return withHeaders(json({ ok: true, value }), { 'cache-control': 'no-store' })
     } catch (error) {
       const e = error as { code?: string; message?: string }
@@ -80,13 +82,16 @@ const api =
       )
     }
   }
-export const studioRoutes: Record<string, RouteEntry> = Object.fromEntries(
-  studioPaths.map((path) => [path, screen]),
-)
-studioRoutes['/website'] = screen
-studioRoutes['/website/'] = screen
-studioRoutes['/website/api/{operation}'] = api
-studioRoutes['/website-client/theme/{file}'] = () => async (url) =>
-  redirect(`/_ket/asset/website_backend/theme/${encodeURIComponent(url.pathname.split('/').at(-1)!)}`)
-
-Object.assign(studioRoutes, imageRoutes, searchRoutes, formRoutes, accountRoutes)
+export const createStudioRoutes = (options: StudioOptions = {}): Record<string, RouteEntry> => ({
+  ...Object.fromEntries(studioPaths.map((path) => [path, screen])),
+  '/website': screen,
+  '/website/': screen,
+  '/website/api/{operation}': api(options),
+  '/website-client/theme/{file}': () => async (url) =>
+    redirect(`/_ket/asset/website_backend/theme/${encodeURIComponent(url.pathname.split('/').at(-1)!)}`),
+  ...imageRoutes,
+  ...searchRoutes,
+  ...formRoutes,
+  ...accountRoutes,
+})
+export const studioRoutes = createStudioRoutes()

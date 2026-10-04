@@ -1426,7 +1426,12 @@ test('record workspace: compact identity and actions share the global record hea
 test('record workspace: floating form controls can extend beyond the sheet', () => {
   const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
-  assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
+  const relationCss = readFileSync(
+    'packages/design-system/src/interactions/relation-select/styles.css',
+    'utf8',
+  )
+  assert.match(relationCss, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: absolute/)
+  assert.match(css, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: fixed/)
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {
@@ -1880,13 +1885,21 @@ test('ui contract: operational inputs disable autocomplete; public sign-in names
           /type="password" name="password"/.test(match[0]) &&
           /aria-labelledby="wt-signin-password-label"/.test(match[0]) &&
           /autocomplete="current-password"/.test(match[0])
-        if (login || password) continue
+        // The account pages' field helper takes the token as a required argument; the
+        // tokens it is given are checked below, so a field cannot quietly fill anything else.
+        const accountField = /autocomplete=\$\{attributes\.autocomplete\}/.test(match[0])
+        if (login || password || accountField) continue
       }
       const line = source.slice(0, match.index).split('\n').length
       missing.push(`${file}:${line}`)
     }
   }
   assert.deepEqual(missing, [], 'new inputs must not restore browser autocomplete')
+  const tokens = readFileSync('packages/ketsuite/src/ui/website-public.ts', 'utf8').matchAll(
+    /\bautocomplete: '([^']*)'/g,
+  )
+  const credentials = ['username', 'current-password', 'new-password', 'name', 'email']
+  for (const [, token] of tokens) assert.ok(credentials.includes(token!), `account field fills "${token}"`)
 })
 
 test('table selection: the checkbox cell is a navigation dead zone', () => {

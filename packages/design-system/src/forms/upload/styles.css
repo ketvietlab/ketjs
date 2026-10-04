@@ -8,15 +8,150 @@
   }
 
   :where([data-kv-design-system]) [data-ui="drop-zone"] {
-    padding: var(--kv-space-4);
+    position: relative;
+    grid-column: 1 / -1;
+    place-content: center;
+    min-block-size: 6rem;
+    padding: var(--kv-space-3);
+    text-align: center;
+    overflow: hidden;
     border: 1px dashed var(--kv-field-border);
     border-radius: var(--kv-radius-sm);
     background: var(--kv-interactive-bg);
+  }
+
+  /* Keep the real file input focusable and droppable over the entire frame. */
+  :where([data-kv-design-system]) [data-ui="drop-zone"] > input[type="file"] {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="drop-zone"][data-preview="true"] {
+    aspect-ratio: 1;
+    inline-size: 100%;
+  }
+  :where([data-kv-design-system]) [data-ui="drop-zone"]:has([data-ui="upload-preview"]) {
+    align-content: end;
+  }
+  :where([data-kv-design-system]) [data-ui="upload-preview"] {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+  }
+  :where([data-kv-design-system]) [data-ui="upload-caption"],
+  :where([data-kv-design-system]) [data-ui="drop-zone"] > [data-ui="upload-status"] {
+    position: relative;
+    background: var(--kv-interactive-bg);
+    border-radius: var(--kv-radius-sm);
+  }
+  :where([data-kv-design-system]) [data-ui="upload-caption"] {
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+  }
+  :where([data-kv-design-system]) [data-ui="drop-zone"]:has(input:focus-visible),
+  :where([data-kv-design-system]) [data-ui="drop-zone"][data-drag="true"] {
+    outline: 2px solid var(--kv-focus-border);
+    outline-offset: 2px;
+    border-color: var(--kv-focus-border);
+  }
+  :where([data-kv-design-system]) [data-ui="drop-zone"][data-disabled="true"] {
+    opacity: 0.6;
+  }
+  :where([data-kv-design-system]) [data-ui="drop-zone"] > input:disabled {
+    cursor: not-allowed;
   }
 
   :where([data-kv-design-system]) [data-ui="upload-status"] {
     color: var(--kv-text-secondary);
     font-size: var(--kv-text-xs);
     line-height: var(--kv-line-xs);
+  }
+}
+
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="image-drop-zone"] {
+    display: grid;
+    position: relative;
+    min-inline-size: 0;
+    inline-size: 100%;
+    border: 1px dashed var(--kv-field-border);
+    border-radius: var(--kv-radius-sm);
+    overflow: hidden;
+    background: var(--kv-interactive-bg);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-preview"] {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--kv-text-secondary);
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-preview"] > span {
+    padding: var(--kv-space-2);
+    text-align: center;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-preview"] > a {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 0;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-preview"] img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-1);
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-picker"] {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    padding: var(--kv-space-1);
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-picker"] input {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-picker"]:focus-within {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-help"],
+  :where([data-kv-design-system]) [data-ui="image-drop-error"] {
+    padding: var(--kv-space-2);
+    font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-zone"][aria-busy="true"] {
+    opacity: 0.6;
+  }
+  :where([data-kv-design-system]) [data-ui="image-drop-zone"][data-drag="true"],
+  :where([data-kv-design-system]) [data-record-dropzone][data-drag="1"] [data-ui="image-drop-zone"] {
+    outline: 2px dashed currentColor;
+    outline-offset: -2px;
   }
 }

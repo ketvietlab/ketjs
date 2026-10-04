@@ -31,8 +31,8 @@ export default defineModule({
 
 export { functions } from './functions.ts'
 export { jobs } from './jobs.ts'
-export { assertDeliveryState, deliveryEnvelope, queueTemplate } from './operations.ts'
-export type { QueueTemplateInput } from './operations.ts'
+export { assertDeliveryState, deliveryEnvelope, queueTemplate, writeTemplate } from './operations.ts'
+export type { QueueTemplateInput, TemplateInput } from './operations.ts'
 export { jsonValue, renderTemplate, templateKeys } from './template.ts'
 export { withDeliveryStatus } from './target.ts'
 export { DELIVERY_STATES, PROVIDER_EVENT_TYPES } from './types.ts'

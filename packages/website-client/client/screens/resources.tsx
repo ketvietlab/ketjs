@@ -187,7 +187,9 @@ export function createResourceScreens(ctx: StudioContext) {
                         body={
                           <>
                             <p>
-                              {ctx.tr('website.seo.sitemap')}: {data.audit.publicationId ?? '—'} ·{' '}
+                              {data.audit.publicationId
+                                ? `${ctx.tr('website.seo.sitemap')}: ${data.audit.publicationId} · `
+                                : null}
                               {ctx.tr(`website.search.index.${data.audit.indexState}`)}
                             </p>
                             <DataTable
@@ -497,7 +499,7 @@ export function createResourceScreens(ctx: StudioContext) {
                   variant="primary"
                   disabled={ctx.busy() || !ctx.can(schema.capability)}
                 />
-                {data.revisionId && !['sites', 'domains'].includes(kind)
+                {data.revisionId && !['sites', 'domains', 'seo'].includes(kind)
                   ? ArchiveActions(ctx, {
                       id: `resource-${kind}-archive`,
                       title: data.title ?? title(),
@@ -649,7 +651,14 @@ export function createResourceScreens(ctx: StudioContext) {
             throw Object.assign(new Error(ctx.tr('website.resource.validation')), { code: 'validation' })
           await ctx.call(
             'website_studio.saveResource',
-            { siteId: ctx.site().id, kind, id: record.id, expectedRevisionId: record.revisionId, values },
+            {
+              // The first site is made before there is one to stand in.
+              siteId: kind === 'sites' ? (ctx.boot().site?.id ?? null) : ctx.site().id,
+              kind,
+              id: record.id,
+              expectedRevisionId: record.revisionId,
+              values,
+            },
             record.revisionId ? {} : { key: record.id },
           )
           pendingId = null

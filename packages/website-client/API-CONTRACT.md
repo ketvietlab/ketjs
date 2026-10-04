@@ -1,9 +1,9 @@
 # Website Studio browser contract
 
-The Studio is a client-rendered island. Every read and write goes through `client/api.mjs` as
-`POST /_ket/fn/<name>`; Atlas answers the same requests from `atlas/store.mjs` with fixture data.
-`test/store.test.mjs` fails when the client calls a function this file does not name in backticks, or
-one the mock does not answer.
+The Studio is a client-rendered island. Current client calls are in `client/api.ts` and the host
+implementation is in KetSuite's `modules/website_backend`. The former Website Atlas mock
+(`atlas/store.mjs`) and its `test/store.test.mjs` are no longer in this package. Historical fixture
+sections below describe design proposals, not callable host routes.
 
 This is a design contract, not a record of production. Each function carries a status:
 
@@ -186,8 +186,11 @@ Domain states simulate DNS/TLS. Member/account records do not send real invitati
 `website_studio.setEntryArchived` `{siteId,id,archived,expectedRevisionId}` toggles the trash state.
 Both mutations require content.write and use the extension mutation boundary.
 `website_studio.preview` `{siteId,id,revisionId?,token?}` returns `{entry}` from the requested snapshot.
-`website_studio.publicSite` `{siteId,path,search}` reads only revisions in the active manifest.
-The visitor screen is a fixture journey within Studio; it is not production public delivery.
+The Studio has no visitor view of its own. "Xem website" and a page preview's internal links open the
+site at `bootstrap.site.url`: this origin when the ERP and the site share a host, else the primary
+domain, and empty until the site has one (the button is then hidden). `website_studio.publicSite`
+and the simulated shop, stay, account and adapter screens were removed from the client on
+2026-10-03. Their fixture routes are no longer present.
 
 ## Form journeys (NEW BFF)
 
@@ -208,24 +211,6 @@ All require site.manage and a valid site. `website_studio.operations` `{siteId}`
 drafts only; duplicate paths refuse the entire package. The id is its idempotency key.
 `website_studio.runHealthCheck` `{siteId,id}` records fixture domain findings; it performs no external probes.
 
-## Visitor account simulation (NEW BFF)
-
-`website_studio.visitorAccount` `{siteId}` returns the current simulated account without credentials.
-`website_studio.visitorAccountCommand` handles register/verify/login/logout/reset/erase in the fixture.
-The fixed displayed code 123456 is exclusively a mock interaction; never bind this endpoint to production.
-Production must delegate to website_accounts/identity with one-time, expiring tokens. Erasure requires a
-current simulated session and explicit confirmation. Reset always gives a non-enumerating response.
-
-## Industry adapter fixture BFF (NEW)
-
-`website_studio.adapterList` `{siteId}` supplies installed experience descriptors.
-`website_studio.adapterContext` `{siteId,adapter}` supplies typed items, cart quantities, fields and receipt.
-`website_studio.adapterCart` `{siteId,adapter,itemId,quantity}` validates integer quantity against availability.
-`website_studio.adapterSubmit` `{siteId,adapter,id,consent,fields}` validates a nonempty cart and contact data,
-then records a simulated receipt. Create retries use key=id. No payment/order/booking/lead backend is called.
-Healthcare is deferred; its private deployment owns booking and clinical data.
-Production registries must supply actual adapter queries/actions; the core screen contains no industry keys.
-
 ## Domain verification (NEW BFF, F-01)
 
 `website_studio.verifyDomain` takes `{siteId,id,expectedRevisionId,observedTxt}`. The Atlas-only provider
@@ -239,6 +224,9 @@ atomically and preserves the old host as redirect. Both operations use the exten
 and require `website.site.manage`. Generic domain saves accept only `title`; role/state/TLS writes
 are refused. The first domain becomes primary when no primary exists; subsequent domains are redirects.
 Hostname changes require a new domain. DNS/TLS are simulated, not checked on the network.
+
+On the host this is superseded: see "SEO, domains and customer passwords on the host (2026-10-03)".
+`observedTxt` is mock-only; the host looks the record up itself.
 
 ## Red-screen parity additions (mock BFF, all NEW)
 
@@ -281,7 +269,6 @@ The public journey is shop → product → cart → checkout → receipt → own
 - **NEW** `website_studio.archiveResource` (`{siteId, kind, id, expectedRevisionId, confirmed}`): capability-checked, transactional soft archive. Rejects stale revision, active/scheduled publication references, draft references and taxonomy children. Sites/domains use their own lifecycle instead. `getResource` includes `usage`. Archived resources are excluded from future publication preparation; old snapshots remain immutable.
 - `saveResource` checks duplicate redirect sources, normalized member emails, taxonomy slugs and parent cycles. Form field rows accept a fourth `required | optional` column (legacy rows default to required).
 - `submitVisitorForm` accepts honeypot/challenge, returns an opaque receipt, stores immutable form revision/labels/delivery destination; the mock does not send email.
-- `visitorAccountCommand` supports `profile` with `expectedRevision`, `reset` with a 60-second resend window and 15-minute expiry, and one-time `recover` with a simulated code/password rule. No real credential is stored. Login by simulation code remains the agreed mock behavior.
 
 - Import review: `website_studio.previewImport` returns every row with `accepted`, `reason`, `media`, and a digest `checkpoint`. `website_studio.applyImport` requires the same checkpoint, revalidates destination paths, imports accepted rows only and records rejects. Replaying the completed job returns its result. This mock models a preview checkpoint, not a production resumable worker.
 - Public metadata is applied by the client after reading the active publication. The Atlas host still serves the island bootstrap, not a production SEO delivery server.
@@ -335,9 +322,6 @@ failed may run; accepted/uncertain cannot resend. Recipient is frozen with the s
   visibility changed. Missing SEO is a warning; unsafe links/private media are blockers.
 - Media batch retry retains completed file IDs in the editor session. Metadata/scan comes from server
   bytes; it is not a production file-scanning service. Reload resets that batch record.
-- CRM contact is `/visit/contact/sales`; `/visit/contact` redirects there. `adapterSubmit` simulates
-  unavailable service and a limit of three distinct requests per minute per fixture owner; idempotent
-  replays remain stable. `state=contact-unavailable` opens that scenario directly.
 
 ## Core cosmetics preset (2026-09-30)
 
@@ -351,6 +335,20 @@ the entry, not the shared theme. Public delivery reads the publication's frozen 
 settings. The opt-in `cosmetics` Atlas scenario seeds `site-cosmetics`; it does not alter baseline data.
 The host loads both `theme/default.css` and `theme/cosmetics.css`. No theme script execution or KTL
 contract change is introduced.
+
+### Bundled trade presets (2026-10-03)
+
+`preset` is now `default | cosmetics | retail | restaurant | hotel | services`; the list lives in
+`client/theme/presets.ts` and is mirrored by the host schema in `website/studio-style.ts`. Unknown values
+are still rejected. Every preset except `default` shares one structure, `theme/skin.css` (extracted
+from the former cosmetics stylesheet), and adds its own token file: `cosmetics.css` (Lành),
+`retail.css` (Phố), `restaurant.css` (Bếp Nhà), `hotel.css` (An Trú) and `services.css` (Vững). Each
+file sets colours, type and radius, plus a small signature (hero composition, title ornament, card
+shape). Accent, font, spacing and button choices apply to all of them. Lành renders pixel-identical
+to before the split. The theme card shows `theme/<preset>.svg`, a local vector illustration.
+
+The presets are named after trades, not deployments, and any site may pick any of them; a new site still
+starts on `default`.
 
 ### Review 2: canonical saved revision comparison
 
@@ -644,3 +642,111 @@ the request stands, and the Studio shows that beside the copy.
   stores a `WEB-…` receipt, which the review journeys depend on.
 - Real Δ `website_studio.submissionReceipt` `{ siteId, id }` answers `{ receipt, createdAt, state:
   'received' }` for a submission of that site, else `notFound`.
+
+## Customer sign-in accounts and real Settings (2026-10-02)
+
+The Studio runs on the host BFF for its Settings page and for the customer accounts of a site.
+
+- Real Δ `website_studio.siteReadiness` `{ siteId }` answers `{ site: { id, title, code, defaultLocale,
+  revisionId }, publicUrl, bindings, blockers: [], customers }`. `customers` is `{ available, selfSignup,
+  signInUrl, total }`, or null for an actor without `website.listCustomerAccounts`. `bindings` lists
+  `retail | hospitality | crm` for the installed modules.
+- Real Δ `website_studio.saveResource` with `kind: 'sites'` saves `{ title, code, defaultLocale }` through
+  `website.saveSite`, keeping the theme, tokens, group and active state. `expectedRevisionId` is the
+  site's `updatedAt`; a stale one fails `conflict`. Timezone and guest-connection fields were removed from
+  the Settings form.
+- NEW `website.listCustomerAccounts` `{ siteId, search?, status?, limit?, offset? }` (read, bundle
+  `security`) answers `{ realm: { id, selfSignup, signInHost } | null, rows, total }`. Search matches the
+  name, the email and, only when it holds digits, the phone. `status` is `active | disabled`; rows never
+  carry a password or hash. The new role template `website.customers` grants it with `partner.view`.
+- Capabilities: `website.customer.manage` (list, read, close, reopen, reset, sign-up switch) and
+  `website.customer.issue` (`website.issueCustomerAccess` and `partner.listPartners`).
+- NEW `website_studio.customers` `{ siteId, search, status, offset }` pages 50 rows: `{ available,
+  selfSignup, signInUrl, rows, total }`. `website_studio.customer` `{ siteId, partnerId }` reads one account
+  plus `signInUrl`; an account of another realm fails `notFound`.
+- NEW `website_studio.customerCommand` `{ siteId, partnerId, action: disable | enable | reset, password? }`
+  checks the account belongs to the site first, then answers `{ account, password }`. `password` is the
+  generated one when staff left it empty, else null; it is shown once and never stored in the client.
+- NEW `website_studio.customerCandidates` `{ siteId, search }` (2+ characters) answers up to 10 partners
+  with the status of their account on this site. `website_studio.issueCustomer` `{ siteId, partnerId,
+  values: { displayName, phone, email, password } }` refuses a partner who already has an account
+  (`conflict`), because issuing again would silently reset the password.
+- NEW `website_studio.saveCustomerSettings` `{ siteId, selfSignup }` opens or closes self sign-up.
+- Password recovery and the public "my account" pages: see the next section.
+
+## SEO, domains and customer passwords on the host (2026-10-03)
+
+The host owns the behaviour below.
+
+- Real Δ `website_studio.listResources` / `getResource` / `saveResource` with `kind: 'seo'` read and
+  write the SEO of each page and post that is not in the trash, through `website.saveEntry`. Rows are
+  `{ id, siteId, kind: 'seo', title, path, description, image, indexing, canonical, state, revisionId }`.
+  A save takes `{ title, path, description, image, indexing, canonical }`; a title equal to the page's
+  own is stored empty so the page title keeps driving it. A stale `expectedRevisionId` fails `conflict`;
+  SEO cannot be created or archived. The list `audit` is `{ publicationId, indexState, rows }` and lists
+  only published entries missing a description or image, or whose draft differs from what is served.
+- Real Δ `kind: 'domains'`: adding a host goes through `website.saveDomain`; the site's first host is
+  primary. Each host has its own proof: a TXT record at `_ketviet.<host>` with the value
+  `ketviet-verify=<token>`, returned as `challenge: { type: 'TXT', name, value }` until it is proven.
+  Retrying an add with the same host answers the same domain; another host under that id is refused.
+  A host renamed outside the Studio gets a new token and must be proven again.
+- NEW `website.verifyDomain` `{ id }` (configure) looks the record up from the server. The result is
+  `matched | missing | mismatch | unreachable`; the first match stamps `verifiedAt`, which a later failed
+  lookup does not take away. `WEBSITE_DNS_SERVERS` (comma-separated `host:port`) overrides the system
+  resolvers. `website_studio.verifyDomain` `{ siteId, id, expectedRevisionId }` wraps it; `observedTxt`
+  is gone. Domain rows carry `state: pending | verified | failed`, `tls: pending | ready`, `checkedAt`,
+  `reason` and the last check as `attempts`. Hosts saved before proofs existed count as proven and served.
+- NEW internal `website.markDomainServing` `{ id, serving }` is how Két Việt records that a host answers
+  over HTTPS. No Studio role reaches it; it refuses a host that is not proven.
+- `website_studio.setPrimaryDomain` needs the host proven **and** served: every other host redirects to
+  the primary, so an unserved primary would take the site down. Until then the Studio shows
+  "Két Việt đang kích hoạt".
+- Customer pages: `/account` (my account), `/account/register`, `/account/forgot` and `/account/reset` render on the site's own
+  look, `noindex`, and are filled by `customer-account.mjs` from the customer API. The reset token stays
+  in the address and is never written into the page.
+- Customer API (`/api/customer/v1`, see `docs/public/api/customer-v1.openapi.json`):
+  - `PATCH me/profile` `{ displayName }` (signed in; a cookie session needs its CSRF token).
+  - `POST auth/password` `{ currentPassword, newPassword }` signs every device out; a cookie session
+    answers a fresh `csrfToken` and cookie.
+  - `POST auth/password/forgot` `{ email } | { phone }` answers `202 { accepted: true }` whatever the
+    account, so it cannot be used to find who has one. An active account with an email gets a link good
+    once for 30 minutes; one without is told to ask the shop. Spending a link voids every other.
+  - `POST auth/password/reset` `{ token, password }` sets the password and signs every device out, or
+    fails `website.customer.error.resetExpired`.
+  - Both are same-origin only and rate limited, per sender and per account.
+- The mail is queued by the bridge `website_customer_mail` on `mail_transport`, from the company's own
+  template named `website.customer.password-reset` with the keys `siteTitle`, `displayName` and
+  `resetUrl`. Without an active template, or without a mail provider, nothing is sent; the visitor sees
+  the same answer. The delivery body keeps the link, which lapses within 30 minutes.
+- `website_studio.customerMail` `{}` answers `{ template, keys }`, where `template` is `{ fromAddress,
+  fromName, replyTo, subject, text, active, version }` or null until saved. `website_studio.saveCustomerMail`
+  `{ expectedVersion, values: { fromAddress, fromName, replyTo, subject, text, active } }` writes it under
+  the fixed name and keys; the body must carry `{{resetUrl}}`, and a stale `expectedVersion` is a
+  `conflict`. Both need the capability `website.customer.mail` (role template `website.customer-mail`,
+  registered only where `website_customer_mail` is composed). The mail is one per company: Settings
+  shows it on every site.
+
+## Creating a site and its first look (2026-10-03)
+
+`website_studio.saveResource` `{ kind: 'sites', siteId: <current or null>, id: <new>, expectedRevisionId:
+null, values: { title, code, defaultLocale, host } }` creates a site on the host: `website.saveSite` with
+the current site's theme module (or the first composed theme), then the deployment's default Studio
+preset, then `host` as its primary domain. Sending the same create again answers with the site it made.
+A deployment chooses the preset by composing `websiteBackendWith({ defaultPreset })` from
+`@ketvietlab/ketsuite` in place of `websiteBackend`; without it a new site starts on `default`. Sites
+that already exist keep the look they render with.
+
+## Customer portal on the public site (2026-10-03)
+
+- `/account/login` offers `/account/register` only while the site's realm allows self sign-up.
+  `/account/register` then renders a `noindex` form in the site's look, asks for display name, email
+  and password, and posts to `POST /api/customer/v1/auth/session/register`. A successful response
+  creates a customer cookie session and opens `/account`. Closing self sign-up removes the link,
+  makes the page 404 and makes the API refuse registration; a page already open handles that refusal.
+- Signed-in `/account` reads customer capabilities from `GET /api/customer/v1/bootstrap`. It loads
+  `GET retail/orders` when `website_retail.orders:read` is served, and
+  `GET hospitality/my-bookings` when `website_hospitality.bookings:read` is served. Each section shows
+  its first 10 records, an empty or error state, and a button to follow `meta.nextCursor`. These are
+  the customer channel's own partner-scoped endpoints; the public page does not accept a partner ID.
+- Két Việt composes `website_retail` in commerce and cosmetic, and `website_hospitality` in hospitality.
+  F&B and office do not show either history section unless they later compose a matching channel.

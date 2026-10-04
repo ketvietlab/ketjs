@@ -32,7 +32,7 @@ import {
   createRelationSelectView,
   Disclosure,
   EmptyState,
-  DropZone,
+  ImageDropZone,
   Field,
   IconButton,
   LightboxThumb,
@@ -510,7 +510,7 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
 
   const uploadImage = async (row: Row, file: File): Promise<void> => {
     const replacing = row.images.length > 0
-    if (!row.id || !props.media.upload || (replacing && !props.media.remove)) return
+    if (!editable || saving() || !row.id || !props.media.upload || (replacing && !props.media.remove)) return
     if (imageBusy() || !file.type.startsWith('image/')) return
     imageBusy.set(row.key)
     problem.set(null)
@@ -902,8 +902,8 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
         data-drag={String(dragOver() === row.key)}
         data-busy={String(busy)}
         onDragOver={(event: DragEvent) => {
-          if (!canUpload || !row.id) return
           event.preventDefault()
+          if (!canUpload || !row.id || busy || saving()) return
           dragOver.set(row.key)
         }}
         onDragLeave={(event: DragEvent) => {
@@ -912,38 +912,48 @@ export function createVariantEditorView(props: VariantEditorProps): IslandContro
           dragOver.set(null)
         }}
         onDrop={(event: DragEvent) => {
-          if (!canUpload || !row.id) return
           event.preventDefault()
+          if (!canUpload || !row.id || busy || saving()) return
           dragOver.set(null)
           const file = event.dataTransfer?.files?.[0]
           if (file) void uploadImage(row, file)
         }}
       >
-        {rowThumb(row, 'large')}
-        <div data-ui="variant-editor-image-actions">
-          {canUpload && row.id
-            ? DropZone({
-                id: `${bodyId}-image`,
-                name: `image|${row.key}`,
-                label: row.images.length ? t('replaceImage') : t('uploadImage'),
-                accept: IMAGE_TYPES,
-                disabled: busy || saving(),
-                status: t('dropImage'),
-                span: 'full',
-              })
-            : null}
-          {canUpload && !row.id ? <small data-ui="variant-editor-hint">{t('imageSaveFirst')}</small> : null}
-          {editable && props.media.remove && row.images.length
-            ? Button({
-                name: ACTION,
-                value: `removeImage|${row.key}`,
-                label: t('removeImage'),
-                variant: 'tertiary',
-                size: 'compact',
-                disabled: busy || saving(),
-              })
-            : null}
-        </div>
+        <ImageDropZone
+          dragging={dragOver() === row.key}
+          label={t('image')}
+          viewer={row.images.length ? rowThumb(row, 'large') : null}
+          busy={busy || saving()}
+          help={canUpload && !row.id ? t('imageSaveFirst') : null}
+          picker={
+            canUpload && row.id ? (
+              <label data-ui="image-drop-picker" title={t('dropImage')}>
+                <input
+                  id={`${bodyId}-image`}
+                  type="file"
+                  autocomplete="off"
+                  name={`image|${row.key}`}
+                  accept={IMAGE_TYPES}
+                  aria-label={row.images.length ? t('replaceImage') : t('uploadImage')}
+                  disabled={busy || saving()}
+                />
+                <span>{row.images.length ? t('replaceImage') : t('uploadImage')}</span>
+              </label>
+            ) : null
+          }
+          actions={
+            editable && props.media.remove && row.images.length
+              ? Button({
+                  name: ACTION,
+                  value: `removeImage|${row.key}`,
+                  label: t('removeImage'),
+                  variant: 'tertiary',
+                  size: 'compact',
+                  disabled: busy || saving(),
+                })
+              : null
+          }
+        />
       </div>
     )
   }
