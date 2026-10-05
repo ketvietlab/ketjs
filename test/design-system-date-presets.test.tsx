@@ -4,6 +4,7 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   DatePresetPicker,
   datePresetIds,
+  datePresetLabel,
   resolveDatePreset,
 } from '../packages/design-system/src/forms/date-presets/index.tsx'
 import { Menu } from '../packages/design-system/src/interactions/menu/index.tsx'
@@ -23,6 +24,8 @@ test('eleven fixed periods resolve against the explicit business date', () => {
     ['2025-01-01', '2025-12-31'],
   ]
   assert.equal(datePresetIds.length, 11)
+  assert.equal(datePresetLabel('today', 'vi'), 'Hôm nay')
+  assert.equal(datePresetLabel('last_year', 'en'), 'Last year')
   for (const [i, preset] of datePresetIds.entries()) {
     assert.deepEqual(resolveDatePreset(preset, '2026-10-04'), { start: expected[i][0], end: expected[i][1] })
   }
