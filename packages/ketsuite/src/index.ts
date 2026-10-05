@@ -462,6 +462,7 @@ export {
   advanceAuthorizationRevision,
   recordAuthorizationAudit,
   effectiveFunctionKeys,
+  AUTHORIZATION_READ_EFFECTS,
   normalizeAssignmentScope,
   resolveEffectivePermissions,
 } from './modules/user/authorization.ts'
