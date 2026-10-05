@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.31",
+  "version": "0.1.38",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -13,8 +13,8 @@
     "compatibilityExports": 259,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 165,
-    "runtimeGaps": 8,
+    "publicGaps": 162,
+    "runtimeGaps": 5,
     "typeGaps": 157,
     "cssFiles": 80,
     "cssLines": 16957
@@ -6131,8 +6131,8 @@
       "target": "@ketvietlab/design-system",
       "wave": 3,
       "consumers": 0,
-      "specimen": "gap",
-      "specimenFiles": [],
+      "specimen": "present",
+      "specimenFiles": ["packages/design-system/src/catalogue/date-pickers.tsx"],
       "tests": "present",
       "testFiles": ["test/design-system-date-presets.test.tsx"],
       "gapTask": "DS-022"
@@ -6149,10 +6149,10 @@
       "target": "@ketvietlab/design-system",
       "wave": 3,
       "consumers": 0,
-      "specimen": "gap",
-      "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "specimen": "present",
+      "specimenFiles": ["packages/design-system/src/catalogue/date-pickers.tsx"],
+      "tests": "present",
+      "testFiles": ["test/design-system-date-presets.test.tsx"],
       "gapTask": "DS-022"
     },
     {
@@ -6246,8 +6246,8 @@
       "target": "@ketvietlab/design-system",
       "wave": 3,
       "consumers": 0,
-      "specimen": "gap",
-      "specimenFiles": [],
+      "specimen": "present",
+      "specimenFiles": ["packages/design-system/src/catalogue/date-pickers.tsx"],
       "tests": "present",
       "testFiles": ["test/design-system-date-presets.test.tsx"],
       "gapTask": "DS-022"
