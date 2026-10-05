@@ -106,6 +106,12 @@ test('a theme package is refused for every way it could reach outside its own si
   }
 })
 
+test('a CSS-only theme accepts an explicit null script', () => {
+  const result = checkThemePackage(files({ 'theme.mjs': null }, manifest({ script: null })))
+  assert.equal(result.ok, true, JSON.stringify(codes(result)))
+  if (result.ok) assert.equal(result.manifest.script, null)
+})
+
 test('an installed theme is offered, chosen, published and served from tenant storage', async (t) => {
   let base: Storage | null = null
   const { app, fixture, revision } = await bootWebsiteStudio(undefined, {
