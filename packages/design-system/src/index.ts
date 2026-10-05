@@ -122,6 +122,9 @@ export type {
   KetTableSort,
 } from './interactions/ket-table/index.tsx'
 export { attachDesignSystemInteractions } from './runtime/index.js'
+export { attachClientModalInteractions } from './runtime/client-modal.js'
+export { ContextButton } from './interactions/context-button/index.tsx'
+export type { ContextButtonProps } from './interactions/context-button/index.tsx'
 
 export {
   Checkbox,
