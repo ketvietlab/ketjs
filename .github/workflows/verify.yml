@@ -1,12 +1,15 @@
 name: verify
 
 on:
-  # The release pull request into master is the only gate. Feature pull
-  # requests into develop carry no CI: whoever changes a part runs that part's
-  # tests locally (AGENT.md). Only `permission coverage` still answers on
-  # develop, from permission-coverage.yml.
+  # Two pull requests carry the full suite: the promotion of integration into
+  # develop, and the release into master. Integration takes merges on local
+  # evidence alone, so the promotion is the first place a test another branch
+  # left stale can show; waiting for the release let #596 sit red on develop.
+  # Other pull requests into develop carry no CI: whoever changes a part runs
+  # that part's tests locally (AGENT.md), and `permission coverage` answers
+  # from permission-coverage.yml.
   pull_request:
-    branches: [master]
+    branches: [develop, master]
   workflow_dispatch:
 
 concurrency:
@@ -16,6 +19,8 @@ concurrency:
 jobs:
   plan:
     name: plan test groups
+    # Every other job needs this one, so skipping it here skips the run.
+    if: github.event_name != 'pull_request' || github.base_ref == 'master' || github.head_ref == 'integration'
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     outputs:
       groups: ${{ steps.groups.outputs.groups }}
@@ -37,6 +42,7 @@ jobs:
 
   quality:
     name: quality contracts
+    needs: [plan]
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
@@ -89,9 +95,10 @@ jobs:
     # bundle, and only a declaration can move that answer. A branch that
     # changed a stylesheet, a translation or a component was rebuilding the
     # whole deployment to be told nothing. The planner fails safe: an
-    # unrecognised path, or a diff it could not compute, still runs it.
+    # unrecognised path, or a diff it could not compute, still runs it. Into
+    # develop, permission-coverage.yml already answers under this name.
     needs: [plan]
-    if: needs.plan.outputs.permissions == 'true'
+    if: needs.plan.outputs.permissions == 'true' && github.base_ref != 'develop'
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
