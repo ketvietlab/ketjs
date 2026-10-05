@@ -78,6 +78,15 @@ const boot = async (t: TestContext) => {
 
 const ids = (result: Row): string[] => ((result.rows as Row[]) ?? []).map((row) => String(row.id)).sort()
 
+type Call = Awaited<ReturnType<typeof boot>>['call']
+
+const grantScope = async (call: Call, userId: string, fnKey: string) => {
+  const roleId = `scope-${fnKey}`
+  await call('user.saveRole', { id: roleId, name: fnKey }, 'admin')
+  await call('user.grantFunction', { id: `${roleId}:grant`, roleId, fnKey }, 'admin')
+  await call('user.assignRole', { id: `${userId}:${roleId}`, userId, roleId }, 'admin')
+}
+
 test('CRM record policy keeps self, team queue, leader, and company scopes distinct', async (t) => {
   const { call } = await boot(t)
 
@@ -87,44 +96,34 @@ test('CRM record policy keeps self, team queue, leader, and company scopes disti
 
   assert.deepEqual(ids(await call('crm.case.list', {}, 'leader-a')), ['own-a', 'own-b', 'queue-a'])
 
-  await call(
-    'crm.access.save',
-    {
-      id: 'access-manager',
-      userId: 'manager',
-      viewScope: 'company',
-      editScope: 'company',
-      assignScope: 'company',
-      idempotencyKey: 'access-manager-save',
-    },
-    'admin',
-  )
+  // Scope is a role permission: the role screen that grants it is where it shows.
+  await grantScope(call, 'manager', 'crm.scope.company')
   assert.deepEqual(ids(await call('crm.case.list', {}, 'manager')), ['own-a', 'own-b', 'queue-a', 'queue-b'])
 
-  await call(
-    'crm.access.save',
-    {
-      id: 'access-viewer',
-      userId: 'viewer',
-      viewScope: 'team',
-      editScope: 'none',
-      assignScope: 'none',
-      idempotencyKey: 'access-viewer-save',
-    },
-    'admin',
-  )
+  await grantScope(call, 'viewer', 'crm.scope.team')
   assert.deepEqual(ids(await call('crm.case.list', {}, 'viewer')), ['own-a', 'own-b', 'queue-a'])
+  assert.equal(await call('crm.case.get', { id: 'queue-b' }, 'viewer'), null)
+
   const refused = await call<Row>(
     'crm.case.move',
     {
-      id: 'own-a',
+      id: 'own-b',
       stageId: 'crm-stage-qualified',
       expectedVersion: 1,
-      idempotencyKey: 'viewer-move-refused',
+      idempotencyKey: 'agent-move-refused',
     },
-    'viewer',
+    'agent-a',
   )
   assert.equal(refused.ok, false)
+})
+
+test('a scope stops reaching once the role that carried it is taken away', async (t) => {
+  const { call } = await boot(t)
+  await grantScope(call, 'manager', 'crm.scope.company')
+  assert.equal(ids(await call('crm.case.list', {}, 'manager')).length, 4)
+
+  await call('user.unassignRole', { userId: 'manager', roleId: 'scope-crm.scope.company' }, 'admin')
+  assert.deepEqual(ids(await call('crm.case.list', {}, 'manager')), [])
 })
 
 test('CRM assignment uses claim for queue work and audited CAS for reassignment', async (t) => {

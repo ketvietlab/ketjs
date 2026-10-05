@@ -27,6 +27,7 @@ import {
 } from '../operations.ts'
 import { CASE_KINDS } from '../types.ts'
 import { caseReadEffects, command, ensureCase, moveToTerminal, caseWriteEffects } from './shared.ts'
+import { AUTHORIZATION_READ_EFFECTS } from '../../user/authorization.ts'
 
 export const caseFunctions: Record<string, FnSpec> = {
   /**
@@ -234,7 +235,7 @@ export const caseFunctions: Record<string, FnSpec> = {
       'write:crm.SalesDetail',
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.Stage',
       'read:crm.TeamMember',
@@ -273,7 +274,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'write:crm.Team',
       'read:crm.TeamMember',
@@ -308,7 +309,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.TeamMember',
       'read:user.User',
@@ -333,7 +334,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.Stage',
       'read:crm.SalesDetail',
@@ -412,7 +413,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.CaseTag',
       'write:crm.CaseTag',
@@ -533,7 +534,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.Stage',
       'write:crm.TimelineEntry',
@@ -566,7 +567,7 @@ export const caseFunctions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:crm.Team',
       'read:crm.Stage',
       'read:crm.SalesDetail',

@@ -37,7 +37,6 @@ const vi = {
   'error.invalidOperator': 'Toán tử không dùng được cho trường đã chọn.',
   'error.notTeamMember': 'Người này không thuộc đội đã chọn. Hãy thêm họ vào đội trong phần cấu hình.',
   'error.permission': 'Bạn không có quyền thực hiện thao tác này trên hồ sơ.',
-  'error.invalidAccessScope': 'Phạm vi truy cập không hợp lệ.',
   'error.reassignReason': 'Cần chọn lý do chuyển giao.',
   'timeline.created': 'Đã tạo hồ sơ',
   'timeline.stage': 'Đã chuyển giai đoạn',
@@ -95,7 +94,6 @@ const en: Record<keyof typeof vi, string> = {
   'error.notTeamMember':
     'That person is not on the selected team. Add them to the team in configuration first.',
   'error.permission': 'You do not have permission to perform this action on the record.',
-  'error.invalidAccessScope': 'The access scope is invalid.',
   'error.reassignReason': 'A reassignment reason is required.',
   'timeline.created': 'Record created',
   'timeline.stage': 'Stage changed',

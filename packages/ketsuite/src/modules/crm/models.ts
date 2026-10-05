@@ -35,6 +35,12 @@ export const models: Record<string, ModelDef> = {
       routing: { fields: ['companyId', 'teamId', 'active', 'sequence'] },
     },
   },
+  /**
+   * Retired: record access now comes from the `crm.scope.team` and
+   * `crm.scope.company` role permissions, and nothing reads or writes this. It
+   * stays declared because removing a model is a breaking schema change; drop it
+   * with the next deliberate schema clean-up.
+   */
   AccessGrant: {
     scope: 'company',
     fields: {
