@@ -6,14 +6,14 @@
       "maturity": "stable",
       "decision": "keep",
       "wave": 4,
-      "gapTask": null
+      "gapTask": "DS-009"
     },
     "./runtime/client-modal.js": {
       "owner": "Interactions",
       "maturity": "stable",
       "decision": "keep",
       "wave": 4,
-      "gapTask": null
+      "gapTask": "DS-015"
     },
     "./data-operations/timeframe-filter/index.tsx": {
       "owner": "Data operations",
