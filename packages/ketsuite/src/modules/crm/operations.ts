@@ -279,6 +279,9 @@ export const CASE_SCOPE_FUNCTIONS = { team: 'crm.scope.team', company: 'crm.scop
  */
 export async function caseAudience(ctx: Ctx, action: CaseAction = 'view'): Promise<CaseAudience | null> {
   if (!ctx.actor) return null
+  // A live superuser answers from the user row alone, as it always has, so a
+  // function that declares only \`read:user.User\` keeps working for them.
+  if (await liveSuperuser(ctx)) return null
   const [allowed, memberships, ledTeams] = await Promise.all([
     effectiveFunctionKeys(ctx, ctx.actor),
     ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true }),
@@ -291,6 +294,13 @@ export async function caseAudience(ctx: Ctx, action: CaseAction = 'view'): Promi
   const teams = scope === 'team' ? [...new Set([...memberTeams, ...leaderTeams])] : leaderTeams
   const queueTeams = action === 'edit' ? [] : memberTeams
   return { actor: ctx.actor, action, scope, teams, queueTeams }
+}
+
+const liveSuperuser = async (ctx: Ctx): Promise<boolean> => {
+  const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
+  if (user?.superuser !== true) return false
+  const expiresAt = user.superuserExpiresAt ? Date.parse(String(user.superuserExpiresAt)) : null
+  return expiresAt === null || expiresAt > Date.now()
 }
 
 const audienceHolds = (audience: CaseAudience | null, row: Row): boolean => {
