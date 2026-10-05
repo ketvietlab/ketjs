@@ -4,6 +4,7 @@ import { Text } from '../status/index.tsx'
 export type FieldFrameProps = {
   id: string
   label: string
+  size?: 'default' | 'large'
   control: JSXChild
   help?: string | null
   error?: string | null
@@ -40,6 +41,7 @@ export const FieldFrame = (props: FieldFrameProps): TemplateResult => {
     <div
       data-ui="field"
       data-kind={props.kind}
+      data-size={props.size ?? null}
       data-span={props.span ?? 'half'}
       data-label-hidden={props.labelHidden ? 'true' : null}
       data-selection-hidden={props.selectionHidden ? 'true' : null}
