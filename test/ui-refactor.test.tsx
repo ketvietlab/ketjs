@@ -69,8 +69,17 @@ test('record assertions exclude only closed shell search markup, preserving reco
 test('media labels preserve alignment only when requested and hide decorative images from speech', () => {
   assert.doesNotMatch(renderToString(<MediaLabel label="No image" />), /data-ui="media-label-image"|<img/)
   const reserved = renderToString(<MediaLabel label="Empty" reserveImage />)
-  assert.match(reserved, /data-ui="media-label-image" aria-hidden="true"/)
+  assert.match(reserved, /data-ui="media-label-image" data-empty="true" aria-hidden="true"/)
   assert.doesNotMatch(reserved, /<img/)
+  // A reserved slot without a photo draws a placeholder icon, the default or the one asked for.
+  assert.match(reserved, /data-ui="media-label-image"[^>]*>(?:<!--[^>]*-->)*<svg data-ui="icon"/)
+  const named = renderToString(<MediaLabel label="Empty" reserveImage placeholder="package" />)
+  assert.notEqual(named, reserved)
+  assert.match(named, /<svg data-ui="icon"/)
+  const photo = renderToString(
+    <MediaLabel label="Photo" src="/photo.png" reserveImage placeholder="package" />,
+  )
+  assert.doesNotMatch(photo, /data-ui="icon"|data-empty/)
   assert.match(renderToString(<MediaLabel label="Product" src="/photo.png" />), /alt=""/)
   assert.match(renderToString(<Text tone="muted">Không</Text>), /data-tone="muted"[^>]*>[\s\S]*?Không/)
 })
