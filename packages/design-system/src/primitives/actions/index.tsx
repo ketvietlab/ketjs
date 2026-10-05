@@ -17,7 +17,7 @@ export const HOOKS = [
 export type ActionVariant = 'primary' | 'secondary' | 'tertiary' | 'destructive'
 export type ActionTone = 'default' | 'danger' | 'positive'
 
-export type ActionSize = 'compact' | 'default' | 'prominent'
+export type ActionSize = 'compact' | 'default' | 'prominent' | 'large'
 
 type ActionBase = {
   label: string

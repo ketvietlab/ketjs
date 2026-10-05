@@ -1,6 +1,7 @@
 @layer ket.reset, ket.theme, ket.app, ket.user;
 
 @import "./foundations/tokens.css";
+@import "./foundations/control-sizes.css";
 @import "./foundations/reset.css";
 @import "./primitives/icon/styles.css";
 @import "./primitives/actions/styles.css";
