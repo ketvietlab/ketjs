@@ -466,6 +466,7 @@ try {
             nested: size(at('surface-in-surface', '[data-ui="surface"] [data-ui="surface"] [data-ui="surface-title"]')),
             modalTable: size(at('modal-table', '[data-ui="surface-title"]')),
             section: size(at('modal-section', '[data-ui="section-title"]')),
+            item: size(at('modal-item', '[data-ui="section"] [data-ui="section"] [data-ui="section-title"]')),
           },
           forms: { wide: labels('wide-form'), narrow: labels('narrow-form'), panel: labels('narrow-panel') },
           strip: {
@@ -528,16 +529,18 @@ try {
     assert.equal(layering.dividedSecond?.border, '1px', `${presentation}: a divider between groups`)
     const titles = layering.titles ?? {}
     assert.equal(titles.canvas, '14px', `${presentation}: surface headingMd`)
-    assert.equal(titles.section, '13px', `${presentation}: section headingSm`)
-    assert.equal(titles.nested, titles.section, `${presentation}: a nested surface title is a section title`)
+    assert.equal(titles.section, '14px', `${presentation}: a modal group heading is headingMd`)
+    assert.equal(titles.item, '13px', `${presentation}: an item heading nested in a group is headingSm`)
+    assert.equal(titles.nested, titles.item, `${presentation}: a nested surface title is an item heading`)
     assert.equal(
       titles.modalTable,
       titles.section,
-      `${presentation}: a table title in a modal is a section title`,
+      `${presentation}: a table title in a modal is a group heading`,
     )
+    assert.equal(titles.canvas, titles.section, `${presentation}: a group heading matches the surface title`)
     assert.ok(
-      Number.parseFloat(titles.canvas) > Number.parseFloat(titles.section),
-      `${presentation}: canvas title`,
+      Number.parseFloat(titles.section) > Number.parseFloat(titles.item),
+      `${presentation}: group heading above item heading`,
     )
     assert.deepEqual(layering.strip, { borders: '0px,1px,1px', rows: '1' }, `${presentation}: metadata strip`)
     assert.deepEqual(
