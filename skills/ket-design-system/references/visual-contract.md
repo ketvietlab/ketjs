@@ -58,9 +58,14 @@ contract; never shrink text to fit. Zero default outer text margins.
 | Card/working-section gap | 12px desktop / 8px mobile, `--kv-layout-gap` | Parent layout |
 | Page gutter | 12px desktop / 8px mobile, `--kv-layout-gap` | Page; keep header and body aligned, with no additional shell inset |
 | Default/prominent button and input height | 32px desktop, 36px mobile | Control |
+| Opt-in `large` input/button height | 36px desktop, 44px mobile | Control; native and compound fields match actions |
 | Explicit compact button height | 28px desktop, 32px mobile | Button |
 | Button/input block / inline padding | 6 / 12px | Control |
 | Button/input radius | 8px | Control |
+
+`large` is an explicit size for touch-focused forms such as authentication. It keeps the
+existing typography, radius, padding and state mechanics; density never selects it
+automatically. Pass `size="large"` to Button/IconButton/LinkButton and TextField/Field.
 
 Default/prominent Button maps to Polaris **large** to align with TextField. Compact
 maps to medium and is not used to build a normal input/action row. Icon-with-text
