@@ -154,7 +154,7 @@ export function checkThemeManifest(
   if (!strings(fonts) || fonts.some((name) => !files.has(name) || !name.endsWith('.woff2')))
     issues.push({ code: 'manifestFonts', detail: 'fonts' })
   let script: ThemeManifest['script'] = null
-  if (value.script !== undefined) {
+  if (value.script != null) {
     const spec = value.script
     if (!plain(spec)) issues.push({ code: 'manifestScript', detail: 'script' })
     else {
