@@ -1,0 +1,41 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="context-button"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-1) var(--kv-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--kv-radius-md);
+    background: transparent;
+    color: var(--kv-color-ink);
+    text-align: start;
+    flex-shrink: 0;
+    max-inline-size: 15rem;
+    cursor: pointer;
+    font: inherit;
+  }
+  :where([data-kv-design-system]) [data-ui="context-button"]:hover:not(:disabled),
+  :where([data-kv-design-system]) [data-ui="context-button"][aria-pressed="true"] {
+    background: var(--kv-color-accent-soft);
+    border-color: var(--kv-color-accent);
+  }
+  :where([data-kv-design-system]) [data-ui="context-button"]:disabled {
+    cursor: default;
+    color: var(--kv-text-disabled);
+  }
+  :where([data-kv-design-system]) [data-ui="context-button-copy"] {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    gap: var(--kv-space-0-5);
+  }
+  :where([data-kv-design-system]) [data-ui="context-button-copy"] > [data-ui="text"] {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  :where([data-kv-design-system]) [data-ui="context-button-leading"] {
+    display: flex;
+    flex-shrink: 0;
+  }
+}

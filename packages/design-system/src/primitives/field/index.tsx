@@ -1,3 +1,4 @@
+import { DatePicker, DateTimePicker } from '../../forms/date-time/index.tsx'
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Disclosure } from '../../layouts/index.tsx'
@@ -125,6 +126,8 @@ export const Field = (props: FieldProps): TemplateResult => {
         <FieldMessages {...props} />
       </div>
     )
+  if (props.type === 'datetime-local' && props.control === undefined) return DateTimePicker(props)
+  if (props.type === 'date' && props.control === undefined) return DatePicker(props)
   const group = props.type === 'radio' || props.type === 'checkbox-group'
   return (
     <FieldFrame

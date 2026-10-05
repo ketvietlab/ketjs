@@ -9,6 +9,9 @@ import { formatRange } from './date-math.js'
 
 export const HOOKS = [
   'date-picker',
+  'date-time-picker',
+  'date-time-controls',
+  'date-time-parts',
   'date-range',
   'date-inputs',
   'date-control-row',
@@ -47,6 +50,7 @@ export type DatePickerLabels = {
   next: string
   apply: string
   cancel: string
+  close: string
   chooseStart: string
   chooseEnd: string
   chooseDate: string
@@ -70,7 +74,7 @@ export type TemporalProps = Omit<FieldProps, 'type' | 'fields' | 'control' | 'er
   issues?: readonly FieldIssue[]
   error?: string | null
 }
-export type DatePickerProps = TemporalProps & CalendarOptions
+export type DatePickerProps = TemporalProps & CalendarOptions & { applyOnClose?: boolean }
 export type DateRangePickerProps = CalendarOptions & {
   /** Compact labelled control for page-heading filters; label remains accessible. */
   variant?: 'field' | 'filter'
@@ -109,6 +113,7 @@ const labelsFor = (props: CalendarOptions, range: boolean): DatePickerLabels => 
           next: 'Next month',
           apply: 'Apply',
           cancel: 'Cancel',
+          close: 'Close calendar',
           chooseStart: 'Choose a start date',
           chooseEnd: 'Choose an end date',
           chooseDate: 'Choose a date',
@@ -133,6 +138,7 @@ const labelsFor = (props: CalendarOptions, range: boolean): DatePickerLabels => 
           next: 'Tháng sau',
           apply: 'Áp dụng',
           cancel: 'Hủy',
+          close: 'Đóng lịch',
           chooseStart: 'Chọn ngày bắt đầu',
           chooseEnd: 'Chọn ngày kết thúc',
           chooseDate: 'Chọn một ngày',
@@ -224,6 +230,9 @@ const CalendarPanel = (props: {
           />,
         ]}
       />
+      {props.applyOnClose && (
+        <IconButton label={props.labels.close} icon="×" name="kv-date-command" value="close" size="compact" />
+      )}
     </header>
     <div data-ui="date-calendar-body">
       <div data-ui="date-calendar-months" />
@@ -248,6 +257,7 @@ export const DatePicker = (props: DatePickerProps): TemplateResult => {
     <div
       data-ui="date-picker"
       data-date-mode="single"
+      data-date-apply-on-close={props.applyOnClose === false ? null : 'true'}
       data-span={props.span ?? 'half'}
       data-date-locale={props.locale ?? 'vi'}
       data-date-today={props.today}
@@ -280,7 +290,7 @@ export const DatePicker = (props: DatePickerProps): TemplateResult => {
           }
         />
       </div>
-      <CalendarPanel id={props.id} labels={labels} />
+      <CalendarPanel id={props.id} labels={labels} applyOnClose={props.applyOnClose !== false} />
     </div>
   )
 }
@@ -382,8 +392,54 @@ export const DateRangePicker = (props: DateRangePickerProps): TemplateResult => 
     </div>
   )
 }
-/** Local date-time text is submitted unchanged; the app adapter owns timezone interpretation. */
-export const DateTimePicker = (props: TemporalProps): TemplateResult => (
-  <Field {...temporal(props)} type="datetime-local" />
-)
+/** Local wall time stays one submitted value; enhancement splits date and time
+ * while retaining a native datetime-local fallback without JavaScript. */
+export const DateTimePicker = (props: TemporalProps & CalendarOptions): TemplateResult => {
+  const held = temporal(props)
+  const [day = '', time = ''] = String(props.value ?? '').split('T')
+  const parts = { ...held, span: 'half' as const, help: null, error: null, labelHidden: true, disabled: true }
+  return (
+    <div
+      data-ui="date-time-picker"
+      data-date-mode="datetime"
+      data-date-locale={props.locale ?? 'vi'}
+      data-span={props.span ?? 'half'}
+    >
+      <FieldFrame
+        {...held}
+        kind="datetime-local"
+        control={
+          <div data-ui="date-time-controls">
+            {NativeFieldControl(
+              { ...held, type: 'datetime-local' },
+              describedBy(props.id, props.help, held.error),
+            )}
+            <div data-ui="date-time-parts" hidden>
+              <DatePicker
+                {...parts}
+                id={`${props.id}-date`}
+                name=""
+                value={day}
+                min={props.min ? String(props.min).split('T')[0] : undefined}
+                max={props.max ? String(props.max).split('T')[0] : undefined}
+                step="1"
+                locale={props.locale}
+                today={props.today}
+              />
+              <TimePicker
+                {...parts}
+                id={`${props.id}-time`}
+                name=""
+                value={time}
+                label={props.locale === 'en' ? `${props.label}: time` : `${props.label}: giờ`}
+                min={undefined}
+                max={undefined}
+              />
+            </div>
+          </div>
+        }
+      />
+    </div>
+  )
+}
 export const TimePicker = (props: TemporalProps): TemplateResult => <Field {...temporal(props)} type="time" />

@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 309,
-    "runtimeExports": 145,
-    "registeredComponents": 137,
+    "publicExports": 312,
+    "runtimeExports": 147,
+    "registeredComponents": 138,
     "compatibilityExports": 262,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 164,
-    "runtimeGaps": 8,
-    "typeGaps": 156,
-    "cssFiles": 80,
-    "cssLines": 16912
+    "publicGaps": 166,
+    "runtimeGaps": 9,
+    "typeGaps": 157,
+    "cssFiles": 81,
+    "cssLines": 17030
   },
   "rows": [
     {
@@ -966,7 +966,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-context-controls.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-021"
     },
     {
@@ -1077,6 +1077,45 @@
       "decision": "refactor",
       "target": "@ketvietlab/design-system",
       "wave": 0,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-009"
+    },
+    {
+      "scope": "public",
+      "name": "ContextButton",
+      "imported": "ContextButton",
+      "kind": "runtime",
+      "source": "./interactions/context-button/index.tsx",
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 4,
+      "consumers": 0,
+      "specimen": "present",
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/registry.ts",
+        "packages/design-system/src/catalogue/specimens.tsx"
+      ],
+      "tests": "present",
+      "testFiles": ["test/design-system-context-controls.test.tsx", "test/design-system.test.tsx"],
+      "gapTask": "DS-009"
+    },
+    {
+      "scope": "public",
+      "name": "ContextButtonProps",
+      "imported": "ContextButtonProps",
+      "kind": "type",
+      "source": "./interactions/context-button/index.tsx",
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 4,
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
@@ -1567,6 +1606,7 @@
       "consumers": 0,
       "specimen": "present",
       "specimenFiles": [
+        "packages/design-system/src/catalogue/date-pickers.tsx",
         "packages/design-system/src/catalogue/registry.ts",
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
@@ -1746,6 +1786,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/design-system-dates.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/search-filter-layout.test.tsx"
@@ -5198,7 +5239,7 @@
         "packages/design-system/src/catalogue/registry.ts"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-client-modal.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -5988,6 +6029,24 @@
       "tests": "gap",
       "testFiles": [],
       "gapTask": "DS-009"
+    },
+    {
+      "scope": "public",
+      "name": "attachClientModalInteractions",
+      "imported": "attachClientModalInteractions",
+      "kind": "runtime",
+      "source": "./runtime/client-modal.js",
+      "owner": "Interactions",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 4,
+      "consumers": 0,
+      "specimen": "gap",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-client-modal.test.ts"],
+      "gapTask": "DS-015"
     },
     {
       "scope": "public",
@@ -8850,7 +8909,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-client-modal.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -9329,6 +9388,7 @@
       "testFiles": [
         "test/backend-ui.test.ts",
         "test/crm-configuration-modal-view.test.tsx",
+        "test/design-system-context-controls.test.tsx",
         "test/design-system-layout-audit.test.ts",
         "test/design-system-primitives.test.tsx",
         "test/design-system.test.tsx",
@@ -9449,6 +9509,7 @@
       "testFiles": [
         "test/accounting.test.ts",
         "test/backend-ui.test.ts",
+        "test/design-system-context-controls.test.tsx",
         "test/design-system-dates.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system-primitives.test.tsx",
@@ -11861,6 +11922,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-context-controls.test.tsx",
         "test/design-system-demo.test.ts",
         "test/design-system-layout-audit.test.ts",
         "test/design-system-normalization.test.tsx",
@@ -12272,13 +12334,14 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/combobox/styles.css",
-      "lines": 77,
+      "lines": 108,
       "hooks": [
         "combobox",
         "combobox-empty",
         "combobox-input-row",
         "combobox-listbox",
         "combobox-option",
+        "combobox-option-leading",
         "combobox-toggle",
         "field-control",
         "tag-picker"
@@ -12287,7 +12350,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/date-time/styles.css",
-      "lines": 289,
+      "lines": 317,
       "hooks": [
         "date-boundary",
         "date-calendar",
@@ -12309,6 +12372,9 @@
         "date-range",
         "date-range-error",
         "date-range-preset",
+        "date-time-controls",
+        "date-time-parts",
+        "date-time-picker",
         "date-tools",
         "date-weekday",
         "field"
@@ -12355,6 +12421,12 @@
       "file": "packages/design-system/src/foundations/tokens.css",
       "lines": 422,
       "hooks": []
+    },
+    {
+      "layer": "public",
+      "file": "packages/design-system/src/interactions/context-button/styles.css",
+      "lines": 41,
+      "hooks": ["context-button", "context-button-copy", "context-button-leading", "text"]
     },
     {
       "layer": "public",
@@ -12996,9 +13068,12 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 125,
+      "lines": 139,
       "hooks": [
         "bulk-action-list",
+        "date-inputs",
+        "date-range",
+        "date-time-picker",
         "field",
         "form-actions",
         "form-errors",
@@ -13070,8 +13145,11 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 409,
+      "lines": 412,
       "hooks": [
+        "date-inputs",
+        "date-range",
+        "date-time-picker",
         "field",
         "field-affix",
         "field-clear",
@@ -13190,7 +13268,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/styles.css",
-      "lines": 61,
+      "lines": 62,
       "hooks": []
     },
     {

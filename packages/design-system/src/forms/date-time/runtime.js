@@ -69,8 +69,89 @@ const lockBackground = (popup) => {
     }
   }
 }
+/** Progressive compound date/time: one canonical submitted wall-time value.
+ * @param {HTMLElement} picker */
+const enhanceDateTime = (picker) => {
+  const input = picker.querySelector('input[type="datetime-local"]')
+  const day = picker.querySelector('input[type="date"]')
+  const time = picker.querySelector('input[type="time"]')
+  const parts = picker.querySelector('[data-ui="date-time-parts"]')
+  if (
+    !(input instanceof HTMLInputElement) ||
+    !(day instanceof HTMLInputElement) ||
+    !(time instanceof HTMLInputElement) ||
+    !(parts instanceof HTMLElement)
+  )
+    return () => {}
+  const validator = /** @type {HTMLInputElement} */ (input.cloneNode())
+  const label = picker.querySelector('label')
+  const originalFor = label?.getAttribute('for')
+  const innerLabel = parts.querySelector('label')
+  const innerFor = innerLabel?.getAttribute('for')
+  const form = input.form
+  input.type = 'hidden'
+  parts.hidden = false
+  label?.setAttribute('for', day.id)
+  innerLabel?.removeAttribute('for')
+  for (const node of parts.querySelectorAll('input,button')) {
+    if (node instanceof HTMLInputElement || node instanceof HTMLButtonElement)
+      node.disabled = input.disabled || (node instanceof HTMLButtonElement && input.readOnly)
+  }
+  for (const part of [day, time]) {
+    const description = input.getAttribute('aria-describedby')
+    if (description) part.setAttribute('aria-describedby', description)
+  }
+  const sync = () => {
+    // Partial drafts survive record view-state re-renders; native child validation
+    // prevents submission until both pieces are present.
+    const value = day.value || time.value ? `${day.value}T${time.value}` : ''
+    validator.value = day.value && time.value ? value : ''
+    const partial = Boolean(day.value) !== Boolean(time.value)
+    time.setCustomValidity(
+      partial
+        ? picker.dataset.dateLocale === 'en'
+          ? 'Choose date and time.'
+          : 'Chọn đủ ngày và giờ.'
+        : validator.validationMessage,
+    )
+    if (input.value === value) return
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  /** @param {Event} event */
+  const change = (event) => {
+    if (event.target === day || event.target === time) sync()
+  }
+  let active = true
+  const reset = () =>
+    queueMicrotask(() => {
+      if (!active) return
+      const [date = '', clock = ''] = input.value.split('T')
+      day.value = date
+      time.value = clock
+      sync()
+    })
+  picker.addEventListener('input', change)
+  picker.addEventListener('change', change)
+  form?.addEventListener('reset', reset)
+  sync()
+  return () => {
+    active = false
+    picker.removeEventListener('input', change)
+    picker.removeEventListener('change', change)
+    form?.removeEventListener('reset', reset)
+    input.type = 'datetime-local'
+    parts.hidden = true
+    if (originalFor) label?.setAttribute('for', originalFor)
+    if (innerFor) innerLabel?.setAttribute('for', innerFor)
+    for (const node of parts.querySelectorAll('input,button'))
+      if (node instanceof HTMLInputElement || node instanceof HTMLButtonElement) node.disabled = true
+  }
+}
 /** @param {HTMLElement} picker */
 const enhance = (picker) => {
+  if (picker.dataset.dateMode === 'datetime') return enhanceDateTime(picker)
   const panel = picker.querySelector('[data-ui="date-calendar"]')
   const trigger = picker.querySelector('[name="kv-date-open"]')
   const inputs = /** @type {HTMLInputElement[]} */ ([
@@ -248,7 +329,8 @@ const enhance = (picker) => {
   }
   const position = () => {
     if (!isOpen() || isMobile()) return
-    const rect = opener.getBoundingClientRect()
+    const anchor = picker.querySelector('[data-ui="date-field-control"]') ?? opener
+    const rect = anchor.getBoundingClientRect()
     const inset = parseFloat(getComputedStyle(popup).scrollMarginTop)
     const gap = inset
     popup.style.setProperty('--kv-date-max-height', `${Math.max(0, window.innerHeight - inset * 2)}px`)
@@ -410,7 +492,7 @@ const enhance = (picker) => {
       focusDate = value
       render(true)
     } else if (target.name === 'kv-date-command') {
-      if (target.value === 'cancel') close(true)
+      if (target.value === 'cancel' || target.value === 'close') close(true)
       else if (target.value === 'apply' && valid()) {
         const values = [...draft]
         close(true)
