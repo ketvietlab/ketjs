@@ -20,6 +20,7 @@ import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { phoneKey } from '../../phone.ts'
 import { addDays, cancelActivity, completeActivity, scheduleActivity } from '../activity/index.ts'
 import { ensureThread } from '../mail/index.ts'
+import { effectiveFunctionKeys } from '../user/authorization.ts'
 import { CASE_KINDS, CASE_PRIORITIES, MESSAGE_VISIBILITIES } from './types.ts'
 import { caseListSearch, emptyCaseListState } from './search.ts'
 
@@ -251,7 +252,7 @@ const teamExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
   !id || Boolean((await ctx.db.select('crm.Team', { id, active: true }))[0])
 
 export type CaseAction = 'view' | 'edit' | 'assign'
-export type CaseAccessScope = 'none' | 'self' | 'team' | 'company'
+export type CaseAccessScope = 'self' | 'team' | 'company'
 export type CaseAudience = {
   actor: string
   action: CaseAction
@@ -262,37 +263,33 @@ export type CaseAudience = {
   queueTeams: string[]
 }
 
-const ACCESS_SCOPES = ['none', 'self', 'team', 'company'] as const
-const accessScope = (value: unknown, fallback: CaseAccessScope): CaseAccessScope =>
-  ACCESS_SCOPES.includes(String(value) as CaseAccessScope) ? (String(value) as CaseAccessScope) : fallback
+/** The two role permissions that widen record access beyond the owner's own records. */
+export const CASE_SCOPE_FUNCTIONS = { team: 'crm.scope.team', company: 'crm.scope.company' } as const
 
 /**
- * Resolve record access independently for view, edit and assignment.
+ * Resolve record access for view, edit and assignment.
  *
  * `null` means "everything": either the call carries no actor at all — a job or
- * a fixture running as the system — or the actor is a superuser. Ordinary users
- * default to owner-private access. Team leaders get their teams for every action,
- * while an explicit company-scoped grant is the business-manager alternative to
- * making somebody a technical superuser.
+ * a fixture running as the system — or the actor is a superuser. How far an
+ * ordinary user reaches comes from their roles and nowhere else: `crm.scope.company`
+ * reaches every record, `crm.scope.team` the records of every team they belong
+ * to, and without either they see what is assigned to them plus the teams they
+ * lead. A separate grant table used to hold this, and a role screen that said
+ * "manager" next to a grant that said "self" is how a manager saw nothing.
  */
 export async function caseAudience(ctx: Ctx, action: CaseAction = 'view'): Promise<CaseAudience | null> {
   if (!ctx.actor) return null
-  const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
-  if (user?.superuser === true) return null
-  const [memberships, ledTeams, grant] = await Promise.all([
+  const [allowed, memberships, ledTeams] = await Promise.all([
+    effectiveFunctionKeys(ctx, ctx.actor),
     ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true }),
     ctx.db.select('crm.Team', { leaderUserId: ctx.actor, active: true }),
-    ctx.db.select('crm.AccessGrant', { userId: ctx.actor, active: true }).then((rows) => rows[0] ?? null),
   ])
+  if (allowed === null || allowed.includes(CASE_SCOPE_FUNCTIONS.company)) return null
   const memberTeams = [...new Set(memberships.map((row) => String(row.teamId)))]
   const leaderTeams = [...new Set(ledTeams.map((row) => String(row.id)))]
-  const scope = accessScope(
-    grant?.[`${action}Scope`],
-    action === 'view' ? 'self' : action === 'edit' ? 'self' : 'self',
-  )
-  if (scope === 'company') return null
+  const scope: CaseAccessScope = allowed.includes(CASE_SCOPE_FUNCTIONS.team) ? 'team' : 'self'
   const teams = scope === 'team' ? [...new Set([...memberTeams, ...leaderTeams])] : leaderTeams
-  const queueTeams = action === 'edit' || scope === 'none' ? [] : memberTeams
+  const queueTeams = action === 'edit' ? [] : memberTeams
   return { actor: ctx.actor, action, scope, teams, queueTeams }
 }
 
@@ -300,7 +297,7 @@ const audienceHolds = (audience: CaseAudience | null, row: Row): boolean => {
   if (!audience) return true
   const teamId = row.teamId ? String(row.teamId) : null
   if (teamId && audience.teams.includes(teamId)) return true
-  if (audience.scope !== 'none' && row.assigneeUserId === audience.actor) return true
+  if (row.assigneeUserId === audience.actor) return true
   return Boolean(
     audience.action !== 'edit' && !row.assigneeUserId && teamId && audience.queueTeams.includes(teamId),
   )
@@ -730,12 +727,10 @@ const listStateOf = (value: unknown): ListState | null =>
 const caseAudienceCondition = async (ctx: Ctx, C: ReturnType<Ctx['table']>, action: CaseAction = 'view') => {
   const audience = await caseAudience(ctx, action)
   if (!audience) return null
-  const clauses = []
-  if (audience.scope !== 'none') clauses.push(eq(C.assigneeUserId, audience.actor))
+  const clauses = [eq(C.assigneeUserId, audience.actor)]
   if (audience.teams.length) clauses.push(inArray(C.teamId, audience.teams))
   if (action !== 'edit' && audience.queueTeams.length)
     clauses.push(and(isNull(C.assigneeUserId), inArray(C.teamId, audience.queueTeams)))
-  if (!clauses.length) return inArray(C.id, [])
   return clauses.length === 1 ? clauses[0]! : or(...clauses)
 }
 
