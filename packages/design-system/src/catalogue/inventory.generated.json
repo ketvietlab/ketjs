@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 157,
     "cssFiles": 81,
-    "cssLines": 17030
+    "cssLines": 17054
   },
   "rows": [
     {
@@ -12714,7 +12714,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layering/styles.css",
-      "lines": 160,
+      "lines": 184,
       "hooks": [
         "content-card",
         "dialog",
@@ -12727,6 +12727,8 @@
         "modal-sheet",
         "popover-panel",
         "record-page-aside",
+        "section",
+        "section-title",
         "surface",
         "surface-head",
         "surface-title",
