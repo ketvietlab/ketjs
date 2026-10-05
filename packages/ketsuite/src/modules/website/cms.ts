@@ -21,6 +21,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
 import { studioAppearance } from './studio-style.ts'
+
 import {
   canAccessSite,
   canAdministerSite,
@@ -36,6 +37,17 @@ import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
 
+/** Content publication stays frozen; site-wide appearance is read at delivery. */
+const liveSiteAppearance = (published: unknown, site: Row): Row => {
+  const appearance =
+    published && typeof published === 'object' && !Array.isArray(published) ? (published as Row) : {}
+  const style =
+    site.studioStyle && typeof site.studioStyle === 'object' && !Array.isArray(site.studioStyle)
+      ? (site.studioStyle as Row)
+      : {}
+  const { theme: _old, ...rest } = appearance
+  return { ...rest, ...style }
+}
 /**
  * What a person typed in the title box, as a literal.
  *
@@ -541,8 +553,7 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
   if (pageNo > pageCount) return null
   const base = `/${kind}/${term.slug}`
   const shown = posts.slice((pageNo - 1) * ARCHIVE_PAGE_SIZE, pageNo * ARCHIVE_PAGE_SIZE)
-  // The archive wears the style its newest post went out with, so it never shows a style
-  // an editor has saved but not yet published.
+  // Page content is frozen, but saved site appearance takes effect on the whole site.
   const home = shown.length
     ? null
     : await ctx.db.one(from(Entry).where(eq(Entry.siteId, site.id), eq(Entry.path, '/')))
@@ -555,8 +566,10 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
     title: term.name,
     excerpt: term.description ?? null,
     layout: [],
-    appearance:
+    appearance: liveSiteAppearance(
       (shown[0]?.appearance as Row | null) ?? home?.publishedAppearance ?? studioAppearance(ctx, site),
+      site,
+    ),
     fields: {
       seo: {
         title: seo.title || term.name,
@@ -1137,7 +1150,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
-            appearance: entry.publishedAppearance ?? null,
+            appearance: liveSiteAppearance(entry.publishedAppearance, site),
             // The head metadata travels with the page it describes. Without it
             // the storefront handed the theme an empty meta, so the fields
             // website_seo declares were stored and never rendered.
