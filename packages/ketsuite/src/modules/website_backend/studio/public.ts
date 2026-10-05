@@ -128,6 +128,8 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   // A deployment module's own page in the site's frame: it brings a script that fills the mount.
   const embed = record.type === 'website.customerEmbed' ? object(fields.embed) : null
   const embedScript = embed ? embedAssetPath(embed.script, 'mjs') : null
+  // An embed that names no script this application serves has nothing to draw: not a blank page.
+  if (record.type === 'website.customerEmbed' && !embedScript) return null
   const listing: WebsitePublicListing | null = archive
     ? {
         kind: 'archive',
