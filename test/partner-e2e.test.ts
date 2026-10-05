@@ -168,7 +168,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   // covered by the design-system-level "operational tables expose sort,
   // selection, grouping and row navigation" test, and by a live browser
   // check, not by this SSR-only fetch.
-  assert.match(partnerList, /data-ui="kt-row-select"[^>]*aria-label="Chọn dòng: customer"/)
+  assert.match(partnerList, /data-ui="kt-row-select"[^>]*aria-label="Chọn dòng: Công ty Minh An"/)
   assert.match(partnerList, /data-ui="kt-select-persisted"/)
   // Since the collection controls moved into ListPage, bulk actions share the
   // identity band with Create rather than sitting in a strip under the toolbar.
