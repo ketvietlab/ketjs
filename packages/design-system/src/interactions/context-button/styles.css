@@ -1,5 +1,5 @@
 @layer ket.app {
-  [data-ui="context-button"] {
+  :where([data-kv-design-system]) [data-ui="context-button"] {
     display: inline-flex;
     align-items: center;
     gap: var(--kv-space-2);
@@ -14,27 +14,27 @@
     cursor: pointer;
     font: inherit;
   }
-  [data-ui="context-button"]:hover:not(:disabled),
-  [data-ui="context-button"][aria-pressed="true"] {
+  :where([data-kv-design-system]) [data-ui="context-button"]:hover:not(:disabled),
+  :where([data-kv-design-system]) [data-ui="context-button"][aria-pressed="true"] {
     background: var(--kv-color-accent-soft);
     border-color: var(--kv-color-accent);
   }
-  [data-ui="context-button"]:disabled {
+  :where([data-kv-design-system]) [data-ui="context-button"]:disabled {
     cursor: default;
     color: var(--kv-text-disabled);
   }
-  [data-ui="context-button-copy"] {
+  :where([data-kv-design-system]) [data-ui="context-button-copy"] {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
     gap: var(--kv-space-0-5);
   }
-  [data-ui="context-button-copy"] > [data-ui="text"] {
+  :where([data-kv-design-system]) [data-ui="context-button-copy"] > [data-ui="text"] {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  [data-ui="context-button-leading"] {
+  :where([data-kv-design-system]) [data-ui="context-button-leading"] {
     display: flex;
     flex-shrink: 0;
   }

@@ -5238,7 +5238,7 @@
         "packages/design-system/src/catalogue/registry.ts"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-client-modal.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -6043,8 +6043,8 @@
       "consumers": 0,
       "specimen": "gap",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system-client-modal.test.ts"],
       "gapTask": null
     },
     {
@@ -8889,7 +8889,7 @@
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-client-modal.test.ts", "test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {

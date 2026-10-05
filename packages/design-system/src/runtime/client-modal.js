@@ -1,4 +1,16 @@
 /**
+ * Layers inside the sheet that Escape closes first. The design-system runtime
+ * dismisses them on the bubbling keydown; the sheet must not close underneath.
+ */
+const INNER_LAYERS_OPEN = [
+  '[data-ui="menu"][open]',
+  '[data-ui="timeframe-menu"][open]',
+  '[data-ui="view-settings"][open]',
+  '[data-ui="popover"][data-open="true"]',
+  '[data-ui="tooltip"]:not([data-dismissed="true"]):is(:hover, :focus-within)',
+].join(', ')
+
+/**
  * Focus lifetime for a server-rendered client ModalSheet. The application owns
  * opening/closing and calls the disposer before replacing the active layer.
  * Native close buttons retain the application's event handler; no navigation is
@@ -34,6 +46,7 @@ export const attachClientModalInteractions = (root = document) => {
   /** @param {KeyboardEvent} event */
   const keydown = (event) => {
     if (event.key === 'Escape') {
+      if (modal.querySelector(INNER_LAYERS_OPEN)) return
       const close = modal.querySelector('[data-ui="modal-close"]')
       if (close instanceof HTMLElement) close.click()
       event.preventDefault()
