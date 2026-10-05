@@ -82,6 +82,7 @@ export const permissionAreas: Record<string, Area> = {
   mail_transport: { group: 'system', vi: 'Kênh gửi thư', en: 'Mail delivery' },
   flow: { group: 'system', vi: 'Quy trình', en: 'Flows' },
   website: { group: 'system', vi: 'Website', en: 'Website' },
+  website_customer_mail: { group: 'system', vi: 'Website · Thư khách hàng', en: 'Website · Customer mail' },
   website_form: { group: 'system', vi: 'Website · Biểu mẫu', en: 'Website · Forms' },
   website_form_mail: { group: 'system', vi: 'Website · Thư biểu mẫu', en: 'Website · Form mail' },
   website_menu: { group: 'system', vi: 'Website · Menu', en: 'Website · Menus' },
