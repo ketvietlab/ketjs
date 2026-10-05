@@ -967,11 +967,14 @@ export const createRecordModal =
             name: typeof stored.name === 'string' ? stored.name : null,
           }
         }
+        // A preview reads and never writes, so the function behind it is not declared
+        // idempotent and the server refuses a key on it.
+        const intent = () => (command.preview ? undefined : uuid())
         const invoke = (fn: string, input: Record<string, unknown>) =>
-          callRecordFunction(fn, input, { idempotencyKey: uuid() })
+          callRecordFunction(fn, input, { idempotencyKey: intent() })
         let result = command.route
           ? await callRecordRoute(command.route, command.input(formData, context, uploads), {
-              idempotencyKey: uuid(),
+              idempotencyKey: intent(),
             })
           : await invoke(command.fn!, command.input(formData, context, uploads))
         // Further calls run only once the first succeeds, and stop at the first
