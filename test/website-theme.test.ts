@@ -194,6 +194,12 @@ test('an installed theme is offered, chosen, published and served from tenant st
     await fixture('website.publishEntry', { id: 'page-site-a', expectedRevisionId: entry.revisionId })
   }
   await publish()
+  // Old entries may have no Studio appearance at all; keep the legacy presenter until a style is saved.
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    await adapter.run(`UPDATE website_entry SET "publishedAppearance" = NULL WHERE id = 'page-site-a'`)
+  })
+  const legacy = await fixture('website.getEntryByPath', { siteId: 'site-a', path: '/' })
+  assert.equal(legacy.appearance, null)
   const plain = await anonymous.get('/')
   assert.equal(plain.headers.get('content-security-policy'), null)
   assert.doesNotMatch(await plain.text(), /data-site-theme/)

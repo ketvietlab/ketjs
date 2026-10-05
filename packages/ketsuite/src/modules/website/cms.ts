@@ -38,13 +38,13 @@ import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
 
 /** Content publication stays frozen; site-wide appearance is read at delivery. */
-const liveSiteAppearance = (published: unknown, site: Row): Row => {
-  const appearance =
-    published && typeof published === 'object' && !Array.isArray(published) ? (published as Row) : {}
-  const style =
-    site.studioStyle && typeof site.studioStyle === 'object' && !Array.isArray(site.studioStyle)
-      ? (site.studioStyle as Row)
-      : {}
+const liveSiteAppearance = (published: unknown, site: Row): Row | null => {
+  const hasPublished = !!published && typeof published === 'object' && !Array.isArray(published)
+  const hasStyle =
+    !!site.studioStyle && typeof site.studioStyle === 'object' && !Array.isArray(site.studioStyle)
+  if (!hasPublished && !hasStyle) return null
+  const appearance = hasPublished ? (published as Row) : {}
+  const style = hasStyle ? (site.studioStyle as Row) : {}
   const { theme: _old, ...rest } = appearance
   return { ...rest, ...style }
 }
