@@ -35,6 +35,7 @@ const runtimeExports = [...publicIndex.matchAll(/export\s+\{([\s\S]*?)\}\s+from\
         'HOOKS',
         'OWNERS',
         'attachDesignSystemInteractions',
+        'attachClientModalInteractions',
         'initials',
         'withQueryState',
         'datePresetIds',

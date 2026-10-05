@@ -1,5 +1,5 @@
 import { each } from '@ketvietlab/ketjs-view'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { describedBy, FieldFrame, issueFor } from '../shared.tsx'
 import type { FieldIssue } from '../shared.tsx'
 
@@ -9,11 +9,19 @@ export const HOOKS = [
   'combobox-toggle',
   'combobox-listbox',
   'combobox-option',
+  'combobox-option-leading',
   'combobox-empty',
   'tag-picker',
 ] as const
 
-export type ComboboxOption = { value: string; label: string; description?: string; disabled?: boolean }
+export type ComboboxOption = {
+  value: string
+  label: string
+  description?: string
+  disabled?: boolean
+  /** Decorative identity or color alongside the option name; does not change its accessible name. */
+  leading?: JSXChild
+}
 export type ComboboxProps = {
   id: string
   name: string
@@ -90,7 +98,14 @@ const ComboControl = (
                 aria-selected={String(option.value === props.value)}
                 aria-disabled={option.disabled ? 'true' : null}
               >
-                <strong>{option.label}</strong>
+                <strong>
+                  {option.leading !== undefined && (
+                    <span data-ui="combobox-option-leading" aria-hidden="true">
+                      {option.leading}
+                    </span>
+                  )}
+                  {option.label}
+                </strong>
                 {option.description && <small>{option.description}</small>}
               </a>
             ),
