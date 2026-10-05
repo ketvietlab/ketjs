@@ -61,7 +61,7 @@ test('Studio embed: a module page wears the site frame and loads only its own as
   assert.match(page, /customer-account\.mjs/, 'the header keeps its account link and script')
   assert.match(page, /href="\/account\/login\?returnTo=%2Fcham-soc" data-customer-account/)
 
-  // A script that is not the application's own draws nothing: the page falls back to a plain 404.
+  // A script that is not the application's own is refused outright.
   for (const script of [
     'https://evil.test/x.mjs',
     '//evil.test/x.mjs',
@@ -75,5 +75,31 @@ test('Studio embed: a module page wears the site frame and loads only its own as
   assert.equal(embedAssetPath(STYLE, 'css'), STYLE)
   assert.equal(embedAssetPath(STYLE, 'mjs'), null)
   assert.doesNotMatch(read({ script: SCRIPT, style: 'https://evil.test/x.css' }), /evil\.test/)
-  assert.doesNotMatch(read({ script: 'https://evil.test/x.mjs' }), /evil\.test/)
+  // No valid script means no page at all, so the route answers 404 rather than a blank 200.
+  assert.equal(draw({ script: 'https://evil.test/x.mjs' }), null)
+  assert.equal(draw({}), null)
+})
+
+/** The type is the application's to draw: an editor cannot save a page of it and pick its assets. */
+test('Studio embed: an editor cannot store a page of the embed type', async (t) => {
+  const { app } = await bootWebsiteStudio()
+  t.after(() => app.close())
+  const saved = (
+    await app.fixture.call<Row>(
+      'website.saveEntry',
+      {
+        id: 'embed-forged',
+        siteId: 'site-a',
+        type: 'website.customerEmbed',
+        title: 'Forged',
+        path: '/forged',
+        slug: 'forged',
+        fields: { embed: { script: SCRIPT } },
+        layout: [],
+      },
+      { scope: { company: 'studio-a', branches: null } },
+    )
+  ).value
+  assert.equal(saved?.ok, false)
+  assert.match(JSON.stringify(saved), /invalidContentType/)
 })
