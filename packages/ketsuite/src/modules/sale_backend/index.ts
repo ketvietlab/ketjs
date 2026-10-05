@@ -645,6 +645,8 @@ const vi = {
   'field.amountTotal': 'Tổng tiền',
   'field.notes': 'Điều khoản và ghi chú',
   'field.product': 'Sản phẩm',
+  'field.sku': 'Mã SKU',
+  'field.category': 'Danh mục',
   'field.quantity': 'Số lượng đặt',
   'field.delivered': 'Đã giao',
   'field.invoiced': 'Đã lập hoá đơn',
@@ -802,6 +804,8 @@ const en = {
   'field.amountTotal': 'Total',
   'field.notes': 'Terms and Conditions',
   'field.product': 'Product',
+  'field.sku': 'SKU',
+  'field.category': 'Category',
   'field.quantity': 'Ordered',
   'field.delivered': 'Delivered',
   'field.invoiced': 'Invoiced',
@@ -1133,7 +1137,24 @@ export default defineModule({
           return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[]
+        const [policies, variants, categories, units] = await Promise.all([
+          ctx.call('sale.listInvoicePolicies', {}, url, req) as Promise<AnyRow[]>,
+          optionalRead<AnyRow[]>(ctx, 'product.listVariants', { saleOk: true }, url, req, []),
+          optionalRead<AnyRow[]>(ctx, 'product.listCategories', {}, url, req, []),
+          optionalRead<AnyRow[]>(ctx, 'uom.listUnits', {}, url, req, []),
+        ])
+        const categoryNames = new Map(categories.map((row) => [row.id, String(row.name)]))
+        const unitNames = new Map(units.map((row) => [row.id, String(row.name)]))
+        const rows = policies.map((row) => ({
+          ...row,
+          sku: variants
+            .filter((variant) => variant.templateId === row.id)
+            .map((variant) => String(variant.defaultCode ?? ''))
+            .filter(Boolean)
+            .join(' · '),
+          category: categoryNames.get(row.categoryId) ?? '',
+          uom: unitNames.get(row.uomId) ?? '',
+        }))
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
           body: async (_, shell) => {

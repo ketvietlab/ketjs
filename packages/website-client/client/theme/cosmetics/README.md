@@ -10,7 +10,9 @@ installed it falls back to the system serif and sans. No external font/image req
 
 - `../cosmetics.ts`: default theme settings and `cosmeticsStarter(tr)`; six normal editable Placement
   pages, menu and media declarations. It takes the product translator; copy lives in messages.ts.
-- `../cosmetics.css`: scoped visitor/canvas presentation; load after `../default.css`.
+- `../skin.css`: the structure every bundled preset shares; load after `../default.css`.
+- `../cosmetics.css`: Lành's colours, type and accent variants; load after `../skin.css`. The other
+  trade presets (`retail`, `restaurant`, `hotel`, `services`) follow the same pattern.
 - `collection.svg`, `serum.svg`, `cream.svg`: original vector illustrations, not product photography.
 - `../../../atlas/cosmetics-fixture.mjs`: demo-only host seeding. Core never imports it.
 
@@ -40,7 +42,6 @@ JavaScript remains an open contract decision; this preset does not change it.
 
 ## Verification
 
-Three tests added in `test/cosmetics-theme.test.mjs` were red before implementation and pass after:
-seeded page/publication coherence and scope; draft/CAS/permissions/publish; shared renderer skin.
-Their three mutations are included in `test/mutations.mjs`. Browser evidence is in
-`review/evidence/THEME-COSMETICS/` at desktop/mobile, with Studio dark-mode checks.
+`test/website-studio-style-http.test.ts` covers the preset through the Studio's draft/CAS/permission
+boundary and rejects unknown presets; `website-studio-preview-http`, `website-studio-public-http` and
+`website-customer-signin-http` check that preview, public delivery and the sign-in page wear it.

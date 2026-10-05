@@ -184,7 +184,7 @@ const body = (c: Context): JSXChild => {
 export const attributeModalDefinition: RecordModalDefinition<AttributeModalData> = {
   kind: 'product.attribute',
   labels: () => ATTRIBUTE_RECORD_MODAL_LABELS[pageLang()],
-  size: 'large',
+  size: 'default',
   context: {
     fn: 'product.attributeModalContext',
     input: (id, creating) => ({

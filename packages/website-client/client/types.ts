@@ -25,6 +25,8 @@ export type Site = {
   id: string
   name: string
   host: string
+  /** Where visitors open the site; empty until it has a primary domain. */
+  url?: string
   locales: string[]
   defaultLocale?: string
   timezone: string

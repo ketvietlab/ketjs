@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketsuite",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "description": "KetSuite \u2014 business modules built on Ket, using only the contract a third-party module has.",
   "type": "module",
   "license": "MIT",
@@ -70,9 +70,9 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/design-system": "0.1.39",
-    "@ketvietlab/ketjs": "0.1.39",
-    "@ketvietlab/ketjs-view": "0.1.39",
+    "@ketvietlab/design-system": "0.1.40",
+    "@ketvietlab/ketjs": "0.1.40",
+    "@ketvietlab/ketjs-view": "0.1.40",
     "chart.js": "4.5.1",
     "ioredis": "^6.0.0",
     "sharp": "0.35.4",

@@ -5,6 +5,11 @@ permissions, native routes and form behavior while applying the visual contract.
 
 ## Collection lists
 
+- SearchFilter owns a 48rem maximum inline size for the complete search/filter
+  group, including applied facets. It fills narrower containers, stays aligned
+  to the start of the collection, and wraps long facet content. Lists and modules
+  do not override that width or stretch the input across the remaining page.
+
 - The KetSuite shell uses `AppBrand` in the sidebar header and `AppShell.location` for the
   main-column organisation context and tools. It does not show breadcrumbs or a full-width
   global topbar. Standalone page patterns retain their context contract. Do not recreate shell
@@ -13,7 +18,7 @@ permissions, native routes and form behavior while applying the visual contract.
   links/GET fallback, Cmd/Ctrl+K, layered Escape, focus return and query drafts. See
   `docs/src/content/docs/ketsuite/design-system.md` for API examples.
 
-- Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell, breadcrumbs/context, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
+- Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell with its location band, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
 - Declare the create link in `frame.chrome.create`; the shared list wrapper places it at the right of the title, above filters. Use `headerActions` for an explicit permission-controlled primary action. Do not put a create link into `actions`, the filter region, or module-local positioned markup.
 - `actions` is for secondary collection commands and bulk operations beside the primary action in the header. Do not render a separate action bar below filters. Bulk actions appear only while their own collection has selected rows; hiding them must never hide the primary action. Preserve native links, permissions, query state and external bulk forms when moving controls. On narrow screens, the shared header stacks its action group beneath the title; modules must not override that layout.
 - Existing inline creation forms (such as period closing) may remain in their documented disclosure/body compatibility boundary. Do not move a whole form into the header to imitate a create button.
@@ -29,6 +34,22 @@ permissions, native routes and form behavior while applying the visual contract.
 - A module supplies tab identity, translated label, URL, visibility, and panel view only. It must not wrap each tab in a custom body shell.
 
 ## Record modals
+
+- `ModalSheet.size` owns width; product modules choose `small`, `default` or `large`,
+  never a private CSS width. At a 16px root, centred dialogs are capped at 34rem
+  (544px), 56rem (896px) and 75rem (1200px), respectively. Side sheets use 34rem
+  for small/default and 56rem for large. Dialogs retain the owner's 24px viewport
+  gutter on desktop; all non-embedded modals become fullscreen below 768px.
+- Choose small for a brief confirmation or a short single-column form; default
+  for ordinary record details and two-column forms; large for line-item tables,
+  rich editors or the three-column purchase form. Choose once for the record,
+  accounting for all its tabs; do not resize width as tabs change. A confirmation
+  inside an existing record keeps that record's width.
+
+- `RecordForm.columns={3}` groups three peer controls in one row when the form
+  container is at least 56rem wide on desktop. Smaller desktop containers use
+  the default two-column form; mobile stacks the fields. The form owns column
+  and row gaps; fields retain their label, help, error and full-span contracts.
 
 - Define record modals with `RecordModalDefinition`; do not build a parallel overlay, history handler, loading state, or close flow in a module.
 - Use `RecordModalForm` for forms and named record commands for mutations. Views never call `fetch`, mutate history, query the document, or refresh the collection themselves.

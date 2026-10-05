@@ -18,6 +18,7 @@ import { RECORD_COMMAND_FIELD } from './record-modal.tsx'
 export const RecordModalForm = (props: {
   kind: string
   fields: readonly FieldProps[]
+  columns?: 1 | 2 | 3
   body?: JSXChild
   /** Structural edits and retained drafts remain dirty after a view-state render. */
   dirty?: boolean
@@ -49,7 +50,11 @@ export const RecordModalForm = (props: {
     {Object.entries(props.hidden ?? {}).map(([name, value]) => (
       <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
-    {props.fields.length ? <div data-ui="form-grid">{props.fields.map((item) => Field(item))}</div> : null}
+    {props.fields.length ? (
+      <div data-ui="form-grid" data-columns={props.columns === 3 ? '3' : undefined}>
+        {props.fields.map((item) => Field(props.columns === 1 ? { ...item, span: 'full' } : item))}
+      </div>
+    ) : null}
     {props.body}
     {props.actions?.length ? <div data-ui="form-actions">{ActionGroup({ actions: props.actions })}</div> : ''}
   </form>

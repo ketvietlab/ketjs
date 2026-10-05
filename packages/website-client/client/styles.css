@@ -619,3 +619,8 @@
   border-radius: 0.375rem;
   background: repeating-conic-gradient(#f1f1ec 0 25%, #fff 0 50%) 0 0 / 1rem 1rem;
 }
+.website-customer-help {
+  color: var(--kv-text-muted);
+  font-size: var(--kv-text-xs);
+  margin: 0;
+}

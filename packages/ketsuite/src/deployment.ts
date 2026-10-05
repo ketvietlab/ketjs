@@ -74,6 +74,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.mailStaffChannel,
       suite.mailBackend,
       suite.mailTransport,
+      suite.websiteCustomerMail,
       suite.mailTransportBackend,
       suite.mailInbound,
       suite.mailInboundBackend,
@@ -154,7 +155,11 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
     datastore: 'main',
     permissions: {
       modules: suite.ketsuitePermissionModules,
-      roleTemplates: { ...everyProductRole(), ...suite.websiteRoleTemplates },
+      roleTemplates: {
+        ...everyProductRole(),
+        ...suite.websiteRoleTemplates,
+        ...suite.websiteCustomerMailRoleTemplates,
+      },
     },
     worker: { queues: productQueues },
     serve: {

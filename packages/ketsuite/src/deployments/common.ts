@@ -40,6 +40,7 @@ export const commonBusinessModules = [
   suite.mailStaffChannel,
   suite.mailBackend,
   suite.mailTransport,
+  suite.websiteCustomerMail,
   suite.activity,
   suite.calendar,
   suite.uom,
@@ -92,6 +93,7 @@ export function productPermissions(
     roleTemplates: {
       ...roleTemplates,
       ...(names.includes('website_backend') ? suite.websiteRoleTemplates : {}),
+      ...(names.includes('website_customer_mail') ? suite.websiteCustomerMailRoleTemplates : {}),
     },
   }
 }

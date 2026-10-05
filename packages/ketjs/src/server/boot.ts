@@ -28,6 +28,7 @@ import type { IslandRegistry, Markup } from '@ketvietlab/ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import type { SessionContext, Sessions, SessionOptions, SessionRecord } from './session.ts'
+import { sameSessionContext } from './sessionstore.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
 import { html, each, renderToString } from '@ketvietlab/ketjs-view'
@@ -641,15 +642,14 @@ export async function bootDeployment(
           await manager.store.destroy(raw.id)
           return null
         }
-        const current: SessionContext = {
-          companies: raw.companies,
-          company: raw.company,
-          branch: raw.branch,
-          branches: raw.branches,
-          securityVersion: raw.securityVersion,
-        }
-        if (JSON.stringify(current) === JSON.stringify(resolved)) return raw
-        return manager.update(raw, resolved)
+        if (sameSessionContext(raw, resolved)) return raw
+        const updated = await manager.update(raw, resolved)
+        if (updated) return updated
+        // The revision moved: a parallel request reconciled this session first. Its result
+        // is the one we would have written, so use it instead of turning a live user
+        // anonymous for the rest of this request.
+        const latest = await manager.of(req)
+        return latest && sameSessionContext(latest, resolved) ? latest : null
       })
       sessionRecords.set(req, record)
     }

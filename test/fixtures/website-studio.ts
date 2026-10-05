@@ -1,16 +1,27 @@
 import assert from 'node:assert/strict'
 import type { Row, OpenStorage } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { websiteBackendWith } from '@ketvietlab/ketsuite'
+import type { StudioOptions } from '@ketvietlab/ketsuite'
 import { ketsuite } from '../../apps/ketsuite/deployment.ts'
 
 export async function bootWebsiteStudio(
   port?: number,
-  options: { worker?: boolean; openStorage?: OpenStorage } = {},
+  options: { worker?: boolean; openStorage?: OpenStorage; studio?: StudioOptions } = {},
 ) {
+  const { studio } = options
   const app = await createTestDeployment(
-    options.openStorage
-      ? { ...ketsuite, serve: { ...ketsuite.serve, openStorage: options.openStorage } }
-      : ketsuite,
+    {
+      ...ketsuite,
+      ...(studio
+        ? {
+            modules: ketsuite.modules.map((m) =>
+              typeof m === 'object' && m.name === 'website_backend' ? websiteBackendWith(studio) : m,
+            ),
+          }
+        : {}),
+      ...(options.openStorage ? { serve: { ...ketsuite.serve, openStorage: options.openStorage } } : {}),
+    },
     { worker: options.worker ?? false, ...(port ? { port } : {}) },
   )
   const fixture = async (name: string, input: Row, company = 'studio-a') => {

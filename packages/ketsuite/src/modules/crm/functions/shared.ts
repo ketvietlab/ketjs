@@ -16,10 +16,11 @@ import {
 } from '../operations.ts'
 import { LOST_REASON_CODES } from '../reporting.ts'
 import type { CrmResult } from '../operations.ts'
+import { AUTHORIZATION_READ_EFFECTS } from '../../user/authorization.ts'
 
 export const caseReadEffects = [
   'read:crm.Case',
-  'read:crm.AccessGrant',
+  ...AUTHORIZATION_READ_EFFECTS,
   'read:crm.Stage',
   'read:crm.Team',
   'read:crm.TeamMember',
@@ -103,14 +104,6 @@ export const command = (ctx: Ctx, key: unknown) => {
   if (!commandKey(key)) return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   return null
 }
-
-export const isSuperuser = async (ctx: Ctx): Promise<boolean> => {
-  if (!ctx.actor) return false
-  const actor = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
-  return actor?.superuser === true
-}
-
-export const accessScopes = new Set(['none', 'self', 'team', 'company'])
 
 export const ensureCase = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
   (await ctx.db.select('crm.Case', { id }))[0] ?? null

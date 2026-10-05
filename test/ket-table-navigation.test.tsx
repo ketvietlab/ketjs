@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { createKetTableView, KetTable } from '@ketvietlab/design-system'
 import { ketTableDemoConfig } from '../packages/design-system/src/interactions/ket-table/demo.ts'
+import { selectionRange } from '../packages/design-system/src/interactions/ket-table/selection.ts'
 
 test('KetTable: descriptive wrapping preserves the complete value and native record link in both renderers', () => {
   const name = 'A long product description with meaningful detail that must remain readable'
@@ -144,4 +145,17 @@ test('KetTable: currency cells retain database decimal precision and the request
   )
   assert.match(html, /value="9007199254740993\.25"/)
   assert.match(html, /9,007,199,254,740,993\.25/)
+})
+
+test('KetTable: Shift extends a selection from the last toggled row, in either direction', () => {
+  const visible = ['a', 'b', 'c', 'd', 'e']
+  // A plain click, and a first Shift-click with nothing to extend from, change one row.
+  assert.deepEqual(selectionRange(visible, 'b', 'd', false), ['d'])
+  assert.deepEqual(selectionRange(visible, null, 'd', true), ['d'])
+  // Downwards and upwards the range includes both ends.
+  assert.deepEqual(selectionRange(visible, 'b', 'd', true), ['b', 'c', 'd'])
+  assert.deepEqual(selectionRange(visible, 'e', 'c', true), ['c', 'd', 'e'])
+  assert.deepEqual(selectionRange(visible, 'c', 'c', true), ['c'])
+  // An anchor no longer on screen (another page, a collapsed group) does not invent a range.
+  assert.deepEqual(selectionRange(visible, 'gone', 'c', true), ['c'])
 })

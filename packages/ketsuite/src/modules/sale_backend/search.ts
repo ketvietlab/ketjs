@@ -92,7 +92,7 @@ export const saleOrderListSearch = defineRowList({
 
 export const invoicingPolicyListSearch = defineRowList({
   key: 'sale.invoicing-policies',
-  searchable: [{ key: 'name' }],
+  searchable: [{ key: 'name' }, { key: 'sku' }, { key: 'category' }],
   filterable: [
     { key: 'name', label: 'sale_backend.field.product', type: 'text' },
     {
@@ -103,7 +103,12 @@ export const invoicingPolicyListSearch = defineRowList({
     },
   ],
   groupable: [{ key: 'invoicePolicy', label: 'sale_backend.field.invoicePolicy' }],
-  sortable: [{ key: 'name', label: 'sale_backend.field.product' }],
+  sortable: [
+    { key: 'name', label: 'sale_backend.field.product' },
+    { key: 'sku', label: 'sale_backend.field.sku' },
+    { key: 'category', label: 'sale_backend.field.category' },
+    { key: 'uom', label: 'sale_backend.field.uom' },
+  ],
   presets: INVOICE_POLICIES.map((policy) => ({
     key: policy,
     label: `sale_backend.invoicePolicy.${policy}`,

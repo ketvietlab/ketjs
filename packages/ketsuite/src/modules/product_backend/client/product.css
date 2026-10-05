@@ -1139,17 +1139,6 @@
     inline-size: 11rem;
     max-inline-size: 100%;
   }
-  /* The column is too narrow for a label beside the file control, so stack them. */
-  [data-ui="variant-editor-image-actions"] [data-ui="field"] {
-    grid-template-columns: minmax(0, 1fr);
-    inline-size: 100%;
-  }
-  [data-ui="variant-editor-image-actions"]
-    [data-ui="field"]
-    > :is([data-ui="field-label"], [data-ui="drop-zone"], [data-ui="field-help"], [data-ui="field-error"]) {
-    grid-column: 1;
-    grid-row: auto;
-  }
 
   /* Footer: what Save will do, and the way back. */
   [data-ui="variant-editor-footer"] {

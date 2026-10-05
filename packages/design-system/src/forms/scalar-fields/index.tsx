@@ -14,7 +14,17 @@ type CommonProps = Omit<FieldProps, 'type' | 'fields' | 'control' | 'error'> & {
 /** Shared field metadata. Each scalar exposes only the options it implements. */
 export type ScalarFieldBase = Pick<
   CommonProps,
-  'id' | 'name' | 'label' | 'labelHidden' | 'help' | 'error' | 'issues' | 'required' | 'disabled' | 'span'
+  | 'id'
+  | 'name'
+  | 'label'
+  | 'size'
+  | 'labelHidden'
+  | 'help'
+  | 'error'
+  | 'issues'
+  | 'required'
+  | 'disabled'
+  | 'span'
 >
 export type TextFieldProps = ScalarFieldBase &
   Pick<
@@ -125,6 +135,7 @@ export const Switch = (props: SwitchProps): TemplateResult => {
       required={props.required}
       labelHidden={props.labelHidden}
       span={props.span}
+      size={props.size}
       kind="switch"
       control={
         <label data-ui="switch-control">

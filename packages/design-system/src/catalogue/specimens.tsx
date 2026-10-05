@@ -34,6 +34,7 @@ import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 import { ActionMenu, Menu } from '../interactions/menu/index.tsx'
+import { ContextButton } from '../interactions/context-button/index.tsx'
 import { Popover } from '../interactions/popover/index.tsx'
 import { Tooltip } from '../interactions/tooltip/index.tsx'
 import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
@@ -144,11 +145,13 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
       {
         id: `demo-manage-${props.active}`,
         label: 'Manage',
+        exclusive: false,
         items: [
           { id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' },
           {
             id: `${props.active}-reports`,
             label: 'Reports',
+            expanded: true,
             leading: '▤',
             children: [
               { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table', count: 7 },
@@ -161,6 +164,7 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
               {
                 id: `${props.active}-report-settings`,
                 label: 'Cấu hình',
+                expanded: true,
                 children: [
                   { id: `${props.active}-terms`, label: 'Điều khoản thanh toán', href: '#navigation-terms' },
                   {
@@ -433,6 +437,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             items={[
               <Avatar name="Nguyễn Minh Châu" size="small" />,
               <MediaLabel label="Product without an image" />,
+              <MediaLabel label="Product without a photo" reserveImage />,
+              <MediaLabel label="Product without a photo" reserveImage placeholder="package" />,
               <Avatar name="Nguyễn Minh Châu" />,
               <Avatar name="Nguyễn Minh Châu" size="large" />,
               <Code value="tenant-vn-hn-0042" context="tenant" />,
@@ -1547,6 +1553,54 @@ export const componentGroups: readonly ComponentGroup[] = [
         ),
       },
       {
+        id: 'record-form-three-columns',
+        name: 'Record form · three peer fields',
+        description:
+          'Three columns in a wide form (56rem or more), the default layout in smaller containers, and one column on mobile. Field labels and native submission remain component-owned.',
+        render: () => (
+          <Surface
+            title="Add purchase line"
+            body={
+              <RecordForm
+                action="#record-form-three-columns"
+                columns={3}
+                fields={[
+                  {
+                    id: 'purchase-product',
+                    name: 'product',
+                    label: 'Product',
+                    type: 'select',
+                    options: [
+                      {
+                        value: 'carton',
+                        label: 'Shipping carton · 30 × 20 × 15cm',
+                      },
+                    ],
+                  },
+                  {
+                    id: 'purchase-quantity',
+                    name: 'quantity',
+                    label: 'Quantity',
+                    type: 'number',
+                    value: '1',
+                    required: true,
+                  },
+                  {
+                    id: 'purchase-price',
+                    name: 'price',
+                    label: 'Unit price',
+                    type: 'number',
+                    value: '0',
+                    required: true,
+                  },
+                ]}
+                submitLabel="Add line"
+              />
+            }
+          />
+        ),
+      },
+      {
         id: 'record-form',
         name: 'Record form',
         description: 'Application supplies translated labels and values, not form markup.',
@@ -1659,6 +1713,21 @@ export const componentGroups: readonly ComponentGroup[] = [
         ),
       },
       {
+        id: 'context-button',
+        name: 'Context button',
+        description:
+          'Two-line workspace context with server-owned selection and an optional count; it is not a record card.',
+        render: () => (
+          <Inline
+            items={[
+              <ContextButton label="Personal inbox" description="Messaging account" count={5} pressed />,
+              <ContextButton label="Store inbox" description="Official account" count={3} pressed={false} />,
+              <ContextButton label="Unavailable workspace" description="Access required" disabled />,
+            ]}
+          />
+        ),
+      },
+      {
         id: 'popover',
         name: 'Popover and tooltip',
         description: 'Popover state remains URL-owned; tooltips contain descriptive text only.',
@@ -1742,7 +1811,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         id: 'search-filter',
         name: 'Search filter',
         description:
-          'Unlike its neighbors above, this is a ketjs-view island — it owns facet/filter/group-by/favorite state and calls its own apply function, so it keeps working after this static snapshot only once the page hydrates it. One caret opens the Filters/Group By/Favorites panel, and typing offers "Search for: …" / "Search <field> for: …" suggestions. Shown with one filter, one group-by and one favorite already applied; the manager is omitted here, so toggling a control updates its chip locally without a server round trip.',
+          'Search, filter/group/favorite controls and applied chips share a component-owned 48rem maximum width and fill narrower containers. This hydrated island owns query state; mobile opens the same sections in a sheet. Try the applied facets and a long search phrase to check wrapping. The manager is omitted, so toggling a control updates its chip locally without a server round trip.',
         render: () =>
           createSearchFilterView({ id: 'demo-search-filter', config: searchFilterDemoConfig }).view(),
       },
@@ -1950,7 +2019,10 @@ export const componentGroups: readonly ComponentGroup[] = [
                   label="Owner"
                   query="Ngọc"
                   value="linh"
-                  options={options}
+                  options={options.map((option) => ({
+                    ...option,
+                    leading: <Avatar name={option.label} size="small" />,
+                  }))}
                   open
                   openHref="#comboboxes"
                   closeHref="#comboboxes"
@@ -2027,7 +2099,8 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="Delivery photos"
                 accept="image/*"
                 multiple
-                status="Up to 10 files · 8 MB each"
+                preview={null}
+                status="Drop images here or click to choose · Up to 10 files"
               />,
             ]}
           />

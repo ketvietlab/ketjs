@@ -39,6 +39,30 @@
     box-shadow: var(--kv-shadow-popover);
   }
 
+  /* Inside a ModalSheet, or any container that clips overflow, an absolute
+     listbox is cut off. Anchored to its input row, a fixed listbox escapes the
+     clip without growing the container, and flips above near the viewport
+     edge. Browsers without anchor positioning keep the absolute listbox. */
+  @supports (anchor-name: --kv-combobox) {
+    :where([data-kv-design-system]) [data-ui="combobox"] {
+      anchor-scope: --kv-combobox;
+    }
+
+    :where([data-kv-design-system]) [data-ui="combobox-input-row"] {
+      anchor-name: --kv-combobox;
+    }
+
+    :where([data-kv-design-system]) [data-ui="combobox-listbox"] {
+      position: fixed;
+      position-anchor: --kv-combobox;
+      position-try-fallbacks: flip-block;
+      top: calc(anchor(bottom) + var(--kv-space-1));
+      right: auto;
+      left: anchor(left);
+      width: anchor-size(width);
+    }
+  }
+
   :where([data-kv-design-system]) [data-ui="combobox-option"] {
     display: grid;
     gap: 2px;
@@ -51,6 +75,13 @@
   :where([data-kv-design-system]) [data-ui="combobox-option"]:hover,
   :where([data-kv-design-system]) [data-ui="combobox-option"][aria-selected="true"] {
     background: var(--kv-interactive-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-option-leading"] {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-inline-end: var(--kv-space-2);
   }
 
   :where([data-kv-design-system]) [data-ui="combobox-empty"] {

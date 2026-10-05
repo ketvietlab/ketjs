@@ -4,7 +4,8 @@ import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { collectionSearchFrame } from '../packages/ketsuite/src/modules/backend/collection-search.ts'
 import { employeesListScreen } from '../packages/ketsuite/src/modules/hr_backend/screens/employees-list.tsx'
-import { usersScreen } from '../packages/ketsuite/src/modules/user_backend/screens/users-list.tsx'
+import { usersGrid, usersScreen } from '../packages/ketsuite/src/modules/user_backend/screens/users-list.tsx'
+import { withGrid } from './helpers/user-grid.ts'
 import { projectsListScreen } from '../packages/ketsuite/src/modules/flow_backend/screens/projects-list.tsx'
 
 const translate = ((key: string) => key) as Translator
@@ -59,8 +60,21 @@ test('employee complete collection pages actual rows and preserves search and lo
 
 test('users already paged by the route retain their row and exact total with toolbar columns', () => {
   const url = new URL('https://ket.test/admin/users?archived=1&lang=en&page=2')
+  const rows = [
+    {
+      id: 'user-31',
+      login: 'ada',
+      name: 'Ada',
+      accessKind: 'internal',
+      securityVersion: 1,
+      passwordReady: true,
+      active: false,
+      superuser: false,
+      detailHref: '/admin/users/user-31?lang=en',
+    },
+  ]
   const html = renderToString(
-    usersScreen(
+    withGrid(
       translate,
       collectionSearchFrame(
         url,
@@ -71,27 +85,19 @@ test('users already paged by the route retain their row and exact total with too
         },
         'Search users',
       ),
-      {
-        rows: [
-          {
-            id: 'user-31',
-            login: 'ada',
-            name: 'Ada',
-            accessKind: 'internal',
-            securityVersion: 1,
-            passwordReady: true,
-            active: false,
-            superuser: false,
-            detailHref: '/admin/users/user-31?lang=en',
-          },
-        ],
-        total: 31,
-        createHref: '/admin/users/new?lang=en',
-      },
+      usersGrid,
+      { rows, rowHrefTemplate: '/admin/users/{id}?lang=en' },
+      (frame, grid) =>
+        usersScreen(translate, frame, {
+          grid,
+          empty: false,
+          total: 31,
+          createHref: '/admin/users/new?lang=en',
+        }),
     ),
   )
   assert.match(html, /31-31 \/ 31/)
-  assert.match(html, /data-row-href="\/admin\/users\/user-31\?lang=en"/)
+  assert.match(html, /data-ui="kt-row-link"[^>]*href="\/admin\/users\/user-31\?lang=en"/)
   assert.ok(links(html).some((target) => target.searchParams.has('columns')))
 })
 
