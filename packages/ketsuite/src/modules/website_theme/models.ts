@@ -30,6 +30,8 @@ export const models: Record<string, ModelDef> = {
       hash: 'text',
       manifest: 'json',
       files: 'json',
+      /** Validated KTL source mirrors its hashed package file for synchronous publication snapshots. */
+      frameTemplates: 'json?',
       storagePrefix: 'text',
       status: 'text',
       statusReason: 'text?',

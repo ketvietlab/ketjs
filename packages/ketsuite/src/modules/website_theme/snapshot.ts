@@ -1,3 +1,4 @@
+import { frameTemplatesOf } from './frame.ts'
 import { THEME_FILE, THEME_KEY, themeAssetPath } from './types.ts'
 import type { SelectedTheme } from './types.ts'
 
@@ -9,7 +10,7 @@ const origins = (value: unknown): string[] =>
     : []
 
 /**
- * The theme a published appearance names, re-read defensively: the snapshot is stored JSON, and every
+ * The theme a site appearance names, re-read defensively: the snapshot is stored JSON, and every
  * value here ends up in a URL, an attribute or a response header.
  */
 export function selectedThemeOf(value: unknown): SelectedTheme | null {
@@ -33,6 +34,7 @@ export function selectedThemeOf(value: unknown): SelectedTheme | null {
     connect: origins(theme.connect),
     frame: origins(theme.frame),
     settings,
+    frameTemplates: frameTemplatesOf(theme.frameTemplates),
   }
 }
 

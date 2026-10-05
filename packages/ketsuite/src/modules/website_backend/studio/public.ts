@@ -8,6 +8,7 @@ import type {
   WebsitePublicListing,
   WebsitePublicNavItem,
 } from '../../../ui/website-public.ts'
+import { renderThemeFrames } from '../../website_theme/frame.ts'
 import { renderLayout, safeHref, safeImage, SECTION_RENDERERS } from '../client/public-renderer.mjs'
 import {
   scriptJson,
@@ -259,9 +260,19 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
         article: blocks ? { title: record.title, bodyHtml: documentHtml(blocks, locale) } : null,
         sections: renderLayout(blocks ? remainingLayout(layout) : layout, options),
         footer: appearance.footer ?? site.title,
+        frame: siteTheme
+          ? renderThemeFrames(siteTheme, {
+              site: { title: site.title, name: site.name },
+              brand: { title: site.title, logo: appearance.logo ? safeImage(appearance.logo) : null },
+              navigation: navigation(null),
+              locale,
+              account,
+            })
+          : null,
         siteTheme: siteTheme
           ? {
               key: siteTheme.key,
+              accent: typeof siteTheme.settings.accent === 'string' ? siteTheme.settings.accent : null,
               stylesheet: themeStylesheet(siteTheme),
               script: scripted ? themeBootScript(siteTheme) : null,
               data: scriptJson({
