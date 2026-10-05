@@ -500,4 +500,10 @@ export { default as inventory } from './modules/inventory/index.ts'
 export { default as checkout } from './modules/checkout/index.ts'
 export { default as defaultTheme } from './themes/default/index.ts'
 
-export { renderStudioPublic, websiteAnonymousScope } from './modules/website_backend/studio/public.ts'
+export {
+  customerReturnPath,
+  renderStudioPublic,
+  websiteAnonymousScope,
+} from './modules/website_backend/studio/public.ts'
+export { publicSiteOf } from './modules/website_backend/studio/public-site.ts'
+export type { PublicSite } from './modules/website_backend/studio/public-site.ts'
