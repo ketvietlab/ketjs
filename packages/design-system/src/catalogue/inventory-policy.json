@@ -84,6 +84,13 @@
       "wave": 3,
       "gapTask": "DS-021"
     },
+    "./forms/date-presets/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
     "./forms/date-time/index.tsx": {
       "owner": "Forms",
       "maturity": "stable",

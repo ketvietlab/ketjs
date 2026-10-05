@@ -249,7 +249,7 @@ export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
   /** Keep the parent record identity visible while completing a nested action. */
   description?: (context: RecordModalContext<Data>) => string | null
-  size?: 'default' | 'large'
+  size?: 'small' | 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
   /** Fixed actions for this dialog layer, outside its scrolling body. */
   actions?: (context: RecordModalContext<Data>) => JSXChild
@@ -1257,6 +1257,9 @@ export const createRecordModal =
             const element = event.target instanceof Element ? event.target : null
             const inModal = element?.closest('[data-ui="modal-layer"][data-client-modal="true"]')
             if (inModal && root?.contains(inModal)) {
+              // A child control can open its own dialog inside this record.
+              // Close/backdrop actions in that layer belong to the child.
+              if (element?.closest('[data-ui="modal-layer"]') !== inModal) return
               // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
               // marks a module's own labeled close button placed elsewhere in the body
               // (the two can't share one attribute — a labeled button needs `data-ui="action"`
@@ -1652,6 +1655,7 @@ export {
 
 export {
   RecordModalForm,
+  RecordImageField,
   RecordActionForm,
   RecordCloseTrigger,
   RecordDialogTrigger,
