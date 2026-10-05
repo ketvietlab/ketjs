@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 158,
     "cssFiles": 81,
-    "cssLines": 17006
+    "cssLines": 17030
   },
   "rows": [
     {
@@ -12276,7 +12276,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/combobox/styles.css",
-      "lines": 84,
+      "lines": 108,
       "hooks": [
         "combobox",
         "combobox-empty",
