@@ -141,7 +141,7 @@ test('flow epic dependency map: exact lookup, complete graph, locale, compatibil
 
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="board-page"[^>]*data-pattern="workspace"/)
-  assert.match(html, /data-ui="board-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="board-page-context"|data-ui="breadcrumbs"/)
   assert.doesNotMatch(
     withoutGlobalSearchDialog(html),
     /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/,
