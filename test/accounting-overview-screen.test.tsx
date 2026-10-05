@@ -135,7 +135,7 @@ test('accounting overview stays specialized: preserves period, ledger KPIs, dril
   const html = renderToString(accountingOverviewScreen(translate, options))
 
   assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
-  assert.match(html, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="dashboard-page-context"|data-ui="breadcrumbs"/)
   assert.doesNotMatch(
     html,
     /data-ui="list-page"|data-ui="form-page"|data-ui="record-workspace"|data-ui="record-thumbnail"|data-ui="record-kicker"/,

@@ -8,7 +8,10 @@ import { bootDeployment, callFn } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import { ketsuiteRoleTemplates } from '../packages/ketsuite/src/role-templates.ts'
-import { websiteRoleTemplates } from '../packages/ketsuite/src/website-role-templates.ts'
+import {
+  websiteCustomerMailRoleTemplates,
+  websiteRoleTemplates,
+} from '../packages/ketsuite/src/website-role-templates.ts'
 
 const boot = async (t: { after: (fn: () => unknown) => void }) => {
   const booted = await bootDeployment(ketsuite, {
@@ -28,8 +31,13 @@ const boot = async (t: { after: (fn: () => unknown) => void }) => {
   return { adapter, call }
 }
 
-// The development composition carries every product's roles, and Website's because it composes Website.
-const TEMPLATE_KEYS = [...Object.values(ketsuiteRoleTemplates), websiteRoleTemplates]
+// The development composition carries every product's roles, and Website's because it composes Website
+// and its customer mail.
+const TEMPLATE_KEYS = [
+  ...Object.values(ketsuiteRoleTemplates),
+  websiteRoleTemplates,
+  websiteCustomerMailRoleTemplates,
+]
   .flatMap((templates) => Object.keys(templates))
   .sort()
 

@@ -502,13 +502,10 @@ test('variant editor: ticking values, generating the missing combinations and fi
 
     // A saved row takes its image through the design-system drop zone, with the drop hint inside it.
     press('toggleRow|black-l')
-    assert.match(html(), /data-ui="drop-zone" data-preview="true"/)
-    assert.match(
-      html(),
-      /<div data-ui="upload-status" id="editor-row-black-l-image-status">(?:<!--k\[-->)*dropImage</,
-    )
+    assert.match(html(), /data-ui="image-drop-zone"/)
+    assert.match(html(), /data-ui="image-drop-picker" title="dropImage"/)
     assert.doesNotMatch(html(), /data-ui="file-upload"|data-ui="lightbox-empty" data-size="large"/)
-    assert.match(html(), /id="editor-row-black-l-image" type="file" name="image\|black-l"/)
+    assert.match(html(), /id="editor-row-black-l-image" type="file"[^>]*name="image\|black-l"/)
     const descendants = (node: HostNode): HostNode[] => [node, ...(node.children ?? []).flatMap(descendants)]
     const target = () => descendants(root).find((node) => node.attrs?.['data-ui'] === 'variant-editor-image')!
     let requests = 0
@@ -532,18 +529,18 @@ test('variant editor: ticking values, generating the missing combinations and fi
       drop(new File(['text'], 'notes.txt', { type: 'text/plain' }))
       assert.equal(requests, 0, 'non-image drops do not upload')
       host.fire(target(), 'dragover', { preventDefault() {} })
-      assert.match(html(), /data-ui="drop-zone" data-preview="true" data-drag="true"/)
+      assert.match(html(), /data-ui="image-drop-zone"[^>]*data-drag="true"/)
       const photo = new File(['image'], 'photo.png', { type: 'image/png' })
       drop(photo)
       assert.equal(requests, 1, 'dropping on the image frame starts upload')
-      assert.match(html(), /data-ui="drop-zone" data-preview="true" data-disabled="true"/)
+      assert.match(html(), /data-ui="image-drop-zone"[^>]*aria-busy="true"/)
       drop(photo)
       assert.equal(requests, 1, 'a second drop is ignored while uploading')
       assert.equal(prevented, 3, 'drop never navigates away from the form')
       finish(new Response('{}', { status: 400 }))
       await new Promise((resolve) => setTimeout(resolve, 0))
       assert.match(html(), /imageFailed/)
-      assert.doesNotMatch(html(), /data-ui="drop-zone" data-preview="true" data-disabled="true"/)
+      assert.doesNotMatch(html(), /data-ui="image-drop-zone"[^>]*aria-busy="true"/)
     } finally {
       globalThis.fetch = originalFetch
     }

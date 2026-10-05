@@ -53,8 +53,9 @@ contract; never shrink text to fit. Zero default outer text margins.
 | Modal inset | 16px | Overlay |
 | Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
-| Field groups/sections | 16px | Parent layout |
-| Page gutter | 16px desktop, 12px mobile | Page |
+| Field groups | 16px | Form layout |
+| Card/working-section gap | 12px desktop / 8px mobile, `--kv-layout-gap` | Parent layout |
+| Page gutter | 12px desktop / 8px mobile, `--kv-layout-gap` | Page; keep header and body aligned, with no additional shell inset |
 | Default/prominent button and input height | 32px desktop, 36px mobile | Control |
 | Explicit compact button height | 28px desktop, 32px mobile | Button |
 | Button/input block / inline padding | 6 / 12px | Control |
@@ -66,12 +67,11 @@ uses the Button-owned 20px box and 2px inner gap; do not substitute the 8px grou
 Textarea grows by rows/content. Native and compound controls use the same type and
 geometry. Loading keeps the button's label/icon footprint and accessible name.
 
-24px is the gap between form columns. Page gutter, surface/card inset and default
-sibling block gaps are 16px on desktop and 12px on mobile (<768px). Form rows
-remain 16px, and title/content and related-action gaps remain 8px. The form-column
+24px is the gap between form columns; the page gutter uses `--kv-layout-gap`: 12px on desktop and 8px below
+768px, including below a record body. The form-column
 gap is Két policy (Polaris FormLayout.Group uses 12px); it separates complete fields,
-not a label from its input. Form rows and field-group gaps remain 16px. Stack gap aliases
-are none=0, tight=4, compact=8, column=12, default/loose=16 desktop and 12 mobile. The last two are
+not a label from its input. Form rows remain 16px; working-section gaps use `--kv-layout-gap`. Stack gap aliases
+are none=0, tight=4, compact=8, column=12, default/loose=12 desktop and 8 mobile. The last two are
 compatibility aliases, not distinct density levels. Use pattern defaults before
 choosing generic gaps. Parent presentation/theme CSS must not override a child's gap.
 

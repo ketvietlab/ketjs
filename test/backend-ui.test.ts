@@ -198,7 +198,7 @@ const CHROME: ListChrome = {
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
 
-test('KetSuite ListPage derives breadcrumbs without duplicating the global company context', () => {
+test('KetSuite ListPage leaves navigation and company context to the shell', () => {
   const output = renderToString(
     KetSuiteListPage({
       variant: 'operational',
@@ -232,10 +232,9 @@ test('KetSuite ListPage derives breadcrumbs without duplicating the global compa
     }),
   )
 
-  assert.match(output, /data-ui="list-page-context"[\s\S]*?data-ui="breadcrumbs"/)
-  assert.match(output, /href="\/admin\/flow\/projects"[^>]*>[\s\S]*?Flow/)
-  assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
-  assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
+  assert.doesNotMatch(output, /data-ui="list-page-context"|data-ui="breadcrumbs"/)
+  assert.doesNotMatch(output, /href="\/admin\/flow\/projects"/)
+  assert.match(output, /data-ui="list-page-title"[\s\S]*?Dự án Sao Bắc/)
   assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
@@ -342,7 +341,7 @@ test('KetSuite FormPage derives its operational topbar from the application fram
   assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
 })
 
-test('KetSuite DashboardPage derives context and preserves extension actions', () => {
+test('KetSuite DashboardPage leaves context to the shell and preserves extension actions', () => {
   const output = renderToString(
     KetSuiteDashboardPage({
       variant: 'operational',
@@ -365,13 +364,13 @@ test('KetSuite DashboardPage derives context and preserves extension actions', (
   )
 
   assert.match(output, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
-  assert.match(output, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
-  assert.match(output, /Bán hàng[\s\S]*?Tổng quan bán hàng/)
+  assert.doesNotMatch(output, /data-ui="dashboard-page-context"|data-ui="breadcrumbs"/)
+  assert.match(output, /data-ui="dashboard-page-title"[\s\S]*?Tổng quan bán hàng/)
   assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="dashboard-page-actions"[\s\S]*?Tạo báo giá[\s\S]*?Extension action/)
 })
 
-test('KetSuite BoardPage derives context and preserves extension actions', () => {
+test('KetSuite BoardPage leaves context to the shell and preserves extension actions', () => {
   const output = renderToString(
     KetSuiteBoardPage({
       variant: 'operational',
@@ -395,8 +394,8 @@ test('KetSuite BoardPage derives context and preserves extension actions', () =>
   )
 
   assert.match(output, /data-ui="board-page"[^>]*data-variant="operational"/)
-  assert.match(output, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
-  assert.match(output, /CRM[\s\S]*?Pipeline bán hàng/)
+  assert.doesNotMatch(output, /data-ui="board-page-context"|data-ui="breadcrumbs"/)
+  assert.match(output, /data-ui="board-page-title"[\s\S]*?Pipeline bán hàng/)
   assert.doesNotMatch(output, /data-ui="page-context-viewer"/)
   assert.match(output, /data-ui="board-page-actions"[\s\S]*?Tạo cơ hội[\s\S]*?Extension action/)
   assert.match(output, /data-ui="board-page-toolbar"[\s\S]*?Lọc theo đội/)
@@ -1268,13 +1267,13 @@ test('sidebar footer: a gateway viewer signs out where the deployment says, or h
   assert.doesNotMatch(undeclared, /data-ui="signout"/)
 })
 
-test('sidebar: modules expand in place and only submenu links carry active state', () => {
+test('sidebar: every module group opens by default and only submenu links carry active state', () => {
   const html = renderToString(pagesScreen(_, [page()], { menu: MENU }))
   assert.match(html, /data-ui="app-navigation"/)
   assert.equal([...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"/g)].length, 2)
   assert.equal(
     [...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"[^>]*open="true"/g)].length,
-    1,
+    2,
   )
   assert.doesNotMatch(html, /data-ui="navigation-branch"[^>]*data-active=/)
   assert.match(html, /data-ui="navigation-item" data-active="true"[^>]*href="\/admin"/)
@@ -1354,10 +1353,10 @@ test('backend shell: visible topbar stays inside the stable navigation slot', ()
   )
 })
 
-test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
+test('backend layout: canonical screen wrappers leave context to the shell and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
   assert.match(list, /data-ui="list-page"[^>]*data-pattern="list"/)
-  assert.match(list, /data-ui="list-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(list, /data-ui="list-page-context"|data-ui="breadcrumbs"/)
   assert.match(list, /data-ui="list-page-title"[\s\S]*Trang/)
 
   const rich = renderToString(
@@ -1374,7 +1373,7 @@ test('backend layout: canonical screen wrappers supply context and flatten aroun
   )
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
   assert.equal(rich.match(/data-pattern="record"/g)?.length, 1)
-  assert.match(rich, /data-ui="record-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(rich, /data-ui="record-page-context"|data-ui="breadcrumbs"/)
 
   const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
@@ -1426,7 +1425,12 @@ test('record workspace: compact identity and actions share the global record hea
 test('record workspace: floating form controls can extend beyond the sheet', () => {
   const css = ADMIN_CSS
   assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
-  assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
+  const relationCss = readFileSync(
+    'packages/design-system/src/interactions/relation-select/styles.css',
+    'utf8',
+  )
+  assert.match(relationCss, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: absolute/)
+  assert.match(css, /\[data-ui="relation-menu"\][^{]*\{[^}]*position: fixed/)
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {
@@ -1564,7 +1568,7 @@ test('backend layout: a workspace screen uses one identity band with navigation 
   )
   assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
   assert.equal(framed.match(/data-ui="dashboard-page-title"/g)?.length, 1)
-  assert.match(framed, /data-ui="dashboard-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(framed, /data-ui="dashboard-page-context"|data-ui="breadcrumbs"/)
 
   // A list keeps its toolbar; it just stops naming the page twice.
   const listed = renderToString(

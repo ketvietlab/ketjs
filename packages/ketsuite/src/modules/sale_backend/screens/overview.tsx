@@ -12,7 +12,6 @@ import {
   Section,
   shell,
   stack,
-  Surface,
 } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
@@ -137,6 +136,8 @@ export const overviewScreen = (
               o.awaiting?.length
                 ? dataTable(_, {
                     columns: salesOrderColumns(_, localeQuery),
+                    responsive: 'scroll',
+                    gutter: 'compact',
                     rows: o.awaiting,
                     id: (row) => String(row.id),
                     rowHref: o.rowHref,
@@ -153,21 +154,18 @@ export const overviewScreen = (
               variant: 'tertiary',
             })}
             body={
-              o.recent.length ? (
-                dataTable(_, {
-                  columns: salesOrderColumns(_, localeQuery),
-                  rows: o.recent,
-                  rowHref: o.rowHref,
-                  id: (row) => String(row.id),
-                })
-              ) : (
-                <Surface
-                  padding="compact"
-                  body={emptyState(_('sale_backend.orderList.empty'), _('sale_backend.orderList.emptyHint'), {
+              o.recent.length
+                ? dataTable(_, {
+                    columns: salesOrderColumns(_, localeQuery),
+                    responsive: 'scroll',
+                    gutter: 'compact',
+                    rows: o.recent,
+                    rowHref: o.rowHref,
+                    id: (row) => String(row.id),
+                  })
+                : emptyState(_('sale_backend.orderList.empty'), _('sale_backend.orderList.emptyHint'), {
                     icon: icon('shopping-bag'),
-                  })}
-                />
-              )
+                  })
             }
           />,
         ],

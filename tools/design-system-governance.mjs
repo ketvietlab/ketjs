@@ -38,6 +38,9 @@ const runtimeExports = [...publicIndex.matchAll(/export\s+\{([\s\S]*?)\}\s+from\
         'attachClientModalInteractions',
         'initials',
         'withQueryState',
+        'datePresetIds',
+        'datePresetLabel',
+        'resolveDatePreset',
       ].includes(name),
   )
   .sort()
