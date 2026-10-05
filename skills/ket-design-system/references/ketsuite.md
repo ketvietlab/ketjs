@@ -18,7 +18,7 @@ permissions, native routes and form behavior while applying the visual contract.
   links/GET fallback, Cmd/Ctrl+K, layered Escape, focus return and query drafts. See
   `docs/src/content/docs/ketsuite/design-system.md` for API examples.
 
-- Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell, breadcrumbs/context, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
+- Every full-page collection uses the KétSuite `ListPage`/`ListScreen` composition: app shell with its location band, title with primary creation and collection actions, filters and table tools, then `KetTable` and result footer.
 - Declare the create link in `frame.chrome.create`; the shared list wrapper places it at the right of the title, above filters. Use `headerActions` for an explicit permission-controlled primary action. Do not put a create link into `actions`, the filter region, or module-local positioned markup.
 - `actions` is for secondary collection commands and bulk operations beside the primary action in the header. Do not render a separate action bar below filters. Bulk actions appear only while their own collection has selected rows; hiding them must never hide the primary action. Preserve native links, permissions, query state and external bulk forms when moving controls. On narrow screens, the shared header stacks its action group beneath the title; modules must not override that layout.
 - Existing inline creation forms (such as period closing) may remain in their documented disclosure/body compatibility boundary. Do not move a whole form into the header to imitate a create button.

@@ -42,8 +42,9 @@ test('experience collection frames put Create and collection actions beside the 
         }),
       }),
     )
+    assert.doesNotMatch(html, /data-ui="list-page-context"/)
     ordered(html, [
-      'data-ui="list-page-context"',
+      'data-ui="list-page-header"',
       'href="/new?lang=vi"',
       'href="/export?lang=vi"',
       '</header>',
