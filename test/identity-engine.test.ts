@@ -191,3 +191,100 @@ test('identity engine: provisioning must be internal', () => {
     /E_PROVISION_EXPOSED/,
   )
 })
+
+const parallelSessionModule = defineModule({
+  name: 'parallel_identity',
+  routes: {
+    '/session/start': {
+      anonymous: true,
+      handler: (ctx) => async (url, req) => {
+        const sessions = await ctx.sessionsOf(url, req)
+        const started = await sessions!.start({
+          userId: 'u1',
+          companies: ['c1'],
+          company: 'c1',
+          branch: 'b1',
+          branches: ['b1'],
+          securityVersion: 0,
+        })
+        return withHeaders(json({ ok: true }), { 'set-cookie': started.cookie })
+      },
+    },
+    '/session/scope': (ctx) => async (url, req) => json(await ctx.scopeOf(url, req)),
+    '/session/revision': {
+      anonymous: true,
+      handler: (ctx) => async (url, req) => {
+        const sessions = await ctx.sessionsOf(url, req)
+        return json({ revision: (await sessions!.of(req))?.revision ?? null })
+      },
+    },
+  },
+})
+
+const startParallelSession = async (live: () => SessionContext) => {
+  const app = defineDeployment({
+    name: 'parallel_identity_http',
+    modules: [parallelSessionModule],
+    headless: true,
+    serve: { sessions: { secret: 'test' }, resolveSession: async () => live() },
+  })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${booted.port}`
+  const started = await fetch(`${at}/session/start`)
+  const cookie = started.headers.get('set-cookie')!.split(';')[0]!
+  const revision = async (): Promise<number | null> =>
+    (
+      (await (await fetch(`${at}/session/revision`, { headers: { cookie } })).json()) as {
+        revision: number | null
+      }
+    ).revision
+  const burst = (count: number) =>
+    Promise.all(
+      Array.from({ length: count }, () =>
+        fetch(`${at}/session/scope`, { headers: { cookie, accept: 'application/json' } }),
+      ),
+    )
+  return { booted, burst, revision, at, cookie }
+}
+
+test('identity engine: an unchanged live context never rewrites the session, whatever order its keys come in', async () => {
+  // The same fields as the session holds, in the order `user.resolveSessionContext` returns them.
+  const { booted, burst, revision } = await startParallelSession(() => ({
+    companies: ['c1'],
+    company: 'c1',
+    branches: ['b1'],
+    branch: 'b1',
+    securityVersion: 0,
+  }))
+  try {
+    const responses = await burst(20)
+    assert.deepEqual(
+      responses.map((response) => response.status),
+      Array(20).fill(200),
+    )
+    assert.equal(await revision(), 0)
+  } finally {
+    await booted.close()
+  }
+})
+
+test('identity engine: parallel requests that reconcile the same changed context all stay signed in', async () => {
+  const { booted, burst, revision } = await startParallelSession(() => ({
+    companies: ['c1', 'c2'],
+    company: 'c2',
+    branches: ['b2'],
+    branch: 'b2',
+    securityVersion: 0,
+  }))
+  try {
+    const responses = await burst(20)
+    assert.deepEqual(
+      responses.map((response) => response.status),
+      Array(20).fill(200),
+    )
+    assert.equal(((await responses[0]!.json()) as { company: string }).company, 'c2')
+    assert.equal(await revision(), 1)
+  } finally {
+    await booted.close()
+  }
+})
