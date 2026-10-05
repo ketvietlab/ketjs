@@ -1,7 +1,10 @@
 export {
-  userListColumns,
+  userGridColumns,
+  userGridRow,
+  usersGrid,
   usersScreen,
   type UserListRow,
+  type UsersGridOptions,
   type UsersListScreenOptions,
 } from './users-list.tsx'
 export type { UserRow } from './types.ts'
@@ -9,16 +12,22 @@ export type { UserRow } from './types.ts'
 export { sessionsScreen } from './sessions.tsx'
 export type { SessionRow } from './types.ts'
 export {
-  roleListColumns,
+  roleGridColumns,
+  roleGridRow,
+  rolesGrid,
   rolesScreen,
   type RoleListRow,
+  type RolesGridOptions,
   type RolesListScreenOptions,
 } from './roles-list.tsx'
 export type { PermissionRow, RoleRow } from './types.ts'
 export { profileScreen, type ProfileScreenOptions } from './profile-form.tsx'
 export {
-  accessPolicyListColumns,
+  accessPolicyGridColumns,
+  accessPolicyGridRow,
+  accessPoliciesGrid,
   accessPoliciesScreen,
+  type AccessPoliciesGridOptions,
   type AccessPolicyMatchKind,
   type AccessPolicyRow,
   type AccessPoliciesListScreenOptions,

@@ -178,7 +178,8 @@ export const models: Record<string, ModelDef> = {
    * One person who reads every project in the company.
    *
    * The business-manager alternative to making somebody a technical superuser,
-   * and the same device `crm.AccessGrant` is. It exists so that membership can
+   * and the same device `crm.AccessGrant` was before the CRM moved its reach onto
+   * roles (`crm.scope.company`). It exists so that membership can
    * be administered by somebody who is not first a member of everything, and so
    * that a project whose members have all left is not unreachable.
    *

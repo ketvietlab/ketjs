@@ -250,6 +250,11 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     'the preview returns before the runtime treats the submit as a change',
   )
 
+  // A preview calls a read that is not declared idempotent, and the server refuses a
+  // key on such a function: only a command that writes carries one.
+  assert.match(runtime, /const intent = \(\) => \(command\.preview \? undefined : uuid\(\)\)/u)
+  assert.doesNotMatch(runtime, /callRecordFunction\(fn, input, \{ idempotencyKey: uuid\(\) \}\)/u)
+
   // An answer is only ever read beside the selection it was computed from, so
   // everything that moves the layer clears it: another record, a closed modal, a
   // closed or newly opened dialog, another tab, a refusal, and a real write.

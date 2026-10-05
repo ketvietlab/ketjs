@@ -437,6 +437,8 @@ export const componentGroups: readonly ComponentGroup[] = [
             items={[
               <Avatar name="Nguyễn Minh Châu" size="small" />,
               <MediaLabel label="Product without an image" />,
+              <MediaLabel label="Product without a photo" reserveImage />,
+              <MediaLabel label="Product without a photo" reserveImage placeholder="package" />,
               <Avatar name="Nguyễn Minh Châu" />,
               <Avatar name="Nguyễn Minh Châu" size="large" />,
               <Code value="tenant-vn-hn-0042" context="tenant" />,
