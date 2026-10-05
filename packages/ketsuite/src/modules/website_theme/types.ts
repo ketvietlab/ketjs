@@ -65,7 +65,7 @@ export type ThemeManifest = {
 }
 
 /**
- * What a site's style holds once a theme is selected, and what publishing freezes with it.
+ * What a site's live style holds once a theme is selected.
  *
  * Everything the public renderer needs is here, because it renders synchronously from the snapshot
  * and cannot look the version up.

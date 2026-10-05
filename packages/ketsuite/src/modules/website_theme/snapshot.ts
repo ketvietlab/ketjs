@@ -9,7 +9,7 @@ const origins = (value: unknown): string[] =>
     : []
 
 /**
- * The theme a published appearance names, re-read defensively: the snapshot is stored JSON, and every
+ * The theme a site appearance names, re-read defensively: the snapshot is stored JSON, and every
  * value here ends up in a URL, an attribute or a response header.
  */
 export function selectedThemeOf(value: unknown): SelectedTheme | null {
