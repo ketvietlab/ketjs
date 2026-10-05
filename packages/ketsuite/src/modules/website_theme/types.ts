@@ -46,10 +46,11 @@ export const themeFileType = (name: string): string | null =>
 export const THEME_STATUSES = ['staged', 'installed', 'available', 'revoked'] as const
 export type ThemeStatus = (typeof THEME_STATUSES)[number]
 
+/** A setting the Studio offers for a theme. `label` and enum `labels` are how the Studio names them. */
 export type ThemeSetting =
-  | { type: 'enum'; values: string[]; default?: string }
-  | { type: 'text'; maxLength: number; default?: string }
-  | { type: 'bool'; default?: boolean }
+  | { type: 'enum'; values: string[]; default?: string; label?: string; labels?: Record<string, string> }
+  | { type: 'text'; maxLength: number; default?: string; label?: string }
+  | { type: 'bool'; default?: boolean; label?: string }
 
 export type ThemeManifest = {
   engine: typeof THEME_ENGINE

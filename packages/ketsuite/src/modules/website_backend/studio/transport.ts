@@ -75,6 +75,8 @@ const capabilities: Record<string, string[]> = {
     'website_customer_mail.passwordResetTemplate',
     'website_customer_mail.savePasswordResetTemplate',
   ],
+  // Absent where the deployment does not compose website_theme: there are no company themes to pick.
+  'website.theme.select': ['website_theme.listThemes', 'website_theme.selectTheme'],
 }
 /** Optional modules a site can be bound to, by the prefix of their functions. */
 const bindingModules: [string, string][] = [
@@ -306,6 +308,18 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     if (siteId && !data.site) fail('notFound', 'Không tìm thấy website.')
     return data
   }
+  /**
+   * The company's own themes a site may switch to, when this deployment composes them and the viewer
+   * may pick one. Bundled presets stay with the style form's preset field.
+   */
+  const companyThemesOf = async (site: Row) => {
+    if (!(await ctx.live(req)).functions['website_theme.listThemes']) return {}
+    if (!(await ctx.allows('website_theme.selectTheme', url, req))) return {}
+    const listed = row(await call('website_theme.listThemes', { siteId: site.id, limit: 100 }))
+    return {
+      companyThemes: ((listed.themes as Row[] | undefined) ?? []).filter((t) => t.tier !== 'bundled'),
+    }
+  }
   const menuOf = async (site: Row) =>
     menuResource(site, row(await call('website_menu.menuState', { siteId: site.id })))
   const forEntry = async (id: unknown) => {
@@ -391,7 +405,10 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       const data = await snapshot(input.site)
       const identity = await ctx.requestIdentityOf(url, req)
       const allowed: string[] = []
+      const composed = (await ctx.live(req)).functions
       for (const [key, functions] of Object.entries(capabilities)) {
+        // An unrestricted actor is allowed every name, including those of modules not composed here.
+        if (!functions.every((fn) => composed[fn])) continue
         if ((await Promise.all(functions.map((fn) => ctx.allows(fn, url, req)))).every(Boolean))
           allowed.push(key)
       }
@@ -715,9 +732,22 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         return fail('notFound', 'Không tìm thấy giao diện.')
       return {
         ...themeResource(data.site!),
+        ...(await companyThemesOf(data.site!)),
         affected: data.entries.map((e) => ({ id: e.id, title: e.title })),
         usage: data.entries.length,
       }
+    },
+    'website_studio.selectCompanyTheme': async (input) => {
+      const site = (await snapshot(input.siteId)).site!
+      if (input.id !== site.id) return fail('notFound', 'Không tìm thấy giao diện.')
+      await call('website_theme.selectTheme', {
+        siteId: site.id,
+        expectedRevisionId: input.expectedRevisionId,
+        versionId: input.versionId ?? null,
+        settings: input.versionId ? (input.settings ?? null) : null,
+      })
+      const saved = (await snapshot(site.id)).site!
+      return { ...themeResource(saved), ...(await companyThemesOf(saved)) }
     },
     'website_studio.saveResource': async (input) => {
       if (input.kind === 'form-editor') {

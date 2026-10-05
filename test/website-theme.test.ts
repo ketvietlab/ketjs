@@ -13,7 +13,15 @@ const manifest = (extra: Row = {}) => ({
   version: '1.0.0',
   tier: 'private',
   title: 'Acme',
-  settings: { tone: { type: 'enum', values: ['warm', 'cool'], default: 'warm' } },
+  settings: {
+    tone: {
+      type: 'enum',
+      values: ['warm', 'cool'],
+      default: 'warm',
+      label: 'Tông màu',
+      labels: { warm: 'Ấm', cool: 'Lạnh' },
+    },
+  },
   script: { entry: 'theme.mjs' },
   ...extra,
 })
@@ -70,6 +78,12 @@ test('a theme package is refused for every way it could reach outside its own si
       manifest({ script: { entry: 'theme.mjs', connect: ['http://insecure.example'] } }),
     ],
     ['manifestUnknownKey', {}, manifest({ hooks: ['server'] })],
+    [
+      'manifestSettings',
+      {},
+      manifest({ settings: { tone: { type: 'enum', values: ['warm'], labels: { cold: 'Lạnh' } } } }),
+    ],
+    ['manifestSettings', {}, manifest({ settings: { dark: { type: 'bool', label: ' ' } } })],
     ['stylesheetMissing', { 'theme.css': null }],
   ]
   for (const [code, overrides, theme] of refused) {
@@ -163,8 +177,61 @@ test('an installed theme is offered, chosen, published and served from tenant st
   assert.equal((await select(editor, { versionId })).status, 403)
   assert.equal((await select(designer, { versionId, settings: { tone: 'loud' } })).value.ok, false)
   assert.equal((await select(designer, { versionId, settings: { other: 'x' } })).value.ok, false)
-  const chosen = await select(designer, { versionId, settings: { tone: 'cool' } })
+  const chosen = await select(designer, { versionId, settings: { tone: 'warm' } })
   assert.equal(chosen.value.ok, true, JSON.stringify(chosen))
+
+  // The Studio offers the company's themes on the site's style page, in the theme's own words.
+  const studio = async (client: typeof designer, fn: string, input: Row) => {
+    const response = await client.post(`/website/api/${fn}`, JSON.stringify(input), {
+      headers: { 'content-type': 'application/json' },
+    })
+    return { status: response.status, value: ((await response.json()) as { value: Row }).value }
+  }
+  const capabilities = async (client: typeof designer) =>
+    ((await studio(client, 'website_studio.bootstrap', { site: 'site-a' })).value.actor as Row)
+      .capabilities as string[]
+  assert.ok((await capabilities(designer)).includes('website.theme.select'))
+  assert.ok(!(await capabilities(editor)).includes('website.theme.select'))
+  const styled = (
+    await studio(designer, 'website_studio.getResource', { siteId: 'site-a', kind: 'themes', id: 'site-a' })
+  ).value
+  assert.equal((styled.theme as Row).versionId, versionId)
+  const offered = (styled.companyThemes as Row[]).find((theme) => theme.id === versionId)!
+  assert.deepEqual(((offered.settings as Row).tone as Row).labels, { warm: 'Ấm', cool: 'Lạnh' })
+  assert.ok(!(styled.companyThemes as Row[]).some((theme) => theme.tier === 'bundled'))
+  const read = await studio(editor, 'website_studio.getResource', {
+    siteId: 'site-a',
+    kind: 'themes',
+    id: 'site-a',
+  })
+  assert.equal(read.status, 200, JSON.stringify(read))
+  assert.equal(read.value.companyThemes, undefined, 'only a viewer who may pick a theme is offered them')
+  const pick = (client: typeof designer, input: Row) =>
+    studio(client, 'website_studio.selectCompanyTheme', { siteId: 'site-a', id: 'site-a', ...input })
+  assert.equal((await pick(editor, { expectedRevisionId: styled.revisionId, versionId })).status, 403)
+  const repicked = await pick(designer, {
+    expectedRevisionId: styled.revisionId,
+    versionId,
+    settings: { tone: 'cool' },
+  })
+  assert.equal(repicked.status, 200, JSON.stringify(repicked))
+  assert.deepEqual((repicked.value.theme as Row).settings, { tone: 'cool' })
+  assert.equal(
+    (await pick(designer, { expectedRevisionId: styled.revisionId, versionId })).status,
+    400,
+    'a stale style page cannot overwrite a newer choice',
+  )
+  // The function grant is the boundary: the theme role makes the editor someone who picks themes.
+  await fixture('user.assignScopedRole', {
+    id: 'editor-themes',
+    userId: 'studio-editor',
+    roleId: 'studio-themes',
+    scopeKind: 'company',
+    companyId: 'studio-a',
+    expectedAuthorizationRevision: await revision(),
+    idempotencyKey: 'editor-themes',
+  })
+  assert.ok((await capabilities(editor)).includes('website.theme.select'))
   // Another company cannot reach this company's version.
   const foreign = await app.fixture.call<Row>(
     'website_theme.selectTheme',
@@ -175,7 +242,7 @@ test('an installed theme is offered, chosen, published and served from tenant st
   // A later style save merges its keys and keeps the theme.
   await fixture('website.saveStudioStyle', {
     siteId: 'site-a',
-    expectedRevisionId: chosen.value.revisionId,
+    expectedRevisionId: repicked.value.revisionId,
     values: { footer: 'Themed footer' },
   })
   assert.doesNotMatch(await (await anonymous.get('/')).text(), /data-site-theme/, 'a draft is not live')

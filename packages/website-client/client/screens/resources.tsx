@@ -1,4 +1,5 @@
 import { themeCards } from './theme-cards.tsx'
+import { companyThemeCommands, companyThemeSection } from './company-themes.tsx'
 import { createMenuEditor } from './menu-editor.tsx'
 import { formEditorView } from './form-editor-view.tsx'
 import { ArchiveActions } from '../archive-actions.tsx'
@@ -512,123 +513,135 @@ export function createResourceScreens(ctx: StudioContext) {
               </>
             }
             body={
-              <Surface
-                title={ctx.tr('website.resource.details')}
-                body={
-                  <Stack
-                    items={[
-                      data.kind === 'themes' ? (
-                        <Notice
-                          title={`${ctx.tr('website.resource.version')} ${data.version ?? ''}`}
-                          message={ctx.tr('website.resource.themeCompatibility', {
-                            count: data.compatibility?.length ?? 0,
-                          })}
-                          tone="info"
-                        />
-                      ) : null,
-                      data.kind === 'menus' ? (
-                        <Stack
-                          items={(data.warnings ?? []).map((w) => (
+              <Stack
+                items={[
+                  <Surface
+                    title={ctx.tr('website.resource.details')}
+                    body={
+                      <Stack
+                        items={[
+                          data.kind === 'themes' ? (
                             <Notice
-                              title={w.target}
-                              message={ctx.tr(`website.menu.warning.${w.state}`)}
-                              tone="warning"
+                              title={`${ctx.tr('website.resource.version')} ${data.version ?? ''}`}
+                              message={ctx.tr('website.resource.themeCompatibility', {
+                                count: data.compatibility?.length ?? 0,
+                              })}
+                              tone="info"
                             />
-                          ))}
-                        />
-                      ) : null,
-                      kind === 'taxonomy-sets' && data.revisionId ? (
-                        <LinkButton
-                          label={ctx.tr('website.resource.taxonomySet.terms')}
-                          href={ctx.href('taxonomy', {}, { set: data.id })}
-                        />
-                      ) : null,
-                      kind === 'domains' ? (
-                        <Notice title={title()} message={ctx.tr('website.resource.domainHelp')} tone="info" />
-                      ) : null,
-                      <form data-reorder={`resource.${kind}.reorder`} id={`resource-${kind}`} novalidate>
-                        <Stack
-                          items={[
-                            <Grid
-                              columns={2}
-                              items={schema.fields
-                                .filter((field) => field.name !== structuredField)
-                                .map((field) => {
-                                  const props = {
-                                    id: `${kind}-${field.name}`,
-                                    name: field.name,
-                                    label: ctx.tr(field.label),
-                                    value: resourceValue(data[field.name]) ?? field.defaultValue ?? '',
-                                    required: field.required,
-                                    disabled: !ctx.can(schema.capability),
-                                  }
-                                  if (kind === 'sites' && field.name === 'companyId')
-                                    return (
-                                      <Select
-                                        {...props}
-                                        value={data.companyId ?? ctx.boot().companies?.[0]?.id}
-                                        options={(ctx.boot().companies ?? []).map((r) => ({
-                                          value: r.id,
-                                          label: r.name,
-                                        }))}
-                                      />
-                                    )
-                                  if (kind === 'taxonomy' && field.name === 'taxonomyId')
-                                    return (
-                                      <Select
-                                        {...props}
-                                        options={(data.sets ?? []).map((r) => ({
-                                          value: r.id,
-                                          label: r.title,
-                                        }))}
-                                      />
-                                    )
-                                  if (kind === 'taxonomy' && field.name === 'parent')
-                                    return (
-                                      <Select
-                                        {...props}
-                                        options={[
-                                          { value: '', label: ctx.tr('website.resource.noParent') },
-                                          ...(data.parents ?? []).map((r) => ({
-                                            value: r.id,
-                                            label: r.title,
-                                          })),
-                                        ]}
-                                      />
-                                    )
-                                  if (field.kind.startsWith('select:')) {
-                                    const values = field.kind.slice(7).split(',')
-                                    return (
-                                      <Select
-                                        {...props}
-                                        value={
-                                          resourceValue(data[field.name]) ?? field.defaultValue ?? values[0]
-                                        }
-                                        options={values.map((value) => ({
-                                          value,
-                                          label: ctx.tr(`website.option.${value}`),
-                                        }))}
-                                      />
-                                    )
-                                  }
-                                  const Input = field.kind === 'area' ? TextArea : TextField
-                                  return (
-                                    <Input {...props} span={field.kind === 'area' ? 'full' : undefined} />
-                                  )
-                                })}
-                            />,
-                            structuredField ? rowsEditor(data) : null,
-                          ]}
-                        />
-                      </form>,
-                    ]}
-                  />
-                }
+                          ) : null,
+                          data.kind === 'menus' ? (
+                            <Stack
+                              items={(data.warnings ?? []).map((w) => (
+                                <Notice
+                                  title={w.target}
+                                  message={ctx.tr(`website.menu.warning.${w.state}`)}
+                                  tone="warning"
+                                />
+                              ))}
+                            />
+                          ) : null,
+                          kind === 'taxonomy-sets' && data.revisionId ? (
+                            <LinkButton
+                              label={ctx.tr('website.resource.taxonomySet.terms')}
+                              href={ctx.href('taxonomy', {}, { set: data.id })}
+                            />
+                          ) : null,
+                          kind === 'domains' ? (
+                            <Notice
+                              title={title()}
+                              message={ctx.tr('website.resource.domainHelp')}
+                              tone="info"
+                            />
+                          ) : null,
+                          <form data-reorder={`resource.${kind}.reorder`} id={`resource-${kind}`} novalidate>
+                            <Stack
+                              items={[
+                                <Grid
+                                  columns={2}
+                                  items={schema.fields
+                                    .filter((field) => field.name !== structuredField)
+                                    .map((field) => {
+                                      const props = {
+                                        id: `${kind}-${field.name}`,
+                                        name: field.name,
+                                        label: ctx.tr(field.label),
+                                        value: resourceValue(data[field.name]) ?? field.defaultValue ?? '',
+                                        required: field.required,
+                                        disabled: !ctx.can(schema.capability),
+                                      }
+                                      if (kind === 'sites' && field.name === 'companyId')
+                                        return (
+                                          <Select
+                                            {...props}
+                                            value={data.companyId ?? ctx.boot().companies?.[0]?.id}
+                                            options={(ctx.boot().companies ?? []).map((r) => ({
+                                              value: r.id,
+                                              label: r.name,
+                                            }))}
+                                          />
+                                        )
+                                      if (kind === 'taxonomy' && field.name === 'taxonomyId')
+                                        return (
+                                          <Select
+                                            {...props}
+                                            options={(data.sets ?? []).map((r) => ({
+                                              value: r.id,
+                                              label: r.title,
+                                            }))}
+                                          />
+                                        )
+                                      if (kind === 'taxonomy' && field.name === 'parent')
+                                        return (
+                                          <Select
+                                            {...props}
+                                            options={[
+                                              { value: '', label: ctx.tr('website.resource.noParent') },
+                                              ...(data.parents ?? []).map((r) => ({
+                                                value: r.id,
+                                                label: r.title,
+                                              })),
+                                            ]}
+                                          />
+                                        )
+                                      if (field.kind.startsWith('select:')) {
+                                        const values = field.kind.slice(7).split(',')
+                                        return (
+                                          <Select
+                                            {...props}
+                                            value={
+                                              resourceValue(data[field.name]) ??
+                                              field.defaultValue ??
+                                              values[0]
+                                            }
+                                            options={values.map((value) => ({
+                                              value,
+                                              label: ctx.tr(`website.option.${value}`),
+                                            }))}
+                                          />
+                                        )
+                                      }
+                                      const Input = field.kind === 'area' ? TextArea : TextField
+                                      return (
+                                        <Input {...props} span={field.kind === 'area' ? 'full' : undefined} />
+                                      )
+                                    })}
+                                />,
+                                structuredField ? rowsEditor(data) : null,
+                              ]}
+                            />
+                          </form>,
+                        ]}
+                      />
+                    }
+                  />,
+                  kind === 'themes' ? companyThemeSection(ctx, data) : null,
+                ]}
               />
             }
           />
         ),
       commands: {
+        ...(kind === 'themes' ? companyThemeCommands(ctx, () => current!) : {}),
         [`resource.${kind}.archive`]: async (_args, form) => {
           await ctx.call('website_studio.archiveResource', {
             siteId: ctx.site().id,
