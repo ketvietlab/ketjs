@@ -61,6 +61,14 @@ export type WebsitePublicListing =
       title: unknown
       view: 'profile' | 'register' | 'forgot' | 'reset'
     }
+  | {
+      /** A page a deployment module draws itself, inside the site's header and footer. */
+      kind: 'embed'
+      title: unknown
+      /** Same-origin asset paths, already checked. */
+      script: string
+      style: string | null
+    }
 export type WebsitePublicPage = {
   locale: string
   head: {
@@ -432,6 +440,8 @@ const listing = (
   if (!value) return null
   if (value.kind === 'signin') return signin(value, vi, brand)
   if (value.kind === 'customer') return customerCard(value, vi)
+  if (value.kind === 'embed')
+    return html`<section class="wt-public-embed" data-embed-mount><h1 class="wt-public-embed__title">${value.title}</h1><div data-embed-root></div><noscript><p>${vi ? 'Cần bật JavaScript trên trình duyệt để dùng trang này.' : 'JavaScript must be enabled in your browser to use this page.'}</p></noscript></section>`
   if (value.kind === 'archive')
     return html`<section class="wt-public-archive"><h1>${value.title}</h1>${value.descriptionHtml != null ? html`<div data-ui="flow-editor-content">${trustedMarkup(value.descriptionHtml)}</div>` : value.description ? html`<p>${value.description}</p>` : null}${
       value.entries.length
@@ -486,7 +496,7 @@ export function websitePublicDocument(p: WebsitePublicPage): TemplateResult {
   const { head, theme } = p
   // Shared links read Open Graph; a crawler that finds none guesses from the page.
   const openGraph = html`<meta property="og:type" content=${head.ogType}><meta property="og:title" content=${head.title}>${head.description ? html`<meta property="og:description" content=${head.description}>` : null}<meta property="og:site_name" content=${head.siteName}>${head.ogImage ? html`<meta property="og:image" content=${head.ogImage}>` : null}${head.ogUrl ? html`<meta property="og:url" content=${head.ogUrl}>` : null}`
-  return html`<html lang=${p.locale}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${head.title}</title>${head.description ? html`<meta name="description" content=${head.description}>` : null}${openGraph}${head.noindex ? html`<meta name="robots" content="noindex">` : null}${head.canonical ? html`<link rel="canonical" href=${head.canonical}>` : null}<link rel="stylesheet" href="/_ket/asset/website_backend/public.css">${p.account || p.listing?.kind === 'signin' || p.listing?.kind === 'customer' ? html`<script type="module" src="/_ket/asset/website_backend/customer-account.mjs"></script>` : null}</head><body class="wt-public"><div class="wt-site" data-website-theme="default" data-theme-preset=${theme.preset} data-accent=${theme.accent} data-font=${theme.font} data-spacing=${theme.spacing} data-buttons=${theme.buttons}><header class="wt-theme-header"><a href="/">${p.brand.logo ? html`<img class="wt-public-logo" src=${p.brand.logo} alt=${p.brand.title}>` : html`<strong>${p.brand.title}</strong>`}</a><nav aria-label=${vi ? 'Điều hướng chính' : 'Main navigation'}>${navigation(p.navigation)}</nav>${p.listing?.kind === 'search' ? null : html`<form class="wt-public-search-box" role="search" action="/search" method="get"><input type="search" name="q" maxlength="100" autocomplete="off" aria-label=${searchLabel} placeholder=${searchLabel}><button type="submit">${vi ? 'Tìm' : 'Search'}</button></form>`}${p.account ? html`<a class="wt-public-account" href=${p.account.href} data-customer-account>${vi ? 'Đăng nhập' : 'Sign in'}</a>` : null}</header><main>${listing(p.listing, vi, p.brand)}${p.article ? html`<article class="wt-public-post"><h1>${p.article.title}</h1><div data-ui="flow-editor-content">${trustedMarkup(p.article.bodyHtml)}</div></article>` : null}${p.sections}</main><footer class="wt-theme-footer">${p.footer}</footer></div></body></html>`
+  return html`<html lang=${p.locale}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${head.title}</title>${head.description ? html`<meta name="description" content=${head.description}>` : null}${openGraph}${head.noindex ? html`<meta name="robots" content="noindex">` : null}${head.canonical ? html`<link rel="canonical" href=${head.canonical}>` : null}<link rel="stylesheet" href="/_ket/asset/website_backend/public.css">${p.account || p.listing?.kind === 'signin' || p.listing?.kind === 'customer' ? html`<script type="module" src="/_ket/asset/website_backend/customer-account.mjs"></script>` : null}${p.listing?.kind === 'embed' ? html`${p.listing.style ? html`<link rel="stylesheet" href=${p.listing.style}>` : null}<script type="module" src=${p.listing.script}></script>` : null}</head><body class="wt-public"><div class="wt-site" data-website-theme="default" data-theme-preset=${theme.preset} data-accent=${theme.accent} data-font=${theme.font} data-spacing=${theme.spacing} data-buttons=${theme.buttons}><header class="wt-theme-header"><a href="/">${p.brand.logo ? html`<img class="wt-public-logo" src=${p.brand.logo} alt=${p.brand.title}>` : html`<strong>${p.brand.title}</strong>`}</a><nav aria-label=${vi ? 'Điều hướng chính' : 'Main navigation'}>${navigation(p.navigation)}</nav>${p.listing?.kind === 'search' ? null : html`<form class="wt-public-search-box" role="search" action="/search" method="get"><input type="search" name="q" maxlength="100" autocomplete="off" aria-label=${searchLabel} placeholder=${searchLabel}><button type="submit">${vi ? 'Tìm' : 'Search'}</button></form>`}${p.account ? html`<a class="wt-public-account" href=${p.account.href} data-customer-account>${vi ? 'Đăng nhập' : 'Sign in'}</a>` : null}</header><main>${listing(p.listing, vi, p.brand)}${p.article ? html`<article class="wt-public-post"><h1>${p.article.title}</h1><div data-ui="flow-editor-content">${trustedMarkup(p.article.bodyHtml)}</div></article>` : null}${p.sections}</main><footer class="wt-theme-footer">${p.footer}</footer></div></body></html>`
 }
 
 /** The empty page the Studio client mounts into; `props` is its serialized starting state. */

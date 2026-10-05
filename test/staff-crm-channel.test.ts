@@ -7,7 +7,7 @@ import { TERMINAL_STATES } from '../packages/ketsuite/src/modules/crm/types.ts'
 
 type Envelope<T> = { data: T; error: { code: string } | null }
 
-const boot = async (t: TestContext) => {
+const boot = async (t: TestContext, options: { teamScope?: boolean } = {}) => {
   const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
@@ -74,6 +74,13 @@ const boot = async (t: TestContext) => {
       roleId: 'crm-reader',
       fnKey,
     })
+  // Moving a lead into the team queue reaches the team, so that role carries the team scope.
+  if (options.teamScope)
+    await fixture('user.grantFunction', {
+      id: 'crm-reader:crm.scope.team',
+      roleId: 'crm-reader',
+      fnKey: 'crm.scope.team',
+    })
   await fixture('user.assignRole', {
     id: 'crm-user:crm-reader',
     userId: 'crm-user',
@@ -102,18 +109,6 @@ const boot = async (t: TestContext) => {
       teamId: 'crm-team-sales',
       userId: 'crm-user',
       idempotencyKey: 'staff-crm-team-member',
-    },
-    'admin',
-  )
-  await fixture(
-    'crm.access.save',
-    {
-      id: 'crm-access-crm-user',
-      userId: 'crm-user',
-      viewScope: 'self',
-      editScope: 'self',
-      assignScope: 'team',
-      idempotencyKey: 'staff-crm-access-crm-user',
     },
     'admin',
   )
@@ -443,7 +438,7 @@ test('staff CRM commands enforce CSRF, idempotency, schema and optimistic concur
 })
 
 test('staff CRM reassign and won commands return the refreshed safe projection', async (t) => {
-  const e2e = await boot(t)
+  const e2e = await boot(t, { teamScope: true })
   await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
   const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
   const csrf = bootstrap.data.csrfToken
@@ -476,10 +471,16 @@ test('staff CRM reassign and won commands return the refreshed safe projection',
   assert.equal(wonBody.data.outcome, 'won')
   assert.equal(wonBody.data.lead.outcome, 'won')
   assert.equal(wonBody.data.lead.version, 2)
+})
+
+test('staff CRM refuses a lead outside the actor reach as missing', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
 
   const hidden = await e2e.client.request('/api/staff/v1/crm/leads/admin-only/transition', {
     method: 'POST',
-    headers: mutationHeaders(csrf, 'crm-hidden-transition'),
+    headers: mutationHeaders(bootstrap.data.csrfToken, 'crm-hidden-transition'),
     body: JSON.stringify({ stageId: 'crm-stage-qualified', expectedVersion: 1 }),
   })
   assert.equal(hidden.status, 404)

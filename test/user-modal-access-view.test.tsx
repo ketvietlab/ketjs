@@ -365,15 +365,14 @@ test('the commands send the selection the person made, and the revision they wer
   assert.equal(unassign.expectedAuthorizationRevision, 7)
 })
 
-test('the sign-in tab links provider identities only when the viewer may list them', () => {
-  const allowed = render(
-    tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities: true } }))),
-  )
-  assert.match(allowed, /href="\/admin\/oauth\/identities\?user=trang&amp;lang=vi"/)
-  const denied = render(
-    tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities: false } }))),
-  )
-  assert.doesNotMatch(denied, /\/admin\/oauth\/identities/)
+test('the sign-in tab never links provider identities, even for a viewer who may list them', () => {
+  // Linked identities are system configuration Két Việt runs; the tenant administrator never sees them.
+  for (const identities of [true, false]) {
+    const html = render(
+      tabView('login')(contextOf(dataOf({ permissions: { ...dataOf().permissions, identities } }))),
+    )
+    assert.doesNotMatch(html, /\/admin\/oauth\/identities|login\.identities/u)
+  }
 })
 
 test('user identity is rendered once in modal chrome; body header contains only actions', () => {
@@ -401,7 +400,7 @@ test('user tabs and nested dialogs never ask for a change reason', () => {
   }
 })
 
-test('unprovisioned external users offer an explicit provision action, without password reset', () => {
+test('an account Két Việt is still preparing tells the administrator to wait, with no identity operation to run', () => {
   const html = render(
     tabView('login')(
       contextOf(
@@ -423,6 +422,7 @@ test('unprovisioned external users offer an explicit provision action, without p
       ),
     ),
   )
-  assert.match(html, /provisionCredential/u)
+  assert.match(html, /login\.externalState\.handling/u)
+  assert.doesNotMatch(html, /provisionCredential|retryCredential|refreshAccount|oauth\/identities/u)
   assert.doesNotMatch(html, /data-record-command="resetPassword"/u)
 })

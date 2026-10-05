@@ -206,6 +206,7 @@ export const roleFunctions: Record<string, FnSpec> = {
       templateDigest: 'text?',
       revision: 'int?',
       assignmentCount: 'int',
+      bundleCount: 'int?',
       healthIssues: 'json',
     },
     effects: ['read:user.Role', 'read:user.Assignment', 'read:user.Grant', 'read:user.GrantSource'],
@@ -232,6 +233,9 @@ export const roleFunctions: Record<string, FnSpec> = {
         return {
           ...role,
           assignmentCount: assignments.filter((assignment) => String(assignment.roleId) === roleId).length,
+          bundleCount: role.templateKey
+            ? (ctx.manifest.permissions.roleTemplates[String(role.templateKey)]?.bundles.length ?? null)
+            : null,
           healthIssues,
         }
       })

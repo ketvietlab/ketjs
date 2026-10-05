@@ -2419,6 +2419,24 @@ test('design system: modal and section headings retain distinct type levels', ()
   assert.match(modal, /font-size: var\(--kv-text-xl\)/)
 })
 
+test('design system: a modal group heading is one step above its body and an item heading', () => {
+  const layering = readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8')
+  const start = layering.indexOf('A modal flattens its groups')
+  assert.ok(start > 0, 'the modal heading tier is documented in the layering rules')
+  const rules = layering.slice(start).split('}')
+  const group = rules[0] ?? ''
+  const item = rules[1] ?? ''
+  assert.match(group, /\[data-ui="modal-sheet"\], \[data-ui="dialog"\]\) \[data-ui="section-title"\]/)
+  assert.match(group, /\[data-ui="surface"\]\s+\[data-ui="surface-title"\]/)
+  assert.match(group, /font-size: var\(--kv-text-md\)/)
+  assert.match(group, /line-height: var\(--kv-line-md\)/)
+  assert.match(
+    item,
+    /:is\(\[data-ui="section"\], \[data-ui="surface"\]\)\s+:is\(\[data-ui="section"\], \[data-ui="surface"\]\)/,
+  )
+  assert.match(item, /font-size: var\(--kv-text-sm\)/)
+})
+
 test('design system: Stack gap variants own their gap above legacy backend styles', () => {
   for (const variant of ['compact', 'loose']) {
     const selector = `[data-ui="stack"][data-pattern="stack"][data-gap="${variant}"]`
