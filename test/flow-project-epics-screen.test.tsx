@@ -62,7 +62,7 @@ test('flow project epics: specialized cards preserve project identity, backlog p
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
   assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
-  assert.match(html, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="board-page-context"|data-ui="breadcrumbs"/)
   assert.doesNotMatch(withoutGlobalSearchDialog(html), /data-ui="record-workspace"|data-ui="modal-layer"/)
   assert.match(textContent, /data-ui="board-page-title"[^>]*>Internal platform/)
   assert.match(textContent, /data-ui="board-page-eyebrow"[^>]*>Epics/)
