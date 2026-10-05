@@ -4,7 +4,8 @@ import { rowListSearch } from '../backend/row-list.ts'
 import { accessPolicyListSearch } from './search.ts'
 import { adminPage } from '../backend/screen.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
-import { accessPoliciesScreen } from './screens/access-policies-list.tsx'
+import { accessPoliciesGrid, accessPoliciesScreen } from './screens/access-policies-list.tsx'
+import { tableGrid } from '../backend/ket-table.ts'
 import type { AccessPolicyMatchKind } from './screens/access-policies-list.tsx'
 
 export const accessPolicyRoutes: Record<string, RouteEntry> = {
@@ -67,10 +68,20 @@ export const accessPolicyRoutes: Record<string, RouteEntry> = {
             labels: { searchPlaceholder: _('user_backend.search.policies') },
             groupLabel: (_key, value) => _(`user_backend.policy.match.${String(value)}`),
           })
-          return accessPoliciesScreen(_, search.frame, {
+          const prepared = accessPoliciesGrid(_, search.frame, {
             rows: search.rows,
+            ...(search.groups ? { groups: search.groups } : {}),
+            rowHrefTemplate: recordModalHref(url, {
+              kind: 'user.accessPolicy',
+              id: '__row__',
+              tab: 'rule',
+            }).replace('__row__', '{id}'),
+          })
+          const grid = await tableGrid(ctx, url, req, 'user-policies-table', prepared.config)
+          return accessPoliciesScreen(_, prepared.frame, {
+            grid,
+            empty: !search.rows.length && !search.groups?.length,
             total: search.rows.length,
-            table: { groups: search.groups },
             createHref: canCreate ? recordModalCreateHref(url, { kind: 'user.accessPolicy' }) : null,
           })
         },

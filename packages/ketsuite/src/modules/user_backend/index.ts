@@ -32,10 +32,13 @@ export default defineModule({
 
 export { routes } from './routes.ts'
 export {
+  accessPoliciesGrid,
   accessPoliciesScreen,
   profileScreen,
+  rolesGrid,
   rolesScreen,
   sessionsScreen,
+  usersGrid,
   usersScreen,
 } from './screens/index.ts'
 

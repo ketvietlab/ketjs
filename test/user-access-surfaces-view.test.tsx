@@ -15,7 +15,11 @@ import { roleModalDefinition } from '../packages/ketsuite/src/modules/user_backe
 import type { RoleModalData } from '../packages/ketsuite/src/modules/user_backend/modal/role-modal-view.tsx'
 import { userModalDefinition } from '../packages/ketsuite/src/modules/user_backend/modal/user-modal-view.tsx'
 import type { UserModalData } from '../packages/ketsuite/src/modules/user_backend/modal/user-modal-view.tsx'
-import { accessPoliciesScreen } from '../packages/ketsuite/src/modules/user_backend/screens/index.ts'
+import {
+  accessPoliciesGrid,
+  accessPoliciesScreen,
+} from '../packages/ketsuite/src/modules/user_backend/screens/index.ts'
+import { withGrid } from './helpers/user-grid.ts'
 import type {
   RecordModalContext,
   RecordModalDefinition,
@@ -457,23 +461,37 @@ const policyRow = {
 }
 
 test('the rules collection keeps title and create, then filters, then the table', () => {
-  const html = renderToString(
-    accessPoliciesScreen(translate, SEARCH_FRAME, {
-      rows: [policyRow],
-      total: 1,
-      createHref: '/admin/access-policies?record=user.accessPolicy%3Anew',
-    }),
-  )
+  const screen = (createHref: string | null) =>
+    renderToString(
+      withGrid(
+        translate,
+        SEARCH_FRAME,
+        accessPoliciesGrid,
+        { rows: [policyRow], rowHrefTemplate: '/admin/access-policies?record=user.accessPolicy%3A{id}' },
+        (frame, grid) => accessPoliciesScreen(translate, frame, { grid, empty: false, total: 1, createHref }),
+      ),
+    )
+  const html = screen('/admin/access-policies?record=user.accessPolicy%3Anew')
   assert.match(
     html,
     /data-ui="list-page-title-row"[\s\S]*?record=user\.accessPolicy%3Anew[\s\S]*?<\/header>[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="ket-table"/,
   )
   assert.match(html, /ketviet-sales-hn/)
-  assert.match(html, /Nhân viên bán hàng · An Việt Miền Bắc/)
-
-  const readOnly = renderToString(
-    accessPoliciesScreen(translate, SEARCH_FRAME, { rows: [policyRow], total: 1, createHref: null }),
+  // The roles and the place they apply sit in their own columns, not joined in one cell.
+  assert.match(html, /user_backend\.policy\.grantsColumn[\s\S]*?user_backend\.field\.scope/)
+  assert.match(
+    html,
+    /data-col="grants"[\s\S]*?Nhân viên bán hàng[\s\S]*?data-col="scope"[\s\S]*?An Việt Miền Bắc/,
   )
+  assert.match(
+    html,
+    /data-ui="kt-row-link"[^>]*href="\/admin\/access-policies\?record=user\.accessPolicy%3Ap1"/,
+  )
+  // Rules change one at a time, from their modal: nothing to check a row for.
+  assert.doesNotMatch(html, /data-ui="kt-row-select"/)
+  assert.doesNotMatch(html, /Nhân viên bán hàng · An Việt Miền Bắc/)
+
+  const readOnly = screen(null)
   assert.doesNotMatch(readOnly, /record=user\.accessPolicy%3Anew|action\.createPolicy/)
   assert.match(readOnly, /data-ui="ket-table"/)
 })

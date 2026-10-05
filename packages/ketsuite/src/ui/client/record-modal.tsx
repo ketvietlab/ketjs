@@ -249,6 +249,7 @@ export type RecordModalDialog<Data> = {
   title: (context: RecordModalContext<Data>) => string
   /** Keep the parent record identity visible while completing a nested action. */
   description?: (context: RecordModalContext<Data>) => string | null
+  /** ModalSheet's width: small for a short single-column form, large for a dense workspace. */
   size?: 'small' | 'default' | 'large'
   view: (context: RecordModalContext<Data>) => JSXChild
   /** Fixed actions for this dialog layer, outside its scrolling body. */

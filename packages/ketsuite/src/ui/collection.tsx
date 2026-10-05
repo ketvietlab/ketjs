@@ -4,7 +4,8 @@ import type { Frame } from './layout.tsx'
 import { bulkActions, listChrome } from './chrome.tsx'
 import { inline } from './primitives.tsx'
 import { Disclosure } from '@ketvietlab/design-system'
-import type { DataTable, TableSelection } from './table.tsx'
+import type { KetTableColumn, KetTableConfig, KetTableGroup, KetTableRow } from '@ketvietlab/design-system'
+import type { DataTable, TableGroup, TableSelection } from './table.tsx'
 import { collectionQueryKeep, paginateCollectionRows } from './collection-state.ts'
 
 /** Collection tools only. ListPage places frame.chrome.create beside the title.
@@ -136,5 +137,99 @@ export const prepareCollectionTable = <R,>(
       colsHref: undefined,
     },
     total: paged?.total ?? chrome.pager?.total ?? rows.length,
+  }
+}
+
+/** The labels every collection grid shares, in the backend's own words. */
+export const collectionGridLabels = (
+  _: Translator,
+  empty: string,
+  emptyHint = '',
+): KetTableConfig['labels'] => ({
+  region: _('backend.table.results'),
+  selectAll: _('backend.table.selectAll'),
+  selectRow: _('backend.table.selectRow'),
+  sortedAscending: _('backend.table.sortAscending'),
+  sortedDescending: _('backend.table.sortDescending'),
+  previousPage: _('backend.chrome.previous'),
+  nextPage: _('backend.chrome.next'),
+  loading: _('backend.relation.loading'),
+  loadError: _('backend.error.failed.title'),
+  retry: _('backend.relation.retry'),
+  empty,
+  emptyHint,
+})
+
+export type CollectionGrid<R> = {
+  /** Island columns: what each one reads out of a view row, as JSON. */
+  columns: KetTableColumn[]
+  rows: readonly R[]
+  groups?: readonly TableGroup<R>[]
+  id: (row: R) => string
+  /** The JSON row the island renders; it must carry `id` and every field a column reads. */
+  view: (row: R) => KetTableRow
+  /** A `{id}` href that opens a row, such as its record modal. */
+  rowHrefTemplate?: string
+  /** The bulk form the row checkboxes post to; null offers no selection. */
+  selection?: TableSelection | null
+  labels: KetTableConfig['labels']
+}
+
+/**
+ * The island counterpart of `prepareCollectionTable` for a list screen whose table
+ * is the KetTable island. The toolbar keeps its page, column chooser and group
+ * state from the same URL rules; the island receives only the rows of this page,
+ * as JSON, with the selection bound to the bulk form the toolbar shows.
+ */
+export const prepareCollectionGrid = <R,>(
+  _: Translator,
+  frame: Frame,
+  grid: CollectionGrid<R>,
+  options: { paginate?: boolean } = {},
+): { frame: Frame; config: KetTableConfig } => {
+  const prepared = prepareCollectionTable(
+    _,
+    frame,
+    {
+      columns: grid.columns.map((column) => ({ key: column.key, label: column.label, cell: () => '' })),
+      rows: grid.rows,
+      id: grid.id,
+      ...(grid.groups ? { groups: grid.groups } : {}),
+    },
+    options,
+  )
+  const shown = new Set(prepared.table.columns.map((column) => column.key))
+  const groups = (nodes: readonly TableGroup<R>[]): KetTableGroup[] =>
+    nodes.map((node) => ({
+      id: node.id,
+      label: node.label,
+      count: node.count,
+      open: node.open,
+      href: node.href,
+      ...(node.pager ? { pager: node.pager } : {}),
+      ...(node.rows ? { rows: node.rows.map(grid.view) } : {}),
+      ...(node.children ? { children: groups(node.children) } : {}),
+    }))
+  const grouped = !!grid.groups?.length
+  return {
+    frame: {
+      ...prepared.frame,
+      chrome: { ...prepared.frame.chrome, ...(grid.selection ? { selection: grid.selection } : {}) },
+    },
+    config: {
+      columns: grid.columns.filter((column) => shown.has(column.key)),
+      rows: prepared.table.rows.map(grid.view),
+      total: prepared.total,
+      idField: 'id',
+      locale: _.locale,
+      ...(grid.rowHrefTemplate ? { rowHrefTemplate: grid.rowHrefTemplate } : {}),
+      groupBy: grouped ? ['group'] : [],
+      ...(grouped ? { groups: groups(grid.groups!) } : {}),
+      ...(grid.selection
+        ? { selection: { formId: grid.selection.formId, fieldName: grid.selection.field ?? 'selected' } }
+        : {}),
+      pager: false,
+      labels: grid.labels,
+    },
   }
 }

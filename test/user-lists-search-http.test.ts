@@ -135,3 +135,50 @@ test('identity lists HTTP: the bar applies and saves searches through the shared
   })
   assert.doesNotMatch(await (await app.client.get(returnTo)).text(), /Chỉ khách portal/)
 })
+
+test('identity lists HTTP: checked people are made active or inactive together, and the last administrator stays', async (t) => {
+  const app = await boot(t)
+  const form = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
+    app.client.post(`${PEOPLE}/bulk?lang=vi`, new URLSearchParams(fields), {
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
+      redirect: 'manual',
+    })
+  const active = async (id: string) =>
+    ((await app.client.call<Row[]>('user.listUsers', { includeArchived: true })).value.find(
+      (row) => row.id === id,
+    )?.active as boolean | undefined) ?? null
+
+  const page = await (await app.client.get(`${PEOPLE}?lang=vi`)).text()
+  assert.match(page, /data-island="backend\.ket-table"/)
+  assert.match(page, /data-ui="kt-row-select"/)
+  assert.match(
+    page,
+    /<form data-ui="bulk-form" id="user-people-bulk"[^>]*action="\/admin\/users\/bulk\?lang=vi"/,
+  )
+
+  assert.equal((await app.client.request(`${PEOPLE}/bulk?lang=vi`)).status, 405)
+  const crossSite = await form(
+    { action: 'deactivate', 'selected.portal-guest': '1' },
+    { origin: 'https://cross-site.example' },
+  )
+  assert.equal(crossSite.status, 403)
+  assert.equal(await active('portal-guest'), true)
+  assert.equal((await form({ action: 'erase', 'selected.portal-guest': '1' })).status, 400)
+
+  const deactivated = await form({
+    action: 'deactivate',
+    returnTo: '/admin/users?q=Portal',
+    'selected.portal-guest': '1',
+    // The only full administrator is refused on its own; the rest still go through.
+    'selected.admin': '1',
+  })
+  assert.equal(deactivated.status, 303)
+  assert.equal(deactivated.headers.get('location'), '/admin/users?q=Portal&lang=vi')
+  assert.equal(await active('portal-guest'), false)
+  assert.equal(await active('admin'), true)
+
+  const activated = await form({ action: 'activate', 'selected.portal-guest': '1', 'selected.left': '1' })
+  assert.equal(activated.status, 303)
+  assert.equal(await active('portal-guest'), true)
+  assert.equal(await active('left'), true)
+})

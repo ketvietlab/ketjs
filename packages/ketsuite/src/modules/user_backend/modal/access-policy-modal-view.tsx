@@ -355,14 +355,13 @@ const ruleInput = (form: FormData, c: Context, id: string | null): Record<string
 
 export const accessPolicyModalDefinition: RecordModalDefinition<AccessPolicyModalData> = {
   kind: 'user.accessPolicy',
-  size: 'large',
+  size: 'default',
   labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
   context: {
     fn: 'user.accessPolicyModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'action.createPolicy') : c.data.record.name),
-  description: (c) => (c.creating ? t(c, 'policy.createSubtitle') : c.data.record.description || null),
   status: (c) =>
     c.creating
       ? undefined
