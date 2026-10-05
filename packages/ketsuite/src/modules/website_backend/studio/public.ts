@@ -9,6 +9,13 @@ import type {
   WebsitePublicNavItem,
 } from '../../../ui/website-public.ts'
 import { renderLayout, safeHref, safeImage, SECTION_RENDERERS } from '../client/public-renderer.mjs'
+import {
+  scriptJson,
+  selectedThemeOf,
+  themeBootScript,
+  themeContentSecurityPolicy,
+  themeStylesheet,
+} from '../../website_theme/snapshot.ts'
 
 const object = (value: unknown): Row =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Row) : {}
@@ -200,6 +207,16 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
     formText: { send: vi ? 'Gửi' : 'Send' },
   }
   const layout = placements(scope.sections)
+  // A theme's code runs only where nothing but the site lives: not in a preview, not beside a staff
+  // session, and only on a host the site answers as its own. A scope that does not say fails closed.
+  const siteTheme = selectedThemeOf(appearance.theme)
+  const request = object(scope.request)
+  const scripted =
+    !!siteTheme?.entry &&
+    request.preview === false &&
+    request.staff === false &&
+    typeof site.id === 'string' &&
+    site.id !== '__legacy__'
   const navigation = (parent: unknown, ancestors = new Set<string>()): WebsitePublicNavItem[] =>
     menu
       .filter((item) => (item.parentId ?? null) === parent && !ancestors.has(String(item.id)))
@@ -242,9 +259,24 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
         article: blocks ? { title: record.title, bodyHtml: documentHtml(blocks, locale) } : null,
         sections: renderLayout(blocks ? remainingLayout(layout) : layout, options),
         footer: appearance.footer ?? site.title,
+        siteTheme: siteTheme
+          ? {
+              key: siteTheme.key,
+              stylesheet: themeStylesheet(siteTheme),
+              script: scripted ? themeBootScript(siteTheme) : null,
+              data: scriptJson({
+                settings: siteTheme.settings,
+                locale,
+                page: { type: record.type ?? null, path: record.path ?? null },
+              }),
+            }
+          : null,
       }),
     }),
-    { 'cache-control': 'no-cache' },
+    {
+      'cache-control': 'no-cache',
+      ...(siteTheme ? { 'content-security-policy': themeContentSecurityPolicy(siteTheme) } : {}),
+    },
   )
 }
 

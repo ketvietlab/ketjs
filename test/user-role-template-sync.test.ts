@@ -11,6 +11,7 @@ import { ketsuiteRoleTemplates } from '../packages/ketsuite/src/role-templates.t
 import {
   websiteCustomerMailRoleTemplates,
   websiteRoleTemplates,
+  websiteThemeRoleTemplates,
 } from '../packages/ketsuite/src/website-role-templates.ts'
 
 const boot = async (t: { after: (fn: () => unknown) => void }) => {
@@ -31,12 +32,13 @@ const boot = async (t: { after: (fn: () => unknown) => void }) => {
   return { adapter, call }
 }
 
-// The development composition carries every product's roles, and Website's because it composes Website
-// and its customer mail.
+// The development composition carries every product's roles, and Website's because it composes Website,
+// its customer mail and its theme registry.
 const TEMPLATE_KEYS = [
   ...Object.values(ketsuiteRoleTemplates),
   websiteRoleTemplates,
   websiteCustomerMailRoleTemplates,
+  websiteThemeRoleTemplates,
 ]
   .flatMap((templates) => Object.keys(templates))
   .sort()
