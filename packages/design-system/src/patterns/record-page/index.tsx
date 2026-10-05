@@ -62,7 +62,7 @@ export const recordPage = (props: RecordPageProps, compatibilityKind?: RecordPag
       data-width={props.width ?? 'default'}
       data-pattern="record"
     >
-      {props.context !== undefined && <div data-ui={`${kind}-context`}>{props.context}</div>}
+      {props.context != null && <div data-ui={`${kind}-context`}>{props.context}</div>}
       <header data-ui={`${kind}-header`} data-ket-slot={props.slots?.header}>
         {pageIdentityContent(kind, props)}
       </header>
