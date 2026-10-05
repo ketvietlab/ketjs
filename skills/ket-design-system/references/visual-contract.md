@@ -19,7 +19,8 @@ through rem-based tokens so user text scaling remains possible.
 | --- | --- | --- | --- |
 | Page/modal title | 20/24/600 | 20/24/600 | Page/modal header |
 | Working surface title | 14/20/600 | 14/20/600 | Surface |
-| Section/nested surface title | 13/20/600 | 13/20/600 | Section or flattened Surface |
+| Modal group title | 14/20/600 | 14/20/600 | Section or flattened Surface directly in a modal |
+| Section/nested surface title | 13/20/600 | 13/20/600 | Section on a canvas, or an item heading nested in a group |
 | Body/table value | 13/20/400 | 13/20/400 | Content component |
 | Field/column label | 13/20/500 | 13/20/500 | Field/table |
 | Help/metadata | 12/16/400 | 12/16/400 | Field or content component |
@@ -147,6 +148,9 @@ uses the modal's boundary. TabbedView/TabPanel add no second card or horizontal 
 
 Separate groups with space, then heading, then a hairline between peers when useful.
 Do not draw both a parent's closing border and a child's opening border for one edge.
+A modal flattens its groups, so its group headings take the working-surface size
+(14/20/600), one step above the 13/20/400 body; a heading nested inside a group is an
+item heading at 13/20/600. Do not draw the tier with weight alone at the same size.
 Keep title and body on the same inset. Use the relevant semantic tokens for each:
 
 - **Boundary:** region against canvas, owned by Surface/Overlay.
