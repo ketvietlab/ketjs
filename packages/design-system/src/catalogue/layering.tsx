@@ -304,6 +304,15 @@ export const LayeringPreview = (props: {
                       body={<Section title="Next care" body={fields('layering-4')} />}
                     />,
                     <Case
+                      name="modal-item"
+                      body={
+                        <Section
+                          title="Product feedback"
+                          body={<Section title="Serum B5 × 1" body={fields('layering-9')} />}
+                        />
+                      }
+                    />,
+                    <Case
                       name="modal-divided"
                       body={
                         <Stack
