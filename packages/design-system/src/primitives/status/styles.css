@@ -16,6 +16,12 @@
     height: var(--kv-space-6);
     flex: 0 0 var(--kv-space-6);
   }
+  :where([data-kv-design-system]) [data-ui="media-label-image"][data-empty="true"] {
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--kv-radius-sm);
+    background: color-mix(in srgb, var(--kv-text-main) 6%, transparent);
+  }
   :where([data-kv-design-system]) [data-ui="media-label-image"] img {
     width: 100%;
     height: 100%;

@@ -66,16 +66,26 @@ export const Text = (props: TextProps): TemplateResult => {
   )
 }
 
-/** A readable row name with optional media. Empty collections do not pay for an unused image column. */
+/**
+ * A readable row name with optional media. Empty collections do not pay for an unused image column.
+ * A reserved slot without an image shows a muted placeholder icon, so a row that has no photo
+ * reads as "no photo" rather than as a missing one.
+ */
 export const MediaLabel = (props: {
   label: string
   src?: string
   reserveImage?: boolean
+  /** Glyph drawn in a reserved slot that has no image. */
+  placeholder?: IconName
 }): TemplateResult => (
   <span data-ui="media-label">
     {props.src || props.reserveImage ? (
-      <span data-ui="media-label-image" aria-hidden="true">
-        {props.src ? <img src={props.src} alt="" loading="lazy" decoding="async" /> : null}
+      <span data-ui="media-label-image" data-empty={props.src ? null : 'true'} aria-hidden="true">
+        {props.src ? (
+          <img src={props.src} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <Icon name={props.placeholder ?? 'image'} size="small" tone="muted" />
+        )}
       </span>
     ) : null}
     <span data-ui="media-label-copy">{props.label}</span>

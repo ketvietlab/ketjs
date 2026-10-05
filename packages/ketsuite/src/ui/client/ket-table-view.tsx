@@ -1,5 +1,5 @@
 import { Badge, createKetTableView, Inline, MediaLabel, Text } from '@ketvietlab/design-system'
-import type { KetTableGroup, KetTableConfig } from '@ketvietlab/design-system'
+import type { IconName, KetTableGroup, KetTableConfig } from '@ketvietlab/design-system'
 import type { IslandController, IslandProps } from '@ketvietlab/ketjs-view'
 
 // A thin, shared registration point — not a reimplementation like
@@ -15,10 +15,22 @@ export const ketTable = (props: IslandProps): IslandController =>
       const collect = (groups: KetTableGroup[]): Record<string, unknown>[] =>
         groups.flatMap((group) => [...(group.rows ?? []), ...collect(group.children ?? [])])
       const rows = [...(config.rows ?? []), ...collect(config.groups ?? [])]
-      const reserveImage = rows.some((entry) =>
-        Boolean((entry[String(options?.imageField ?? 'image')] as { src?: string } | null)?.src),
+      // A column that names a placeholder always shows one, so an imageless page keeps its icons
+      // instead of dropping the slot.
+      const placeholder = options?.placeholder as IconName | undefined
+      const reserveImage =
+        placeholder !== undefined ||
+        rows.some((entry) =>
+          Boolean((entry[String(options?.imageField ?? 'image')] as { src?: string } | null)?.src),
+        )
+      return (
+        <MediaLabel
+          label={String(value ?? '')}
+          src={image?.src}
+          reserveImage={reserveImage}
+          placeholder={placeholder}
+        />
       )
-      return <MediaLabel label={String(value ?? '')} src={image?.src} reserveImage={reserveImage} />
     },
     // A classification in words. `status` draws a badge, which is for states
     // and exceptions; a value most rows share would repeat the same pill down
