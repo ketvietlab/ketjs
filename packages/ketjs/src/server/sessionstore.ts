@@ -60,6 +60,23 @@ export type SessionContext = Pick<
   'companies' | 'company' | 'branches' | 'branch' | 'securityVersion'
 >
 
+const sameIds = (a: readonly string[] | null, b: readonly string[] | null): boolean =>
+  a === b || (a !== null && b !== null && a.length === b.length && a.every((id, i) => id === b[i]))
+
+/**
+ * Whether two sessions scope the same companies and branches.
+ *
+ * Compared field by field. Serialising both and comparing the strings depends on
+ * the order each side happened to build its keys in, so two identical contexts
+ * could differ and make every request rewrite the session.
+ */
+export const sameSessionContext = (a: SessionContext, b: SessionContext): boolean =>
+  a.company === b.company &&
+  (a.branch ?? null) === (b.branch ?? null) &&
+  a.securityVersion === b.securityVersion &&
+  sameIds(a.companies, b.companies) &&
+  sameIds(a.branches ?? null, b.branches ?? null)
+
 const alive = (r: SessionRecord, now: number): boolean => r.expiresAt > now
 
 export function memorySessionStore(o: { now?: () => number } = {}): SessionStore {

@@ -222,11 +222,13 @@ test('product list: renders contributed catalogue actions beside native actions'
   assert.match(htmlOutput, /href="\/admin\/channels\/products"/)
 })
 
-test('product media columns omit empty space for an imageless page and align mixed pages', () => {
+test('product rows without a photo show the package placeholder, on mixed and imageless pages', () => {
   const withoutImage = { ...rows[0], id: 'no-image', image: null }
   const empty = renderToString(grid([withoutImage]))
-  assert.doesNotMatch(empty, /data-ui="media-label-image"/)
+  assert.equal(empty.match(/data-ui="media-label-image" data-empty="true"/g)?.length, 1)
+  assert.equal(empty.match(/<img /g)?.length ?? 0, 0)
   const mixed = renderToString(grid([rows[0]!, withoutImage]))
   assert.equal(mixed.match(/data-ui="media-label-image"/g)?.length, 2)
+  assert.equal(mixed.match(/data-ui="media-label-image" data-empty="true"/g)?.length, 1)
   assert.equal(mixed.match(/<img /g)?.length, 1)
 })

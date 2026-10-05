@@ -61,7 +61,12 @@ export const templateColumns = (_: Translator): KetTableColumn[] => [
   {
     key: 'name',
     label: _('product_backend.col.name'),
-    format: { kind: 'custom', field: 'name', renderer: 'thumbnail-label' },
+    format: {
+      kind: 'custom',
+      field: 'name',
+      renderer: 'thumbnail-label',
+      options: { placeholder: 'package' },
+    },
     priority: 'primary',
     width: 'wide',
     wrap: true,

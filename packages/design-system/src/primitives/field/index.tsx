@@ -24,6 +24,8 @@ export const HOOKS = [
 export type FieldOption = {
   value: string
   label: string
+  /** Opt-in matched input/action height: 36px desktop, 44px mobile. */
+  size?: 'default' | 'large'
   name?: string
   checked?: boolean
   disabled?: boolean
@@ -36,6 +38,8 @@ export type FieldProps = {
   id: string
   name: string
   label: string
+  /** Opt-in matched input/action height: 36px desktop, 44px mobile. */
+  size?: 'default' | 'large'
   /** A trusted, progressively enhanced control such as a relation selector. */
   control?: JSXChild
   type?:

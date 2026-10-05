@@ -34,7 +34,6 @@ flowchart LR
   subgraph Pipeline["Per legal entity"]
     T["Team"]
     TM["TeamMember<br/>unique company + team + user"]
-    AG["AccessGrant<br/>view, edit, assign scopes"]
     S["Stage<br/>allowedKinds, terminalState"]
     C["Case<br/>lead | opportunity"]
     SD["SalesDetail<br/>unique company + case"]
@@ -48,7 +47,6 @@ flowchart LR
     T -->|has many| TM
     C -->|stage| S
     C -->|team| T
-    AG -->|limits access to| C
     C -->|has one| SD
     C -->|has many| CT
     CT -->|tag| TAG
@@ -74,8 +72,11 @@ policy runs:
 - a superuser sees everything;
 - an agent sees cases assigned to them plus unassigned work in their active team queues;
 - a team leader sees assigned and unassigned cases in teams they lead;
-- an active `AccessGrant` may independently widen `viewScope`, `editScope`, or `assignScope` from
-  `none` through `self`, `team`, and `company`.
+- a role holding `crm.scope.team` sees the cases of every team the user belongs to;
+- a role holding `crm.scope.company` sees every case in the company.
+
+How far somebody reaches is part of their roles, like everything else they may do, so the role
+screen that grants it is also where it shows. There is no separate access table to drift from it.
 
 Creating a record does not grant permanent access after somebody else owns it. List, group, summary,
 and duplicate queries push the audience clauses into SQL, so a filter can only narrow a permitted

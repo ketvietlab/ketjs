@@ -3,7 +3,8 @@ import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage } from '../backend/screen.ts'
 import { rowListSearch } from '../backend/row-list.ts'
 import { recordModalHref } from '../../ui/record-modal.tsx'
-import { rolesScreen } from './screens/roles-list.tsx'
+import { rolesGrid, rolesScreen } from './screens/roles-list.tsx'
+import { tableGrid } from '../backend/ket-table.ts'
 import type { RoleRow } from './screens/types.ts'
 import { roleListSearch } from './search.ts'
 
@@ -36,9 +37,19 @@ export const managedRoleRoutes: Record<string, RouteEntry> = {
             },
             labels: { searchPlaceholder: _('user_backend.search.roles') },
           })
-          return rolesScreen(_, search.frame, {
+          const prepared = rolesGrid(_, search.frame, {
             rows: search.rows,
-            table: { groups: search.groups },
+            ...(search.groups ? { groups: search.groups } : {}),
+            rowHrefTemplate: recordModalHref(url, { kind: 'user.role', id: '__row__' }).replace(
+              '__row__',
+              '{id}',
+            ),
+          })
+          const grid = await tableGrid(ctx, url, req, 'user-roles-table', prepared.config)
+          return rolesScreen(_, prepared.frame, {
+            grid,
+            empty: !search.rows.length && !search.groups?.length,
+            total: search.rows.length,
             createHref: null,
           })
         },
