@@ -26,8 +26,8 @@ const workspaces = [
   {
     name: '@ketvietlab/design-system',
     dir: 'packages/design-system',
-    // 0.1.38 packs 417,142 bytes: 137 catalogue components, fixed date presets,
-    // temporal record fields and image dropzones. Audited archive contains only
+    // 0.1.40 packs 419,011 bytes: 137 catalogue components, fixed date presets,
+    // temporal record fields, image dropzones and commerce form layouts. Audited archive contains only
     // dist, docs and metadata; no tests, dependencies or build caches.
     maxPackedBytes: 430_000,
   },
