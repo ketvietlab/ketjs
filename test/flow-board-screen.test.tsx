@@ -27,7 +27,7 @@ test('flow board: uses the horizontal workspace around the kanban island', () =>
   const rendered = renderToString(boardScreen(translate, {}, 'Nền tảng nội bộ', board))
 
   assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
-  assert.match(rendered, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(rendered, /data-ui="board-page-context"|data-ui="breadcrumbs"/)
   assert.doesNotMatch(rendered, /data-ui="record-workspace"|data-ui="section"/)
   assert.match(rendered, /Nền tảng nội bộ/)
   assert.match(rendered, /data-island="flow.board"/)

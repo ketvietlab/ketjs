@@ -13,7 +13,7 @@ test('calendar uses the horizontal workspace around its board joint', () => {
   const html = renderToString(calendarScreen(translate, <div data-board="calendar">Board</div>, {}))
   assert.match(html, /calendar_backend\.title/)
   assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
-  assert.match(html, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="board-page-context"|data-ui="breadcrumbs"/)
   assert.match(html, /data-board="calendar"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"/)
 })
