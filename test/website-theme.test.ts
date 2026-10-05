@@ -66,8 +66,19 @@ test('a theme package is refused for every way it could reach outside its own si
     ['cssKeyframes', { 'theme.css': '@keyframes fade { from { opacity: 0 } }' }],
     ['cssSyntax', { 'theme.css': '[data-site-theme="acme"] p { color: red /* open' }],
     ['scriptBudget', { 'theme.mjs': `export const x = '${randomBytes(200_000).toString('base64')}'` }],
-    ['frameUnsupported', {}, manifest({ frame: ['header'] })],
-    ['fileType', { 'frame-header.ktl': '<header></header>' }],
+    ['frameMissing', {}, manifest({ frame: ['header'] })],
+    ['frameUndeclared', { 'frame-header.ktl': '<header></header>' }],
+    ['frameInvalid', { 'frame-header.ktl': '<script>alert(1)</script>' }, manifest({ frame: ['header'] })],
+    [
+      'frameInvalid',
+      { 'frame-header.ktl': '<a href="javascript:alert(1)">x</a>' },
+      manifest({ frame: ['header'] }),
+    ],
+    [
+      'frameInvalid',
+      { 'frame-header.ktl': '<header>{{{ brand.title }}}</header>' },
+      manifest({ frame: ['header'] }),
+    ],
     ['fileName', { 'Theme.CSS': 'x' }],
     ['fileName', { '_boot.mjs': 'export {}' }],
     ['scriptUndeclared', {}, manifest({ script: undefined })],
@@ -98,6 +109,7 @@ test('a theme package is refused for every way it could reach outside its own si
 test('an installed theme is offered, chosen, published and served from tenant storage', async (t) => {
   let base: Storage | null = null
   const { app, fixture, revision } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
     openStorage: (config) => (base = storageFromConfig(config)),
   })
   t.after(() => app.close())
@@ -105,7 +117,7 @@ test('an installed theme is offered, chosen, published and served from tenant st
   const install = (packageFiles: Record<string, Uint8Array>, company = 'studio-a') =>
     installThemePackage(
       {
-        storage: namespacedStorage(base!, 'ketsuite'),
+        storage: namespacedStorage(base!, 'commerce'),
         call: async (fn, input) =>
           (await app.fixture.call<Row>(fn, input, { scope: { company, branches: null } })).value,
       },
@@ -121,6 +133,15 @@ test('an installed theme is offered, chosen, published and served from tenant st
     })
     return { status: response.status, value: ((await response.json()) as { value: Row }).value }
   }
+
+  const cssOnly = await install(
+    files({ 'theme.mjs': null }, manifest({ version: '0.9.0', script: undefined })),
+  )
+  assert.equal(cssOnly.ok, true, JSON.stringify(cssOnly))
+  assert.deepEqual(
+    await install(files({ 'theme.mjs': null }, manifest({ version: '0.9.0', script: undefined }))),
+    cssOnly,
+  )
 
   const installed = await install(files())
   assert.equal(installed.ok, true, JSON.stringify(installed))
@@ -245,7 +266,9 @@ test('an installed theme is offered, chosen, published and served from tenant st
     expectedRevisionId: repicked.value.revisionId,
     values: { footer: 'Themed footer' },
   })
-  assert.doesNotMatch(await (await anonymous.get('/')).text(), /data-site-theme/, 'a draft is not live')
+  const immediately = await (await anonymous.get('/')).text()
+  assert.match(immediately, /data-site-theme="acme"/, 'theme save applies immediately')
+  assert.match(immediately, /Themed footer/, 'site style save applies without publishing the page')
   await publish()
 
   const page = await anonymous.get('/')
@@ -292,4 +315,55 @@ test('an installed theme is offered, chosen, published and served from tenant st
   assert.equal((await anonymous.get(`/_theme/${versionId}/theme.css`)).status, 404)
   assert.equal((await anonymous.get(`/_theme/${versionId}/_boot.mjs`)).status, 404)
   assert.equal((await anonymous.get('/')).status, 200)
+})
+
+test('stored KTL frame compiles at install and replaces only its declared slots', async (t) => {
+  let base: Storage | null = null
+  const { app, fixture } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
+    openStorage: (config) => (base = storageFromConfig(config)),
+  })
+  t.after(() => app.close())
+  const packaged = files({
+    'theme.json': JSON.stringify(manifest({ version: '2.0.0', frame: ['topbar', 'header', 'footer'] })),
+    'frame-topbar.ktl': '<div class="theme-topbar">{{ settings.tone }}</div>',
+    'frame-header.ktl': '<header class="theme-header"><a href="/">{{ brand.title }}</a></header>',
+    'frame-footer.ktl': '<footer class="theme-footer">{{ site.title }}</footer>',
+  })
+  const installed = await installThemePackage(
+    {
+      storage: namespacedStorage(base!, 'commerce'),
+      call: async (fn, input) =>
+        (await app.fixture.call<Row>(fn, input, { scope: { company: 'studio-a', branches: null } })).value,
+    },
+    packaged,
+    { available: true },
+  )
+  assert.equal(installed.ok, true, JSON.stringify(installed))
+  if (!installed.ok) return
+  const choice = await fixture('website_theme.selectTheme', {
+    siteId: 'site-a',
+    expectedRevisionId: 'initial',
+    versionId: installed.id,
+    settings: { tone: 'cool' },
+  })
+  assert.equal(choice.ok, true)
+  await fixture('website.saveDomain', {
+    id: 'theme-domain',
+    siteId: 'site-a',
+    host: '127.0.0.1',
+    primary: true,
+  })
+  const entry = (await fixture('website.getEntry', { id: 'page-site-a' })).entry as Row
+  await fixture('website.publishEntry', { id: 'page-site-a', expectedRevisionId: entry.revisionId })
+  const response = await app.client.anonymous().get('/')
+  const html = await response.text()
+  assert.match(html, /class="theme-topbar">cool/)
+  assert.match(html, /class="theme-header"/)
+  assert.match(html, /class="theme-footer"/)
+  assert.match(html, /<main>/)
+  assert.doesNotMatch(html, /class="wt-theme-header"/)
+  assert.doesNotMatch(html, /class="wt-theme-footer"/)
+  assert.ok(html.indexOf('theme-header') < html.indexOf('<main>'))
+  assert.ok(html.indexOf('theme-footer') > html.indexOf('</main>'))
 })

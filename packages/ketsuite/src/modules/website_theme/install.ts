@@ -47,6 +47,7 @@ export async function installThemePackage(
     manifest: checked.manifest,
     hash: checked.hash,
     files: checked.files,
+    frameTemplates: checked.frameTemplates,
   })
   if (staged.ok !== true) return { ok: false, errors: (staged.errors as Row[]) ?? [] }
   const id = String(staged.id)
