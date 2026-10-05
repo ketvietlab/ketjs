@@ -477,13 +477,15 @@ const holdersTab = (c: Context): JSXChild =>
 export const roleModalDefinition: RecordModalDefinition<RoleModalData> = {
   kind: 'user.role',
   labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
-  size: 'large',
+  // A name to create; tables of two columns to read; only a custom role's
+  // permission matrix is a dense workspace.
+  size: (c) => (c.creating ? 'small' : managed(c) ? 'default' : 'large'),
   context: {
     fn: 'user.managedRoleModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'action.createRole') : c.data.record.name),
-  description: (c) => (c.creating ? t(c, 'roles.createSubtitle') : c.data.record.description || null),
+  description: (c) => (c.creating ? null : c.data.record.description || null),
   status: (c) =>
     c.creating
       ? undefined

@@ -19,6 +19,10 @@ import { workplaces } from './user-modal-context.ts'
 import { templateTier } from './access-surfaces.ts'
 
 const kinds = ['idpGroup', 'department', 'jobTitle']
+// Sign-in provider groups stay a system matter: a business picks people by the
+// department or job title it knows. A rule already matching a group keeps it.
+const offeredKinds = (current: unknown): string[] =>
+  current === 'idpGroup' ? kinds : kinds.filter((kind) => kind !== 'idpGroup')
 const fail = (field: string, code: string): never =>
   abortAuthorization({ ok: false, errors: [{ field, code }] })
 export const ACCESS_POLICY_EFFECTS = [
@@ -405,7 +409,7 @@ export const accessPolicyFunctions: Record<string, FnSpec> = {
             name: '',
             description: '',
             active: true,
-            matchKind: 'idpGroup',
+            matchKind: 'department',
             matchValue: '',
             roleIds: [],
             scopeKind: 'company',
@@ -441,9 +445,9 @@ export const accessPolicyFunctions: Record<string, FnSpec> = {
           companies: places.companies,
           branches: places.branches,
           scopeKinds: ['tenant', 'company', 'branch'],
-          matchKinds: kinds,
+          matchKinds: offeredKinds(record.matchKind),
           matchOptions: Object.fromEntries(
-            kinds.map((kind) => [
+            offeredKinds(record.matchKind).map((kind) => [
               kind,
               [
                 ...new Map(
