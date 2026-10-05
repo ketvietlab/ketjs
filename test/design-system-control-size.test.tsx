@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { Button, IconButton, LinkButton } from '../packages/design-system/src/primitives/actions/index.tsx'
-import { TextField } from '../packages/design-system/src/forms/scalar-fields/index.tsx'
+import { TextField, Switch } from '../packages/design-system/src/forms/scalar-fields/index.tsx'
 test('large actions preserve native semantics and size hook', () => {
   for (const view of [
     <Button label="Continue" type="submit" size="large" />,
@@ -30,6 +30,10 @@ test('large native and compound fields preserve label and help association', () 
     assert.match(html, /for="account"/)
     assert.match(html, /aria-describedby="account-help"/)
   }
+  assert.match(
+    renderToString(<Switch id="switch" name="switch" label="Switch" size="large" />),
+    /data-size="large"/,
+  )
   assert.doesNotMatch(
     renderToString(<TextField id="default" name="default" label="Default" />),
     /data-size="large"/,

@@ -5206,7 +5206,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system-normalization.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-control-size.test.tsx",
+        "test/design-system-normalization.test.tsx",
+        "test/design-system.test.tsx"
+      ],
       "gapTask": "DS-020"
     },
     {
