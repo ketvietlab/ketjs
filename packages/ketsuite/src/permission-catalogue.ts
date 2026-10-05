@@ -285,10 +285,19 @@ const sources = {
   },
   crm: {
     posture: 'permission-bearing',
-    bundles: ['agent-operate', 'analytics', 'approve', 'assignment', 'configure', 'merge', 'report', 'view'],
+    bundles: [
+      'agent-operate',
+      'analytics',
+      'approve',
+      'assignment',
+      'configure',
+      'merge',
+      'report',
+      'scope-company',
+      'scope-team',
+      'view',
+    ],
     functions: {
-      'access.get': ['read', 'view'],
-      'access.save': ['configure', 'configure', 'crm.configuration-audit'],
       'activity.cancel': ['approve', 'approve', 'crm.domain-policy'],
       'activity.complete': ['approve', 'approve', 'crm.domain-policy'],
       'activity.listMine': ['read', 'view'],
@@ -325,6 +334,8 @@ const sources = {
       overview: ['read', 'report'],
       'pipeline.summary': ['read', 'report'],
       'plan.apply': ['configure', 'configure', 'crm.configuration-audit'],
+      'scope.company': ['sensitive', 'scope-company', 'crm.sensitive-data'],
+      'scope.team': ['sensitive', 'scope-team', 'crm.sensitive-data'],
       'scoreRule.modalContext': ['read', 'view'],
       'scoreRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'stage.list': ['read', 'view'],
@@ -1722,6 +1733,10 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'revenue-operate': { en: 'Manage hospitality revenue', vi: 'Quản lý doanh thu lưu trú' },
   'quote-operate': { en: 'Operate quotations', vi: 'Vận hành báo giá' },
   security: { en: 'Security', vi: 'Bảo mật' },
+  // These widen whose records the rest of a role reaches; without either, a user
+  // works their own records and the teams they lead.
+  'scope-company': { en: 'See the whole company', vi: 'Thấy việc toàn công ty' },
+  'scope-team': { en: 'See their teams', vi: 'Thấy việc của team' },
   sensitive: { en: 'Sensitive data', vi: 'Dữ liệu nhạy cảm' },
   'shift-approve': { en: 'Approve shifts', vi: 'Duyệt ca' },
   'shift-operate': { en: 'Operate shifts', vi: 'Vận hành ca' },
