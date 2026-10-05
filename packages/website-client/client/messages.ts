@@ -161,7 +161,7 @@ export const coreMessages = {
     'website.companyTheme.using': 'Đang dùng {title} · phiên bản {version}',
     'website.companyTheme.none': 'Website đang dùng giao diện có sẵn',
     'website.companyTheme.draftHelp':
-      'Lựa chọn được lưu vào bản nháp giao diện. Khách thấy thay đổi sau lần xuất bản kế tiếp.',
+      'Lưu giao diện để áp dụng ngay cho toàn website. Nội dung trang vẫn xuất bản riêng.',
     'website.companyTheme.name': 'Theme',
     'website.companyTheme.version': 'Phiên bản',
     'website.companyTheme.state': 'Trạng thái',
@@ -174,7 +174,7 @@ export const coreMessages = {
     'website.companyTheme.emptyHelp': 'Theme riêng Két Việt cài cho công ty sẽ hiện ở đây.',
     'website.companyTheme.saveSettings': 'Lưu thiết lập theme',
     'website.companyTheme.clear': 'Quay về giao diện có sẵn',
-    'website.companyTheme.saved': 'Đã lưu giao diện. Xuất bản để khách thấy thay đổi.',
+    'website.companyTheme.saved': 'Đã lưu giao diện cho toàn website.',
     'website.resource.themes.preset': 'Mẫu giao diện',
     'website.option.default': 'Mặc định · Đa ngành',
     'website.option.cosmetics': 'Mỹ phẩm · Lành',
@@ -579,12 +579,12 @@ export const coreMessages = {
     'website.workspace.styles': 'Phong cách toàn site',
     'website.workspace.siteScope': 'Thay đổi dùng chung',
     'website.workspace.affectedPages':
-      'trang và bài viết dùng theme này. Cấu hình mới chỉ công khai sau khi xuất bản.',
+      'trang và bài viết dùng theme này. Lưu để áp dụng ngay cho toàn website.',
     'website.workspace.themeConfirm': 'Tôi đã xem ảnh hưởng tới các trang dùng theme này.',
     'website.workspace.logo': 'Logo',
     'website.workspace.logoHelp':
       'Hiện ở đầu trang thay cho tên site. Ảnh ngang, nền trong suốt trông gọn nhất.',
-    'website.workspace.saveTheme': 'Lưu phong cách vào bản nháp',
+    'website.workspace.saveTheme': 'Lưu phong cách',
     'website.workspace.themePermission': 'Cần quyền quản trị website để thay đổi phong cách dùng chung.',
     'website.resource.noParent': 'Không có chủ đề cha',
     'website.resource.requirement': 'Yêu cầu nhập',
