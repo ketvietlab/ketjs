@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { Script } from 'node:vm'
+import { componentRegistry } from '../packages/design-system/src/catalogue/registry.ts'
 import { materializeAtlasDesignSystem } from '../packages/design-system/src/atlas-cli.ts'
 
 test('design system: KetAtlas materialization is complete and reproducible', () => {
@@ -47,7 +48,7 @@ test('design system: KetAtlas materialization is complete and reproducible', () 
     assert.equal(lock.schemaVersion, 'ketatlas.design-system-lock.v1')
     assert.equal(lock.adapterSchemaVersion, 'ketatlas.design-system-adapter.v1')
     assert.equal(lock.adapter, '@ketvietlab/design-system')
-    assert.equal(lock.registeredComponents, 136)
+    assert.equal(lock.registeredComponents, componentRegistry.length)
     assert.deepEqual(
       lock.files.map((file) => file.path),
       [
