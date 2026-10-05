@@ -1,0 +1,21 @@
+/* Opt-in large controls; existing defaults and density remain unchanged. */
+@layer ket.theme {
+  :root,
+  [data-kv-design-system] {
+    --kv-control-height-large: 2.25rem;
+  }
+  @media (max-width: 47.9375rem) {
+    :root,
+    [data-kv-design-system] {
+      --kv-control-height-large: 2.75rem;
+    }
+  }
+}
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="field"][data-size="large"] {
+    --kv-control-height: var(--kv-control-height-large);
+  }
+  :where([data-kv-design-system]) [data-ui="action"][data-size="large"] {
+    --kv-action-height: var(--kv-control-height-large);
+  }
+}

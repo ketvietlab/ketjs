@@ -10,6 +10,7 @@ import {
   visibleCases,
 } from '../operations.ts'
 import { activityEffects, caseReadEffects } from './shared.ts'
+import { AUTHORIZATION_READ_EFFECTS } from '../../user/authorization.ts'
 
 export const activityFunctions: Record<string, FnSpec> = {
   /**
@@ -40,7 +41,7 @@ export const activityFunctions: Record<string, FnSpec> = {
       'read:crm.Case',
       'read:crm.Team',
       'read:crm.TeamMember',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:activity.Activity',
       'read:user.User',
     ],

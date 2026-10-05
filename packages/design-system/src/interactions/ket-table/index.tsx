@@ -4,6 +4,7 @@ import { Avatar, Badge, Code } from '../../primitives/status/index.tsx'
 import type { Tone } from '../../primitives/status/index.tsx'
 import { EmptyState, Notice } from '../../primitives/feedback/index.tsx'
 import { FormattedDate, FormattedMoney, FormattedNumber } from '../../record/formatted-values/index.tsx'
+import { selectionRange } from './selection.ts'
 
 export const HOOKS = [
   'ket-table',
@@ -331,12 +332,33 @@ export function createKetTableView(
   }
   const idOf = (row: KetTableRow): string => string(row[config.idField])
   const isSelected = (row: KetTableRow): boolean => selectedIds().has(idOf(row))
+  // A row is announced by its leading cell (the name the reader sees), falling back to its id.
+  const rowNameOf = (row: KetTableRow): string => {
+    const lead = config.columns[0] ? row[config.columns[0].key] : undefined
+    return typeof lead === 'string' && lead.trim()
+      ? lead
+      : typeof lead === 'number'
+        ? String(lead)
+        : idOf(row)
+  }
 
-  const toggleSelect = (row: KetTableRow): void => {
+  // The row a Shift-click extends from: the last row the reader toggled.
+  let selectionAnchor: string | null = null
+
+  /**
+   * Toggle one row, or with `extend` every visible row from the anchor to it.
+   * The whole range takes the state the clicked row moves to, so a Shift-click
+   * on a checked row clears the range as readily as one on an empty row fills it.
+   */
+  const toggleSelect = (row: KetTableRow, extend = false): void => {
     const id = idOf(row)
     const next = new Set(selectedIds())
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    const select = !next.has(id)
+    for (const key of selectionRange(visibleRows().map(idOf), selectionAnchor, id, extend)) {
+      if (select) next.add(key)
+      else next.delete(key)
+    }
+    selectionAnchor = id
     selectedIds.set(next)
   }
 
@@ -557,7 +579,13 @@ export function createKetTableView(
     >
       {config.selection ? (
         <td data-ui="kt-select-cell">
-          <label data-ui="kt-selection-target">
+          <label
+            data-ui="kt-selection-target"
+            // Shift extends the selection; without this it also extends the text selection.
+            onMouseDown={(event: MouseEvent) => {
+              if (event.shiftKey) event.preventDefault()
+            }}
+          >
             <input
               data-ui="kt-row-select"
               type="checkbox"
@@ -566,8 +594,8 @@ export function createKetTableView(
               value={server ? '1' : undefined}
               form={server ? config.selection.formId : undefined}
               checked={isSelected(row)}
-              aria-label={`${labels.selectRow}: ${idOf(row)}`}
-              onChange={() => toggleSelect(row)}
+              aria-label={`${labels.selectRow}: ${rowNameOf(row)}`}
+              onClick={(event: Event) => toggleSelect(row, (event as MouseEvent).shiftKey)}
             />
           </label>
         </td>

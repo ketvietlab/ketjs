@@ -568,6 +568,11 @@ export const AUTHORIZATION_EFFECTS = [
   'read:company.Branch',
 ]
 
+/** What reading somebody's effective permissions touches — for a module that derives access from a role. */
+export const AUTHORIZATION_READ_EFFECTS = AUTHORIZATION_EFFECTS.filter(
+  (effect) => !effect.startsWith('write:'),
+)
+
 export const authorizationFunctions: Record<string, FnSpec> = {
   authorizationState: defineFn({
     input: {},
@@ -606,7 +611,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       functions: 'json',
       issues: 'json',
     },
-    effects: AUTHORIZATION_EFFECTS.filter((effect) => !effect.startsWith('write:')),
+    effects: AUTHORIZATION_READ_EFFECTS,
     handler: (ctx: Ctx, args) =>
       resolveEffectivePermissions(ctx, String(args.userId), {
         companyId: args.companyId as string | null | undefined,
