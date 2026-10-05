@@ -9923,6 +9923,7 @@
         "test/website-studio-public-http.test.ts",
         "test/website-studio-publishing.test.ts",
         "test/website-studio-taxonomy-http.test.ts",
+        "test/website-theme.test.ts",
         "test/websocket.test.ts",
         "test/workspace.test.ts"
       ],

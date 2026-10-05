@@ -28,6 +28,7 @@ export const commonBusinessModules = [
   suite.websiteMenu,
   suite.websiteSeo,
   suite.websiteSearch,
+  suite.websiteTheme,
   suite.livedoc,
   ...staffChannelModules,
   suite.address,
@@ -94,6 +95,7 @@ export function productPermissions(
       ...roleTemplates,
       ...(names.includes('website_backend') ? suite.websiteRoleTemplates : {}),
       ...(names.includes('website_customer_mail') ? suite.websiteCustomerMailRoleTemplates : {}),
+      ...(names.includes('website_theme') ? suite.websiteThemeRoleTemplates : {}),
     },
   }
 }

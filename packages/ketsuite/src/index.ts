@@ -10,7 +10,11 @@ export {
   ketsuitePermissionModules,
 } from './permission-catalogue.ts'
 export { ketsuiteRoleTemplates } from './role-templates.ts'
-export { websiteCustomerMailRoleTemplates, websiteRoleTemplates } from './website-role-templates.ts'
+export {
+  websiteCustomerMailRoleTemplates,
+  websiteRoleTemplates,
+  websiteThemeRoleTemplates,
+} from './website-role-templates.ts'
 export { DEFAULT_PHONE_REGION, normalizePhone, phoneKey, phoneSearchFragment } from './phone.ts'
 export {
   customerAccessEffects,
@@ -66,6 +70,14 @@ export { default as website } from './modules/website/index.ts'
 export { default as websiteMenu } from './modules/website_menu/index.ts'
 export { default as websiteSeo } from './modules/website_seo/index.ts'
 export { default as websiteSearch } from './modules/website_search/index.ts'
+export { default as websiteTheme } from './modules/website_theme/index.ts'
+export {
+  checkThemePackage,
+  installThemePackage,
+  installWebsiteTheme,
+  readThemeDirectory,
+} from './modules/website_theme/index.ts'
+export type { SelectedTheme, ThemeInstallResult, ThemeManifest } from './modules/website_theme/index.ts'
 export { default as websiteForm } from './modules/website_form/index.ts'
 export { default as websiteFormMail } from './modules/website_form_mail/index.ts'
 export { default as websiteCustomerMail } from './modules/website_customer_mail/index.ts'
