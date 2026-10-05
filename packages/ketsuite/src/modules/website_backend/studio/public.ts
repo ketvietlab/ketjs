@@ -53,6 +53,19 @@ export const customerReturnPath = (value: unknown): string => {
   return path === CUSTOMER_SIGNIN_PATH || path.startsWith(`${CUSTOMER_SIGNIN_PATH}?`) ? '/' : path
 }
 
+/**
+ * A file a deployment module serves under the asset prefix, as a page may load it. Only a same-origin
+ * `/_ket/asset/` path to a script or a stylesheet passes, so a page of the site never pulls in code
+ * from another origin or from a query string.
+ */
+export const embedAssetPath = (value: unknown, extension: 'mjs' | 'css'): string | null => {
+  const path = typeof value === 'string' ? value : ''
+  return new RegExp(`^/_ket/asset/[a-z0-9_]+(?:/[A-Za-z0-9._-]+)+\\.${extension}$`).test(path) &&
+    !path.includes('..')
+    ? path
+    : null
+}
+
 /** Application-owned presenter, never executable uploaded theme code. Legacy domains keep KTL. */
 export function renderStudioPublic(scope: Record<string, unknown>) {
   if (!scope.appearance || !object(scope.page).id || !supported(placements(scope.sections))) return null
@@ -112,6 +125,9 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   const receipt = record.type === 'website.formReceipt' ? object(fields.receipt) : null
   const signin = record.type === 'website.customerSignin' ? object(fields.signin) : null
   const customer = record.type === 'website.customerAccount' ? object(fields.customer) : null
+  // A deployment module's own page in the site's frame: it brings a script that fills the mount.
+  const embed = record.type === 'website.customerEmbed' ? object(fields.embed) : null
+  const embedScript = embed ? embedAssetPath(embed.script, 'mjs') : null
   const listing: WebsitePublicListing | null = archive
     ? {
         kind: 'archive',
@@ -148,13 +164,20 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
               returnTo: customerReturnPath(signin.returnTo),
               selfSignup: signin.selfSignup === true,
             }
-          : customer && ['profile', 'register', 'forgot', 'reset'].includes(String(customer.view))
+          : embed && embedScript
             ? {
-                kind: 'customer',
+                kind: 'embed',
                 title: record.title,
-                view: customer.view as 'profile' | 'register' | 'forgot' | 'reset',
+                script: embedScript,
+                style: embedAssetPath(embed.style, 'css'),
               }
-            : null
+            : customer && ['profile', 'register', 'forgot', 'reset'].includes(String(customer.view))
+              ? {
+                  kind: 'customer',
+                  title: record.title,
+                  view: customer.view as 'profile' | 'register' | 'forgot' | 'reset',
+                }
+              : null
   // The header offers the sign-in only where the site chose to; the sign-in page needs no link to itself.
   const here = customerReturnPath(record.path)
   const account =
