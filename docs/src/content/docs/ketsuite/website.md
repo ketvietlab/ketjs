@@ -324,6 +324,23 @@ and a rollback renders with the version that was live then. `versionId: null` re
 preset. Choosing needs the `website.themes` role; the theme runs code on the site, so it is not part of
 `website.designer`.
 
+In the Studio, the site's **Giao diện** page lists the company's themes under the style form, for an
+actor the bootstrap grants `website.theme.select`. That capability needs both functions above, and
+the deployment composing `website_theme`. A designer chooses a theme there, edits its settings, moves
+to a newer version of the theme in use (keeping the settings it still declares), or returns to the
+preset. A setting can name itself for the Studio in the manifest:
+
+```jsonc
+// File: themes/acme/theme.json (excerpt)
+"settings": {
+  "tone": { "type": "enum", "values": ["warm", "cool"], "label": "Tông màu", "labels": { "warm": "Ấm", "cool": "Lạnh" } },
+  "banner": { "type": "bool", "default": true, "label": "Hiện dải thông báo" }
+}
+```
+
+`label` and each of `labels` are 1 to 80 characters, and `labels` may only name declared values.
+Without them the Studio shows the setting's name and raw values.
+
 ### What the page gets
 
 A themed page adds, after `public.css`, the theme's stylesheet and `data-site-theme="<key>"` on the

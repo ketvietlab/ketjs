@@ -33,6 +33,16 @@ const MANIFEST_KEYS = new Set([
 
 const sha256 = (bytes: Uint8Array | string): string => createHash('sha256').update(bytes).digest('hex')
 
+/** What the Studio calls a setting or one of its values; the theme's own words, never markup. */
+const shortText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && value.length <= 80
+const labelOf = (spec: Record<string, unknown>) =>
+  spec.label !== undefined ? { label: spec.label as string } : {}
+const labelsFit = (labels: unknown, values: string[]) =>
+  labels === undefined ||
+  (plain(labels) &&
+    Object.entries(labels).every(([value, label]) => values.includes(value) && shortText(label)))
+
 /**
  * A theme's settings schema, which replaces the fixed accent/font enums for a site using the theme.
  * Kept small and closed: a value is chosen in the Studio and lands in public markup.
@@ -48,7 +58,7 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
   const settings: Record<string, ThemeSetting> = {}
   for (const [name, spec] of entries) {
     const bad = () => issues.push({ code: 'manifestSettings', detail: `settings.${name}` })
-    if (!SETTING_NAME.test(name) || !plain(spec)) {
+    if (!SETTING_NAME.test(name) || !plain(spec) || (spec.label !== undefined && !shortText(spec.label))) {
       bad()
       continue
     }
@@ -59,7 +69,8 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
         !values.length ||
         values.length > 20 ||
         values.some((item) => !/^[a-z0-9][a-z0-9-]{0,40}$/.test(item)) ||
-        (spec.default !== undefined && !values.includes(spec.default as string))
+        (spec.default !== undefined && !values.includes(spec.default as string)) ||
+        !labelsFit(spec.labels, values)
       )
         bad()
       else
@@ -67,6 +78,8 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
           type: 'enum',
           values,
           ...(spec.default ? { default: spec.default as string } : {}),
+          ...labelOf(spec),
+          ...(spec.labels !== undefined ? { labels: spec.labels as Record<string, string> } : {}),
         }
     } else if (spec.type === 'text') {
       const max = spec.maxLength
@@ -83,10 +96,16 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
           type: 'text',
           maxLength: max as number,
           ...(spec.default !== undefined ? { default: spec.default as string } : {}),
+          ...labelOf(spec),
         }
     } else if (spec.type === 'bool') {
       if (spec.default !== undefined && typeof spec.default !== 'boolean') bad()
-      else settings[name] = { type: 'bool', ...(spec.default !== undefined ? { default: spec.default } : {}) }
+      else
+        settings[name] = {
+          type: 'bool',
+          ...(spec.default !== undefined ? { default: spec.default } : {}),
+          ...labelOf(spec),
+        }
     } else bad()
   }
   return settings
