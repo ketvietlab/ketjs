@@ -1383,6 +1383,13 @@ export async function bootDeployment(
             // It was hardcoded there, which made i18n untrue on the first tag of every
             // storefront page.
             const locale = resolvedSite?.locale ?? localeOf(url, req)
+            // What a renderer needs to know about the request itself, not the page: whether it is a
+            // preview, and whether a staff session came with it. Code a site runs in the browser must
+            // never share a page with either.
+            const request = {
+              preview: isPreviewRequest(url),
+              staff: (await requestIdentityOf(url, req)) !== null,
+            }
             // A preview reads by token, not by path: the draft has no address
             // on the site yet, which is the whole reason a link is needed.
             const row = (
@@ -1414,6 +1421,7 @@ export async function bootDeployment(
               return {
                 site,
                 locale,
+                request,
                 page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' },
                 sections: [],
                 // Answered as a page, but a crawler must not index it as one.
@@ -1438,6 +1446,7 @@ export async function bootDeployment(
             return {
               site,
               locale,
+              request,
               menu,
               page: { id: row.id, path: row.path ?? url.pathname, title: row.title, type: row.type },
               fields: row.fields ?? {},
