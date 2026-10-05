@@ -402,7 +402,10 @@ test('design system: a label sits beside its control from tablet width and above
   // Két Design System visual contract L7. The browser check measures this on /layering at 1440 and 390 px;
   // this keeps the rule from being dropped where CI does not run a browser.
   const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
-  assert.match(css, /:has\(> \[data-ui="field"\]\) \{\s+container-type: inline-size;/u)
+  assert.match(
+    css,
+    /:has\(> \[data-ui="field"\]\):not\(\[data-ui="date-inputs"\]\):not\(\[data-ui="date-range"\]\):not\(\s*\[data-ui="date-time-picker"\]\s*\) \{\s+container-type: inline-size;/u,
+  )
   for (const query of ['@media (max-width: 47.9375rem)', '@container (max-width: 28rem)']) {
     const start = css.indexOf(query)
     assert.notEqual(start, -1, query)
@@ -2180,7 +2183,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 137)
+  assert.equal(names.length, 138)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2217,8 +2220,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 309)
-  assert.equal(designSystemInventory.summary.runtimeExports, 145)
+  assert.equal(designSystemInventory.summary.publicExports, 312)
+  assert.equal(designSystemInventory.summary.runtimeExports, 147)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
