@@ -98,6 +98,7 @@ test('a theme package is refused for every way it could reach outside its own si
 test('an installed theme is offered, chosen, published and served from tenant storage', async (t) => {
   let base: Storage | null = null
   const { app, fixture, revision } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
     openStorage: (config) => (base = storageFromConfig(config)),
   })
   t.after(() => app.close())
@@ -105,7 +106,7 @@ test('an installed theme is offered, chosen, published and served from tenant st
   const install = (packageFiles: Record<string, Uint8Array>, company = 'studio-a') =>
     installThemePackage(
       {
-        storage: namespacedStorage(base!, 'ketsuite'),
+        storage: namespacedStorage(base!, 'commerce'),
         call: async (fn, input) =>
           (await app.fixture.call<Row>(fn, input, { scope: { company, branches: null } })).value,
       },
@@ -245,7 +246,9 @@ test('an installed theme is offered, chosen, published and served from tenant st
     expectedRevisionId: repicked.value.revisionId,
     values: { footer: 'Themed footer' },
   })
-  assert.doesNotMatch(await (await anonymous.get('/')).text(), /data-site-theme/, 'a draft is not live')
+  const immediately = await (await anonymous.get('/')).text()
+  assert.match(immediately, /data-site-theme="acme"/, 'theme save applies immediately')
+  assert.match(immediately, /Themed footer/, 'site style save applies without publishing the page')
   await publish()
 
   const page = await anonymous.get('/')

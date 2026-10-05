@@ -3,24 +3,31 @@ import type { Row, OpenStorage } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { websiteBackendWith } from '@ketvietlab/ketsuite'
 import type { StudioOptions } from '@ketvietlab/ketsuite'
+import { createCommerceDeployment } from '@ketvietlab/ketsuite/deployment'
 import { ketsuite } from '../../apps/ketsuite/deployment.ts'
 
 export async function bootWebsiteStudio(
   port?: number,
-  options: { worker?: boolean; openStorage?: OpenStorage; studio?: StudioOptions } = {},
+  options: {
+    worker?: boolean
+    openStorage?: OpenStorage
+    studio?: StudioOptions
+    deployment?: 'commerce'
+  } = {},
 ) {
   const { studio } = options
+  const deployment = options.deployment === 'commerce' ? createCommerceDeployment() : ketsuite
   const app = await createTestDeployment(
     {
-      ...ketsuite,
+      ...deployment,
       ...(studio
         ? {
-            modules: ketsuite.modules.map((m) =>
+            modules: deployment.modules.map((m) =>
               typeof m === 'object' && m.name === 'website_backend' ? websiteBackendWith(studio) : m,
             ),
           }
         : {}),
-      ...(options.openStorage ? { serve: { ...ketsuite.serve, openStorage: options.openStorage } } : {}),
+      ...(options.openStorage ? { serve: { ...deployment.serve, openStorage: options.openStorage } } : {}),
     },
     { worker: options.worker ?? false, ...(port ? { port } : {}) },
   )

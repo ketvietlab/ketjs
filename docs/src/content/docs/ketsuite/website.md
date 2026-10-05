@@ -314,13 +314,13 @@ Install refuses a package that could reach beyond its own site root:
 | `frameUnsupported` | KTL frame slots are not compiled from storage yet. |
 | `fileName`, `fileType` | A nested or upper-case name, a name starting with `_`, or a type outside the list above. |
 
-### Choosing and publishing
+### Choosing and applying
 
 `website_theme.listThemes` offers the bundled presets and the company's themes at their newest
 available version. `website_theme.selectTheme` writes the choice and its settings into the site's
-style, under the same revision check as `website.saveStudioStyle`. A later style save keeps it. Like
-any style change it is a draft: publishing freezes the theme version with the rest of the appearance,
-and a rollback renders with the version that was live then. `versionId: null` returns the site to its
+style, under the same revision check as `website.saveStudioStyle`. A later style save keeps it. A
+successful save applies to all published pages immediately, while page content still has its own
+publish step. Rolling back a page revision does not roll back the site theme. `versionId: null` returns the site to its
 preset. Choosing needs the `website.themes` role; the theme runs code on the site, so it is not part of
 `website.designer`.
 
@@ -1323,13 +1323,12 @@ semantics remain unchanged, and taxonomy ownership is not covered by this entry-
 
 ## Studio site appearance
 
-`website.saveStudioStyle` updates the site's draft appearance using `expectedRevisionId` and an atomic
+`website.saveStudioStyle` updates the site's live appearance using `expectedRevisionId` and an atomic
 compare-and-set on `Site.styleRevision`. Accepted values are title, preset, accent, font, spacing,
-buttons, logo and footer. This does not create a page revision or publish content. Studio's frame and
-authenticated preview read `Site.studioStyle`. Publishing freezes that configuration in
-`Entry.publishedAppearance`; scheduling freezes it in `scheduledAppearance`. The worker promotes the
-scheduled snapshot rather than reading later draft configuration. Cancel, unpublish and archive clear
-the corresponding snapshot.
+buttons, account, logo and footer. This does not create a page revision or publish content. Studio's
+frame, authenticated preview and public delivery read `Site.studioStyle`. Existing publication and
+scheduled appearance snapshots remain stored for history; live site appearance takes precedence when
+rendering. Page rollback and scheduled publication change content, not current site style.
 
 The function belongs to `website.configure` with the `website.configuration-audit` policy marker.
 The managed `website.designer` role includes author and configure capabilities, not publishing.

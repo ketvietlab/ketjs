@@ -11,9 +11,8 @@ const issue = (field: string, message: string) => ({ ok: false, errors: [{ field
  * Put a site on one of its company's available theme versions, or back on its bundled preset.
  *
  * It writes `studioStyle.theme` under the same revision check as `website.saveStudioStyle`, which
- * merges its own keys and so keeps the theme. Like any style change it is a draft until the site
- * publishes: publishing freezes the theme with the rest of the appearance, and a rollback renders with
- * the version that was live then.
+ * merges its own keys and so keeps the theme. Delivery reads site appearance live; page publication
+ * freezes content only. A later theme choice therefore applies across existing published pages.
  */
 export async function selectThemeHandler(ctx: Ctx, args: Row) {
   const site = (await ctx.db.select('website.Site', { id: args.siteId }))[0]
