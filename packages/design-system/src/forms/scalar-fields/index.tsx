@@ -135,6 +135,7 @@ export const Switch = (props: SwitchProps): TemplateResult => {
       required={props.required}
       labelHidden={props.labelHidden}
       span={props.span}
+      size={props.size}
       kind="switch"
       control={
         <label data-ui="switch-control">
