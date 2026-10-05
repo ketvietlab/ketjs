@@ -27,7 +27,7 @@ export type CompanyTheme = {
   version: string
   settings: Record<string, ThemeSetting>
 }
-/** What the site's draft style holds once a company theme is chosen. */
+/** What the site's saved style holds once a company theme is chosen. */
 type Selected = {
   key: string
   versionId: string
@@ -45,7 +45,7 @@ const settingName = (name: string) => `theme-setting-${name}`
 
 /**
  * The company's own themes on the site's style page. A theme replaces the bundled preset's look; the
- * choice is a draft, as every style change is, and reaches visitors with the next publish.
+ * choice applies across published pages as soon as the style save succeeds.
  */
 export function companyThemeSection(ctx: StudioContext, record: ResourceRecord) {
   const tr = ctx.tr
@@ -217,7 +217,15 @@ export function companyThemeCommands(ctx: StudioContext, current: () => Resource
       const kept =
         selected?.key === theme.key
           ? Object.fromEntries(
-              Object.entries(selected.settings).filter(([name]) => Object.hasOwn(theme.settings, name)),
+              Object.entries(selected.settings).filter(([name, value]) => {
+                if (!Object.hasOwn(theme.settings, name)) return false
+                const spec = theme.settings[name]!
+                return spec.type === 'enum'
+                  ? typeof value === 'string' && spec.values.includes(value)
+                  : spec.type === 'text'
+                    ? typeof value === 'string' && value.length <= spec.maxLength
+                    : typeof value === 'boolean'
+              }),
             )
           : undefined
       await select(theme.id, kept)
