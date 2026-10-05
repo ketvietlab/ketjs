@@ -251,7 +251,10 @@ export function createRelationSelectView(
     await loadRows()
   }
 
-  const closeDialog = (): void => {
+  const closeDialog = (event?: Event): void => {
+    // A manager dialog may sit inside a record modal. Closing this layer must
+    // not reach the record modal's document-level close handler.
+    event?.stopPropagation()
     dialog.set(false)
     editor.set(null)
     pendingRemove.set('')
