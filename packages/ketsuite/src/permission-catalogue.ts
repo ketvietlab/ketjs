@@ -285,10 +285,19 @@ const sources = {
   },
   crm: {
     posture: 'permission-bearing',
-    bundles: ['agent-operate', 'analytics', 'approve', 'assignment', 'configure', 'merge', 'report', 'view'],
+    bundles: [
+      'agent-operate',
+      'analytics',
+      'approve',
+      'assignment',
+      'configure',
+      'merge',
+      'report',
+      'scope-company',
+      'scope-team',
+      'view',
+    ],
     functions: {
-      'access.get': ['read', 'view'],
-      'access.save': ['configure', 'configure', 'crm.configuration-audit'],
       'activity.cancel': ['approve', 'approve', 'crm.domain-policy'],
       'activity.complete': ['approve', 'approve', 'crm.domain-policy'],
       'activity.listMine': ['read', 'view'],
@@ -325,6 +334,8 @@ const sources = {
       overview: ['read', 'report'],
       'pipeline.summary': ['read', 'report'],
       'plan.apply': ['configure', 'configure', 'crm.configuration-audit'],
+      'scope.company': ['sensitive', 'scope-company', 'crm.sensitive-data'],
+      'scope.team': ['sensitive', 'scope-team', 'crm.sensitive-data'],
       'scoreRule.modalContext': ['read', 'view'],
       'scoreRule.save': ['configure', 'configure', 'crm.configuration-audit'],
       'stage.list': ['read', 'view'],
@@ -1529,6 +1540,18 @@ const sources = {
       submissionReceipt: ['internal-route', 'website_form.public-submit-route'],
     },
   },
+  website_customer_mail: {
+    posture: 'projection/bridge',
+    bundles: ['configure', 'view'],
+    functions: {
+      passwordResetTemplate: ['read', 'view'],
+      savePasswordResetTemplate: ['configure', 'configure', 'website_customer_mail.configuration-audit'],
+    },
+    exemptions: {
+      // Only the customer API's forgot-password route, after it recorded the reset.
+      mailPasswordReset: ['internal-route', 'channel_api.customer-password-forgot-route'],
+    },
+  },
   website_form_mail: {
     posture: 'projection/bridge',
     bundles: ['operate'],
@@ -1618,11 +1641,13 @@ const sources = {
       resetCustomerPassword: ['security', 'security', 'website.security-audit'],
       setCustomerSelfSignup: ['security', 'security', 'website.security-audit'],
       customerAccessForSite: ['read', 'security'],
+      listCustomerAccounts: ['read', 'security'],
       restoreRevision: ['operate', ['operate', 'author']],
       unpublishEntry: ['configure', ['configure', 'publish'], 'website.configuration-audit'],
       // Whoever can share a draft can take the link back.
       revokePreviewTokens: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
+      verifyDomain: ['configure', 'configure', 'website.configuration-audit'],
       saveEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       savePage: ['configure', ['configure', 'author'], 'website.configuration-audit'],
@@ -1640,11 +1665,15 @@ const sources = {
     exemptions: {
       // Only the Studio upload route, after it has checked `website.saveEntry` and the entry's site.
       stageImage: ['internal-route', 'website_backend.image-upload'],
+      // Két Việt sets it once a host answers over HTTPS; no tenant role reaches it.
+      markDomainServing: ['internal-route', 'website.domain-serving-operator'],
       completeImage: ['internal-route', 'website_backend.image-upload'],
       // Only the image file route; the handler serves published images and otherwise needs site access.
       imageForReader: ['internal-route', 'website_backend.image-download'],
       authenticateCustomer: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       changeCustomerPassword: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      completeCustomerPasswordReset: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      requestCustomerPasswordReset: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       claimChannelRateSlot: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       customerRealmByKey: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       customerRealmForSite: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
@@ -1704,6 +1733,10 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'revenue-operate': { en: 'Manage hospitality revenue', vi: 'Quản lý doanh thu lưu trú' },
   'quote-operate': { en: 'Operate quotations', vi: 'Vận hành báo giá' },
   security: { en: 'Security', vi: 'Bảo mật' },
+  // These widen whose records the rest of a role reaches; without either, a user
+  // works their own records and the teams they lead.
+  'scope-company': { en: 'See the whole company', vi: 'Thấy việc toàn công ty' },
+  'scope-team': { en: 'See their teams', vi: 'Thấy việc của team' },
   sensitive: { en: 'Sensitive data', vi: 'Dữ liệu nhạy cảm' },
   'shift-approve': { en: 'Approve shifts', vi: 'Duyệt ca' },
   'shift-operate': { en: 'Operate shifts', vi: 'Vận hành ca' },

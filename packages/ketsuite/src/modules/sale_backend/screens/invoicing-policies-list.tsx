@@ -34,6 +34,20 @@ export const invoicingPolicyColumns = (_: Translator): Array<Column<InvoicingPol
     cell: (row) => String(row.name),
   },
   {
+    key: 'sku',
+    label: _('sale_backend.field.sku'),
+    wrap: true,
+    kind: 'identifier',
+    cell: (row) => String(row.sku || '—'),
+  },
+  {
+    key: 'category',
+    label: _('sale_backend.field.category'),
+    wrap: true,
+    cell: (row) => String(row.category || '—'),
+  },
+  { key: 'uom', label: _('sale_backend.field.uom'), cell: (row) => String(row.uom || '—') },
+  {
     key: 'policy',
     label: _('sale_backend.field.invoicePolicy'),
     priority: 'secondary',

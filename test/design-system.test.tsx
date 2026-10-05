@@ -33,6 +33,7 @@ import {
   Disclosure,
   Field,
   FileUpload,
+  DropZone,
   FilterBar,
   FormPage,
   FormattedDate,
@@ -418,6 +419,28 @@ test('design system: a label sits beside its control from tablet width and above
   // Label stacking belongs to Field; form columns may align their label tracks.
   const recordForm = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
   assert.doesNotMatch(recordForm, /\[data-ui="field-label"\]/u)
+})
+
+test('design system: single checkboxes keep the box beside a full-width label', () => {
+  const field = renderToString(
+    <Field id="default-filter" name="default" type="checkbox" label="Đặt làm bộ lọc mặc định" span="full" />,
+  )
+  assert.match(field, /for="default-filter"/u)
+  assert.match(field, /type="checkbox"[^>]*name="default"/u)
+  const css = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  assert.match(css, /\[data-kind="checkbox"\] \{[^}]*grid-template-columns: 1rem minmax\(0, 1fr\);/u)
+  const form = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.equal(
+    (form.match(/\[data-span="full"\]:not\(\[data-kind="group"\]\):not\(\[data-kind="checkbox"\]\)/gu) ?? [])
+      .length,
+    2,
+  )
+})
+
+test('design system: mobile page titles do not reserve an empty action row', () => {
+  const css = readFileSync('packages/design-system/src/patterns/page-shell/styles.css', 'utf8')
+  const mobile = css.slice(css.indexOf('@media (max-width: 42rem)'))
+  assert.match(mobile, /\[data-kv-page-identity="title-row"\] \{\s+min-block-size: 0;/u)
 })
 
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
@@ -2160,7 +2183,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 137)
+  assert.equal(names.length, 138)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -2197,8 +2220,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 309)
-  assert.equal(designSystemInventory.summary.runtimeExports, 145)
+  assert.equal(designSystemInventory.summary.publicExports, 312)
+  assert.equal(designSystemInventory.summary.runtimeExports, 147)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
@@ -2396,6 +2419,24 @@ test('design system: modal and section headings retain distinct type levels', ()
   assert.match(modal, /font-size: var\(--kv-text-xl\)/)
 })
 
+test('design system: a modal group heading is one step above its body and an item heading', () => {
+  const layering = readFileSync('packages/design-system/src/layouts/layering/styles.css', 'utf8')
+  const start = layering.indexOf('A modal flattens its groups')
+  assert.ok(start > 0, 'the modal heading tier is documented in the layering rules')
+  const rules = layering.slice(start).split('}')
+  const group = rules[0] ?? ''
+  const item = rules[1] ?? ''
+  assert.match(group, /\[data-ui="modal-sheet"\], \[data-ui="dialog"\]\) \[data-ui="section-title"\]/)
+  assert.match(group, /\[data-ui="surface"\]\s+\[data-ui="surface-title"\]/)
+  assert.match(group, /font-size: var\(--kv-text-md\)/)
+  assert.match(group, /line-height: var\(--kv-line-md\)/)
+  assert.match(
+    item,
+    /:is\(\[data-ui="section"\], \[data-ui="surface"\]\)\s+:is\(\[data-ui="section"\], \[data-ui="surface"\]\)/,
+  )
+  assert.match(item, /font-size: var\(--kv-text-sm\)/)
+})
+
 test('design system: Stack gap variants own their gap above legacy backend styles', () => {
   for (const variant of ['compact', 'loose']) {
     const selector = `[data-ui="stack"][data-pattern="stack"][data-gap="${variant}"]`
@@ -2452,4 +2493,110 @@ test('design system: empty Kanban lanes retain an accessible drop target', () =>
   assert.doesNotMatch(populated, /data-ui="kanban-empty"/)
   const readOnly = renderToString(<KanbanCard id="readonly" title="Read only" href="#record" />)
   assert.doesNotMatch(readOnly, /draggable="true"/)
+})
+
+test('design system: three-column RecordForm preserves native field and submit semantics', () => {
+  const props = {
+    action: '/purchase/lines',
+    submitLabel: 'Add line',
+    fields: ['product', 'quantity', 'price'].map((name) => ({
+      id: `purchase-${name}`,
+      name,
+      label: name,
+      required: true,
+    })),
+  }
+  const body = renderToString(<RecordForm {...props} columns={3} />)
+  assert.match(body, /<form[^>]*action="\/purchase\/lines"[^>]*method="post"/u)
+  assert.match(body, /data-ui="form-grid" data-columns="3"/u)
+  for (const name of ['product', 'quantity', 'price']) {
+    assert.match(body, new RegExp(`for="purchase-${name}"`, 'u'))
+    assert.match(body, new RegExp(`name="${name}"`, 'u'))
+  }
+  assert.match(body, /type="submit"/u)
+  assert.doesNotMatch(renderToString(<RecordForm {...props} />), /data-columns="3"/u)
+  const css = readFileSync('packages/design-system/src/patterns/record-form/styles.css', 'utf8')
+  assert.match(css, /@container record-form \(min-width: 56rem\)/u)
+  assert.match(css, /\[data-ui="form-grid"\]\[data-columns="3"\] \{[^}]*repeat\(3, minmax\(0, 1fr\)\)/u)
+})
+
+test('design system: SearchFilter bounds the whole group and lets narrow content wrap', () => {
+  const css = readFileSync('packages/design-system/src/interactions/search-filter/styles.css', 'utf8')
+  const root = css.match(/\[data-ui="search-filter"\] \{[^}]*\}/u)?.[0] ?? ''
+  assert.match(root, /inline-size: 100%;/u)
+  assert.match(root, /max-inline-size: 48rem;/u)
+  assert.match(root, /min-inline-size: 0;/u)
+  assert.match(css, /\[data-ui="search-filter-facets"\] \{[^}]*flex-wrap: wrap;/u)
+  assert.match(css, /\[data-ui="search-filter-facet"\] \{[^}]*max-inline-size: 100%;/u)
+})
+
+test('design system: image DropZone keeps one focusable native target over its preview', () => {
+  const html = String(
+    renderToString(
+      DropZone({
+        id: 'photo',
+        name: 'photo',
+        label: 'Upload image',
+        preview: { src: '/photo.png', alt: 'Product' },
+        accept: 'image/*',
+        status: 'Drop image here',
+        error: 'Too large',
+        disabled: true,
+        dragging: true,
+      }),
+    ),
+  )
+  assert.match(html, /data-kind="drop-zone"[^>]*data-label-hidden="true"/)
+  assert.match(html, /data-ui="drop-zone" data-preview="true" data-drag="true" data-disabled="true"/)
+  assert.match(html, /data-ui="upload-preview" src="\/photo.png" alt="Product"/)
+  assert.match(html, /type="file" name="photo" accept="image\/\*" disabled/)
+  assert.match(html, /aria-invalid="true" aria-describedby="photo-error photo-status"/)
+  assert.doesNotMatch(html, /type="file"[^>]*(?:hidden|tabindex="-1")/)
+  const uploadCss = readFileSync('packages/design-system/src/forms/upload/styles.css', 'utf8')
+  assert.match(
+    uploadCss,
+    /input\[type="file"\] \{[^}]*position: absolute;[^}]*inset: 0;[^}]*inline-size: 100%;[^}]*block-size: 100%;[^}]*opacity: 0;/,
+  )
+  assert.match(uploadCss, /:has\(input:focus-visible\)/)
+  assert.match(uploadCss, /\[data-preview="true"\] \{[^}]*aspect-ratio: 1;/)
+  const native = String(renderToString(FileUpload({ id: 'file', name: 'file', label: 'File' })))
+  assert.match(native, /data-ui="file-upload"/)
+  assert.doesNotMatch(native, /upload-preview|upload-caption/)
+})
+
+test('design system: navigation groups can expand all branches independently', () => {
+  const items = [
+    {
+      id: 'sales',
+      label: 'Sales',
+      expanded: true,
+      children: [
+        {
+          id: 'reports',
+          label: 'Reports',
+          expanded: true,
+          children: [{ id: 'report', label: 'Report', href: '/report' }],
+        },
+      ],
+    },
+    {
+      id: 'stock',
+      label: 'Stock',
+      expanded: true,
+      children: [{ id: 'inventory', label: 'Inventory', href: '/stock', active: true }],
+    },
+  ]
+  const navigation = renderToString(
+    <AppNavigation id="all" label="Menu" groups={[{ id: 'work', exclusive: false, items }]} />,
+  )
+  const branches = [...navigation.matchAll(/<details data-ui="navigation-branch"[^>]*>/g)].map(
+    (match) => match[0],
+  )
+  assert.equal(branches.length, 3)
+  assert.ok(branches.every((tag) => tag.includes('open="true"') && !tag.includes('name=')))
+  assert.match(navigation, /href="\/stock"[^>]*aria-current="page"/)
+  const defaultNavigation = renderToString(
+    <AppNavigation id="single" label="Menu" groups={[{ id: 'work', items }]} />,
+  )
+  assert.match(defaultNavigation, /name="single-drawer-branches"/)
 })

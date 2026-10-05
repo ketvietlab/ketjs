@@ -10,7 +10,7 @@ export {
   ketsuitePermissionModules,
 } from './permission-catalogue.ts'
 export { ketsuiteRoleTemplates } from './role-templates.ts'
-export { websiteRoleTemplates } from './website-role-templates.ts'
+export { websiteCustomerMailRoleTemplates, websiteRoleTemplates } from './website-role-templates.ts'
 export { DEFAULT_PHONE_REGION, normalizePhone, phoneKey, phoneSearchFragment } from './phone.ts'
 export {
   customerAccessEffects,
@@ -19,6 +19,7 @@ export {
   disableCustomerAccess,
   enableCustomerAccess,
   issueCustomerAccess,
+  listCustomerAccounts,
   resetCustomerPassword,
   setCustomerSelfSignup,
   type IssueCustomerAccessInput,
@@ -67,7 +68,10 @@ export { default as websiteSeo } from './modules/website_seo/index.ts'
 export { default as websiteSearch } from './modules/website_search/index.ts'
 export { default as websiteForm } from './modules/website_form/index.ts'
 export { default as websiteFormMail } from './modules/website_form_mail/index.ts'
+export { default as websiteCustomerMail } from './modules/website_customer_mail/index.ts'
 export { default as websiteBackend } from './modules/website_backend/index.ts'
+export { websiteBackendWith } from './modules/website_backend/index.ts'
+export type { StudioOptions } from './modules/website_backend/studio/transport.ts'
 export { default as websiteHospitality } from './modules/website_hospitality/index.ts'
 export { default as websiteRetail } from './modules/website_retail/index.ts'
 export { default as paperTheme } from './themes/paper/index.ts'
@@ -458,6 +462,7 @@ export {
   advanceAuthorizationRevision,
   recordAuthorizationAudit,
   effectiveFunctionKeys,
+  AUTHORIZATION_READ_EFFECTS,
   normalizeAssignmentScope,
   resolveEffectivePermissions,
 } from './modules/user/authorization.ts'
@@ -495,4 +500,10 @@ export { default as inventory } from './modules/inventory/index.ts'
 export { default as checkout } from './modules/checkout/index.ts'
 export { default as defaultTheme } from './themes/default/index.ts'
 
-export { renderStudioPublic, websiteAnonymousScope } from './modules/website_backend/studio/public.ts'
+export {
+  customerReturnPath,
+  renderStudioPublic,
+  websiteAnonymousScope,
+} from './modules/website_backend/studio/public.ts'
+export { publicSiteOf } from './modules/website_backend/studio/public-site.ts'
+export type { PublicSite } from './modules/website_backend/studio/public-site.ts'

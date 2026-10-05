@@ -149,3 +149,65 @@ export const assertDeliveryState = (state: unknown): void => {
   if (!DELIVERY_STATES.includes(String(state) as never))
     fail('E_MAIL_DELIVERY_STATE', `unknown delivery state "${String(state)}"`)
 }
+
+const normalizedKeys = (value: unknown): string[] => {
+  const parsed = jsonValue<unknown>(value, [])
+  if (!Array.isArray(parsed)) return fail('E_MAIL_TEMPLATE', 'allowedKeys must be an array')
+  return [...new Set(parsed.map(String))].sort()
+}
+
+export type TemplateInput = {
+  id: string
+  name: string
+  fromAddress: string
+  fromName?: string | null
+  replyTo?: string | null
+  subjectTemplate: string
+  textTemplate: string
+  htmlTemplate?: string | null
+  allowedKeys: unknown
+  active: boolean
+}
+/** Saves a template after the checks `saveTemplate` promises: a safe envelope, and no key it was not given. */
+export async function writeTemplate(
+  ctx: Ctx,
+  input: TemplateInput,
+): Promise<{ id: string; version: number }> {
+  const name = String(input.name).trim()
+  const fromAddress = String(input.fromAddress).trim()
+  if (!name) throw new Error('template name cannot be empty')
+  if (!fromAddress.includes('@') || /[\r\n]/.test(fromAddress))
+    throw new Error('template sender must be a safe email address')
+  for (const value of [input.fromName, input.replyTo, input.subjectTemplate])
+    if (String(value ?? '').match(/[\r\n]/)) throw new Error('mail envelope values cannot contain newlines')
+  if (input.replyTo && !String(input.replyTo).includes('@'))
+    throw new Error('template reply-to must be an email address')
+  const allowedKeys = normalizedKeys(input.allowedKeys)
+  const usedKeys = templateKeys(
+    [input.subjectTemplate, input.textTemplate, input.htmlTemplate ?? ''].map(String).join('\n'),
+  )
+  const forbidden = usedKeys.filter((key) => !allowedKeys.includes(key))
+  if (forbidden.length) throw new Error(`template key(s) not allowlisted: ${forbidden.join(', ')}`)
+  const T = ctx.table('mail_transport.Template')
+  const existing = await ctx.db.one(from(T).where(eq(T.id, input.id)))
+  const now = new Date().toISOString()
+  const version = Number(existing?.version ?? 0) + 1
+  const row: Row = {
+    id: input.id,
+    name,
+    fromAddress,
+    ...(input.fromName ? { fromName: String(input.fromName).trim() } : {}),
+    ...(input.replyTo ? { replyTo: String(input.replyTo).trim() } : {}),
+    subjectTemplate: input.subjectTemplate,
+    textTemplate: input.textTemplate,
+    ...(input.htmlTemplate ? { htmlTemplate: input.htmlTemplate } : {}),
+    allowedKeys,
+    active: input.active,
+    version,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  }
+  if (existing) await ctx.db.update('mail_transport.Template', { id: input.id }, row)
+  else await ctx.db.insert('mail_transport.Template', row)
+  return { id: input.id, version }
+}

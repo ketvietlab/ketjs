@@ -6,10 +6,11 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { profileScreen, usersScreen } from './screens/index.ts'
+import { profileScreen, usersGrid, usersScreen } from './screens/index.ts'
 import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
 import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
-import type { TailMenu } from '../../ui/index.ts'
+import type { TableSelection, TailMenu } from '../../ui/index.ts'
+import { tableGrid } from '../backend/ket-table.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -173,6 +174,7 @@ export const routes: Record<string, RouteEntry> = {
       // The create action is offered to whoever the create modal would answer; a
       // viewer who may only read people is not shown a button that opens a refusal.
       const mayCreate = await ctx.allows('user.createUser', url, req)
+      const mayChangeActive = await ctx.allows('user.archiveUser', url, req)
       const includeArchived = url.searchParams.get('archived') === '1'
       const allRows = (await ctx.call(
         'user.listUsers',
@@ -214,10 +216,34 @@ export const routes: Record<string, RouteEntry> = {
               listFilterMenu(url, 'role', _('user_backend.field.role'), roleFilter, roles),
             ],
           }
-          return usersScreen(_, search.frame, {
+          // Rows are checked to change many people at once; the form only exists for
+          // a viewer who may change whether someone is active.
+          const selection: TableSelection | null = mayChangeActive
+            ? {
+                formId: 'user-people-bulk',
+                action: inLocale(url, '/admin/users/bulk'),
+                hidden: { returnTo },
+                actions: [
+                  { id: 'activate', label: _('user_backend.action.activateSelected') },
+                  { id: 'deactivate', label: _('user_backend.action.deactivateSelected'), tone: 'danger' },
+                ],
+              }
+            : null
+          const prepared = usersGrid(_, search.frame, {
+            rows: search.rows,
+            ...(search.groups ? { groups: search.groups } : {}),
+            rowHrefTemplate: recordModalHref(`${url.pathname}${url.search}`, {
+              kind: 'user.user',
+              id: '__row__',
+            }).replace('__row__', '{id}'),
+            selection,
+          })
+          const grid = await tableGrid(ctx, url, req, 'user-people-table', prepared.config)
+          return usersScreen(_, prepared.frame, {
+            grid,
+            empty: !search.rows.length && !search.groups?.length,
             clearHref:
               companyFilter || roleFilter || url.searchParams.get('q') ? inLocale(url, '/admin/users') : null,
-            rows: search.rows,
             total: search.groups
               ? search.groups.reduce((sum, group) => sum + group.count, 0)
               : search.rows.length,
@@ -228,10 +254,30 @@ export const routes: Record<string, RouteEntry> = {
                 : recordModalCreateHref(`${url.pathname}${url.search}`, {
                     kind: 'user.user',
                   }),
-            ...(search.groups ? { table: { groups: search.groups } } : {}),
           })
         },
       })
+    },
+
+  // Many people made active or inactive at once, from the rows checked in the list.
+  // Each person goes through `user.archiveUser` on its own, so the guard that keeps
+  // the last full administrator active still answers for every one of them.
+  '/admin/users/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Cross-site request', { status: 403 })
+      const form = await readForm(req)
+      const returnTo = safeUserReturnTo(url, form.returnTo)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      if (form.action !== 'activate' && form.action !== 'deactivate')
+        return text('Unknown bulk action', { status: 400 })
+      for (const id of ids)
+        await ctx.call('user.archiveUser', { id, active: form.action === 'activate' }, url, req)
+      return seeOther(returnTo)
     },
 
   '/admin/users/new':

@@ -242,7 +242,7 @@
     display: grid;
     min-width: 0;
     gap: var(--kv-space-3);
-    padding: var(--kv-card-padding, var(--kv-space-4));
+    padding: var(--kv-card-padding, var(--kv-surface-inset));
     border: 1px solid var(--kv-panel-border);
     border-radius: var(--kv-radius-md);
     background: var(--kv-panel-bg);
@@ -283,8 +283,8 @@
   }
 
   :where([data-kv-design-system]) [data-ui="card-media"] {
-    margin: calc(var(--kv-card-padding, var(--kv-space-4)) * -1)
-      calc(var(--kv-card-padding, var(--kv-space-4)) * -1) 0;
+    margin: calc(var(--kv-card-padding, var(--kv-surface-inset)) * -1)
+      calc(var(--kv-card-padding, var(--kv-surface-inset)) * -1) 0;
     overflow: hidden;
     border-radius: var(--kv-radius-md) var(--kv-radius-md) 0 0;
   }
@@ -480,7 +480,7 @@
     min-height: 6.75rem;
     align-content: start;
     gap: var(--kv-space-1);
-    padding: var(--kv-space-4);
+    padding: var(--kv-surface-inset);
     border: 1px solid var(--kv-panel-border);
     border-radius: var(--kv-radius-md);
     background: var(--kv-panel-bg);

@@ -19,7 +19,8 @@ through rem-based tokens so user text scaling remains possible.
 | --- | --- | --- | --- |
 | Page/modal title | 20/24/600 | 20/24/600 | Page/modal header |
 | Working surface title | 14/20/600 | 14/20/600 | Surface |
-| Section/nested surface title | 13/20/600 | 13/20/600 | Section or flattened Surface |
+| Modal group title | 14/20/600 | 14/20/600 | Section or flattened Surface directly in a modal |
+| Section/nested surface title | 13/20/600 | 13/20/600 | Section on a canvas, or an item heading nested in a group |
 | Body/table value | 13/20/400 | 13/20/400 | Content component |
 | Field/column label | 13/20/500 | 13/20/500 | Field/table |
 | Help/metadata | 12/16/400 | 12/16/400 | Field or content component |
@@ -49,16 +50,22 @@ contract; never shrink text to fit. Zero default outer text margins.
 | --- | --- | --- |
 | Related actions | 8px | ActionGroup |
 | Title block to content | 8px | Surface/Section |
-| Surface/modal inset | 16px | Outer surface/overlay |
+| Surface/card inset | 16px desktop, 12px mobile | Surface/object card |
+| Modal inset | 16px | Overlay |
 | Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
 | Field groups | 16px | Form layout |
 | Card/working-section gap | 12px desktop / 8px mobile, `--kv-layout-gap` | Parent layout |
 | Page gutter | 12px desktop / 8px mobile, `--kv-layout-gap` | Page; keep header and body aligned, with no additional shell inset |
 | Default/prominent button and input height | 32px desktop, 36px mobile | Control |
+| Opt-in `large` input/button height | 36px desktop, 44px mobile | Control; native and compound fields match actions |
 | Explicit compact button height | 28px desktop, 32px mobile | Button |
 | Button/input block / inline padding | 6 / 12px | Control |
 | Button/input radius | 8px | Control |
+
+`large` is an explicit size for touch-focused forms such as authentication. It keeps the
+existing typography, radius, padding and state mechanics; density never selects it
+automatically. Pass `size="large"` to Button/IconButton/LinkButton and TextField/Field.
 
 Default/prominent Button maps to Polaris **large** to align with TextField. Compact
 maps to medium and is not used to build a normal input/action row. Icon-with-text
@@ -94,6 +101,10 @@ The list result footer is metadata on the canvas, not another framed surface.
 
 AppNavigation owns menu geometry, including NavigationToggle and the mobile drawer.
 These are Két navigation roles, not a requirement to give every component one size.
+Navigation groups default to exclusive accordions. Set `NavigationGroupData.exclusive`
+to `false` for independently collapsible branches, and set each branch's `expanded`
+to `true` to open all of them initially. This also applies to nested branches and
+the mobile drawer; opening the drawer remains a separate action.
 
 | Role | Desktop >=768px | Mobile <768px |
 | --- | --- | --- |
@@ -142,6 +153,9 @@ uses the modal's boundary. TabbedView/TabPanel add no second card or horizontal 
 
 Separate groups with space, then heading, then a hairline between peers when useful.
 Do not draw both a parent's closing border and a child's opening border for one edge.
+A modal flattens its groups, so its group headings take the working-surface size
+(14/20/600), one step above the 13/20/400 body; a heading nested inside a group is an
+item heading at 13/20/600. Do not draw the tier with weight alone at the same size.
 Keep title and body on the same inset. Use the relevant semantic tokens for each:
 
 - **Boundary:** region against canvas, owned by Surface/Overlay.
@@ -185,3 +199,13 @@ scoped exception owned by the website authentication view: the login field uses
 `username` and the password field uses `current-password` so password managers can
 identify the credentials. This exception does not apply to ordinary website or ERP
 forms. Keep the field associations and native password semantics.
+
+### Image drop zones
+
+`DropZone` owns one visible frame, its caption, hint, preview and focus/drag states.
+Pass `preview={null}` for an empty square image target or `{ src, alt }` for an image.
+The transparent native file input covers that frame and stays keyboard accessible;
+do not render a separate image placeholder and native file chooser below it.
+The application runtime owns file validation, transport and `dragging` state; it
+must ignore uploads while disabled or saving. Keep any image viewer action separate
+from the file input target. `FileUpload` remains the explicit native chooser variant.

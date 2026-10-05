@@ -15,9 +15,10 @@ directly to their owning module; the visitor sees its acknowledgement. Website d
 module's records, processing states or history. Earlier review requests for HO-001…010 are superseded.
 
 Industry experiences are visitor journeys, not a Studio navigation section. The sidebar does not
-include the adapter catalogue. Editors open the public site through “Xem website”; connection
-readiness stays in Settings and processing stays in the owning business module. Direct catalogue
-routes remain available for Atlas review; this navigation change does not remove public journeys.
+include the adapter catalogue. Editors open the public site through “Xem website”, at the site's own address; connection
+readiness stays in Settings and processing stays in the owning business module. The adapter
+catalogue and the simulated visitor journeys exist only in the Atlas mock; the client serves the
+form preview and its receipt and nothing else under `/website/visit`.
 
 Page templates are selected during page creation (blank by default) or applied explicitly in the
 builder with replacement confirmation. The template catalogue is not a sidebar item; its direct

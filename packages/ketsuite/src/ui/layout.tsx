@@ -15,7 +15,7 @@ import { sidebarMain, sidebarNavigationContent, sidebarFoot } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { pageContextFromFrame, viewerContext } from './navigation.tsx'
+import { viewerContext } from './navigation.tsx'
 import { ListPage } from './list-page.tsx'
 import { collectionActions, collectionControls } from './collection.tsx'
 
@@ -93,7 +93,7 @@ const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
 
 const locationBar = (_: Translator, frame: Frame): TemplateResult => (
   <AppTopbar
-    location={frame.viewer ? viewerContext(frame.viewer) : null}
+    location={frame.viewer ? viewerContext(frame.viewer, 'topbar') : null}
     navigation={<NavigationToggle controls="backend-navigation-drawer" label={_('backend.nav.open')} />}
     search={{
       action: '/admin/search',
@@ -245,7 +245,7 @@ export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
     <ListPage
       variant="operational"
       frame={options.frame}
-      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? null}
       eyebrow={options.kicker}
       title={options.title}
       headerActions={options.headerActions}
@@ -260,7 +260,7 @@ export const recordScreen = (options: OperationalScreenOptions): TemplateResult 
     options,
     <DesignSystemRecordPage
       variant="operational"
-      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? null}
       title={options.title}
       actions={operationalActions(options)}
       meta={options.meta}
@@ -291,7 +291,7 @@ export const workspaceScreen = (
     <DesignSystemWorkspacePage
       variant="operational"
       layout={options.layout ?? 'flow'}
-      context={options.context ?? pageContextFromFrame(options.title, options.frame)}
+      context={options.context ?? null}
       eyebrow={options.kicker}
       title={options.title}
       actions={operationalActions(options)}

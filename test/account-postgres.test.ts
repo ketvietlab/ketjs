@@ -139,6 +139,8 @@ test('account PostgreSQL: line/post and reversal races preserve one exact ledger
     ])
     assert.equal(lockResult.ok, true)
     const lockRacedMove = await call(first, 'account.getMove', { id: 'period-lock-race' })
+    // Either side may win. A post that lands before the lock credits revenue too.
+    const lockRaceRevenueCredit = lockRacePost.ok === true ? 10n : 0n
     if (lockRacePost.ok === true) assert.equal(lockRacedMove.state, 'posted')
     else {
       assert.equal(lockRacedMove.state, 'draft')
@@ -170,7 +172,7 @@ test('account PostgreSQL: line/post and reversal races preserve one exact ledger
     assert.equal(beforeReversal.find((row) => row.accountId === 'receivable')?.debit, amount)
     assert.equal(
       beforeReversal.find((row) => row.accountId === 'revenue')?.credit,
-      String(BigInt(amount) + racedRevenueCredit),
+      String(BigInt(amount) + racedRevenueCredit + lockRaceRevenueCredit),
     )
 
     const reversalIds = ['exact-reversal-a', 'exact-reversal-b']

@@ -50,7 +50,7 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
   assert.match(archived, /31-32 \/ 32/)
   assert.match(
     archived,
-    /data-row-href="\/admin\/users\?archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3Auser-31"/,
+    /data-ui="kt-row-link"[^>]*href="\/admin\/users\?archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3Auser-31"/,
   )
 
   const byName = await (await app.client.get('/admin/users?q=needle&lang=en')).text()
@@ -80,9 +80,9 @@ test('the create action opens a person in the record modal, keeping the list sta
   // A row opens the same modal on the person it names, not a page of its own.
   assert.match(
     page,
-    /data-row-href="\/admin\/users\?q=user&amp;archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3A[^"]+"/,
+    /data-ui="kt-row-link"[^>]*href="\/admin\/users\?q=user&amp;archived=1&amp;page=2&amp;lang=en&amp;record=user\.user%3A[^"]+"/,
   )
-  assert.doesNotMatch(page, /data-row-href="\/admin\/users\/[^"?]+\?/)
+  assert.doesNotMatch(page, /data-ui="kt-row-link"[^>]*href="\/admin\/users\/[^"?]+\?/)
 })
 
 test('the list narrows by where people work and what they hold, and says so removably', async (t) => {

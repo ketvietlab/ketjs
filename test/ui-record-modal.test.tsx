@@ -250,6 +250,11 @@ test('record modal: a preview command changes nothing and leaves its answer on s
     'the preview returns before the runtime treats the submit as a change',
   )
 
+  // A preview calls a read that is not declared idempotent, and the server refuses a
+  // key on such a function: only a command that writes carries one.
+  assert.match(runtime, /const intent = \(\) => \(command\.preview \? undefined : uuid\(\)\)/u)
+  assert.doesNotMatch(runtime, /callRecordFunction\(fn, input, \{ idempotencyKey: uuid\(\) \}\)/u)
+
   // An answer is only ever read beside the selection it was computed from, so
   // everything that moves the layer clears it: another record, a closed modal, a
   // closed or newly opened dialog, another tab, a refusal, and a real write.
@@ -317,6 +322,19 @@ test('record modal: the loading state never shows a label key', () => {
   )
   for (const key of documented)
     assert.doesNotMatch(resolveRecordModalLabel(key, {}), /^recordModal\./u, `${key} resolves to words`)
+})
+
+test('record modal: read failures replace the loading title and keep retry available', () => {
+  assert.match(
+    runtime,
+    /title:\s*context\s*\? definition\.title\(context\)\s*: t\(status\(\) === 'error' \? 'recordModal.loadFailed' : 'recordModal.loading'\)/u,
+  )
+  const errorBody = runtime.slice(
+    runtime.indexOf("if (status() === 'error')"),
+    runtime.indexOf("if (status() !== 'ready'"),
+  )
+  assert.match(errorBody, /title: t\('recordModal.loadFailed'\)/u)
+  assert.match(errorBody, /value: 'retry'/u)
 })
 
 test('record modal: a created record is in the address bar before the collection refreshes', () => {

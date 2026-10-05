@@ -54,8 +54,10 @@ test('public production permission catalogue covers every function owned by its 
     // 89: baseline 84 plus actor-bound denial telemetry and trusted directory fact import, then
     // the three Website image functions behind the Studio upload and image file routes.
     // 91: the public form section's fields and the form receipt, both website_form.
+    // 95: customer password reset (request, complete, and its mail bridge) and the operator's
+    // mark that a domain serves.
     // The reasons live beside their declarations.
-    Object.keys(manifest.permissions.exemptions).length <= 91,
+    Object.keys(manifest.permissions.exemptions).length <= 95,
     'a new permission exemption was added — say why, in the declaration',
   )
 

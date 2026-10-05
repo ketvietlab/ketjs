@@ -3,12 +3,13 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { addTimeline, canReadCase, commandKey, invalid, issue, normalized, now } from '../crm/index.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'
 import { ours } from '../sale/scope.ts'
+import { AUTHORIZATION_READ_EFFECTS } from '../user/authorization.ts'
 
 export const quotationEffects = [
   'read:crm.Case',
   'read:crm.Team',
   'read:crm.TeamMember',
-  'read:crm.AccessGrant',
+  ...AUTHORIZATION_READ_EFFECTS,
   'read:user.User',
   'read:crm.SalesDetail',
   'read:crm_sale.OpportunityQuotation',
@@ -242,7 +243,7 @@ export const saleFunctionsPublic: Record<string, FnSpec> = {
       'read:crm.Case',
       'read:crm.Team',
       'read:crm.TeamMember',
-      'read:crm.AccessGrant',
+      ...AUTHORIZATION_READ_EFFECTS,
       'read:user.User',
       'read:crm_sale.OpportunityQuotation',
       'read:sale.Order',

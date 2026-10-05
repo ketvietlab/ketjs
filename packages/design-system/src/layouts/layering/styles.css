@@ -90,6 +90,30 @@
     line-height: var(--kv-line-sm);
   }
 
+  /*
+   * A modal flattens its groups, so the group heading is the only tier between the
+   * modal title and the body text. A Section title, or the title of a Surface the modal
+   * flattened, takes the working-surface size (14/20/600): one step above the 13/20/400
+   * body. A heading nested inside a group is an item heading and stays at the section size.
+   */
+  [data-kv-design-system] :is([data-ui="modal-sheet"], [data-ui="dialog"]) [data-ui="section-title"],
+  [data-kv-design-system]
+    :is([data-ui="modal-sheet"], [data-ui="dialog"])
+    [data-ui="surface"]
+    [data-ui="surface-title"] {
+    font-size: var(--kv-text-md);
+    line-height: var(--kv-line-md);
+  }
+
+  [data-kv-design-system]
+    :is([data-ui="modal-sheet"], [data-ui="dialog"])
+    :is([data-ui="section"], [data-ui="surface"])
+    :is([data-ui="section"], [data-ui="surface"])
+    :is([data-ui="section-title"], [data-ui="surface-title"]) {
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+  }
+
   [data-kv-design-system]
     :is(
       [data-ui="surface"],

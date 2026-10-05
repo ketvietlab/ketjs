@@ -16,7 +16,6 @@ import {
   Disclosure,
   DescriptionList,
   Notice,
-  LinkButton,
   Section,
   Stack,
 } from '@ketvietlab/design-system'
@@ -1363,14 +1362,8 @@ const loginTab = (c: Context): JSXChild => {
   return Stack({
     gap: 'default',
     items: [
-      ...(c.data.permissions.identities
-        ? [
-            LinkButton({
-              label: t(c, 'login.identities'),
-              href: `/admin/oauth/identities?${new URLSearchParams({ user: c.id, lang: c.data.lang })}`,
-            }),
-          ]
-        : []),
+      // Linked sign-in identities are system configuration that Két Việt runs; the
+      // administrator of a business sees whether the account works, not how.
       Section({
         title: t(c, 'login.accountTitle'),
         body: DescriptionList({
@@ -1409,33 +1402,22 @@ const loginTab = (c: Context): JSXChild => {
           ],
         }),
       }),
-      ...(c.data.externalCredential
+      // Preparing the account is Két Việt's work: the administrator is told whether
+      // to wait, never offered a provision, retry or status probe to run themselves.
+      // An existing linked account ('unmanaged') already signs in, like a ready one.
+      ...(c.data.externalCredential && !['ready', 'unmanaged'].includes(c.data.externalCredential.state)
         ? [
-            Section({
-              title: t(c, `login.externalState.${c.data.externalCredential.state}`),
-              body: RecordModalForm({
-                kind: c.kind,
-                fields: [],
-                command: c.data.permissions.provisionCredential
-                  ? 'provisionCredential'
-                  : c.data.permissions.retryCredential
-                    ? 'retryCredential'
-                    : 'refreshAccount',
-                actions: [
-                  Button({
-                    type: 'submit',
-                    label: t(
-                      c,
-                      c.data.permissions.provisionCredential
-                        ? 'action.provisionAccount'
-                        : c.data.permissions.retryCredential
-                          ? 'action.retryAccount'
-                          : 'action.refreshAccount',
-                    ),
-                  }),
-                ],
-              }),
-            }),
+            c.data.externalCredential.state === 'pending'
+              ? Notice({
+                  tone: 'info',
+                  title: t(c, 'login.externalState.pending'),
+                  message: t(c, 'login.externalPendingHint'),
+                })
+              : Notice({
+                  tone: 'warning',
+                  title: t(c, 'login.externalState.handling'),
+                  message: t(c, 'login.externalHandlingHint'),
+                }),
           ]
         : []),
       ...(c.data.externalCredential?.emailState
@@ -1545,12 +1527,14 @@ const assignSelection = (form: FormData, c: Context): Record<string, unknown> =>
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
   labels: () => USER_RECORD_MODAL_LABELS[pageLang()],
+  // Two-column facts and forms, and tables of two to four columns: the default width.
+  size: 'default',
   context: {
     fn: 'user.userModalContext',
     input: (id, creating) => (creating ? { locale: pageLang() } : { id, locale: pageLang() }),
   },
   title: (c) => (c.creating ? t(c, 'users.create') : c.data.record.name || c.data.record.login),
-  description: (c) => (c.creating ? t(c, 'users.createSubtitle') : c.data.record.login),
+  description: (c) => (c.creating ? null : c.data.record.login),
   status: (c) =>
     c.creating
       ? undefined
@@ -1597,7 +1581,7 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     },
   ],
   dialogs: {
-    diagnostics: { title: (c) => t(c, 'action.checkAccess'), view: screensTab, size: 'large' },
+    diagnostics: { title: (c) => t(c, 'action.checkAccess'), view: screensTab },
     assign: { title: (c) => t(c, 'action.assignRole'), view: assignDialog },
     role: {
       title: (c) => String(openAssignment(c).roleName ?? ''),
@@ -1605,6 +1589,8 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
     },
     edit: {
       title: (c) => t(c, 'action.editProfile'),
+      // A handful of single-column fields: who the person is and where they work.
+      size: 'small',
       view: (c) =>
         Stack({
           gap: 'default',

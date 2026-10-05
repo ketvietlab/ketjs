@@ -44,6 +44,8 @@ export type RoleRow = {
   templateDigest?: string | null
   revision?: number | null
   assignmentCount?: number
+  /** The permission areas a role template gives; null for a role no template owns. */
+  bundleCount?: number | null
   healthIssues?: string[]
   grants?: Array<{ fnKey: string }>
   grantSources?: Array<{

@@ -20,6 +20,8 @@ export type Column<R> = {
   kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person' | 'media'
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
+  /** Allow long content to wrap inside the column. */
+  wrap?: boolean
   sort?: { href: string; direction?: 'asc' | 'desc' | null; label: string }
   optional?: boolean
 }
