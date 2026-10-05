@@ -214,7 +214,7 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
         </Row>
         <Row label="Sizes & icons" detail="Matched text and icon targets at each size.">
           <Inline
-            items={(['compact', 'default', 'prominent'] as const).map((size) => (
+            items={(['compact', 'default', 'prominent', 'large'] as const).map((size) => (
               <ActionGroup
                 label={`${size} actions`}
                 actions={[
@@ -327,6 +327,13 @@ export const PrimitiveHarness = (props: PrimitiveHarnessProps = {}): TemplateRes
         >
           <Stack
             items={[
+              <TextField
+                id="primitive-large"
+                name="large"
+                label="Large input"
+                size="large"
+                value="36px desktop / 44px mobile"
+              />,
               <TextField
                 id="primitive-affix"
                 name="reference"

@@ -16,8 +16,8 @@
     "publicGaps": 166,
     "runtimeGaps": 9,
     "typeGaps": 157,
-    "cssFiles": 81,
-    "cssLines": 17060
+    "cssFiles": 82,
+    "cssLines": 17082
   },
   "rows": [
     {
@@ -735,6 +735,7 @@
       ],
       "tests": "present",
       "testFiles": [
+        "test/design-system-control-size.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/ui-record-modal.test.tsx"
@@ -2172,7 +2173,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system-normalization.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-control-size.test.tsx",
+        "test/design-system-normalization.test.tsx",
+        "test/design-system.test.tsx"
+      ],
       "gapTask": "DS-013"
     },
     {
@@ -2840,6 +2845,7 @@
       "testFiles": [
         "test/account-wave1-screens.test.tsx",
         "test/collection-ket-table.test.tsx",
+        "test/design-system-control-size.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/manufacturing-orders-screen.test.tsx",
@@ -5200,7 +5206,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system-normalization.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-control-size.test.tsx",
+        "test/design-system-normalization.test.tsx",
+        "test/design-system.test.tsx"
+      ],
       "gapTask": "DS-020"
     },
     {
@@ -5622,7 +5632,11 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system-normalization.test.tsx", "test/design-system.test.tsx"],
+      "testFiles": [
+        "test/design-system-control-size.test.tsx",
+        "test/design-system-normalization.test.tsx",
+        "test/design-system.test.tsx"
+      ],
       "gapTask": "DS-020"
     },
     {
@@ -10535,6 +10549,7 @@
         "test/commerce-ui-design.test.tsx",
         "test/crm-pipeline-screen.test.tsx",
         "test/crm-ux.test.ts",
+        "test/design-system-control-size.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system.test.tsx",
         "test/list-chrome.test.ts",
@@ -12413,6 +12428,12 @@
     },
     {
       "layer": "public",
+      "file": "packages/design-system/src/foundations/control-sizes.css",
+      "lines": 21,
+      "hooks": ["action", "field"]
+    },
+    {
+      "layer": "public",
       "file": "packages/design-system/src/foundations/reset.css",
       "lines": 46,
       "hooks": []
@@ -13271,7 +13292,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/styles.css",
-      "lines": 62,
+      "lines": 63,
       "hooks": []
     },
     {
