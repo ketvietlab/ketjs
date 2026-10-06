@@ -24,16 +24,18 @@ export type Domain = {
   state?: string
   tls?: string
   checkedAt?: string | null
-  /** What the last check found: matched, missing, mismatch or unreachable. */
+  /** What the last check found: matched, missing, mismatch, unreachable, taken or reserved. */
   reason?: string | null
-  /** The DNS record that proves ownership; a host Két Việt connected before needs none. */
+  /** The DNS record that proves ownership, when whoever serves the site asks for one. */
   challenge?: { type: string; name: string; value: string } | null
+  /** The record that points the host at whoever serves the site, until it answers there. */
+  route?: { type: string; name: string; value: string; apex: boolean; check: string | null } | null
   attempts?: { id: string; at: string; result: string; reason: string }[]
 }
 type DomainList = { rows: Domain[] }
 
 const tones: Record<string, Tone> = { verified: 'positive', pending: 'warning', failed: 'danger' }
-/** HTTPS follows ownership: Két Việt switches it on once the host is proven. */
+/** HTTPS follows ownership: whoever serves the site switches it on once the host is proven. */
 const tlsLabel = (row: Pick<Domain, 'state' | 'tls'>) =>
   row.tls === 'ready'
     ? 'website.domain.tlsReady'
@@ -188,6 +190,48 @@ export function createDomainScreens(ctx: StudioContext) {
                     )
                   }
                 />,
+                data.revisionId && data.route && data.tls !== 'ready' ? (
+                  <Surface
+                    title={tr('website.domain.route')}
+                    body={
+                      <Stack
+                        divided
+                        items={[
+                          <Notice
+                            title={tr('website.domain.routeHow')}
+                            message={tr('website.domain.routeHelp')}
+                            tone="info"
+                          />,
+                          <DescriptionList
+                            items={[
+                              { id: 'type', label: tr('website.domain.recordType'), value: data.route.type },
+                              { id: 'name', label: tr('website.domain.recordName'), value: data.route.name },
+                              {
+                                id: 'value',
+                                label: tr('website.domain.recordValue'),
+                                value: data.route.value,
+                              },
+                            ]}
+                          />,
+                          data.route.apex ? (
+                            <Notice
+                              title={tr('website.domain.routeApex')}
+                              message={tr('website.domain.routeApexHelp')}
+                              tone="warning"
+                            />
+                          ) : null,
+                          data.route.check && data.route.check !== 'routed' ? (
+                            <Notice
+                              title={tr('website.domain.routeFailed')}
+                              message={tr(`website.domain.route.${data.route.check}`)}
+                              tone="danger"
+                            />
+                          ) : null,
+                        ]}
+                      />
+                    }
+                  />
+                ) : null,
                 data.revisionId && data.challenge ? (
                   <Surface
                     title={tr('website.domain.verify')}

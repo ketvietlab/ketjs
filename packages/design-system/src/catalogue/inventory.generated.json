@@ -11237,6 +11237,7 @@
         "test/website-form-crm-routing.test.ts",
         "test/website-site-tokens.test.ts",
         "test/website-studio-customers-http.test.ts",
+        "test/website-studio-domains-http.test.ts",
         "test/website-submission-export.test.ts"
       ],
       "gapTask": "DS-010"
