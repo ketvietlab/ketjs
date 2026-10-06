@@ -82,6 +82,28 @@
     flex: 1 1 40rem;
   }
 
+  /*
+   * A selection takes the controls' place: same row, same height, so the table
+   * below does not move when the first row is checked or the last one cleared.
+   */
+  :where([data-kv-design-system]) [data-ui="list-page-selection"] {
+    display: flex;
+    min-width: 0;
+    min-block-size: var(--kv-control-height);
+    flex: 1 1 100%;
+    align-items: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-selection"][hidden] {
+    display: none;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page-selection"]:not([hidden])
+    ~ [data-ui="list-page-controls"] {
+    display: none;
+  }
+
   :where([data-kv-design-system]) [data-ui="list-page-status"] {
     min-width: max-content;
     flex: 0 0 auto;

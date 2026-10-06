@@ -10,6 +10,7 @@
 // Bundled by tools/build-backend-client.mjs into user_backend/client/.
 
 import {
+  ActionGroup,
   Badge,
   Button,
   DataTable,
@@ -18,10 +19,16 @@ import {
   Notice,
   Section,
   Stack,
+  Surface,
+  Text,
 } from '@ketvietlab/design-system'
 import type { FieldOption, FieldProps } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import { createRecordModal, RECORD_COMMAND_FIELD } from '../../../ui/client/record-modal.tsx'
+import {
+  createRecordModal,
+  createRecordPage,
+  RECORD_COMMAND_FIELD,
+} from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import { USER_RECORD_MODAL_LABELS } from '../../user/modal-labels.ts'
 import {
@@ -84,8 +91,18 @@ export type UserModalData = {
   /** Who is reading: the guards are about the reader as much as the person read. */
   actor?: { self: boolean; superuser: boolean }
   /** What this person can open and work on, screen by screen. */
-  surfaces?: SurfaceAccess[]
+  surfaces?: (SurfaceAccess & { areaKey?: string })[]
+  /** What they can do, area by area, at their default workplace. */
+  areas?: AccessArea[]
+  /** The areas they hold nothing of, by name. */
+  areasWithout?: string[]
   lastDenial?: LastDenial | null
+  /**
+   * Why the access is what it is before any role is read: measured where the person
+   * lands, everything (superuser), nothing (archived), or nothing because they are
+   * not admitted there. Held roles whose template moved on give nothing either.
+   */
+  standing?: { state: 'measured' | 'superuser' | 'inactive' | 'outside'; staleRoles: string[] }
   credentialDelivery?: CredentialDelivery
   /** Verified external identity state supplied by the deployment adapter. */
   externalCredential?: {
@@ -95,6 +112,17 @@ export type UserModalData = {
     claimable: boolean
     emailState: 'pending' | 'sending' | 'accepted' | 'uncertain' | 'failed' | null
   }
+}
+
+/** One permission area and how far this person reaches in it. */
+export type AccessArea = {
+  key: string
+  label: string
+  level: 'view' | 'edit' | 'manage'
+  /** The level is only partly held. */
+  partial: boolean
+  /** The held roles that give it. */
+  via: string[]
 }
 
 type Context = RecordModalContext<UserModalData>
@@ -110,6 +138,26 @@ const pageLang = (): 'vi' | 'en' =>
   typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'vi'
 
 const t = (c: Context, key: string): string => c.t(`user_backend.${key}`)
+
+/** A person's page, keeping the language the reader switched to. */
+export const userPagePath = (id: string): string => {
+  const lang = typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('lang')
+  return `/admin/users/${encodeURIComponent(id)}${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`
+}
+
+/** A moment, written one way everywhere on this record: day, month, year and time. */
+const when = (c: Context, iso: string | null | undefined): string => {
+  if (!iso) return '—'
+  const at = new Date(iso)
+  if (!Number.isFinite(at.getTime())) return iso
+  return new Intl.DateTimeFormat(c.data.lang === 'en' ? 'en-GB' : 'vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(at)
+}
 
 const text = (form: FormData, name: string): string => String(form.get(name) ?? '').trim()
 
@@ -587,7 +635,10 @@ const overviewTab = (c: Context): JSXChild => {
                 label: t(c, 'field.superuser'),
                 value: Badge({
                   label: c.data.record.superuserExpiresAt
-                    ? t(c, 'breakGlass.activeUntil').replace('{until}', c.data.record.superuserExpiresAt)
+                    ? t(c, 'breakGlass.activeUntil').replace(
+                        '{until}',
+                        when(c, c.data.record.superuserExpiresAt),
+                      )
                     : t(c, 'breakGlass.standing'),
                   tone: 'danger',
                 }),
@@ -604,8 +655,8 @@ const denialNotice = (c: Context): JSXChild[] => {
   const denial = c.data.lastDenial
   if (!denial) return []
   const where = denial.surface
-    ? t(c, 'denial.onSurface').replace('{surface}', denial.surface).replace('{at}', denial.at)
-    : t(c, 'denial.at').replace('{at}', denial.at)
+    ? t(c, 'denial.onSurface').replace('{surface}', denial.surface).replace('{at}', when(c, denial.at))
+    : t(c, 'denial.at').replace('{at}', when(c, denial.at))
   const times = denial.count > 1 ? ` ${t(c, 'denial.count').replace('{count}', String(denial.count))}` : ''
   const fix = denial.templates.length
     ? t(c, 'denial.fix').replace('{roles}', denial.templates.join(', '))
@@ -740,7 +791,7 @@ const breakGlassSection = (c: Context): JSXChild[] => {
             tone: 'warning',
             title: t(c, 'breakGlass.activeTitle'),
             message: record.superuserExpiresAt
-              ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
+              ? t(c, 'breakGlass.activeUntil').replace('{until}', when(c, record.superuserExpiresAt))
               : t(c, 'breakGlass.standing'),
           }),
         ]
@@ -749,45 +800,49 @@ const breakGlassSection = (c: Context): JSXChild[] => {
     Section({
       title: t(c, 'breakGlass.title'),
       description: t(c, 'breakGlass.hint'),
-      body: active
-        ? Stack({
-            gap: 'default',
-            items: [
-              Notice({
-                tone: 'warning',
-                title: t(c, 'breakGlass.activeTitle'),
-                message: record.superuserExpiresAt
-                  ? t(c, 'breakGlass.activeUntil').replace('{until}', record.superuserExpiresAt)
-                  : t(c, 'breakGlass.standing'),
-              }),
-              RecordModalForm({
-                kind: c.kind,
-                fields: [],
-                command: 'revokeBreakGlass',
-                actions: [
-                  Button({ label: t(c, 'action.revokeBreakGlass'), variant: 'destructive', type: 'submit' }),
-                ],
-              }),
-            ],
-          })
-        : RecordModalForm({
-            kind: c.kind,
-            fields: [
-              field(c, {
-                name: 'breakGlassUntil',
-                label: t(c, 'field.breakGlassUntil'),
-                type: 'datetime-local',
-                required: true,
-                disabled: false,
-              }),
-            ],
-            command: 'grantBreakGlass',
-            actions: [
-              Button({ label: t(c, 'action.grantBreakGlass'), variant: 'destructive', type: 'submit' }),
-            ],
-          }),
+      body: breakGlassBody(c),
     }),
   ]
+}
+
+/** The grant while it lasts and the way to end it, or the form that gives it. */
+const breakGlassBody = (c: Context): JSXChild => {
+  const record = c.data.record
+  return record.superuser === true
+    ? Stack({
+        gap: 'default',
+        items: [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'breakGlass.activeTitle'),
+            message: record.superuserExpiresAt
+              ? t(c, 'breakGlass.activeUntil').replace('{until}', when(c, record.superuserExpiresAt))
+              : t(c, 'breakGlass.standing'),
+          }),
+          RecordModalForm({
+            kind: c.kind,
+            fields: [],
+            command: 'revokeBreakGlass',
+            actions: [
+              Button({ label: t(c, 'action.revokeBreakGlass'), variant: 'destructive', type: 'submit' }),
+            ],
+          }),
+        ],
+      })
+    : RecordModalForm({
+        kind: c.kind,
+        fields: [
+          field(c, {
+            name: 'breakGlassUntil',
+            label: t(c, 'field.breakGlassUntil'),
+            type: 'datetime-local',
+            required: true,
+            disabled: false,
+          }),
+        ],
+        command: 'grantBreakGlass',
+        actions: [Button({ label: t(c, 'action.grantBreakGlass'), variant: 'destructive', type: 'submit' })],
+      })
 }
 
 /** What this person may do, as rows of role and place — the authority they actually hold. */
@@ -1111,20 +1166,21 @@ const roleDialog = (c: Context): JSXChild => {
       DescriptionList({
         columns: 2,
         items: [
-          {
-            id: 'role',
-            label: t(c, 'field.assignment'),
-            value: String(assignment.roleName),
-          },
+          // The dialog is titled with the role; say where it applies, who gave it, and whether it gives anything.
           {
             id: 'scope',
-            label: t(c, 'field.scope'),
-            value: scopeName(c, assignment),
+            label: t(c, 'page.scopeColumn'),
+            value: scopeOf(c, assignment),
           },
           {
             id: 'source',
             label: t(c, 'access.sourceColumn'),
             value: sourceBadge(c, assignment),
+          },
+          {
+            id: 'state',
+            label: t(c, 'page.stateColumn'),
+            value: roleStateBadge(c, assignment),
           },
         ],
       }),
@@ -1356,108 +1412,127 @@ const oneTimeReset = (c: Context): JSXChild[] => {
  * to read or revoke; and a reset does the administrator's work — a new credential,
  * every session ended — while leaving the password itself with its owner.
  */
-const loginTab = (c: Context): JSXChild => {
+/**
+ * Whether the account signs in, and how. Linked sign-in identities are system
+ * configuration that Két Việt runs; the administrator of a business sees whether
+ * the account works, not how.
+ */
+/** Whether the account works yet: ready, invited, or still being prepared. */
+const credentialBadge = (c: Context): JSXChild =>
+  Badge({
+    label: t(
+      c,
+      activated(c)
+        ? 'login.ready'
+        : c.data.record.invitationSentAt || c.outcome<{ ok?: boolean }>('sendResetLink')?.ok
+          ? 'login.invited'
+          : 'login.preparing',
+    ),
+    tone: activated(c) ? 'positive' : 'warning',
+  })
+
+const accountFacts = (c: Context): JSXChild => {
   const delivery = deliveryOf(c)
-  const mayReset = c.data.permissions.sendLink || c.data.permissions.resetPassword
-  return Stack({
-    gap: 'default',
+  return DescriptionList({
+    columns: 2,
     items: [
-      // Linked sign-in identities are system configuration that Két Việt runs; the
-      // administrator of a business sees whether the account works, not how.
-      Section({
-        title: t(c, 'login.accountTitle'),
-        body: DescriptionList({
-          columns: 2,
-          items: [
-            {
-              id: 'credential',
-              label: t(c, 'field.credential'),
-              value: Badge({
-                label: t(
-                  c,
-                  activated(c)
-                    ? 'login.ready'
-                    : c.data.record.invitationSentAt || c.outcome<{ ok?: boolean }>('sendResetLink')?.ok
-                      ? 'login.invited'
-                      : 'login.preparing',
-                ),
-                tone: activated(c) ? 'positive' : 'warning',
-              }),
-            },
-            {
-              id: 'login',
-              label: t(c, 'field.login'),
-              value: c.data.record.login,
-            },
-            {
-              id: 'lastLogin',
-              label: t(c, 'login.lastSignIn'),
-              value: c.data.record.lastLoginAt || t(c, 'login.never'),
-            },
-            {
-              id: 'delivery',
-              label: t(c, 'login.delivery'),
-              value: t(c, `login.delivery.${delivery}`),
-            },
-          ],
-        }),
-      }),
-      // Preparing the account is Két Việt's work: the administrator is told whether
-      // to wait, never offered a provision, retry or status probe to run themselves.
-      // An existing linked account ('unmanaged') already signs in, like a ready one.
-      ...(c.data.externalCredential && !['ready', 'unmanaged'].includes(c.data.externalCredential.state)
-        ? [
-            c.data.externalCredential.state === 'pending'
-              ? Notice({
-                  tone: 'info',
-                  title: t(c, 'login.externalState.pending'),
-                  message: t(c, 'login.externalPendingHint'),
-                })
-              : Notice({
-                  tone: 'warning',
-                  title: t(c, 'login.externalState.handling'),
-                  message: t(c, 'login.externalHandlingHint'),
-                }),
-          ]
-        : []),
-      ...(c.data.externalCredential?.emailState
-        ? [
-            Notice({
-              tone: ['failed', 'uncertain'].includes(c.data.externalCredential.emailState)
-                ? 'warning'
-                : 'info',
-              title: t(c, `login.emailState.${c.data.externalCredential.emailState}`),
-              message: t(c, 'login.emailStateHint'),
-            }),
-          ]
-        : []),
-      // Resetting your own password is the profile's job, with the current one.
-      ...(readingSelf(c)
-        ? [
-            Notice({
-              tone: 'info',
-              title: t(c, 'login.selfTitle'),
-              message: t(c, 'login.selfHint'),
-            }),
-          ]
-        : mayReset
-          ? [
-              ...(delivery !== 'oneTime' && c.data.permissions.sendLink ? emailReset(c) : []),
-              ...(delivery !== 'email' && c.data.permissions.resetPassword ? oneTimeReset(c) : []),
-            ]
-          : // An account still being prepared waits on its state, which the section above
-            // already names; calling that "read only" blames a permission the reader has.
-            c.data.externalCredential && c.data.externalCredential.state !== 'ready'
-            ? []
-            : [
-                Notice({
-                  tone: 'info',
-                  title: t(c, 'users.readOnlyTitle'),
-                  message: t(c, 'login.readOnlyHint'),
-                }),
-              ]),
+      {
+        id: 'credential',
+        label: t(c, 'field.credential'),
+        value: credentialBadge(c),
+      },
+      {
+        id: 'login',
+        label: t(c, 'field.login'),
+        value: c.data.record.login,
+      },
+      {
+        id: 'lastLogin',
+        label: t(c, 'login.lastSignIn'),
+        value: c.data.record.lastLoginAt ? when(c, c.data.record.lastLoginAt) : t(c, 'login.never'),
+      },
+      {
+        id: 'delivery',
+        label: t(c, 'login.delivery'),
+        value: t(c, `login.delivery.${delivery}`),
+      },
     ],
   })
+}
+
+/** What follows the account's facts: its state while it is prepared, and the way to reset it. */
+const accountFollowUp = (c: Context): JSXChild[] => {
+  const delivery = deliveryOf(c)
+  const mayReset = c.data.permissions.sendLink || c.data.permissions.resetPassword
+  return [
+    // Preparing the account is Két Việt's work: the administrator is told whether
+    // to wait, never offered a provision, retry or status probe to run themselves.
+    // An existing linked account ('unmanaged') already signs in, like a ready one.
+    ...(c.data.externalCredential && !['ready', 'unmanaged'].includes(c.data.externalCredential.state)
+      ? [
+          c.data.externalCredential.state === 'pending'
+            ? Notice({
+                tone: 'info',
+                title: t(c, 'login.externalState.pending'),
+                message: t(c, 'login.externalPendingHint'),
+              })
+            : Notice({
+                tone: 'warning',
+                title: t(c, 'login.externalState.handling'),
+                message: t(c, 'login.externalHandlingHint'),
+              }),
+        ]
+      : []),
+    ...(c.data.externalCredential?.emailState
+      ? [
+          Notice({
+            tone: ['failed', 'uncertain'].includes(c.data.externalCredential.emailState) ? 'warning' : 'info',
+            title: t(c, `login.emailState.${c.data.externalCredential.emailState}`),
+            message: t(c, 'login.emailStateHint'),
+          }),
+        ]
+      : []),
+    // Resetting your own password is the profile's job, with the current one.
+    ...(readingSelf(c)
+      ? [
+          Notice({
+            tone: 'info',
+            title: t(c, 'login.selfTitle'),
+            message: t(c, 'login.selfHint'),
+          }),
+        ]
+      : mayReset
+        ? [
+            ...(delivery !== 'oneTime' && c.data.permissions.sendLink ? emailReset(c) : []),
+            ...(delivery !== 'email' && c.data.permissions.resetPassword ? oneTimeReset(c) : []),
+          ]
+        : // An account still being prepared waits on its state, which the section above
+          // already names; calling that "read only" blames a permission the reader has.
+          c.data.externalCredential && c.data.externalCredential.state !== 'ready'
+          ? []
+          : [
+              Notice({
+                tone: 'info',
+                title: t(c, 'users.readOnlyTitle'),
+                message: t(c, 'login.readOnlyHint'),
+              }),
+            ]),
+  ]
+}
+
+const loginTab = (c: Context): JSXChild =>
+  Stack({
+    gap: 'default',
+    items: [Section({ title: t(c, 'login.accountTitle'), body: accountFacts(c) }), ...accountFollowUp(c)],
+  })
+
+/** Who changed it, by name: a person, a rule that matched them, or the system. */
+const actorLabel = (c: Context, actor: unknown): string => {
+  if (typeof actor === 'string') return actor
+  const named = (actor ?? {}) as { kind?: string; name?: string | null }
+  if (named.kind === 'user' && named.name) return named.name
+  if (named.kind === 'policy') return t(c, 'page.actor.policy').replace('{policy}', String(named.name ?? ''))
+  return t(c, 'page.actor.system')
 }
 
 /** What was done to this person's authority, and who did it. */
@@ -1465,23 +1540,33 @@ const auditTab = (c: Context): JSXChild =>
   c.data.audit.length
     ? DataTable<AnyRow>({
         rows: c.data.audit,
+        responsive: 'stack',
         id: (row) => String(row.id),
         columns: [
           {
             key: 'when',
             label: t(c, 'audit.when'),
-            cell: (row) => String(row.occurredAt ?? '—'),
+            cell: (row) => when(c, row.occurredAt as string | null),
           },
           {
             key: 'event',
             label: t(c, 'audit.action'),
             priority: 'primary',
-            cell: (row) => `${t(c, `audit.event.${String(row.event)}`)} · ${String(row.actor ?? '—')}`,
+            cell: (row) => t(c, `audit.event.${String(row.event)}`),
           },
           {
             key: 'roles',
-            label: t(c, 'field.assignment'),
-            cell: (row) => (row.roleIds as string[]).map((id) => roleNameOf(c, id)).join(' · ') || '—',
+            label: t(c, 'page.roleColumn'),
+            cell: (row) =>
+              (
+                (row.roles as string[] | undefined) ??
+                (row.roleIds as string[]).map((id) => roleNameOf(c, id))
+              ).join(' · ') || '—',
+          },
+          {
+            key: 'actor',
+            label: t(c, 'page.actorColumn'),
+            cell: (row) => actorLabel(c, row.actor),
           },
           {
             key: 'outcome',
@@ -1523,6 +1608,386 @@ const assignSelection = (form: FormData, c: Context): Record<string, unknown> =>
   // it; the server refuses that unless the actor may also grant the membership.
   addMembership: true,
 })
+
+// ── The person as a page ─────────────────────────────────────────────────────
+//
+// An administrator opens a person to answer, in order: who is this and can they
+// sign in; where they are admitted; what they can do there; which roles give it,
+// where and by what; and what changed. Each answer is a card of its own, in that
+// order, so the reader scans the titles and stops at the one they came for.
+//
+// The cards follow how KetJS decides access, not how the tables are stored: roles
+// apply only where the person is admitted and only in the scope they were given,
+// access is measured at the place the person lands, an archived account or a role
+// whose template moved on gives nothing, and a superuser needs no role at all.
+
+const LEVEL_TONE: Record<AccessArea['level'], 'neutral' | 'info' | 'positive'> = {
+  view: 'neutral',
+  edit: 'info',
+  manage: 'positive',
+}
+
+const companyNameOf = (c: Context, id: string): string =>
+  String(c.data.companies.find((row) => row.id === id)?.name ?? id)
+
+/** Where the access below is measured: the place this person lands. */
+const defaultWorkplace = (c: Context): string =>
+  [
+    c.data.companies.find((row) => row.id === c.data.record.defaultCompanyId)?.name,
+    c.data.branches.find((row) => row.id === c.data.record.defaultBranchId)?.name,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+/** The assign action where the reader may use it; nothing otherwise. */
+const assignAction = (c: Context, variant: 'primary' | 'secondary'): JSXChild[] =>
+  c.data.permissions.assign && !readingSelf(c)
+    ? [
+        RecordDialogTrigger({
+          dialog: 'assign',
+          children: Button({ label: t(c, 'action.assignRole'), variant }),
+        }),
+      ]
+    : []
+
+/** Who this is, and whether and how they sign in. */
+const accountCard = (c: Context): JSXChild => {
+  const record = c.data.record
+  return Surface({
+    title: t(c, 'page.accountTitle'),
+    body: Stack({
+      gap: 'default',
+      items: [
+        DescriptionList({
+          columns: 2,
+          items: [
+            { id: 'login', label: t(c, 'field.login'), value: record.login },
+            { id: 'email', label: t(c, 'field.email'), value: record.email || '—' },
+            { id: 'accessKind', label: t(c, 'field.accessKind'), value: t(c, `access.${record.accessKind}`) },
+            { id: 'credential', label: t(c, 'field.credential'), value: credentialBadge(c) },
+            {
+              id: 'lastLogin',
+              label: t(c, 'login.lastSignIn'),
+              value: record.lastLoginAt ? when(c, record.lastLoginAt) : t(c, 'login.never'),
+            },
+            { id: 'delivery', label: t(c, 'login.delivery'), value: t(c, `login.delivery.${deliveryOf(c)}`) },
+          ],
+        }),
+        ...accountFollowUp(c),
+      ],
+    }),
+  })
+}
+
+/** One row per company the person is admitted to, with the branches admitted there. */
+const workplaceRows = (c: Context): AnyRow[] =>
+  c.data.memberships.companies.map((companyId) => ({
+    id: companyId,
+    company: companyNameOf(c, companyId),
+    branches: c.data.branches
+      .filter((row) => row.companyId === companyId && c.data.memberships.branches.includes(String(row.id)))
+      .map((row) => String(row.name)),
+  }))
+
+/** Where the person is admitted: no role applies anywhere else. */
+const workplacesCard = (c: Context): JSXChild =>
+  Surface({
+    title: t(c, 'users.workplaceTitle'),
+    description: t(c, 'page.workplacesHint').replace(
+      '{place}',
+      defaultWorkplace(c) || t(c, 'page.noWorkplace'),
+    ),
+    actions: c.data.permissions.workplaces
+      ? RecordDialogTrigger({
+          dialog: 'workplaces',
+          children: Button({ label: t(c, 'page.workplacesEdit'), variant: 'tertiary', size: 'compact' }),
+        })
+      : undefined,
+    body: DataTable<AnyRow>({
+      rows: workplaceRows(c),
+      // A narrow screen reads each row as a card, not a strip to scroll sideways.
+      responsive: 'stack',
+      id: (row) => String(row.id),
+      gutter: 'compact',
+      emptyTitle: t(c, 'page.workplacesEmptyTitle'),
+      emptyMessage: t(c, 'page.workplacesEmptyHint'),
+      columns: [
+        {
+          key: 'company',
+          label: t(c, 'scope.choice.company'),
+          priority: 'primary',
+          cell: (row) => row.company,
+        },
+        {
+          key: 'branches',
+          label: t(c, 'scope.choice.branch'),
+          cell: (row) => (row.branches as string[]).join(', ') || '—',
+        },
+      ],
+    }),
+  })
+
+/** Why the access is what it is, said before the areas it explains. */
+const standingNotices = (c: Context): JSXChild[] => {
+  const standing = c.data.standing ?? { state: 'measured', staleRoles: [] }
+  const record = c.data.record
+  if (standing.state === 'superuser')
+    return [
+      Notice({
+        tone: 'warning',
+        title: t(c, 'breakGlass.activeTitle'),
+        message: `${t(c, 'area.superuserHint')} ${
+          record.superuserExpiresAt
+            ? t(c, 'breakGlass.activeUntil').replace('{until}', when(c, record.superuserExpiresAt))
+            : t(c, 'breakGlass.standing')
+        }`,
+      }),
+    ]
+  if (standing.state === 'inactive')
+    return [
+      Notice({ tone: 'info', title: t(c, 'standing.inactiveTitle'), message: t(c, 'standing.inactiveHint') }),
+    ]
+  if (standing.state === 'outside')
+    return [
+      Notice({
+        tone: 'warning',
+        title: t(c, 'standing.outsideTitle'),
+        message: t(c, 'standing.outsideHint'),
+      }),
+    ]
+  const gaps = (c.data.surfaces ?? []).filter((row) => row.status === 'partial')
+  return [
+    ...(standing.staleRoles.length
+      ? [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'standing.staleTitle').replace('{roles}', standing.staleRoles.join(', ')),
+            message: t(c, 'standing.staleHint'),
+          }),
+        ]
+      : []),
+    ...(gaps.length
+      ? [
+          Notice({
+            tone: 'warning',
+            title: t(c, 'area.gapTitle').replace('{count}', String(gaps.length)),
+            message: t(c, 'area.gapHint'),
+          }),
+        ]
+      : []),
+  ]
+}
+
+/** What the person can do where they land, area by area on the four-level scale. */
+const accessCard = (c: Context): JSXChild => {
+  const state = c.data.standing?.state ?? 'measured'
+  const areas = c.data.areas ?? []
+  const without = c.data.areasWithout ?? []
+  const measured = state === 'measured'
+  return Surface({
+    title: t(c, 'page.accessTitle'),
+    description: t(c, 'page.accessHint').replace('{place}', defaultWorkplace(c) || t(c, 'page.noWorkplace')),
+    actions:
+      measured && (c.data.surfaces ?? []).length
+        ? RecordDialogTrigger({
+            dialog: 'diagnostics',
+            children: Button({ label: t(c, 'page.screensAction'), variant: 'tertiary', size: 'compact' }),
+          })
+        : undefined,
+    body: Stack({
+      gap: 'default',
+      items: [
+        ...denialNotice(c),
+        ...standingNotices(c),
+        ...(measured
+          ? [
+              DataTable<AccessArea>({
+                rows: areas,
+                responsive: 'stack',
+                id: (row) => row.key,
+                gutter: 'compact',
+                emptyTitle: t(c, 'area.emptyTitle'),
+                emptyMessage: t(c, 'area.emptyHint'),
+                emptyActions: assignAction(c, 'secondary'),
+                columns: [
+                  {
+                    key: 'area',
+                    label: t(c, 'page.areaColumn'),
+                    priority: 'primary',
+                    cell: (row) => row.label,
+                  },
+                  {
+                    key: 'level',
+                    label: t(c, 'page.levelColumn'),
+                    kind: 'status',
+                    cell: (row) =>
+                      Badge({
+                        label: row.partial
+                          ? t(c, 'level.partialOf').replace('{level}', t(c, `level.${row.level}`))
+                          : t(c, `level.${row.level}`),
+                        tone: row.partial ? 'warning' : LEVEL_TONE[row.level],
+                      }),
+                  },
+                  { key: 'via', label: t(c, 'page.viaColumn'), cell: (row) => row.via.join(', ') || '—' },
+                ],
+              }),
+              ...(areas.length && without.length
+                ? [
+                    Disclosure({
+                      summary: t(c, 'area.without').replace('{count}', String(without.length)),
+                      body: Text({ tone: 'muted', children: without.join(', ') }),
+                    }),
+                  ]
+                : []),
+            ]
+          : []),
+      ],
+    }),
+  })
+}
+
+/** Whether a held role gives anything: a managed role whose template moved on gives nothing. */
+const roleStateBadge = (c: Context, row: AnyRow): JSXChild =>
+  Badge({
+    label: t(c, `page.roleState.${row.roleState === 'stale' ? 'stale' : 'current'}`),
+    tone: row.roleState === 'stale' ? 'warning' : 'positive',
+  })
+
+/** Where an assignment applies: everywhere, a whole company, or one branch. */
+const scopeOf = (c: Context, row: AnyRow): string =>
+  row.branch
+    ? `${String(row.company)} · ${String(row.branch)}`
+    : row.company
+      ? `${String(row.company)} · ${t(c, 'page.allBranches')}`
+      : t(c, 'scope.choice.tenant')
+
+const SCOPE_ORDER: Record<string, number> = { tenant: 0, company: 1, branch: 2 }
+
+/** Each role the person holds, where it applies, who decided it, and whether it gives anything. */
+const rolesCard = (c: Context): JSXChild => {
+  const rows = [...c.data.assignments].sort(
+    (a, b) =>
+      (SCOPE_ORDER[String(a.scopeKind)] ?? 3) - (SCOPE_ORDER[String(b.scopeKind)] ?? 3) ||
+      scopeOf(c, a).localeCompare(scopeOf(c, b)) ||
+      String(a.roleName).localeCompare(String(b.roleName)),
+  )
+  return Surface({
+    title: t(c, 'page.rolesTitle'),
+    description: t(c, 'page.rolesHint'),
+    body: Stack({
+      gap: 'default',
+      items: [
+        // Why the reader may not change these, when they may not.
+        ...(readingSelf(c) || !c.data.permissions.assign ? accessControls(c) : []),
+        DataTable<AnyRow>({
+          rows,
+          responsive: 'stack',
+          id: (row) => String(row.id),
+          gutter: 'compact',
+          emptyTitle: t(c, 'users.noAssignments'),
+          emptyMessage: t(c, 'access.emptyHint'),
+          emptyActions: assignAction(c, 'secondary'),
+          columns: [
+            {
+              key: 'role',
+              label: t(c, 'page.roleColumn'),
+              priority: 'primary',
+              cell: (row) =>
+                Text({ id: `user-role-${String(row.id)}`, tone: 'inherit', children: String(row.roleName) }),
+            },
+            { key: 'scope', label: t(c, 'page.scopeColumn'), cell: (row) => scopeOf(c, row) },
+            { key: 'source', label: t(c, 'access.sourceColumn'), cell: (row) => sourceBadge(c, row) },
+            {
+              key: 'state',
+              label: t(c, 'page.stateColumn'),
+              kind: 'status',
+              cell: (row) => roleStateBadge(c, row),
+            },
+            {
+              key: 'open',
+              label: t(c, 'page.detailsColumn'),
+              align: 'end',
+              // The role opens: what it covers, where it applies, and how to take it back.
+              cell: (row) =>
+                RecordDialogTrigger({
+                  dialog: 'role',
+                  id: String(row.id),
+                  // Every row says "View"; which role it opens is read from the row's name.
+                  children: Button({
+                    label: t(c, 'page.roleDetails'),
+                    variant: 'tertiary',
+                    size: 'compact',
+                    describedBy: `user-role-${String(row.id)}`,
+                  }),
+                }),
+            },
+          ],
+        }),
+      ],
+    }),
+  })
+}
+
+/** How many history entries the page shows before "see all". */
+const AUDIT_PREVIEW = 5
+
+/** The latest changes to this person's authority; the full log opens over the page. */
+const historyCard = (c: Context): JSXChild[] =>
+  c.data.permissions.audit
+    ? [
+        Surface({
+          title: t(c, 'page.auditTitle'),
+          actions:
+            c.data.audit.length > AUDIT_PREVIEW
+              ? RecordDialogTrigger({
+                  dialog: 'audit',
+                  children: Button({ label: t(c, 'page.auditAll'), variant: 'tertiary', size: 'compact' }),
+                })
+              : undefined,
+          body: auditTab({ ...c, data: { ...c.data, audit: c.data.audit.slice(0, AUDIT_PREVIEW) } }),
+        }),
+      ]
+    : []
+
+/** Emergency access, for the superuser reading someone else; its state otherwise shows above. */
+const breakGlassCard = (c: Context): JSXChild[] =>
+  c.data.permissions.breakGlass && !readingSelf(c)
+    ? [
+        Surface({
+          title: t(c, 'breakGlass.title'),
+          description: t(c, 'breakGlass.hint'),
+          body: breakGlassBody(c),
+        }),
+      ]
+    : []
+
+/** The person: one card per answer, the page's own gap between them. */
+const pageBody = (c: Context): JSXChild => (
+  <>
+    {accountCard(c)}
+    {workplacesCard(c)}
+    {accessCard(c)}
+    {rolesCard(c)}
+    {historyCard(c)}
+    {breakGlassCard(c)}
+  </>
+)
+
+/** The page's own commands: change who they are, and give them a role. */
+const pageActions = (c: Context): JSXChild | undefined => {
+  const actions = [
+    ...(c.data.permissions.save
+      ? [
+          RecordDialogTrigger({
+            dialog: 'edit',
+            children: Button({ label: t(c, 'action.editProfile'), variant: 'secondary' }),
+          }),
+        ]
+      : []),
+    ...assignAction(c, 'primary'),
+  ]
+  return actions.length ? ActionGroup({ actions, label: t(c, 'users.profileTitle') }) : undefined
+}
 
 export const userModalDefinition: RecordModalDefinition<UserModalData> = {
   kind: 'user.user',
@@ -1641,9 +2106,11 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
         expectedAuthorizationRevision: c.data.revision,
         idempotencyKey: uuid(),
       }),
-      // The modal switches to the person it created, on their overview.
-      after: 'open',
-      openTab: 'overview',
+      // The person created is read on their own page, in the language being read.
+      navigate: (value) => {
+        const row = (value ?? {}) as { id?: unknown }
+        return typeof row.id === 'string' ? userPagePath(row.id) : '/admin/users'
+      },
       created: (value) => {
         const row = (value ?? {}) as { id?: unknown }
         return typeof row.id === 'string' ? row.id : null
@@ -1794,3 +2261,36 @@ export const userModalDefinition: RecordModalDefinition<UserModalData> = {
 }
 
 export const userModal = createRecordModal(userModalDefinition)
+
+/**
+ * The person as a page of their own, at `/admin/users/{id}`. Same data, dialogs
+ * and commands as the modal; the modal is left with creating someone, which then
+ * lands here.
+ */
+export const userPageDefinition: RecordModalDefinition<UserModalData> = {
+  ...userModalDefinition,
+  header: undefined,
+  tabs: undefined,
+  extensionTabs: undefined,
+  body: pageBody,
+  pageActions,
+  dialogs: {
+    ...userModalDefinition.dialogs,
+    // Who the person is, alone: where they work has a card and a dialog of its own.
+    edit: {
+      title: (c) => t(c, 'action.editProfile'),
+      size: 'small',
+      view: (c) =>
+        RecordModalForm({
+          kind: c.kind,
+          fields: profileFields(c),
+          command: 'save',
+          actions: [Button({ label: t(c, 'action.save'), variant: 'primary', type: 'submit' })],
+        }),
+    },
+    workplaces: { title: (c) => t(c, 'page.workplacesEdit'), size: 'small', view: workplaceForm },
+    audit: { title: (c) => t(c, 'page.auditTitle'), size: 'large', view: auditTab },
+  },
+}
+
+export const userPage = createRecordPage(userPageDefinition)

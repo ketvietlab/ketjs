@@ -1,10 +1,11 @@
-// What a set of functions opens, screen by screen.
+// What a set of functions opens, screen by screen and area by area.
 //
 // Shared by the user and role record-modal contexts: a person is measured by what
 // they effectively hold where they land, a role template by what it grants. Both
 // answer the same question the same way, so the two modals never disagree.
 
 import type { Ctx, Row } from '@ketvietlab/ketjs'
+import { permissionArea, permissionGroupOrder } from './permission-areas.ts'
 
 type Lang = 'vi' | 'en'
 type CatalogueContext = Pick<Ctx, 'manifest'>
@@ -53,6 +54,8 @@ export const surfaceRows = (
         key,
         label: label(def),
         area: parent ? label(parent) : '',
+        // The module that placed the screen, so it can be read under its permission area.
+        module: String(def.by ?? ''),
         status: missing.length ? 'partial' : 'full',
         missing: missing.map((fn) => ({
           key: fn,
@@ -97,4 +100,73 @@ export const templateTier = (ctx: CatalogueContext, templateKey: string): 'secur
   return template?.functions.some((fn) => ctx.manifest.permissions.functions[fn]?.risk === 'security')
     ? 'security'
     : 'standard'
+}
+
+/**
+ * How far a function reaches, on the four-step scale an administrator reads:
+ * see, create and change, run the area. Reading private data is still reading;
+ * approving, configuring and security run the area.
+ */
+const RISK_LEVEL: Record<string, 1 | 2 | 3> = {
+  read: 1,
+  sensitive: 1,
+  operate: 2,
+  approve: 3,
+  configure: 3,
+  security: 3,
+}
+const LEVELS = ['none', 'view', 'edit', 'manage'] as const
+
+/** The area a module's bundles and screens are read under: `sale_backend` is Sales. */
+export const areaKey = (module: string): string =>
+  module.endsWith('_backend') ? module.slice(0, -8) : module
+
+/**
+ * What this person can do, area by area, on four levels.
+ *
+ * An area reaches the highest level of any function it holds there; it is
+ * partial when functions of that level are only partly held, which is what a
+ * "why can't they" call is about. Each area names the held roles that give it, and
+ * the areas held nothing of are named apart, so the list says what someone does
+ * rather than everything they don't.
+ */
+export const accessAreas = (
+  ctx: CatalogueContext,
+  lang: Lang,
+  holds: (fn: string) => boolean,
+  via: (fn: string) => string[],
+): { areas: Row[]; without: string[] } => {
+  const catalogue = ctx.manifest.permissions
+  const modules = new Map<string, Set<string>>()
+  for (const [key, bundle] of Object.entries(catalogue.bundles ?? {})) {
+    const dot = key.indexOf('.')
+    const module = areaKey(dot > 0 ? key.slice(0, dot) : key)
+    const functions = modules.get(module) ?? new Set<string>()
+    for (const fn of (bundle as { functions?: string[] }).functions ?? []) functions.add(fn)
+    if (functions.size) modules.set(module, functions)
+  }
+  type Ranked = { group: number; label: string }
+  const areas: (Ranked & Row)[] = []
+  const without: Ranked[] = []
+  for (const [module, functions] of modules) {
+    const named = permissionArea(module, lang)
+    const group = permissionGroupOrder.indexOf(named.group)
+    const levelOf = (fn: string): number => RISK_LEVEL[String(catalogue.functions[fn]?.risk)] ?? 2
+    const held = [...functions].filter(holds)
+    const level = Math.max(0, ...held.map(levelOf))
+    if (!level) {
+      without.push({ group, label: named.label })
+      continue
+    }
+    areas.push({
+      key: module,
+      label: named.label,
+      group,
+      level: LEVELS[level],
+      partial: [...functions].some((fn) => levelOf(fn) === level && !holds(fn)),
+      via: [...new Set(held.flatMap(via))].sort((a, b) => a.localeCompare(b)),
+    })
+  }
+  const order = (a: Ranked, b: Ranked) => a.group - b.group || a.label.localeCompare(b.label)
+  return { areas: areas.sort(order), without: without.sort(order).map((row) => row.label) }
 }
