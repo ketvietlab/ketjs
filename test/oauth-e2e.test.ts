@@ -284,7 +284,7 @@ test('oauth HTTP E2E: every administration screen renders in Vietnamese and Engl
     ['/admin/oauth/identities?lang=vi', /Danh tính ngoài/],
     ['/admin/oauth/identities/new?lang=en', /Verified issuer and subject/],
     ['/admin/oauth/link?lang=en', /Choose a provider/],
-    ['/admin/users/admin?lang=en', /data-record-kind="user\.user"/],
+    ['/admin/users/admin?lang=en', /data-island="user\.user-page"/],
     ['/admin/profile?lang=en', /Link external identity/],
   ] as const) {
     const response = await e2e.client.get(path, {

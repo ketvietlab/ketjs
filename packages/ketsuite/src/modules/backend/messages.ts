@@ -180,6 +180,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customValue': 'Giá trị',
     'chrome.apply': 'Áp dụng',
     'chrome.more': 'Thêm thao tác',
+    'chrome.selectedCount': 'Đã chọn {count}',
+    'chrome.clearSelection': 'Bỏ chọn',
     'chrome.archive': 'Lưu trữ',
     'chrome.delete': 'Xoá',
 
@@ -362,6 +364,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customValue': 'Value',
     'chrome.apply': 'Apply',
     'chrome.more': 'More actions',
+    'chrome.selectedCount': '{count} selected',
+    'chrome.clearSelection': 'Clear selection',
     'chrome.archive': 'Archive',
     'chrome.delete': 'Delete',
 

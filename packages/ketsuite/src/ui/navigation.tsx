@@ -107,6 +107,9 @@ export const pageContext = (o: {
   </div>
 )
 
+/** The way from the menu to this page, ending with its own title. */
+export const pageTrailItems = (title: string, frame: PageContextFrame) => trailItems(title, frame)
+
 const trailItems = (title: string, frame: PageContextFrame) => {
   const items = activeTrail(frame.menu ?? []).map((node, index) => ({
     id: `${index}:${node.label}`,

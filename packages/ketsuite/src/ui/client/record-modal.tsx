@@ -11,7 +11,7 @@
 // They never fetch, never touch history and never query the document.
 
 import { signal } from '@ketvietlab/ketjs-view'
-import type { IslandController, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { IslandController, IslandProps, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Button, LoadingState, ModalSheet, Notice, TabbedView } from '@ketvietlab/design-system'
 import {
   RECORD_NEW_ID,
@@ -22,6 +22,9 @@ import {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageFrame,
+  recordPageShell,
+  type RecordPageIslandProps,
 } from '../record-modal.tsx'
 
 // ── Function calls ────────────────────────────────────────────────────────────
@@ -295,6 +298,12 @@ export type RecordModalDefinition<Data> = {
    * at all, e.g. while creating, when the create form owns its own submit.
    */
   actions?: (context: RecordModalContext<Data>) => JSXChild | undefined
+  /**
+   * On a record page (`createRecordPage`), the commands beside the title. A page
+   * has no footer: its body scrolls with the document, so the record's own
+   * commands sit in the header the way a list page's create action does.
+   */
+  pageActions?: (context: RecordModalContext<Data>) => JSXChild | undefined
   tabs?: readonly RecordModalTab<Data>[]
   /**
    * Tabs other modules add to this record, read from its context: they follow the
@@ -537,9 +546,27 @@ export const openerHref = (element: Element | null): string | null => {
  * The returned factory is what a module exports as its island client:
  * `export const followupModal = createRecordModal(definition)`.
  */
+/**
+ * Every layer the runtime owns: the record (a client modal, or the body of a record
+ * page) and the dialogs nested over it, in document order.
+ */
+const RECORD_LAYER = '[data-ui="modal-layer"][data-client-modal="true"], [data-record-layer="page"]'
+
+export type RecordRuntimeOptions = {
+  /**
+   * `modal` (the default) opens records named by a link over the page beneath.
+   * `page` renders one record as the page itself; its dialogs still open as modals.
+   */
+  presentation?: 'modal' | 'page'
+}
+
 export const createRecordModal =
-  <Data,>(definition: RecordModalDefinition<Data>) =>
-  (): IslandController => {
+  <Data,>(definition: RecordModalDefinition<Data>, options: RecordRuntimeOptions = {}) =>
+  (props: IslandProps = {}): IslandController => {
+    const page = options.presentation === 'page'
+    const pageProps = page ? (props as unknown as RecordPageIslandProps) : null
+    // Until the browser adopts the server's markup, render exactly what it wrote.
+    const adopted = signal(!page)
     const open = signal<{ id: string; tab: string } | null>(null)
     const status = signal<Status>('idle')
     const envelope = signal<RecordContextEnvelope<Data> | null>(null)
@@ -582,6 +609,15 @@ export const createRecordModal =
       cache.delete(id)
       cache.set(id, value)
       while (cache.size > RECORD_MODAL_CACHE_SIZE) cache.delete(cache.keys().next().value as string)
+    }
+
+    // A record page is open from the start, on the record its route named.
+    if (pageProps) {
+      open.set({ id: String(pageProps.id), tab: '' })
+      if (pageProps.envelope) {
+        envelope.set(pageProps.envelope as RecordContextEnvelope<Data>)
+        status.set('ready')
+      }
     }
 
     let root: HTMLElement | null = null
@@ -701,8 +737,7 @@ export const createRecordModal =
       }
     }
 
-    const layers = (): HTMLElement[] =>
-      root ? [...root.querySelectorAll<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')] : []
+    const layers = (): HTMLElement[] => (root ? [...root.querySelectorAll<HTMLElement>(RECORD_LAYER)] : [])
     const recordLayer = (): HTMLElement | null => layers()[0] ?? null
     const topLayer = (): HTMLElement | null => layers().at(-1) ?? null
 
@@ -800,6 +835,19 @@ export const createRecordModal =
         const top = currentLayers.at(-1)
         if (!top) return
         if (record) record.inert = currentLayers.length > 1
+        if (page) {
+          // A page is not a modal: only a dialog over it fences off the rest of the
+          // document, and closing the last dialog hands the page back untouched.
+          if (currentLayers.length > 1) {
+            if (root && !releaseInert) releaseInert = inertOutside(root)
+          } else {
+            releaseInert?.()
+            releaseInert = null
+            const target = preferred?.()
+            if (target?.isConnected) target.focus()
+            return
+          }
+        }
         const target = preferred?.()
         if (target?.isConnected && top.contains(target)) {
           target.focus()
@@ -864,7 +912,7 @@ export const createRecordModal =
         history.pushState({ ...(history.state ?? {}), __ketRecordModal: definition.kind }, '', href)
         pushed = true
       } else if (how === 'replace') history.replaceState(history.state ?? {}, '', href)
-      if (root && !releaseInert) releaseInert = inertOutside(root)
+      if (root && !releaseInert && !page) releaseInert = inertOutside(root)
       afterRender(preferredFocus)
     }
 
@@ -904,7 +952,7 @@ export const createRecordModal =
         dialogReturnFocus = null
         dialog.set(null)
         const current = open()
-        if (current)
+        if (current && !page)
           history.replaceState(
             history.state ?? {},
             '',
@@ -917,6 +965,8 @@ export const createRecordModal =
         afterRender(() => (target?.isConnected ? target : null))
         return
       }
+      // A page is left by navigating away, which the browser guards itself.
+      if (page) return
       if (!mayDiscard(recordLayer())) return
       hide('history')
     }
@@ -927,7 +977,7 @@ export const createRecordModal =
       const data = envelope()?.data
       if (!command || !current || data === undefined || running()) return
       const formData = new FormData(form, submitter instanceof HTMLButtonElement ? submitter : null)
-      const currentLayer = form.closest<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')
+      const currentLayer = form.closest<HTMLElement>(RECORD_LAYER)
       const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
       keepDrafts(currentLayer, scope)
       const context = contextFor(current, data, scope)
@@ -1048,13 +1098,24 @@ export const createRecordModal =
           const destination = new URL(command.navigate(result.value, context), location.href)
           if (destination.origin !== location.origin)
             throw new Error('Record navigation must stay same-origin')
-          hide('none')
+          if (!page) hide('none')
           location.assign(destination.href)
           return
         }
-        const after = after_(command)
-        // A modal that closes says so by closing; one that stays owes an answer.
-        if (after !== 'close') saved.set(true)
+        // A page never closes or switches tab: what would close the modal closes the
+        // dialog that ran the command and reads the record again in place.
+        const declared = after_(command)
+        const after: ReturnType<typeof after_> =
+          page &&
+          (declared === 'close' ||
+            declared === 'reload' ||
+            declared === 'open' ||
+            (typeof declared === 'object' && 'tab' in declared))
+            ? { dialog: null }
+            : declared
+        // A modal that closes says so by closing; one that stays owes an answer. A
+        // page whose dialog closed shows the change itself, read again in place.
+        if (after !== 'close' && after === declared) saved.set(true)
         if (after === 'open') {
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
@@ -1203,10 +1264,39 @@ export const createRecordModal =
       })
     }
 
+    // The record as the page itself: the trail back to its collection, its
+    // identity and commands, then the body. Dialogs still open over it.
+    const pageView = (): TemplateResult => {
+      if (!adopted()) return recordPageShell(pageProps!)
+      const current = open()!
+      const data = envelope()?.data
+      const context = data === undefined ? null : contextFor(current, data)
+      const title = context
+        ? definition.title(context)
+        : status() === 'error'
+          ? t('recordModal.loadFailed')
+          : pageProps!.title
+      return (
+        <>
+          {recordPageFrame({
+            title,
+            trail: pageProps!.trail,
+            trailLabel: pageProps!.trailLabel,
+            meta: context ? (definition.description?.(context) ?? undefined) : undefined,
+            status: context ? definition.status?.(context) : undefined,
+            actions: context ? definition.pageActions?.(context) : undefined,
+            body: recordBody(),
+          })}
+          {dialogLayer()}
+        </>
+      )
+    }
+
     return {
       view: () => {
         version()
         const current = open()
+        if (page && current) return pageView()
         if (!current) return recordModalHost(definition.kind)
         const data = envelope()?.data
         const context = data === undefined ? null : contextFor(current, data)
@@ -1259,16 +1349,18 @@ export const createRecordModal =
             )
               return
             const element = event.target instanceof Element ? event.target : null
-            const inModal = element?.closest('[data-ui="modal-layer"][data-client-modal="true"]')
+            const inModal = element?.closest(RECORD_LAYER)
             if (inModal && root?.contains(inModal)) {
               // A child control can open its own dialog inside this record.
               // Close/backdrop actions in that layer belong to the child.
-              if (element?.closest('[data-ui="modal-layer"]') !== inModal) return
+              const layer = element?.closest('[data-ui="modal-layer"]')
+              if (layer && layer !== inModal && inModal.contains(layer)) return
               // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
               // marks a module's own labeled close button placed elsewhere in the body
               // (the two can't share one attribute — a labeled button needs `data-ui="action"`
-              // for its styling, not the icon-only close control's).
+              // for its styling, not the icon-only close control's). A page has no close.
               if (
+                inModal.matches('[data-ui="modal-layer"]') &&
                 element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"], [data-record-close]')
               ) {
                 event.preventDefault()
@@ -1327,6 +1419,8 @@ export const createRecordModal =
                 return
               }
             }
+            // A page shows one record; links naming others are the modal host's.
+            if (page) return
             const href = openerHref(element)
             if (!href) return
             const url = new URL(href, location.href)
@@ -1381,7 +1475,7 @@ export const createRecordModal =
         document.addEventListener(
           'keydown',
           (event) => {
-            if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+            if (page || event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
             const element = event.target instanceof Element ? event.target : null
             if (!element?.matches('[data-row-href][tabindex="0"]')) return
             const href = element.getAttribute('data-row-href')
@@ -1590,9 +1684,34 @@ export const createRecordModal =
             if (detail?.kind !== definition.kind) return
             if (!Array.isArray(detail.ids) || !detail.ids.length) cache.clear()
             else for (const id of detail.ids) cache.delete(String(id))
+            // A page keeps showing its record, so it reads the change at once.
+            const current = open()
+            if (
+              page &&
+              current &&
+              !running() &&
+              (!Array.isArray(detail.ids) ||
+                !detail.ids.length ||
+                detail.ids.map(String).includes(current.id))
+            )
+              void load(current.id, true)
           },
           { signal: lifetime },
         )
+
+        lifetime.addEventListener('abort', () => {
+          request?.abort()
+          showBusy.stop()
+          releaseInert?.()
+          releaseInert = null
+          root = null
+        })
+        // A page belongs to its address; history and links are the shell's.
+        if (page) {
+          adopted.set(true)
+          if (status() !== 'ready') void load(open()!.id)
+          return
+        }
 
         // Back and forward over entries this modal created change only the modal.
         document.addEventListener(
@@ -1627,17 +1746,13 @@ export const createRecordModal =
         const initial = readRecordModalTarget(location.href)
         if (initial?.kind === definition.kind)
           show(initial.id, initial.tab ?? null, 'none', undefined, initial.dialog)
-
-        lifetime.addEventListener('abort', () => {
-          request?.abort()
-          showBusy.stop()
-          releaseInert?.()
-          releaseInert = null
-          root = null
-        })
       },
     }
   }
+
+/** The runtime of a record read as a page of its own; see `defineRecordPageIsland`. */
+export const createRecordPage = <Data,>(definition: RecordModalDefinition<Data>) =>
+  createRecordModal(definition, { presentation: 'page' })
 
 /**
  * Place an island inside a record view. The runtime starts it when the host
