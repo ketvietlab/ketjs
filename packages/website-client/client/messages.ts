@@ -615,6 +615,8 @@ export const coreMessages = {
     'website.domain.reason.mismatch':
       'Có bản ghi TXT nhưng giá trị chưa khớp. Sao chép lại đúng giá trị bên trên rồi kiểm tra lại.',
     'website.domain.reason.unreachable': 'Chưa hỏi được DNS lúc này. Thử lại sau ít phút.',
+    'website.domain.reason.taken': 'Tên miền này đang được một website khác sử dụng.',
+    'website.domain.reason.reserved': 'Tên miền này do nơi lưu trữ cấp, không cần thêm và xác minh.',
     'website.domain.check': 'Kiểm tra domain',
     'website.domain.switch': 'Đặt làm domain chính',
     'website.domain.switchHelp':

@@ -33,6 +33,11 @@ export type StudioDomainStatus = {
  */
 export type StudioDomainPolicy = {
   status: (domain: Row) => StudioDomainStatus
+  /**
+   * Runs once the Studio has made a site, before any host typed with it. An operator gives the
+   * site an address of its own here; whatever host it adds first is the site's address.
+   */
+  siteCreated?: (call: StudioCall, site: Row) => Promise<void>
   /** Runs once the Studio has added a host, before the host is shown. */
   added?: (call: StudioCall, domain: Row) => Promise<void>
   /** Checks the host again. The Studio reads it afresh afterwards. */
@@ -855,6 +860,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
               expectedRevisionId: 'initial',
               values: { preset: options.defaultPreset },
             })
+          await domains.siteCreated?.(call, (await snapshot(input.id)).site!)
           const host = String(values.host ?? '')
             .trim()
             .toLowerCase()
@@ -863,7 +869,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
               id: `${input.id}-domain`,
               siteId: input.id,
               host,
-              primary: true,
+              primary: !(await snapshot(input.id)).domains.some((d) => d.primary),
             })
             const added = (await snapshot(input.id)).domains.find((d) => d.id === `${input.id}-domain`)
             if (added) await domains.added?.(call, added)
