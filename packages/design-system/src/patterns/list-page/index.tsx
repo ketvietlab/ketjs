@@ -44,6 +44,13 @@ export type ListPageProps = {
   /** Hide only the operational tool slot without unmounting associated forms or hiding primary actions. */
   actionsHidden?: boolean
   controls?: JSXChild
+  /**
+   * Commands for the rows the reader has checked. They take the place of the
+   * query controls while a selection exists, right beside the checkboxes that
+   * made it, and give the place back when it is cleared. The slot starts hidden;
+   * the selection runtime reveals it.
+   */
+  selection?: JSXChild
   status?: JSXChild
   footer?: JSXChild
 }
@@ -90,9 +97,14 @@ export const ListPage = (props: ListPageProps): TemplateResult => {
         actions: operational ? headerActions : props.actions,
         actionsHidden: headerTools && props.headerActions == null && props.actionsHidden === true,
       })}
-      {(props.controls !== undefined || toolbarStatus !== undefined) && (
+      {(props.controls !== undefined || toolbarStatus !== undefined || props.selection !== undefined) && (
         <div data-ui="list-page-toolbar">
           {toolbarStatus !== undefined && <div data-ui="list-page-status">{toolbarStatus}</div>}
+          {props.selection !== undefined && (
+            <div data-ui="list-page-selection" hidden>
+              {props.selection}
+            </div>
+          )}
           {props.controls !== undefined && <div data-ui="list-page-controls">{props.controls}</div>}
         </div>
       )}
