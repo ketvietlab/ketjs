@@ -36,12 +36,6 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
-      [data-ui="list-page-header"] {
-      padding: var(--kv-gap-section) var(--kv-page-padding-x) var(--kv-space-3);
-    }
-
-    :where([data-kv-design-system])
-      [data-ui="list-page"][data-variant="operational"]
       [data-ui="list-page-heading"] {
       display: flex;
       flex-direction: column;

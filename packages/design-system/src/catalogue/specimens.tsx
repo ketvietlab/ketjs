@@ -306,6 +306,7 @@ const ListDemoChrome = (props: { id: string; selected?: number }): TemplateResul
       { id: 'table', label: 'Table', href: `#${props.id}`, active: true },
       { id: 'kanban', label: 'Kanban', href: `#${props.id}` },
     ]}
+    filtersToggle={{ label: 'Filters' }}
     sort={{
       id: `${props.id}-sort`,
       action: `#${props.id}`,
@@ -1709,6 +1710,52 @@ export const componentGroups: readonly ComponentGroup[] = [
                 label="More actions"
                 items={[{ id: 'export', label: 'Export report', href: '#data-table' }]}
               />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'grouped-action-menu',
+        name: 'Grouped action menu',
+        description:
+          'Groups name related commands for assistive technology; a separator precedes every group after the first.',
+        render: () => (
+          <ActionMenu
+            id="stay-actions"
+            label="More actions"
+            open
+            items={[
+              {
+                id: 'stay',
+                kind: 'group',
+                label: 'In-house guest',
+                items: [
+                  { id: 'move-room', label: 'Move room', value: 'move-room' },
+                  { id: 'extend-stay', label: 'Extend stay', value: 'extend-stay' },
+                ],
+              },
+              {
+                id: 'cashier',
+                kind: 'group',
+                label: 'Cashier',
+                items: [
+                  { id: 'payment', label: 'Take payment', value: 'payment' },
+                  { id: 'charge', label: 'Post charge', value: 'charge' },
+                ],
+              },
+              {
+                id: 'room',
+                kind: 'group',
+                label: 'Room',
+                items: [
+                  {
+                    id: 'out-of-service',
+                    label: 'Take out of service',
+                    value: 'out-of-service',
+                    destructive: true,
+                  },
+                ],
+              },
             ]}
           />
         ),
