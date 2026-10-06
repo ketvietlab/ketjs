@@ -16,6 +16,7 @@ export function builderThemeFrame(
   return (
     <div
       class="wt-site"
+      style="position:relative;transform:translateZ(0)"
       data-website-theme="default"
       data-site-theme={theme?.theme?.key ?? null}
       data-theme-preset={theme?.preset ?? 'default'}
