@@ -21,6 +21,7 @@ export type BuilderToolbarProps = {
   zoom: number
   busy: boolean
   canWrite: boolean
+  interactive?: boolean
 }
 
 // The current shared icon catalogue has no device glyphs. Keep these native SVG glyphs local.
@@ -57,7 +58,7 @@ const deviceIcon = (device: Viewport) => (
 
 export function builderToolbar(
   ctx: StudioContext,
-  { entry, draft, previewWidth, zoom, busy, canWrite }: BuilderToolbarProps,
+  { entry, draft, previewWidth, zoom, busy, canWrite, interactive }: BuilderToolbarProps,
 ) {
   const tr = ctx.tr
   const command = (key: string, extra: Partial<ButtonProps> = {}) => (
@@ -208,6 +209,11 @@ export function builderToolbar(
         <ActionGroup
           label={tr('website.builder.actions')}
           actions={[
+            command('interact', {
+              label: tr(interactive ? 'website.builder.editCanvas' : 'website.builder.interact'),
+              pressed: !!interactive,
+              disabled: busy || !canWrite,
+            }),
             command('preview', { disabled: busy }),
             devices(),
             zoomTools(),
@@ -243,6 +249,11 @@ export function builderToolbar(
         />
       </div>
       <div class="website-builder-toolbar-mobile" role="group" aria-label={tr('website.builder.actions')}>
+        {command('interact', {
+          label: tr(interactive ? 'website.builder.editCanvas' : 'website.builder.interact'),
+          pressed: !!interactive,
+          disabled: busy || !canWrite,
+        })}
         {command('preview', { disabled: busy, variant: 'tertiary' })}
         {save()}
         {publish(true)}

@@ -228,6 +228,9 @@ export type SiteTheme = {
   buttons?: string
   account?: string
   footer?: string
+  stylesheet?: string
+  theme?: { key: string; versionId: string; version: string; settings: Record<string, string | boolean> }
+  frame?: Partial<Record<'topbar' | 'header' | 'footer' | 'beforeMain' | 'afterMain', string>> | null
   logo?: string
 }
 

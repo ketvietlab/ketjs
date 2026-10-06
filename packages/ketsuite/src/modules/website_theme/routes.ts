@@ -10,7 +10,9 @@ const IMMUTABLE = {
   'cache-control': 'public, max-age=31536000, immutable',
   'x-content-type-options': 'nosniff',
   'content-security-policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
-  'cross-origin-resource-policy': 'same-origin',
+  // Published, reader-authorized assets also serve the opaque-origin interactive canvas.
+  'cross-origin-resource-policy': 'cross-origin',
+  'access-control-allow-origin': '*',
 }
 const missing = () => withHeaders(text('not found', { status: 404 }), { 'cache-control': 'no-store' })
 

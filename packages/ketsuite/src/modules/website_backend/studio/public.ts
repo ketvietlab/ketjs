@@ -217,7 +217,8 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
     request.staff === false &&
     typeof site.id === 'string' &&
     site.id !== '__legacy__'
-  const scripted = !!siteTheme?.entry && publicVisitor
+  const interactivePreview = request.preview === true && request.themeInteractive === true
+  const scripted = !!siteTheme?.entry && (publicVisitor || interactivePreview)
   const googleTagManagerId =
     publicVisitor && /^GTM-[A-Z0-9]{4,20}$/.test(String(site.googleTagManagerId ?? ''))
       ? String(site.googleTagManagerId)
@@ -283,6 +284,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
               data: scriptJson({
                 settings: siteTheme.settings,
                 locale,
+                ...(interactivePreview ? { interactivePreview: true } : {}),
                 page: { type: record.type ?? null, path: record.path ?? null },
               }),
             }
@@ -291,12 +293,15 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
     }),
     {
       'cache-control': 'no-cache',
-      ...(siteTheme || googleTagManagerId
+      vary: 'Cookie',
+      ...(publicVisitor ? { 'access-control-allow-origin': '*' } : {}),
+      ...(siteTheme || googleTagManagerId || interactivePreview
         ? {
-            'content-security-policy': themeContentSecurityPolicy(
-              siteTheme ?? { connect: [], frame: [] },
-              !!googleTagManagerId,
-            ),
+            'content-security-policy': interactivePreview
+              ? themeContentSecurityPolicy(siteTheme ?? { connect: [], frame: [] })
+                  .replace("frame-ancestors 'self'", 'frame-ancestors *')
+                  .replace("form-action 'self'", "form-action 'none'") + '; sandbox allow-scripts'
+              : themeContentSecurityPolicy(siteTheme ?? { connect: [], frame: [] }, !!googleTagManagerId),
           }
         : {}),
     },
