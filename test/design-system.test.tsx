@@ -1380,6 +1380,18 @@ test('design system: controls preserve their native semantics and accessible sta
     disclosure,
     /<summary data-ui="disclosure-summary">[\s\S]*?Permission provenance[\s\S]*?<\/summary>/,
   )
+  assert.doesNotMatch(disclosure, /disclosure-(?:label|meta)/, 'a plain summary keeps its markup')
+  // Meta says what the closed line is about, beside its label and before the toggle.
+  const withMeta = renderToString(
+    <Disclosure summary="Sales" meta={<Badge label="View only" />} body="Orders" />,
+  )
+  assert.match(
+    withMeta,
+    /<summary data-ui="disclosure-summary">[\s\S]*?<span data-ui="disclosure-label">[\s\S]*?Sales[\s\S]*?<span data-ui="disclosure-meta">[\s\S]*?View only[\s\S]*?<\/summary>/,
+  )
+  const css = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
+  assert.match(css, /\[data-ui="disclosure-label"\] \{[^}]*flex: 1 1 auto;[^}]*min-width: 0;/)
+  assert.match(css, /\[data-ui="disclosure-meta"\] \{[^}]*display: inline-flex;/)
 })
 
 test('design system: fields cover operational form controls and nested groups', () => {
