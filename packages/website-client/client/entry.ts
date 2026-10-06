@@ -20,7 +20,9 @@ if (root) {
     uploadImage: (file, options) =>
       uploadImage(file, {
         ...options,
-        endpoint: `/website/images/${encodeURIComponent(options.id)}/${encodeURIComponent(options.field)}?site=${encodeURIComponent(options.siteId)}`,
+        endpoint: options.resModel?.startsWith('website_catalog.')
+          ? `/website/catalog/images/${encodeURIComponent(options.resModel.split('.')[1]!)}/${encodeURIComponent(options.id)}/${encodeURIComponent(options.field)}?site=${encodeURIComponent(options.siteId)}`
+          : `/website/images/${encodeURIComponent(options.id)}/${encodeURIComponent(options.field)}?site=${encodeURIComponent(options.siteId)}`,
       }),
   })
   const view = createRoot(domHost(), root as unknown as HostNode)

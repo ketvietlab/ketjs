@@ -15,6 +15,7 @@ export const models: Record<string, ModelDef> = {
       title: 'text',
       defaultLocale: 'text',
       theme: 'text',
+      googleTagManagerId: 'text?',
       tokens: 'json?',
       studioStyle: 'json?',
       styleRevision: 'text?',

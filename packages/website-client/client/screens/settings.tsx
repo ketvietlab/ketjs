@@ -126,6 +126,14 @@ export function createSettings(ctx: StudioContext) {
                     }))}
                     disabled={!canManage}
                   />,
+                  <TextField
+                    id="site-gtm"
+                    name="googleTagManagerId"
+                    label={tr('website.settings.googleTagManagerId')}
+                    value={resourceValue(value.readiness.site.googleTagManagerId)}
+                    placeholder="GTM-XXXXXXX"
+                    disabled={!canManage}
+                  />,
                 ]}
               />
             </form>
@@ -405,12 +413,18 @@ export function createSettings(ctx: StudioContext) {
       },
       'site.save': async (_args, form) => {
         form = form!
+        const googleTagManagerId = String(form.get('googleTagManagerId') ?? '').trim()
+        if (googleTagManagerId && !/^GTM-[A-Z0-9]{4,20}$/.test(googleTagManagerId))
+          throw Object.assign(new Error(tr('website.settings.invalidGoogleTagManagerId')), {
+            code: 'validation',
+          })
         const name = String(form.get('name') ?? '').trim()
         if (!name) throw Object.assign(new Error(tr('website.settings.nameRequired')), { code: 'validation' })
         await save({
           title: name,
           code: String(form.get('code') ?? '').trim(),
           defaultLocale: String(form.get('defaultLocale') ?? ''),
+          googleTagManagerId,
         })
       },
     },

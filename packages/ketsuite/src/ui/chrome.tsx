@@ -4,6 +4,7 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
+import { BulkActions } from '@ketvietlab/design-system'
 import { icon } from './icons.ts'
 import type { TableSelection } from './table.tsx'
 
@@ -363,30 +364,57 @@ export const bulkActions = (_: Translator, selection: TableSelection): TemplateR
         <input type="hidden" name={key} value={value} autocomplete="off" />
       ),
     )}
-    <details data-ui="bulk-actions">
-      <summary data-ui="bulk-actions-open" aria-label={_('backend.chrome.more')}>
-        …
-      </summary>
-      <div data-ui="bulk-actions-menu">
-        {each(
-          selection.actions,
-          (action) => action.id,
-          (action) => (
-            <button
-              data-ui="bulk-action"
-              data-tone={action.tone ?? 'default'}
-              type="submit"
-              name="action"
-              value={action.id}
-            >
-              {action.label}
-            </button>
-          ),
-        )}
-      </div>
-    </details>
+    {selection.presentation === 'bar' ? (
+      <BulkActions
+        form={selection.formId}
+        summary={selectedSummary(_)}
+        clearLabel={_('backend.chrome.clearSelection')}
+        actions={selection.actions.map((action) => ({
+          id: action.id,
+          label: action.label,
+          name: 'action',
+          value: action.id,
+          variant: action.tone === 'danger' ? ('destructive' as const) : ('secondary' as const),
+        }))}
+      />
+    ) : (
+      <details data-ui="bulk-actions">
+        <summary data-ui="bulk-actions-open" aria-label={_('backend.chrome.more')}>
+          …
+        </summary>
+        <div data-ui="bulk-actions-menu">
+          {each(
+            selection.actions,
+            (action) => action.id,
+            (action) => (
+              <button
+                data-ui="bulk-action"
+                data-tone={action.tone ?? 'default'}
+                type="submit"
+                name="action"
+                value={action.id}
+              >
+                {action.label}
+              </button>
+            ),
+          )}
+        </div>
+      </details>
+    )}
   </form>
 )
+
+/** "Đã chọn 2" / "2 selected": the figure sits where the language puts it. */
+const selectedSummary = (_: Translator): TemplateResult => {
+  const [before = '', after = ''] = _('backend.chrome.selectedCount').split('{count}')
+  return (
+    <span>
+      {before}
+      <span data-ui="bulk-count">0</span>
+      {after}
+    </span>
+  )
+}
 
 const chromeLead = (_: Translator, title: string, chrome: ListChrome, titled: boolean): TemplateResult => (
   <div data-ui="chrome-lead">

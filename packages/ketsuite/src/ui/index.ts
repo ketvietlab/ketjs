@@ -87,6 +87,7 @@ export { collectionTable, dataTable, visibleColumns } from './table.tsx'
 export {
   collectionActions,
   collectionControls,
+  collectionSelection,
   collectionGridLabels,
   prepareCollectionGrid,
   prepareCollectionTable,
@@ -149,8 +150,10 @@ export {
   recordModalHost,
   recordModalHref,
   recordPageLoading,
+  recordPageFrame,
+  recordPageShell,
 } from './record-modal.tsx'
-export type { RecordModalTarget, RecordPageIslandProps } from './record-modal.tsx'
+export type { RecordModalTarget, RecordPageIslandProps, RecordPageTrailItem } from './record-modal.tsx'
 export {
   RECORD_COMMAND_FIELD,
   RECORD_DIALOG_ATTRIBUTE,
@@ -175,6 +178,7 @@ export type {
   RecordModalDialog,
   RecordModalTab,
   RecordPageOptions,
+  RecordRuntimeOptions,
 } from './client/record-modal.tsx'
 export type {
   RecordBreadcrumbs,

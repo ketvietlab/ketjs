@@ -3,9 +3,12 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+// Client bundles are built before package dist exists on a clean checkout.
+const documentRenderer = resolve(root, 'packages/ketsuite/src/ui/client/live-doc-shell.tsx')
 export async function buildWebsiteClient() {
   const out = resolve(root, 'packages/ketsuite/src/modules/website_backend/client')
   mkdirSync(out, { recursive: true })
+  cpSync(resolve(root, 'packages/website-client/client/gtm.mjs'), resolve(out, 'gtm.mjs'))
   // Bundle the same pure renderer used by the builder into the server package.
   await build({
     entryPoints: [resolve(root, 'packages/website-client/client/renderer.tsx')],
@@ -13,6 +16,7 @@ export async function buildWebsiteClient() {
     bundle: true,
     format: 'esm',
     platform: 'node',
+    alias: { '@ketvietlab/ketsuite/livedoc/render': documentRenderer },
     external: ['@ketvietlab/ketjs-view', '@ketvietlab/ketjs-view/jsx-runtime'],
     jsx: 'automatic',
     jsxImportSource: '@ketvietlab/ketjs-view',
@@ -46,6 +50,7 @@ export async function buildWebsiteClient() {
     bundle: true,
     format: 'esm',
     platform: 'browser',
+    alias: { '@ketvietlab/ketsuite/livedoc/render': documentRenderer },
     jsx: 'automatic',
     jsxImportSource: '@ketvietlab/ketjs-view',
     target: 'es2022',

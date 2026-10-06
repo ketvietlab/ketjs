@@ -23,10 +23,22 @@ export default defineModule({
     'backend:runtime': Object.keys(USER_MODAL_ISLANDS)
       .map((name) => `{% island "${name}" %}`)
       .join(''),
+    'user_backend:user.record-page': '{% island "user.user-page" %}',
   },
   joints: {
     'user.external-identities': { props: { userId: 'id' } },
     'profile.external-identities': { props: { userId: 'id' } },
+    /** A person's own page: the record page island, with the context already read. */
+    'user.record-page': {
+      props: {
+        id: 'id',
+        title: 'text',
+        loadingLabel: 'text',
+        trail: 'json?',
+        trailLabel: 'text?',
+        envelope: 'json?',
+      },
+    },
   },
 })
 
