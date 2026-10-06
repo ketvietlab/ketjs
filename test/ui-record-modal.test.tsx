@@ -836,7 +836,7 @@ test('record page: the runtime keeps a page a page — no history, no fence, no 
   )
   // Closing a dialog leaves the address alone; the page itself never closes.
   assert.match(runtime, /if \(current && !serverPage\)\s*history\.replaceState/u)
-  assert.match(runtime, /if \(page\) return\s*if \(!mayDiscard\(recordLayer\(\)\)\) return/u)
+  assert.match(runtime, /if \(serverPage\) return\s*if \(!mayDiscard\(recordLayer\(\)\)\) return/u)
   // What would close the modal closes the dialog and reads the record again in place.
   assert.match(runtime, /serverPage &&[\s\S]{0,200}declared === 'close'[\s\S]{0,200}\? \{ dialog: null \}/u)
 })
@@ -870,4 +870,32 @@ test('record page: both client-read and route-context factories adopt their serv
     const page = factory(routeProps)
     assert.equal(renderToString(page.view()), renderToString(recordPageShell(routeProps)))
   }
+})
+
+test('record page: Back guards client-read drafts and returns; route-context profiles stay open', () => {
+  const close = runtime.slice(runtime.indexOf('const close = ('), runtime.indexOf('const run = async'))
+  const tail = close.slice(close.indexOf('// Route-context pages'), close.lastIndexOf('}'))
+  const run = new Function('serverPage', 'mayDiscard', 'recordLayer', 'hide', tail)
+  const calls: string[] = []
+  const layer = {}
+  const invoke = (serverPage: boolean, discard: boolean) =>
+    run(
+      serverPage,
+      (current: unknown) => {
+        assert.equal(current, layer)
+        calls.push('guard')
+        return discard
+      },
+      () => layer,
+      (how: string) => calls.push(how),
+    )
+  invoke(false, true)
+  assert.deepEqual(calls, ['guard', 'history'])
+  calls.length = 0
+  invoke(false, false)
+  assert.deepEqual(calls, ['guard'], 'canceling discard keeps the client-read page')
+  calls.length = 0
+  invoke(true, true)
+  assert.deepEqual(calls, [], 'a route-context profile has no close action')
+  assert.match(runtime, /\(!serverPage \|\| inModal\.matches\('\[data-ui="modal-layer"\]'\)\)/u)
 })
