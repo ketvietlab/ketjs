@@ -2397,6 +2397,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               />,
               <TreeGrid
                 label="Account hierarchy"
+                primaryLabel="Account"
                 rows={[
                   {
                     row: { id: '100', name: 'Assets', balance: '120.000.000 ₫' },
