@@ -71,7 +71,13 @@ export { default as websiteFormMail } from './modules/website_form_mail/index.ts
 export { default as websiteCustomerMail } from './modules/website_customer_mail/index.ts'
 export { default as websiteBackend } from './modules/website_backend/index.ts'
 export { websiteBackendWith } from './modules/website_backend/index.ts'
-export type { StudioOptions } from './modules/website_backend/studio/transport.ts'
+export { canAdministerSite } from './modules/website/access.ts'
+export type {
+  StudioCall,
+  StudioDomainPolicy,
+  StudioDomainStatus,
+  StudioOptions,
+} from './modules/website_backend/studio/transport.ts'
 export { default as websiteHospitality } from './modules/website_hospitality/index.ts'
 export { default as websiteRetail } from './modules/website_retail/index.ts'
 export { default as paperTheme } from './themes/paper/index.ts'
