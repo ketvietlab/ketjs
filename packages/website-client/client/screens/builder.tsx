@@ -71,6 +71,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   }
   let guarding = false
   let templates: PageTemplate[] = []
+  let interactive: { entryId: string; url: string } | null = null
   let previewWidth: Viewport = 'desktop'
   let zoom = 100
   let dialogOpener: HTMLElement | null = null
@@ -149,6 +150,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     return data
   }
   const change = (id: string, mutate: (layout: Placement[]) => unknown, coalesce: string | null = null) => {
+    interactive = null
     const draft = draftOf(id)
     if (!draft) return
     drag.cancel(false)
@@ -271,7 +273,10 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     const target = event.target as Element
     if (event.defaultPrevented || target.closest?.('[data-builder-drag-id]')) return
     const node = target.closest?.<HTMLElement>('[data-node]')
-    if (!node) return
+    if (!node) {
+      if (!interactive && target.closest?.('a[href]')) event.preventDefault()
+      return
+    }
     event.preventDefault()
     ctx.navigate(
       'builder',
@@ -738,6 +743,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
             zoom,
             busy,
             canWrite,
+            interactive: interactive?.entryId === entry.id,
           })}
           body={
             <>
@@ -876,28 +882,44 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                           style={`zoom:${zoom / 100}`}
                           onClick={templatePreview ? undefined : selectOnCanvas}
                         >
-                          {workspace.frame(
-                            renderLayout(
-                              templatePreview?.layout ?? draft.layout,
-                              templatePreview
-                                ? { headingLevel: 2, viewport: previewWidth, locale: entry.locale }
-                                : {
-                                    mode: 'builder',
-                                    controls: dragHandle,
-                                    emptySlot: ctx.can('website.content.write') ? emptyDropSlot : null,
-                                    headingLevel: 2,
-                                    viewport: previewWidth,
-                                    locale: entry.locale,
-                                    selected: node,
-                                    unknownLabel: (type: string) =>
-                                      tr('website.builder.unknownSection', { type }),
-                                    sectionData: formSectionData(draft.layout),
-                                    formText: {
-                                      send: tr('website.formJourney.send'),
-                                      missing: tr('website.builder.form.missing'),
+                          {interactive?.entryId === entry.id ? (
+                            <>
+                              <LinkButton
+                                label={tr('website.builder.openInteractive')}
+                                href={interactive.url}
+                              />
+                              <iframe
+                                title={tr('website.builder.interactiveCanvas')}
+                                src={interactive.url}
+                                sandbox="allow-scripts"
+                                referrerpolicy="no-referrer"
+                                style="width:100%;height:75vh;min-height:480px;border:0;background:white"
+                              />
+                            </>
+                          ) : (
+                            workspace.frame(
+                              renderLayout(
+                                templatePreview?.layout ?? draft.layout,
+                                templatePreview
+                                  ? { headingLevel: 2, viewport: previewWidth, locale: entry.locale }
+                                  : {
+                                      mode: 'builder',
+                                      controls: dragHandle,
+                                      emptySlot: ctx.can('website.content.write') ? emptyDropSlot : null,
+                                      headingLevel: 2,
+                                      viewport: previewWidth,
+                                      locale: entry.locale,
+                                      selected: node,
+                                      unknownLabel: (type: string) =>
+                                        tr('website.builder.unknownSection', { type }),
+                                      sectionData: formSectionData(draft.layout),
+                                      formText: {
+                                        send: tr('website.formJourney.send'),
+                                        missing: tr('website.builder.form.missing'),
+                                      },
                                     },
-                                  },
-                            ),
+                              ),
+                            )
                           )}
                         </div>
                       </>
@@ -1029,6 +1051,31 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         touch()
       },
       'builder.save': () => save(),
+      'builder.interact': async () => {
+        if (interactive?.entryId === current().id) {
+          interactive = null
+          touch()
+          return
+        }
+        if (draftOf(current().id)?.dirty) await save()
+        const link = await ctx.call<{ token: string }>('website_studio.createPreview', {
+          siteId: ctx.site().id,
+          id: current().id,
+          revisionId: draftOf(current().id)!.base,
+          audience: 'link',
+          minutes: 5,
+        })
+        const data = await ctx.call<{ preview: { url: string | null } }>('website_studio.preview', {
+          siteId: ctx.site().id,
+          id: current().id,
+          token: link.token,
+        })
+        if (!data.preview?.url) throw new Error(tr('website.builder.interactiveUnavailable'))
+        const url = new URL(data.preview.url, globalThis.location?.href ?? 'http://atlas.invalid')
+        url.searchParams.set('themeInteractive', '1')
+        interactive = { entryId: current().id, url: url.href }
+        touch()
+      },
       'builder.preview': async () => {
         if (draftOf(current().id)?.dirty) await save()
         await ctx.navigate('preview', { id: current().id })

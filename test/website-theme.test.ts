@@ -47,6 +47,104 @@ const files = (overrides: Record<string, string | null> = {}, theme: Row = manif
 const codes = (result: ReturnType<typeof checkThemePackage>) =>
   result.ok ? [] : result.errors.map((e) => e.code)
 
+test('commerce builder gets real CSS/KTL and runs scripts only in an opaque interactive preview', async (t) => {
+  let base: Storage | null = null
+  const { app, fixture } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
+    openStorage: (config) => (base = storageFromConfig(config)),
+  })
+  t.after(() => app.close())
+  const installed = await installThemePackage(
+    {
+      storage: namespacedStorage(base!, 'commerce'),
+      call: async (fn, input) =>
+        (
+          await app.fixture.call<Row>(fn, input, {
+            scope: { company: 'studio-a', branches: null },
+          })
+        ).value,
+    },
+    files(
+      { 'frame-header.ktl': '<header class="real-header">{{ brand.title }}</header>' },
+      manifest({ frame: ['header'] }),
+    ),
+    { available: true },
+  )
+  assert.equal(installed.ok, true, JSON.stringify(installed))
+  if (!installed.ok) return
+  await fixture('website_theme.selectTheme', {
+    siteId: 'site-a',
+    expectedRevisionId: 'initial',
+    versionId: installed.id,
+    settings: { tone: 'cool' },
+  })
+  await fixture('website.saveDomain', {
+    id: 'builder-domain',
+    siteId: 'site-a',
+    host: '127.0.0.1',
+    primary: true,
+  })
+  await fixture('website.saveSite', {
+    id: 'site-a',
+    name: 'site-a',
+    title: 'site-a',
+    defaultLocale: 'vi',
+    theme: 'theme_paper',
+    googleTagManagerId: 'GTM-WN52Z58',
+    active: true,
+  })
+  const designer = app.client.anonymous()
+  await designer.login({ login: 'studio-designer', password: 'studio-local' })
+  const send = async (fn: string, input: Row) => {
+    const response = await designer.post('/website/api/' + fn, JSON.stringify(input), {
+      headers: { 'content-type': 'application/json' },
+    })
+    assert.equal(response.status, 200, await response.clone().text())
+    return ((await response.json()) as { value: Row }).value
+  }
+  const resource = await send('website_studio.getResource', {
+    siteId: 'site-a',
+    kind: 'themes',
+    id: 'site-a',
+  })
+  assert.equal(resource.stylesheet, `/_theme/${installed.id}/theme.css`)
+  assert.match(String((resource.frame as Row).header), /real-header/)
+  const entry = (await fixture('website.getEntry', { id: 'page-site-a' })).entry as Row
+  const link = await send('website_studio.createPreview', {
+    siteId: 'site-a',
+    id: entry.id,
+    revisionId: entry.revisionId,
+    audience: 'link',
+    minutes: 5,
+  })
+  const path = '/_ket/preview?token=' + encodeURIComponent(String(link.token))
+  const visitor = app.client.anonymous()
+  const regular = await visitor.get(path)
+  assert.equal(regular.status, 200)
+  assert.doesNotMatch(await regular.text(), /_boot\.mjs|data-website-gtm/)
+  const interactive = await visitor.get(path + '&themeInteractive=1')
+  assert.equal(interactive.status, 200)
+  const html = await interactive.text()
+  assert.match(html, /_boot\.mjs/)
+  assert.match(html, /"interactivePreview":true/)
+  assert.doesNotMatch(html, /data-website-gtm|googletagmanager/)
+  const policy = interactive.headers.get('content-security-policy')!
+  assert.match(policy, /(?:^|;\s*)sandbox allow-scripts(?:;|$)/)
+  assert.match(policy, /frame-ancestors \*/)
+  assert.match(policy, /form-action 'none'/)
+  assert.doesNotMatch(policy, /allow-same-origin|allow-forms|unsafe-eval|googletagmanager/)
+  const boot = await visitor.get(`/_theme/${installed.id}/_boot.mjs`)
+  assert.equal(boot.headers.get('access-control-allow-origin'), '*')
+  assert.equal(boot.headers.get('cross-origin-resource-policy'), 'cross-origin')
+  assert.match(await boot.text(), /interactivePreview === true/)
+  const module = await visitor.get(`/_theme/${installed.id}/theme.mjs`)
+  assert.equal(module.headers.get('access-control-allow-origin'), '*')
+  await send('website_studio.revokePreview', { siteId: 'site-a', id: entry.id, token: link.token })
+  const revoked = await visitor.get(path + '&themeInteractive=1')
+  assert.notEqual(revoked.status, 200)
+  assert.doesNotMatch(await revoked.text(), /_boot\.mjs|data-website-gtm/)
+})
+
 test('a theme package is refused for every way it could reach outside its own site root', () => {
   assert.equal(checkThemePackage(files()).ok, true, JSON.stringify(codes(checkThemePackage(files()))))
   const refused: Array<[string, Record<string, string | null>, Row?]> = [

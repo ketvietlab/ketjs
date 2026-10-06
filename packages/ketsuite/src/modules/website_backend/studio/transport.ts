@@ -5,6 +5,8 @@ import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
 import { entryProjection } from './context.ts'
 import { CUSTOMER_SIGNIN_PATH } from './public.ts'
+import { selectedThemeOf, themeStylesheet } from '../../website_theme/snapshot.ts'
+import { renderThemeFrames } from '../../website_theme/frame.ts'
 import type { Route, ServeContext, Row } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
 /** What a deployment decides about its Studio. */
@@ -26,7 +28,7 @@ const row = (value: unknown): Row =>
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code })
 }
-const themeResource = (site: Row) => ({
+const themeResourceData = (site: Row): Row => ({
   id: String(site.id),
   kind: 'themes',
   title: site.title,
@@ -302,6 +304,27 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       fail(code, ctx.translate(ctx.localeOf(url, req))(key) || 'Không thể lưu thay đổi.')
     }
     return result
+  }
+  const themeResource = async (site: Row) => {
+    const style = themeResourceData(site)
+    const theme = selectedThemeOf(style.theme)
+    if (!theme) return style
+    const items = (await call('website_menu.publicMenu', { siteId: site.id })) as Row[]
+    const children = (parent: unknown, seen = new Set<string>()): Row[] =>
+      items
+        .filter((item) => (item.parentId ?? null) === parent && !seen.has(String(item.id)))
+        .map((item) => ({ ...item, children: children(item.id, new Set([...seen, String(item.id)])) }))
+    return {
+      ...style,
+      stylesheet: themeStylesheet(theme),
+      frame: renderThemeFrames(theme, {
+        site: { title: site.title, name: site.name },
+        brand: { title: site.title, logo: String(style.logo ?? '') },
+        navigation: children(null),
+        locale: String(site.defaultLocale),
+        account: null,
+      }),
+    }
   }
   const snapshot = async (siteId?: unknown): Promise<Snapshot> => {
     const data = (await call('website_backend.studioContext', { siteId: siteId ?? null })) as Snapshot
@@ -684,7 +707,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         : []
       return {
         entry,
-        resources: [themeResource(dataSet.site!), ...menus],
+        resources: [await themeResource(dataSet.site!), ...menus],
         liveRevisionId: entry.publishedRevisionId,
         revisions: dataSet.revisions
           .filter((r) => r.entryId === entry.id)
@@ -732,7 +755,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       if (input.kind !== 'themes' || input.id !== data.site!.id)
         return fail('notFound', 'Không tìm thấy giao diện.')
       return {
-        ...themeResource(data.site!),
+        ...(await themeResource(data.site!)),
         ...(await companyThemesOf(data.site!)),
         affected: data.entries.map((e) => ({ id: e.id, title: e.title })),
         usage: data.entries.length,
@@ -748,7 +771,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         settings: input.versionId ? (input.settings ?? null) : null,
       })
       const saved = (await snapshot(site.id)).site!
-      return { ...themeResource(saved), ...(await companyThemesOf(saved)) }
+      return { ...(await themeResource(saved)), ...(await companyThemesOf(saved)) }
     },
     'website_studio.saveResource': async (input) => {
       if (input.kind === 'form-editor') {
@@ -948,7 +971,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     'website_studio.listResources': async (input) => {
       const data = await snapshot(input.siteId)
       if (input.kind === 'templates') return { rows: pageTemplates }
-      if (input.kind === 'themes') return { rows: [themeResource(data.site!)] }
+      if (input.kind === 'themes') return { rows: [await themeResource(data.site!)] }
       if (input.kind === 'menus') return { rows: [await menuOf(data.site!)], creatable: false }
       if (input.kind === 'domains') return { rows: data.domains.map(domainResource) }
       if (input.kind === 'sites') return { rows: data.sites.map((s) => publicSite(s, data.domains)) }
@@ -1001,7 +1024,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         const link = row(await call('website.previewLink', { token: input.token }))
         if (link.entryId !== entry.id || link.active !== true)
           fail('expired', 'Liên kết xem trước đã hết hạn hoặc bị thu hồi.')
-        const host = publicSite(dataSet.site!, dataSet.domains).host
+        const host = String(publicSite(dataSet.site!, dataSet.domains).host ?? '')
         revisionId = link.revisionId
         preview = {
           token: input.token,
@@ -1010,7 +1033,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           // Staff open it here; anyone else needs the site's own address, where no ERP login is asked.
           url:
             link.audience === 'link' && host
-              ? `${url.hostname === host ? url.origin : `${url.protocol}//${host}`}/_ket/preview?token=${encodeURIComponent(String(input.token))}`
+              ? `${url.hostname === host ? url.origin : `${url.protocol}//${host}${url.port && (host === 'localhost' || host.endsWith('.localhost')) ? `:${url.port}` : ''}`}/_ket/preview?token=${encodeURIComponent(String(input.token))}`
               : null,
         }
       }
@@ -1023,7 +1046,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           title: revision.title,
           revisionId: revision.id,
         },
-        theme: themeResource(dataSet.site!),
+        theme: await themeResource(dataSet.site!),
         site: publicSite(dataSet.site!, dataSet.domains),
       }
     },

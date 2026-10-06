@@ -1396,6 +1396,7 @@ export async function bootDeployment(
             // never share a page with either.
             const request = {
               preview: isPreviewRequest(url),
+              themeInteractive: isPreviewRequest(url) && url.searchParams.get('themeInteractive') === '1',
               staff: (await requestIdentityOf(url, req)) !== null,
             }
             // A preview reads by token, not by path: the draft has no address
