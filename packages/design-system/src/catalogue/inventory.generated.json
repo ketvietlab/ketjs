@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 157,
     "cssFiles": 82,
-    "cssLines": 17082
+    "cssLines": 17085
   },
   "rows": [
     {
@@ -12868,7 +12868,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/board-page/styles.css",
-      "lines": 158,
+      "lines": 149,
       "hooks": [
         "board-page",
         "board-page-actions",
@@ -12889,7 +12889,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/dashboard-page/styles.css",
-      "lines": 153,
+      "lines": 167,
       "hooks": [
         "action",
         "dashboard-page",
@@ -12998,7 +12998,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/responsive.css",
-      "lines": 128,
+      "lines": 122,
       "hooks": [
         "action",
         "cell",
@@ -13021,7 +13021,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-page/styles.css",
-      "lines": 226,
+      "lines": 220,
       "hooks": [
         "list-page",
         "list-page-actions",
@@ -13067,8 +13067,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 120,
-      "hooks": ["form-actions", "record-form"]
+      "lines": 130,
+      "hooks": ["form-actions", "record-form", "record-page-header"]
     },
     {
       "layer": "public",

@@ -87,6 +87,7 @@ import {
   TreeGrid,
   ViewSettings,
   MediaGallery,
+  WorkspacePage,
   withQueryState,
 } from '@ketvietlab/design-system'
 import {
@@ -861,6 +862,68 @@ test('design system: canonical page headers share compact responsive padding', (
   const compactPadding =
     /padding: var\(--kv-(?:space-4|gap-section)\) var\(--kv-page-padding-x\) var\(--kv-space-3\)/g
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
+})
+
+test('design system: compact operational pages share one header band at every width', () => {
+  const shell = readFileSync('packages/design-system/src/patterns/page-shell/styles.css', 'utf8')
+  const compact = shell.match(
+    /:where\(\[data-kv-design-system\]\[data-density="compact"\]\)\s+\[data-variant="operational"\]\s+> :is\(\[data-kv-page-identity="header"\], \[data-ui="record-page-header"\]\) \{\s+padding-block: var\(--kv-space-2\);\s+\}/u,
+  )
+  assert.ok(compact, 'page-shell owns the compact operational header padding')
+  // Declared after the mobile reflow, so the compact band holds below 42rem too.
+  assert.ok(compact.index! > shell.indexOf('@media (max-width: 42rem)'))
+  // One owner: no pattern re-declares the band per kind, and the list no longer
+  // overrides it with a more specific operational padding.
+  assert.doesNotMatch(patternCss, /\[data-density="compact"\]\)[^{]*-page-header"\]\s*\{/u)
+  assert.doesNotMatch(
+    patternCss,
+    /\[data-ui="list-page"\]\[data-variant="operational"\]\s+\[data-ui="list-page-header"\]\s*\{[^}]*padding/u,
+  )
+
+  // The shared rule selects a direct child, so every operational page must render its header there.
+  const pages = {
+    'list-page': <ListPage variant="operational" context="Front office" title="Stays" body="Rows" />,
+    'record-page': <RecordPage variant="operational" context="Front office" title="Check-out" body="Folio" />,
+    'dashboard-page': (
+      <WorkspacePage
+        variant="operational"
+        layout="flow"
+        context="Front office"
+        title="Front desk"
+        body="Queues"
+      />
+    ),
+    'board-page': (
+      <WorkspacePage
+        variant="operational"
+        layout="canvas"
+        context="Front office"
+        title="Tape chart"
+        body="Rooms"
+      />
+    ),
+  }
+  for (const [kind, page] of Object.entries(pages)) {
+    assert.match(
+      renderToString(page).replace(/<!--[\s\S]*?-->/gu, ''),
+      new RegExp(
+        `data-ui="${kind}"[^>]*data-variant="operational"[^>]*><div data-ui="${kind}-context"[^>]*>Front office</div><header data-ui="${kind}-header"`,
+        'u',
+      ),
+      kind,
+    )
+  }
+})
+
+test('design system: a flow workspace toolbar sits on the page gutter', () => {
+  const toolbar = patternCss.match(
+    /\[data-ui="dashboard-page"\]\[data-variant="operational"\]\s+\[data-ui="dashboard-page-toolbar"\] \{\s+padding: var\(--kv-space-3\) var\(--kv-page-padding-x\) 0;/u,
+  )
+  assert.ok(toolbar, 'operational flow toolbar is inset like the list toolbar')
+  assert.match(
+    patternCss,
+    /\[data-density="compact"\]\)\s+\[data-ui="dashboard-page"\]\[data-variant="operational"\]\s+\[data-ui="dashboard-page-toolbar"\] \{\s+padding-top: var\(--kv-space-2\);/u,
+  )
 })
 
 test('design system: light page surfaces use component roles without changing the palette', () => {

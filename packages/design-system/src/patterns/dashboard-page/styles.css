@@ -110,6 +110,20 @@
     background: var(--kv-page-bg);
   }
 
+  /* A flow workspace's controls sit on the page gutter below the header divider,
+     like the operational list toolbar, instead of touching both. */
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-toolbar"] {
+    padding: var(--kv-space-3) var(--kv-page-padding-x) 0;
+  }
+
+  :where([data-kv-design-system][data-density="compact"])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-toolbar"] {
+    padding-top: var(--kv-space-2);
+  }
+
   @media (max-width: 42rem) {
     :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
       padding-bottom: var(--kv-space-8);
