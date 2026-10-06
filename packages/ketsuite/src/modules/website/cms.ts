@@ -95,9 +95,9 @@ const cleanPath = (value: unknown): string | null => {
 }
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
-/** The record a host's owner adds to prove it: `TXT _ketviet.<host>` holding this value. */
-export const domainProofName = (host: string) => `_ketviet.${host}`
-export const domainProofValue = (token: string) => `ketviet-verify=${token}`
+/** The record a host's owner adds to prove it: `TXT _ketsuite.<host>` holding this value. */
+export const domainProofName = (host: string) => `_ketsuite.${host}`
+export const domainProofValue = (token: string) => `ketsuite-verify=${token}`
 const unverifiedDomain = () => ({
   verifyToken: randomBytes(16).toString('hex'),
   verifiedAt: null,

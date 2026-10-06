@@ -101,8 +101,8 @@ test('Studio domains: add, prove by a real TXT lookup, and switch the primary on
   assert.equal(second.role, 'redirect')
   const challenge = second.challenge as Row
   assert.equal(challenge.type, 'TXT')
-  assert.equal(challenge.name, '_ketviet.moi.lanh.test')
-  assert.match(String(challenge.value), /^ketviet-verify=[0-9a-f]{32}$/)
+  assert.equal(challenge.name, '_ketsuite.moi.lanh.test')
+  assert.match(String(challenge.value), /^ketsuite-verify=[0-9a-f]{32}$/)
   assert.notEqual(challenge.value, (first.value.challenge as Row).value, 'each host has its own proof')
   // A retried add answers with the same domain; a new name under that id is refused.
   assert.equal((await add('d-new', 'moi.lanh.test')).value.revisionId, second.revisionId)
@@ -121,9 +121,9 @@ test('Studio domains: add, prove by a real TXT lookup, and switch the primary on
     (missing.attempts as Row[]).map((a) => [a.result, a.reason]),
     [['failed', 'missing']],
   )
-  records.set('_ketviet.moi.lanh.test', ['ketviet-verify=0000'])
+  records.set('_ketsuite.moi.lanh.test', ['ketsuite-verify=0000'])
   assert.equal((await verify('d-new')).value.reason, 'mismatch')
-  failing.add('_ketviet.moi.lanh.test')
+  failing.add('_ketsuite.moi.lanh.test')
   assert.equal((await verify('d-new')).value.reason, 'unreachable')
   failing.clear()
   assert.equal(
@@ -143,11 +143,11 @@ test('Studio domains: add, prove by a real TXT lookup, and switch the primary on
   })
   assert.equal(stale.status, 400)
 
-  records.set('_ketviet.moi.lanh.test', ['v=spf1 -all', String(challenge.value)])
+  records.set('_ketsuite.moi.lanh.test', ['v=spf1 -all', String(challenge.value)])
   const proven = (await verify('d-new')).value
   assert.deepEqual([proven.state, proven.reason, proven.tls], ['verified', 'matched', 'pending'])
   // A proof stays once made; a later lookup that fails is reported without taking it away.
-  records.delete('_ketviet.moi.lanh.test')
+  records.delete('_ketsuite.moi.lanh.test')
   const after = (await verify('d-new')).value
   assert.deepEqual([after.state, after.reason], ['verified', 'missing'])
 
