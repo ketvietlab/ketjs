@@ -1349,3 +1349,21 @@ and pixel parity are not yet verified.
 `websiteAnonymousScope` resolves an exact configured hostname inside the selected tenant database.
 Multiple matching companies fail closed; an unknown domain delegates to existing anonymous scope
 handling. Private fleet composition preserves this result before applying its tenant fallback.
+
+### Site-level Google Tag Manager
+
+Settings → general information exposes the optional `googleTagManagerId` field. A blank value
+disables tracking. `website.saveSite` validates container identifiers; omitted values preserve the
+existing configuration and an empty value clears it. The Studio resource preserves its revision
+check and site administration permission. Save takes effect on published pages immediately.
+
+The same-origin `/_ket/asset/website_backend/gtm.mjs` loader keeps queued data-layer events, adds
+one asynchronous Google script and records readiness on the document root. It never loads in
+preview or a staff session. Its source lives in the public website-client package and is copied by
+the normal build, independently of company theme packages.
+
+An enabled visitor page adds Google script/connect/frame origins to its content security policy.
+Custom JavaScript variables in existing containers require `unsafe-eval`; inline scripts remain
+disallowed. Sites without a container and staff/preview pages keep their existing strict policy.
+See [Google's CSP guidance](https://developers.google.com/tag-platform/security/guides/csp).
+A loaded container does not prove that a conversion trigger matched or that Ads received an event.
