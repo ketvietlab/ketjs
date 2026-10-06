@@ -53,7 +53,7 @@ const domainScreens = (designer: Awaited<ReturnType<typeof studioClient>>) => {
  * deployment points the names at it, so a host answers as soon as it is added: nothing to prove.
  */
 test('Studio domains: a host the deployment serves itself answers once added', async (t) => {
-  const { app } = await bootWebsiteStudio()
+  const { app } = await bootWebsiteStudio(undefined, { deployment: 'commerce' })
   t.after(() => app.close())
   const designer = await studioClient(app, 'studio-designer')
   const { add, domain, verify, switchTo } = domainScreens(designer)
@@ -158,7 +158,10 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
       if (proof.checks > 1) proof.verified = true
     },
   }
-  const { app } = await bootWebsiteStudio(undefined, { studio: { domains: policy } })
+  const { app } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
+    studio: { domains: policy },
+  })
   t.after(() => app.close())
   const designer = await studioClient(app, 'studio-designer')
   const reader = await studioClient(app, 'studio-reader')

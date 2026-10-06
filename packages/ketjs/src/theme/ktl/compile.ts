@@ -30,7 +30,7 @@ export type CompileOpts = {
   renderTemplate?: (name: string, scope: Scope, from: string) => string
   name?: string
   /** Report templates may only produce data markup; web extension primitives and raw output are forbidden. */
-  mode?: 'theme' | 'report'
+  mode?: 'theme' | 'report' | 'frame'
   maxIterations?: number
 }
 
@@ -145,7 +145,8 @@ const at = (o: { name: string; line?: number }): string =>
 
 export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const name = opts.name ?? '(anonymous)'
-  if (opts.mode === 'report' && source.length > 256_000) {
+  const restricted = opts.mode === 'report' || opts.mode === 'frame'
+  if (restricted && source.length > 256_000) {
     throw new KetError({ code: 'E_REPORT_TEMPLATE_LIMIT', message: `template "${name}" exceeds 256 KiB` })
   }
   // Translation arrives as a filter rather than a function in scope, because scope
@@ -169,7 +170,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   const islandsUsed: string[] = []
 
   let iterations = 0
-  const maxIterations = opts.maxIterations ?? (opts.mode === 'report' ? 10_000 : Number.MAX_SAFE_INTEGER)
+  const maxIterations = opts.maxIterations ?? (restricted ? 10_000 : Number.MAX_SAFE_INTEGER)
   const compileNodes = (nodes: Node[]): Array<(s: Scope, out: string[]) => void> =>
     nodes.map((n) => {
       if (n.k === 'text') {
@@ -179,7 +180,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'out') {
-        if (opts.mode === 'report' && n.raw) {
+        if (restricted && n.raw) {
           throw new KetError({
             code: 'E_REPORT_RAW_OUTPUT',
             message: `${at({ name, line: n.line })} uses raw output`,
@@ -231,7 +232,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'joint') {
-        if (opts.mode === 'report')
+        if (restricted)
           throw new KetError({
             code: 'E_REPORT_WEB_PRIMITIVE',
             message: `${at({ name, line: n.line })} uses joint`,
@@ -243,7 +244,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'sections') {
-        if (opts.mode === 'report')
+        if (restricted)
           throw new KetError({
             code: 'E_REPORT_WEB_PRIMITIVE',
             message: `${at({ name, line: n.line })} uses sections`,
@@ -255,7 +256,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
       if (n.k === 'slot') {
         // A printed report has no page tree to draw children from, so the same
         // refusal that guards `sections` guards this.
-        if (opts.mode === 'report')
+        if (restricted)
           throw new KetError({
             code: 'E_REPORT_WEB_PRIMITIVE',
             message: `${at({ name, line: n.line })} uses slot`,
@@ -266,6 +267,11 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'render') {
+        if (opts.mode === 'frame')
+          throw new KetError({
+            code: 'E_KTL_FRAME_INCLUDE',
+            message: `${at({ name, line: n.line })} uses render`,
+          })
         const target = n.template
         const args = Object.entries(n.args).map(
           ([k, e]) => [k, compileExpr(e, { filters, name, line: n.line })] as const,
@@ -280,7 +286,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
       }
       if (n.k === 'island') {
-        if (opts.mode === 'report')
+        if (restricted)
           throw new KetError({
             code: 'E_REPORT_WEB_PRIMITIVE',
             message: `${at({ name, line: n.line })} uses island`,
@@ -291,7 +297,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
           out.push(opts.renderIsland ? opts.renderIsland(iname, s) : '')
         }
       }
-      if (opts.mode === 'report')
+      if (restricted)
         throw new KetError({
           code: 'E_REPORT_WEB_PRIMITIVE',
           message: `${at({ name, line: n.line })} uses region`,

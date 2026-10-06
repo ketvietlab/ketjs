@@ -13,6 +13,7 @@ export type FieldFrameProps = {
   selectionHidden?: boolean
   span?: 'half' | 'full'
   kind: string
+  layout?: 'inline'
   group?: boolean
 }
 
@@ -41,6 +42,7 @@ export const FieldFrame = (props: FieldFrameProps): TemplateResult => {
     <div
       data-ui="field"
       data-kind={props.kind}
+      data-layout={props.layout ?? null}
       data-size={props.size ?? null}
       data-span={props.span ?? 'half'}
       data-label-hidden={props.labelHidden ? 'true' : null}

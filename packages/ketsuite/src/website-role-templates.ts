@@ -36,6 +36,19 @@ export const websiteRoleTemplates = {
 } satisfies Record<string, RoleTemplateDef>
 
 /**
+ * Choosing one of the company's own themes. Separate from `websiteRoleTemplates` because only a
+ * deployment that composes `website_theme` has the bundle, and because a theme runs JavaScript on the
+ * site: who may switch it on is a decision of its own.
+ */
+export const websiteThemeRoleTemplates = {
+  'website.themes': {
+    version: 1,
+    labels: { vi: 'Website · Giao diện riêng', en: 'Website · Custom themes' },
+    bundles: [...read, 'website_theme.configure'],
+  },
+} satisfies Record<string, RoleTemplateDef>
+
+/**
  * The wording and sender of the customer password-reset mail. Separate from `websiteRoleTemplates`
  * because only a deployment that composes `website_customer_mail` has these bundles.
  */
