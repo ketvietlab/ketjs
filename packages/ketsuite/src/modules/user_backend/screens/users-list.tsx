@@ -5,6 +5,7 @@ import {
   collectionActions,
   collectionControls,
   collectionGridLabels,
+  collectionSelection,
   emptyState,
   formatDateTime,
   LinkButton,
@@ -20,7 +21,7 @@ export type UserListRow = UserRow & { detailHref: string }
 export type UsersGridOptions = {
   rows: readonly UserListRow[]
   groups?: readonly TableGroup<UserListRow>[]
-  /** A `{id}` href that opens a person in the record modal. */
+  /** A `{id}` href that opens a person on their own page. */
   rowHrefTemplate: string
   /** The bulk form the row checkboxes post to; null when the viewer may not change people in bulk. */
   selection?: TableSelection | null
@@ -170,6 +171,7 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
       }
       actions={collectionActions(_, frame)}
       controls={collectionControls(_, _('user_backend.users.title'), frame)}
+      selection={collectionSelection(_, frame)}
       status={`${_('user_backend.users.title')}: ${String(options.total)}`}
       body={
         !options.empty

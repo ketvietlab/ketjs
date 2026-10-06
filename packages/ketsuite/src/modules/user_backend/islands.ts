@@ -1,4 +1,5 @@
-import { defineRecordModalIsland } from '../../ui/record-modal.tsx'
+import type { IslandDefinition } from '@ketvietlab/ketjs-view'
+import { defineRecordModalIsland, defineRecordPageIsland } from '../../ui/record-modal.tsx'
 
 /**
  * The users collection opens its records in a client-side modal (KetSuite
@@ -17,9 +18,18 @@ export const USER_MODAL_ISLANDS = {
   'user.user-modal': { kind: 'user.user', client: 'user-modal.mjs', export: 'userModal' },
 } as const
 
-export const islands = Object.fromEntries(
-  Object.entries(USER_MODAL_ISLANDS).map(([name, island]) => [
-    name,
-    defineRecordModalIsland({ kind: island.kind, client: island.client, export: island.export }),
-  ]),
-)
+export const islands: Record<string, IslandDefinition> = {
+  ...Object.fromEntries(
+    Object.entries(USER_MODAL_ISLANDS).map(([name, island]) => [
+      name,
+      defineRecordModalIsland({ kind: island.kind, client: island.client, export: island.export }),
+    ]),
+  ),
+  // A person is read on their own page (`/admin/users/{id}`), placed by the
+  // `user.record-page` joint rather than on every admin page.
+  'user.user-page': defineRecordPageIsland({
+    kind: 'user.user',
+    client: 'user-modal.mjs',
+    export: 'userPage',
+  }) as unknown as IslandDefinition,
+}

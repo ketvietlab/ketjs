@@ -5,6 +5,7 @@ import type { Tone } from '../../primitives/status/index.tsx'
 import { EmptyState, Notice } from '../../primitives/feedback/index.tsx'
 import { FormattedDate, FormattedMoney, FormattedNumber } from '../../record/formatted-values/index.tsx'
 import { selectionRange } from './selection.ts'
+import { BULK_CLEAR_COMMAND } from '../../patterns/list-chrome/index.tsx'
 
 export const HOOKS = [
   'ket-table',
@@ -890,6 +891,29 @@ export function createKetTableView(
         if (checkbox) checkbox.indeterminate = selected > 0 && selected < visible.length
       })
       lifetime.addEventListener('abort', stop, { once: true })
+      // "Clear selection" in the bulk bar is a command addressed to the form this
+      // table selects into. Clearing the signal re-renders every checkbox, and a
+      // bubbling change tells the page's selection runtime to recount.
+      const formId = config.selection?.formId
+      if (formId) {
+        const element = root as unknown as HTMLElement
+        element.ownerDocument.addEventListener(
+          'click',
+          (event: Event) => {
+            const command = event.target instanceof Element ? event.target.closest('button') : null
+            if (command?.name !== BULK_CLEAR_COMMAND || command.getAttribute('form') !== formId) return
+            selectedIds.set(new Set())
+            // The `checked` binding writes the attribute, which no longer drives a box
+            // the user has toggled; clear the live property too.
+            for (const box of element.querySelectorAll<HTMLInputElement>(
+              '[data-ui="kt-row-select"], [data-ui="kt-select-all"]',
+            ))
+              box.checked = false
+            queueMicrotask(() => element.dispatchEvent(new Event('change', { bubbles: true })))
+          },
+          { signal: lifetime },
+        )
+      }
     },
     dispose: () => {
       loading.set(false)

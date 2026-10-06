@@ -17,10 +17,22 @@ export const collectionActions = (
   extra?: JSXChild,
   selection?: TableSelection | null,
 ): JSXChild => {
-  const active = selection ?? frame.chrome?.selection
+  const chosen = selection ?? frame.chrome?.selection
+  // A bar selection takes the controls' place instead; see collectionSelection.
+  const active = chosen?.presentation === 'bar' ? null : chosen
   return active || extra !== undefined || frame.extras?.['topbar.end'] !== undefined
     ? inline([active ? bulkActions(_, active) : '', extra ?? '', frame.extras?.['topbar.end'] ?? ''])
     : undefined
+}
+
+/** The bar a `presentation: 'bar'` selection shows in place of the query controls. */
+export const collectionSelection = (
+  _: Translator,
+  frame: Frame,
+  selection?: TableSelection | null,
+): JSXChild => {
+  const active = selection ?? frame.chrome?.selection
+  return active?.presentation === 'bar' ? bulkActions(_, active) : undefined
 }
 
 export const collectionControls = (

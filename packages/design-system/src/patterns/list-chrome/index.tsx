@@ -47,10 +47,19 @@ export type BulkAction = {
   disabled?: boolean
 }
 
+/** The name of the command button that asks the selecting table to clear its selection. */
+export const BULK_CLEAR_COMMAND = 'clear-selection'
+
 export type BulkActionsProps = {
   form?: string | null
+  /**
+   * The selected-row figure known when rendering. Omit it when a client runtime
+   * owns the selection: the actions then stay enabled and the runtime keeps
+   * `bulk-count` and `data-has-selection` current.
+   */
   selectedCount?: number
   summary?: JSXChild
+  /** Clears the selection by navigation. Without it, `clearLabel` asks the table bound to `form` to clear. */
   clearHref?: string | null
   clearLabel?: string
   actions: readonly BulkAction[]
@@ -204,7 +213,7 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
   <div
     data-ui="bulk-actions"
     data-form={props.form ?? null}
-    data-has-selection={props.selectedCount && props.selectedCount > 0 ? 'true' : null}
+    data-has-selection={props.selectedCount === undefined || props.selectedCount > 0 ? 'true' : null}
   >
     <div data-ui="bulk-summary">
       {/* `bulk-count` is the live figure the runtime updates as rows are checked. */}
@@ -213,13 +222,27 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
           <span data-ui="bulk-count">{String(props.selectedCount ?? 0)}</span> selected
         </>
       )}
-      {props.clearHref && (
+      {props.clearHref ? (
         <LinkButton
           href={props.clearHref}
           label={props.clearLabel ?? 'Clear'}
           variant="tertiary"
           size="compact"
         />
+      ) : (
+        props.clearLabel &&
+        props.form && (
+          // The table that owns the selection clears it (KetTable listens for this
+          // command); a native reset would race the table's own render.
+          <Button
+            type="button"
+            form={props.form}
+            name={BULK_CLEAR_COMMAND}
+            label={props.clearLabel}
+            variant="tertiary"
+            size="compact"
+          />
+        )
       )}
     </div>
     <div data-ui="bulk-action-list">
@@ -235,7 +258,9 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
             label={action.label}
             variant={action.variant ?? 'secondary'}
             size="compact"
-            disabled={action.disabled === true || !(props.selectedCount && props.selectedCount > 0)}
+            disabled={
+              action.disabled === true || (props.selectedCount !== undefined && props.selectedCount <= 0)
+            }
           />
         ),
       )}

@@ -8,7 +8,7 @@ export const installBulkSelection = (root: Document, signal: AbortSignal): (() =
     if (node.nodeType === 3) return Boolean(node.textContent?.trim())
     if (!(node instanceof Element)) return false
     if (node.matches('[data-ui="bulk-form"]')) return !(node as HTMLFormElement).hidden
-    if (node.matches('[data-ui="inline"], [data-ui="list-page-tools"]'))
+    if (node.matches('[data-ui="inline"], [data-ui="list-page-tools"], [data-ui="list-page-selection"]'))
       return [...node.childNodes].some(hasContent)
     return true
   }
@@ -17,22 +17,32 @@ export const installBulkSelection = (root: Document, signal: AbortSignal): (() =
     if (signal.aborted) return
     const slots = new Set<HTMLElement>()
     for (const form of root.querySelectorAll<HTMLFormElement>('form[data-ui="bulk-form"]')) {
-      const selected = [...form.elements].some(
-        (control) =>
-          control instanceof HTMLInputElement &&
-          !control.disabled &&
-          ((control.matches('[data-ui="row-select"], [data-ui="kt-row-select"]') && control.checked) ||
-            (control.type === 'hidden' &&
-              control.parentElement?.matches('[data-ui="kt-select-persisted"]') &&
-              control.value === '1')),
+      // A row counts once, whether its checkbox or its persisted id carries it.
+      const ids = new Set(
+        [...form.elements]
+          .filter(
+            (control): control is HTMLInputElement =>
+              control instanceof HTMLInputElement &&
+              !control.disabled &&
+              ((control.matches('[data-ui="row-select"], [data-ui="kt-row-select"]') && control.checked) ||
+                (control.type === 'hidden' &&
+                  !!control.parentElement?.matches('[data-ui="kt-select-persisted"]') &&
+                  control.value === '1')),
+          )
+          .map((control) => control.name),
       )
+      const selected = ids.size > 0
       form.hidden = !selected
+      // Write only a changed figure: replacing the text is itself a mutation the
+      // observer below reports, so an unconditional write would re-run sync forever.
+      for (const count of form.querySelectorAll<HTMLElement>('[data-ui="bulk-count"]'))
+        if (count.textContent !== String(ids.size)) count.textContent = String(ids.size)
       if (!selected)
         for (const menu of form.querySelectorAll<HTMLDetailsElement>('details[data-ui="bulk-actions"][open]'))
           menu.open = false
       const tools = form.closest<HTMLElement>('[data-ui="list-page-tools"]')
       if (tools) slots.add(tools)
-      const slot = form.closest<HTMLElement>('[data-ui="list-page-actions"]')
+      const slot = form.closest<HTMLElement>('[data-ui="list-page-actions"], [data-ui="list-page-selection"]')
       if (slot) slots.add(slot)
     }
     for (const slot of slots) slot.hidden = ![...slot.childNodes].some(hasContent)
