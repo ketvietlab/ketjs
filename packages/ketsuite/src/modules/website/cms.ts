@@ -31,7 +31,7 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { claimImages, imageClaimEffects } from './image-assets.ts'
-import { isSafeUrl, studioFields, termDescription } from './studio-content.ts'
+import { isSafeUrl, liveDocument, studioFields, termDescription } from './studio-content.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { usageOf } from './media-usage.ts'
@@ -1265,7 +1265,74 @@ export const cmsFunctions: Record<string, FnSpec> = {
       // Ids are assigned here rather than trusted from the client, so content
       // written before identity existed gains it on its first save and keeps it
       // on every save after. A client that already carries ids keeps its own.
-      const layout = withPlacementIds(args.layout as Placement[], sha256)
+      const documents = (nodes: Placement[]): Placement[] =>
+        nodes.map((node) => {
+          const settings = node.settings ?? {}
+          if (node.type === 'website.gallery' && settings.images) {
+            const album = JSON.parse(String(settings.images))
+            const imageSource = (value: unknown) =>
+              typeof value === 'string' &&
+              value.length <= 3000 &&
+              (!value || /^(\/(?!\/)|https?:\/\/)/i.test(value))
+            if (
+              !Array.isArray(album) ||
+              album.length > 200 ||
+              album.some(
+                (item) =>
+                  !item ||
+                  !imageSource(item.src) ||
+                  (item.mobileSrc != null && !imageSource(item.mobileSrc)) ||
+                  (item.alt != null && (typeof item.alt !== 'string' || item.alt.length > 500)),
+              )
+            )
+              throw new Error('Invalid gallery album')
+            if (
+              settings.galleryLayout &&
+              !['grid', 'slideshow', 'activity', 'clients'].includes(String(settings.galleryLayout))
+            )
+              throw new Error('Invalid gallery mode')
+            for (const [key, max] of [
+              ['rows', 3],
+              ['interval', 60],
+            ] as const)
+              if (
+                settings[key] != null &&
+                (!Number.isInteger(Number(settings[key])) ||
+                  Number(settings[key]) < 1 ||
+                  Number(settings[key]) > max)
+              )
+                throw new Error('Invalid gallery motion')
+            settings.images = JSON.stringify(
+              album.map((item) => ({
+                src: item.src,
+                ...(item.mobileSrc ? { mobileSrc: item.mobileSrc } : {}),
+                alt: item.alt || '',
+              })),
+            )
+          }
+          const doc =
+            node.type === 'website.rich_text' && settings.bodyDoc
+              ? liveDocument(settings.bodyDoc, { images: false })
+              : null
+          return {
+            ...node,
+            ...(doc ? { settings: { ...settings, bodyDoc: doc.doc, body: doc.text } } : {}),
+            ...(node.slots
+              ? {
+                  slots: Object.fromEntries(
+                    Object.entries(node.slots).map(([slot, children]) => [slot, documents(children)]),
+                  ),
+                }
+              : {}),
+          }
+        })
+      let normalized: Placement[]
+      try {
+        normalized = documents(args.layout as Placement[])
+      } catch {
+        return invalid('layout', 'website.error.invalidFields')
+      }
+      const layout = withPlacementIds(normalized, sha256)
       args.fields = studioFields(String(args.type), args.fields)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }

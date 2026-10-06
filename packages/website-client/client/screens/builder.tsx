@@ -10,6 +10,8 @@ import { checkBuilderAccessibility } from '../builder-checks.ts'
 // lives in this island until saved; saving sends the revision it was based on, so a concurrent
 // edit is a conflict, never a silent overwrite. The canvas uses the public theme renderer.
 import { signal } from '@ketvietlab/ketjs-view'
+import { LiveDescription } from '../live-description.tsx'
+import { GalleryEditor, galleryUploadPending } from '../gallery-editor.tsx'
 import {
   ActionGroup,
   IconButton,
@@ -29,7 +31,7 @@ import {
   WorkspacePage,
 } from '@ketvietlab/design-system'
 import { CommandButton, icon } from '../ui.tsx'
-import { renderLayout, walkLayout, safeImage } from '../renderer.tsx'
+import { renderLayout, walkLayout, safeImage, galleryImages } from '../renderer.tsx'
 import { newId } from './format.ts'
 import type { TreeNode } from '@ketvietlab/design-system'
 import type {
@@ -320,6 +322,43 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   const field = (name: string, kind: string, value: string | undefined, disabled: boolean) => {
     const label = tr(`website.builder.setting.${name}`)
     const common = { id: `builder-${name}`, name, label, value: value ?? '', disabled }
+    if (name === 'images') {
+      const selected = locate(draftOf(current().id)!.layout, current().node ?? '')?.placement
+      return selected
+        ? GalleryEditor(ctx, {
+            entryId: current().id,
+            images: galleryImages(selected.settings ?? {}),
+            disabled,
+            update: (images) =>
+              change(
+                current().id,
+                () => {
+                  selected.settings!.images = JSON.stringify(images)
+                },
+                `gallery:${selected.id}`,
+              ),
+          })
+        : null
+    }
+    if (name === 'galleryLayout')
+      return (
+        <Select
+          {...common}
+          value={value || 'grid'}
+          options={['grid', 'slideshow', 'activity', 'clients'].map((value) => ({
+            value,
+            label: tr(`website.gallery.${value}`),
+          }))}
+        />
+      )
+    if (name === 'rows')
+      return (
+        <Select
+          {...common}
+          value={value || '1'}
+          options={['1', '2', '3'].map((value) => ({ value, label: value }))}
+        />
+      )
     if (name === 'visibility')
       return (
         <Select
@@ -363,7 +402,25 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
           )}
         />
       )
-    if (name === 'body') return <TextArea {...common} />
+    if (name === 'body') {
+      const draft = draftOf(current().id)
+      const selected = draft && locate(draft.layout, current().node ?? '')?.placement
+      if (selected?.type === 'website.rich_text')
+        return (
+          <LiveDescription
+            id={`builder-${selected.id}`}
+            value={String(selected.settings?.bodyDoc ?? '')}
+            text={value ?? ''}
+            label={label}
+            readOnly={disabled}
+            field
+            documentField="bodyDoc"
+            textField="body"
+            notify
+          />
+        )
+      return <TextArea {...common} />
+    }
     return <TextField {...common} required={!kind.endsWith('?')} />
   }
 
@@ -394,6 +451,8 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
             'focalY',
             'imageFit',
             'imageRatio',
+            'bodyDoc',
+            ...(placement.type === 'website.gallery' ? ['image', 'image2'] : []),
           ].includes(name),
       )
       .filter(([name]) =>
@@ -1025,6 +1084,14 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   return screen
 
   async function save() {
+    if (galleryUploadPending(current().id)) throw new Error(tr('website.taxonomy.imageUploading'))
+    if (
+      typeof document !== 'undefined' &&
+      [...document.querySelectorAll<HTMLElement>('[data-live="builder.edit"][data-uploading]')].some(
+        (form) => Number(form.dataset.uploading) > 0,
+      )
+    )
+      throw new Error(tr('website.taxonomy.imageUploading'))
     const { id } = current()
     const draft = draftOf(id)
     if (!draft) return
