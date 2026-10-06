@@ -6,6 +6,7 @@ const INNER_LAYERS_OPEN = [
   '[data-ui="menu"][open]',
   '[data-ui="timeframe-menu"][open]',
   '[data-ui="view-settings"][open]',
+  '[data-ui="list-filters"][open]',
   '[data-ui="popover"][data-open="true"]',
   '[data-ui="tooltip"]:not([data-dismissed="true"]):is(:hover, :focus-within)',
 ].join(', ')

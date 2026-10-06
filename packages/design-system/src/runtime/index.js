@@ -30,10 +30,15 @@ const focusables = (root) =>
  * @returns {() => void}
  */
 /**
- * Popups built on <details> other than the action menu: a period filter and view
- * settings. They close on a click outside them and on Escape, like the menu.
+ * Popups built on <details> other than the action menu: a period filter, view
+ * settings and a list toolbar's folded filters. They close on a click outside
+ * them and on Escape, like the menu.
  */
-const DISMISSIBLE_POPUPS = ['[data-ui="timeframe-menu"]', '[data-ui="view-settings"]']
+const DISMISSIBLE_POPUPS = [
+  '[data-ui="timeframe-menu"]',
+  '[data-ui="view-settings"]',
+  '[data-ui="list-filters"]',
+]
 const DISMISSIBLE_POPUPS_OPEN = DISMISSIBLE_POPUPS.map((selector) => `${selector}[open]`).join(', ')
 
 /** @param {ParentNode} root */
@@ -160,12 +165,16 @@ export const attachDesignSystemInteractions = (root = document) => {
     ;(first instanceof HTMLElement ? first : modal).focus()
   }
 
+  // A list toolbar's folded filters are a disclosure with a button trigger, as a menu is.
   const menus = /** @type {HTMLDetailsElement[]} */ (
-    [...root.querySelectorAll('[data-ui="menu"]')].filter((menu) => menu instanceof HTMLDetailsElement)
+    [...root.querySelectorAll('[data-ui="menu"], [data-ui="list-filters"]')].filter(
+      (menu) => menu instanceof HTMLDetailsElement,
+    )
   )
   /** @param {HTMLDetailsElement} menu */
   const syncMenu = (menu) => {
-    const trigger = menu.querySelector('[data-ui="menu-trigger"]')
+    // Its own trigger: folded filters hold menus whose triggers are not theirs.
+    const trigger = menu.querySelector(':scope > summary')
     if (trigger instanceof HTMLElement) trigger.setAttribute('aria-expanded', String(menu.open))
   }
   const menuCleanups = menus.map((menu) => {

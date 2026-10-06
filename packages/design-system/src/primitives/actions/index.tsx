@@ -32,6 +32,11 @@ type ActionBase = {
   disabled?: boolean
   loading?: boolean
   describedBy?: string | null
+  /**
+   * Shows the action at one width only. A page header folds a secondary action
+   * into its overflow menu on a phone: the button is `wide`, the menu item `phone`.
+   */
+  viewport?: 'phone' | 'wide'
 }
 
 export type ButtonProps = ActionBase & {
@@ -80,6 +85,7 @@ const actionAttributes = (props: ActionBase) => ({
   'data-tone': props.tone ?? (props.variant === 'destructive' ? 'danger' : 'default'),
   'data-loading': props.loading ? 'true' : null,
   'data-full-width': props.fullWidth ? 'true' : null,
+  'data-viewport': props.viewport ?? null,
 })
 
 export const Button = (props: ButtonProps): TemplateResult => (

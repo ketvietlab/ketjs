@@ -148,6 +148,20 @@
     align-items: center;
     gap: var(--kv-space-2);
   }
+
+  /* An action shown at one width only: a header's secondary action is a button
+     when there is room and an item of the overflow menu on a phone. */
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="action"][data-viewport="wide"] {
+      display: none;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="action"][data-viewport="phone"] {
+      display: none;
+    }
+  }
   @keyframes kv-spin {
     to {
       transform: rotate(360deg);

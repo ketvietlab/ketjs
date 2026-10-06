@@ -25,7 +25,7 @@
   :where([data-kv-design-system])
     [data-ui="list-chrome"][data-pattern="list-chrome"]
     [data-ui="list-chrome-row"][data-row="query"] {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
   }
 
@@ -48,10 +48,12 @@
   :where([data-kv-design-system])
     [data-ui="list-chrome"][data-pattern="list-chrome"]
     [data-ui="list-chrome-row"][data-row="tail"] {
-    flex: 0 1 auto;
-    flex-wrap: nowrap;
+    /* Search, filters and pager share a line while they fit. When they do not, a
+       whole group moves to the next line: kept on one, the filters were squeezed
+       until each facet stood on a line of its own beside a shrunken search. */
+    flex: 1 1 auto;
+    flex-wrap: wrap;
     align-items: center;
-    margin-left: auto;
     max-width: 100%;
   }
 
@@ -322,8 +324,8 @@
   :where([data-kv-design-system]) [data-ui="list-chrome"][data-pattern="list-chrome"] [data-ui="pager-page"] {
     display: inline-grid;
     place-items: center;
-    min-width: 2rem;
-    height: 2rem;
+    min-width: var(--kv-control-height);
+    height: var(--kv-control-height);
     padding: 0 var(--kv-space-2);
     border: 1px solid var(--kv-border-default);
     border-radius: var(--kv-control-radius);
@@ -348,16 +350,91 @@
     opacity: 0.45;
   }
 
+  /* A toolbar can fold its filters into one disclosure. The toggle is a control
+     beside the search; it only shows where the filters do not fit, see below. */
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="list-filters"] {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="list-filters-toggle"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-1);
+    min-height: var(--kv-control-height);
+    padding: 0 var(--kv-space-3);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-control-radius);
+    background: var(--kv-interactive-bg);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-line-sm);
+    font-weight: var(--kv-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="list-filters-toggle"]::-webkit-details-marker {
+    display: none;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    :is(
+      [data-ui="list-filters"][data-active="true"] > [data-ui="list-filters-toggle"],
+      [data-ui="list-filters"][open] > [data-ui="list-filters-toggle"]
+    ) {
+    border-color: var(--kv-color-accent);
+    background: var(--kv-color-accent-soft);
+    color: var(--kv-color-accent);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-chrome"][data-pattern="list-chrome"]
+    [data-ui="list-filters-count"] {
+    display: inline-grid;
+    min-width: 1.375rem;
+    padding: 0 var(--kv-space-1);
+    border-radius: var(--kv-radius-full);
+    background: var(--kv-color-accent);
+    color: var(--kv-color-on-accent);
+    font-size: var(--kv-text-xs);
+    line-height: var(--kv-line-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  /* Wide enough, the folded filters stay in the row: the toggle hides and the
+     closed disclosure still draws its content. A browser without
+     ::details-content keeps the toggle, so the filters stay reachable. */
+  @media (min-width: 48rem) {
+    @supports selector(::details-content) {
+      :where([data-kv-design-system])
+        [data-ui="list-chrome"][data-pattern="list-chrome"]
+        [data-ui="list-filters-toggle"] {
+        display: none;
+      }
+
+      :where([data-kv-design-system])
+        [data-ui="list-chrome"][data-pattern="list-chrome"]
+        [data-ui="list-filters"]::details-content {
+        content-visibility: visible;
+      }
+    }
+  }
+
   @media (max-width: 47.9375rem) {
     /* One line cannot hold search, facets and pager on a phone. Kept on one, the
        facets were pushed past the screen edge and stacked into a tall empty band.
-       Search takes its own line, facets wrap on the next, the pager ends the row. */
-    :where([data-kv-design-system])
-      [data-ui="list-chrome"][data-pattern="list-chrome"]
-      [data-ui="list-chrome-row"]:is([data-row="query"], [data-row="tail"]) {
-      flex-wrap: wrap;
-    }
-
+       Search takes its own line, facets wrap on the next, and the last line holds
+       the status and actions at the start and the pager at the end. */
     :where([data-kv-design-system])
       [data-ui="list-chrome"][data-pattern="list-chrome"]
       [data-ui="list-search"] {
@@ -370,7 +447,6 @@
       [data-ui="list-chrome"][data-pattern="list-chrome"]
       [data-ui="list-chrome-row"][data-row="tail"] {
       flex: 1 1 100%;
-      margin-left: 0;
     }
 
     :where([data-kv-design-system])
@@ -382,6 +458,21 @@
     :where([data-kv-design-system])
       [data-ui="list-chrome"][data-pattern="list-chrome"]
       [data-ui="list-chrome-row"][data-row="meta"] {
+      flex: 1 1 100%;
+      flex-wrap: wrap;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      :is([data-ui="list-filter-menus"], [data-ui="list-actions"], [data-ui="bulk-action-list"]) {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-row="meta"]
+      > [data-ui="pager-bar"] {
       margin-left: auto;
     }
 
@@ -392,6 +483,44 @@
       grid-template-columns: minmax(0, 1fr) auto;
       min-width: 0;
       max-width: 100%;
+    }
+
+    /* Folded filters: the toggle ends the search line, the time or page controls
+       take the next, and the open filters drop below the toggle as a panel. */
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"][data-filters="collapsible"]
+      [data-ui="list-chrome-row"][data-row="tail"] {
+      display: contents;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"][data-filters="collapsible"]
+      [data-ui="list-search"] {
+      flex: 1 1 8rem;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-filters"] {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-chrome"][data-pattern="list-chrome"]
+      [data-ui="list-filters"]
+      > [data-row="filters"] {
+      position: absolute;
+      z-index: var(--kv-layer-menu);
+      top: calc(100% + var(--kv-space-1));
+      right: 0;
+      width: max-content;
+      max-width: min(22rem, calc(100vw - var(--kv-space-8)));
+      padding: var(--kv-space-2);
+      border: 1px solid var(--kv-border-default);
+      border-radius: var(--kv-radius-md);
+      background: var(--kv-panel-bg);
+      box-shadow: var(--kv-shadow-popover);
     }
   }
 }
