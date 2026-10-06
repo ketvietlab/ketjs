@@ -118,6 +118,31 @@ test('a viewer who may change people checks rows into the bulk form that makes t
   assert.equal((html.match(/user_backend\.field\.superuser/g) ?? []).length, 1)
 })
 
+test('a bar selection replaces the filter row beside the checkboxes instead of joining the header', () => {
+  const html = render({}, [person('ada')], {
+    total: 1,
+    createHref: '/admin/users/new',
+    selection: { ...bulk, presentation: 'bar' },
+  })
+  const header = html.slice(
+    html.indexOf('data-ui="list-page-header"'),
+    html.indexOf('data-ui="list-page-toolbar"'),
+  )
+  assert.ok(header.length > 0)
+  assert.doesNotMatch(header, /data-ui="bulk-form"|data-ui="bulk-actions"/)
+  // The bar waits hidden in the toolbar, ahead of the filters it stands in for.
+  assert.match(
+    html,
+    /data-ui="list-page-toolbar"[\s\S]*?<div data-ui="list-page-selection" hidden[^>]*>[\s\S]*?id="user-people-bulk"[\s\S]*?data-ui="list-page-controls"/,
+  )
+  assert.match(html, /data-ui="bulk-count">(?:<!--k\[-->)?0</)
+  assert.match(
+    html,
+    /type="button"[^>]*form="user-people-bulk"[^>]*name="clear-selection"|name="clear-selection"[^>]*form="user-people-bulk"/,
+  )
+  assert.doesNotMatch(html, /<details[^>]*data-ui="bulk-actions"/)
+})
+
 test('users list keeps ListPage identity and empty state without decorative pager', () => {
   const html = render({}, [], { total: 0, createHref: '/admin/users/new' })
   assert.match(html, /data-ui="list-page"/)
