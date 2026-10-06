@@ -1,3 +1,6 @@
+import { compileThemeFrame } from './frame.ts'
+import { THEME_FRAME_FILES } from './types.ts'
+import type { ThemeFrameSlot, ThemeFrameTemplates } from './types.ts'
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { THEME_ENGINE, THEME_FILE, THEME_KEY, THEME_LIMITS, THEME_VERSION, themeFileType } from './types.ts'
@@ -9,7 +12,13 @@ export type ThemeIssue = { code: string; detail: string }
 export type ThemeFileEntry = { name: string; type: string; size: number; sha256: string }
 
 export type CheckedThemePackage =
-  | { ok: true; manifest: ThemeManifest; hash: string; files: ThemeFileEntry[] }
+  | {
+      ok: true
+      manifest: ThemeManifest
+      hash: string
+      files: ThemeFileEntry[]
+      frameTemplates: ThemeFrameTemplates
+    }
   | { ok: false; errors: ThemeIssue[] }
 
 const plain = (value: unknown): value is Record<string, unknown> =>
@@ -33,6 +42,16 @@ const MANIFEST_KEYS = new Set([
 
 const sha256 = (bytes: Uint8Array | string): string => createHash('sha256').update(bytes).digest('hex')
 
+/** What the Studio calls a setting or one of its values; the theme's own words, never markup. */
+const shortText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && value.length <= 80
+const labelOf = (spec: Record<string, unknown>) =>
+  spec.label !== undefined ? { label: spec.label as string } : {}
+const labelsFit = (labels: unknown, values: string[]) =>
+  labels === undefined ||
+  (plain(labels) &&
+    Object.entries(labels).every(([value, label]) => values.includes(value) && shortText(label)))
+
 /**
  * A theme's settings schema, which replaces the fixed accent/font enums for a site using the theme.
  * Kept small and closed: a value is chosen in the Studio and lands in public markup.
@@ -48,7 +67,7 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
   const settings: Record<string, ThemeSetting> = {}
   for (const [name, spec] of entries) {
     const bad = () => issues.push({ code: 'manifestSettings', detail: `settings.${name}` })
-    if (!SETTING_NAME.test(name) || !plain(spec)) {
+    if (!SETTING_NAME.test(name) || !plain(spec) || (spec.label !== undefined && !shortText(spec.label))) {
       bad()
       continue
     }
@@ -59,7 +78,8 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
         !values.length ||
         values.length > 20 ||
         values.some((item) => !/^[a-z0-9][a-z0-9-]{0,40}$/.test(item)) ||
-        (spec.default !== undefined && !values.includes(spec.default as string))
+        (spec.default !== undefined && !values.includes(spec.default as string)) ||
+        !labelsFit(spec.labels, values)
       )
         bad()
       else
@@ -67,6 +87,8 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
           type: 'enum',
           values,
           ...(spec.default ? { default: spec.default as string } : {}),
+          ...labelOf(spec),
+          ...(spec.labels !== undefined ? { labels: spec.labels as Record<string, string> } : {}),
         }
     } else if (spec.type === 'text') {
       const max = spec.maxLength
@@ -83,10 +105,16 @@ const checkSettings = (value: unknown, issues: ThemeIssue[]): Record<string, The
           type: 'text',
           maxLength: max as number,
           ...(spec.default !== undefined ? { default: spec.default as string } : {}),
+          ...labelOf(spec),
         }
     } else if (spec.type === 'bool') {
       if (spec.default !== undefined && typeof spec.default !== 'boolean') bad()
-      else settings[name] = { type: 'bool', ...(spec.default !== undefined ? { default: spec.default } : {}) }
+      else
+        settings[name] = {
+          type: 'bool',
+          ...(spec.default !== undefined ? { default: spec.default } : {}),
+          ...labelOf(spec),
+        }
     } else bad()
   }
   return settings
@@ -145,9 +173,23 @@ export function checkThemeManifest(
   if (typeof value.title !== 'string' || !value.title.trim() || value.title.length > 80)
     issues.push({ code: 'manifestTitle', detail: 'title' })
   const settings = checkSettings(value.settings, issues)
-  // KTL frame slots compile at boot today; a stored template has no compiler yet (THEMES.md §5.2).
-  if (value.frame !== undefined && !(Array.isArray(value.frame) && value.frame.length === 0))
-    issues.push({ code: 'frameUnsupported', detail: 'frame' })
+  const frame = value.frame ?? []
+  if (
+    !strings(frame) ||
+    new Set(frame).size !== frame.length ||
+    frame.some((slot) => !Object.hasOwn(THEME_FRAME_FILES, slot))
+  )
+    issues.push({ code: 'manifestFrame', detail: 'frame' })
+  else
+    for (const slot of frame as ThemeFrameSlot[])
+      if (!files.has(THEME_FRAME_FILES[slot]))
+        issues.push({ code: 'frameMissing', detail: THEME_FRAME_FILES[slot] })
+  for (const file of files)
+    if (
+      file.endsWith('.ktl') &&
+      !(Array.isArray(frame) && frame.some((slot) => THEME_FRAME_FILES[slot as ThemeFrameSlot] === file))
+    )
+      issues.push({ code: 'frameUndeclared', detail: file })
   if (value.sections !== undefined && !strings(value.sections))
     issues.push({ code: 'manifestSections', detail: 'sections' })
   const fonts = value.fonts === undefined ? [] : value.fonts
@@ -195,6 +237,7 @@ export function checkThemeManifest(
     tier: 'private',
     title: (value.title as string).trim(),
     settings,
+    frame: frame as ThemeFrameSlot[],
     sections: (value.sections as string[] | undefined) ?? [],
     script,
     fonts: fonts as string[],
@@ -425,6 +468,21 @@ export function checkThemePackage(files: Record<string, Uint8Array>): CheckedThe
     }
     if (parsed !== undefined) manifest = checkThemeManifest(parsed, known, issues)
   }
+  const frameTemplates: ThemeFrameTemplates = {}
+  if (manifest)
+    for (const slot of manifest.frame) {
+      const file = THEME_FRAME_FILES[slot]
+      try {
+        const source = new TextDecoder('utf-8', { fatal: true }).decode(files[file])
+        compileThemeFrame(source, slot)
+        frameTemplates[slot] = source
+      } catch (error) {
+        issues.push({
+          code: 'frameInvalid',
+          detail: `${file}: ${error instanceof Error ? error.message : 'invalid template'}`,
+        })
+      }
+    }
   const css = names.filter((name) => name.endsWith('.css'))
   if (manifest)
     for (const name of css) {
@@ -447,5 +505,5 @@ export function checkThemePackage(files: Record<string, Uint8Array>): CheckedThe
   }
   if (issues.length || !manifest) return { ok: false, errors: issues }
   const hash = sha256(entries.map((file) => `${file.name}\0${file.size}\0${file.sha256}\n`).join(''))
-  return { ok: true, manifest, hash, files: entries }
+  return { ok: true, manifest, hash, files: entries, frameTemplates }
 }

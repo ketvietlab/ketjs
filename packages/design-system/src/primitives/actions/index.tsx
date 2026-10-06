@@ -45,7 +45,11 @@ export type ButtonProps = ActionBase & {
   controls?: string | null
 }
 
-export type LinkButtonProps = Omit<ActionBase, 'pressed'> & { href: string }
+export type LinkButtonProps = Omit<ActionBase, 'pressed'> & {
+  href: string
+  /** Keep native link navigation with the named, square icon-action contract. */
+  iconOnly?: boolean
+}
 export type IconButtonProps = Omit<ButtonProps, 'leading' | 'icon'> & {
   icon: JSXChild
   pressed?: boolean
@@ -130,11 +134,13 @@ export const LinkButton = (props: LinkButtonProps): TemplateResult =>
     <button
       {...actionAttributes(props)}
       data-ui="action"
+      data-icon-only={props.iconOnly ? 'true' : null}
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       type="button"
       disabled
-      aria-label={props.loading ? props.label : null}
+      aria-label={props.loading || props.iconOnly ? props.label : null}
+      title={props.iconOnly ? props.label : undefined}
       aria-busy={props.loading === true ? 'true' : null}
       aria-describedby={props.describedBy ?? null}
     >
@@ -144,9 +150,12 @@ export const LinkButton = (props: LinkButtonProps): TemplateResult =>
     <a
       {...actionAttributes(props)}
       data-ui="action"
+      data-icon-only={props.iconOnly ? 'true' : null}
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       href={props.href}
+      aria-label={props.iconOnly ? props.label : null}
+      title={props.iconOnly ? props.label : undefined}
       aria-describedby={props.describedBy ?? null}
     >
       <ActionContent {...props} />

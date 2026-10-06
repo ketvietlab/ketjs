@@ -28,7 +28,10 @@ const vi = {
   'error.manifestFonts': 'Danh sách font không hợp lệ.',
   'error.manifestScript': 'Khai báo script không hợp lệ.',
   'error.manifestOrigin': 'Origin cho script phải là https và tối đa 10 mục.',
-  'error.frameUnsupported': 'Chưa hỗ trợ thay khung trang bằng KTL.',
+  'error.manifestFrame': 'Danh sách vị trí khung không hợp lệ.',
+  'error.frameMissing': 'Thiếu tệp KTL cho vị trí đã khai báo.',
+  'error.frameUndeclared': 'Tệp KTL chưa được khai báo trong manifest.',
+  'error.frameInvalid': 'Tệp KTL không hợp lệ hoặc có HTML không an toàn.',
 }
 const en = {
   'app.title': 'Website · Themes',
@@ -55,7 +58,10 @@ const en = {
   'error.manifestFonts': 'The font list is not valid.',
   'error.manifestScript': 'The script declaration is not valid.',
   'error.manifestOrigin': 'Script origins must be https, at most 10.',
-  'error.frameUnsupported': 'Replacing frame slots with KTL is not supported yet.',
+  'error.manifestFrame': 'The frame slot list is not valid.',
+  'error.frameMissing': 'A declared frame slot has no KTL file.',
+  'error.frameUndeclared': 'A KTL file is not declared in the manifest.',
+  'error.frameInvalid': 'A KTL file is invalid or contains unsafe HTML.',
 }
 
 export default defineModule({

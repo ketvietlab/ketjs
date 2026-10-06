@@ -21,12 +21,14 @@ export const THEME_LIMITS = {
   /** The gzip budget of a module when its manifest names none, and the most it may name. */
   scriptKb: 120,
   scriptKbMax: 256,
+  frameBytes: 64 * 1024,
   settings: 40,
   origins: 10,
 } as const
 
 /** What the route answers each file with, by extension. Anything else is refused at install. */
 export const THEME_TYPES: Record<string, string> = {
+  ktl: 'text/plain; charset=utf-8',
   json: 'application/json',
   css: 'text/css; charset=utf-8',
   mjs: 'text/javascript; charset=utf-8',
@@ -46,10 +48,21 @@ export const themeFileType = (name: string): string | null =>
 export const THEME_STATUSES = ['staged', 'installed', 'available', 'revoked'] as const
 export type ThemeStatus = (typeof THEME_STATUSES)[number]
 
+/** A setting the Studio offers for a theme. `label` and enum `labels` are how the Studio names them. */
 export type ThemeSetting =
-  | { type: 'enum'; values: string[]; default?: string }
-  | { type: 'text'; maxLength: number; default?: string }
-  | { type: 'bool'; default?: boolean }
+  | { type: 'enum'; values: string[]; default?: string; label?: string; labels?: Record<string, string> }
+  | { type: 'text'; maxLength: number; default?: string; label?: string }
+  | { type: 'bool'; default?: boolean; label?: string }
+
+export const THEME_FRAME_FILES = {
+  topbar: 'frame-topbar.ktl',
+  header: 'frame-header.ktl',
+  footer: 'frame-footer.ktl',
+  beforeMain: 'frame-before-main.ktl',
+  afterMain: 'frame-after-main.ktl',
+} as const
+export type ThemeFrameSlot = keyof typeof THEME_FRAME_FILES
+export type ThemeFrameTemplates = Partial<Record<ThemeFrameSlot, string>>
 
 export type ThemeManifest = {
   engine: typeof THEME_ENGINE
@@ -58,13 +71,14 @@ export type ThemeManifest = {
   tier: 'private'
   title: string
   settings: Record<string, ThemeSetting>
+  frame: ThemeFrameSlot[]
   sections: string[]
   script: { entry: string; connect: string[]; frame: string[]; budgetKb: number } | null
   fonts: string[]
 }
 
 /**
- * What a site's style holds once a theme is selected, and what publishing freezes with it.
+ * What a site's live style holds once a theme is selected.
  *
  * Everything the public renderer needs is here, because it renders synchronously from the snapshot
  * and cannot look the version up.
@@ -77,6 +91,7 @@ export type SelectedTheme = {
   connect: string[]
   frame: string[]
   settings: Record<string, string | boolean>
+  frameTemplates?: ThemeFrameTemplates
 }
 
 /** Where a version's files live in the tenant's storage, whichever driver backs it. */

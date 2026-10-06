@@ -27,8 +27,17 @@ if (root && source && typeof theme.mount === 'function') {
     data: freeze(data.data),
     asset: (file) => (FILE.test(String(file)) ? base + String(file) : ''),
   })
+  if (data.interactivePreview === true) {
+    // Preview interactions stay in this snapshot: no tel, external navigation or form submission.
+    document.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('a[href]')) event.preventDefault()
+    })
+    document.addEventListener('submit', (event) => event.preventDefault(), true)
+  }
   try {
-    theme.mount(root, ctx)
+    const mounted = theme.mount(root, ctx)
+    if (data.interactivePreview === true) document.documentElement.dataset.builderThemeState = 'ready'
+    window.addEventListener('pagehide', () => mounted?.dispose?.(), { once: true })
   } catch (error) {
     console.error('website theme', error)
   }

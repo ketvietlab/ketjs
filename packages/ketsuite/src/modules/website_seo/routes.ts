@@ -75,7 +75,11 @@ export const routes: Record<string, RouteEntry> = {
         // not call it; through ctx.call every anonymous request was refused and the file was
         // never served. The site here is the one this host resolved to, not one the caller named.
         const entries = (await ctx.callUnchecked(
-          'website_seo.sitemapEntries',
+          (
+            await ctx.live(req)
+          ).functions['website_catalog.sitemapEntries']
+            ? 'website_catalog.sitemapEntries'
+            : 'website_seo.sitemapEntries',
           { siteId: site.id },
           url,
           req,
