@@ -140,6 +140,7 @@ export {
   RECORD_TAB_PARAM,
   RECORD_DIALOG_PARAM,
   defineRecordModalIsland,
+  defineRecordPageIsland,
   isRecordKind,
   isRecordModalCreate,
   readRecordModalTarget,
@@ -147,13 +148,15 @@ export {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageLoading,
 } from './record-modal.tsx'
-export type { RecordModalTarget } from './record-modal.tsx'
+export type { RecordModalTarget, RecordPageIslandProps } from './record-modal.tsx'
 export {
   RECORD_COMMAND_FIELD,
   RECORD_DIALOG_ATTRIBUTE,
   callRecordFunction,
   createRecordModal,
+  createRecordPage,
   recordLayerHasDraft,
 } from './client/record-modal.tsx'
 export {
@@ -171,6 +174,7 @@ export type {
   RecordModalDefinition,
   RecordModalDialog,
   RecordModalTab,
+  RecordPageOptions,
 } from './client/record-modal.tsx'
 export type {
   RecordBreadcrumbs,

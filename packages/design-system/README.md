@@ -172,8 +172,13 @@ returns them exactly where they were.
 - A child action of the record (reassign, postpone, confirm) opens inside the same
   island as a nested step, not as another page.
 - `RecordPage` remains for records reached directly rather than from a collection,
-  such as a shared link or a record without a parent list. It is never the target of
-  a collection row or card.
+  such as a shared link or a record without a parent list.
+- A record that is a workspace of its own — many tabs, nested editors, work that
+  outlasts a glance at the list (a product template with its variants) — opens on
+  its `RecordPage` instead, from its rows and its create action alike. The page is
+  still the same client-side island: the server renders the `RecordPage` in its
+  loading state and the client renders the record, its tabs, commands and drafts.
+  Its way back to the collection is a header action, not a breadcrumb.
 
 ### Option groups
 

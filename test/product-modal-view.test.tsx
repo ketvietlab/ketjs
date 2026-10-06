@@ -21,6 +21,7 @@ type Options = {
   state?: Record<string, string>
   dialog?: { name: string; params: Record<string, string> } | null
   tab?: string
+  presentation?: 'modal' | 'page'
 }
 
 const contextOf = (
@@ -40,6 +41,7 @@ const contextOf = (
   busy: false,
   dialog: options.dialog ?? null,
   href: () => '',
+  presentation: options.presentation,
   state: (key, fallback = '') => options.state?.[key] ?? fallback,
 })
 
@@ -783,4 +785,33 @@ test('product modal commands: delete removes only this template and asks before 
   assert.equal(commands.delete!.after, 'close')
   assert.equal(typeof commands.delete!.confirm, 'function')
   assert.match(commands.delete!.confirm!(contextOf(templateData()))!, /archive\.deleteConfirm/)
+})
+
+test('product page: the header goes back to the catalogue and More opens downward, create included', () => {
+  const page = render(
+    templateModalDefinition.actions!(
+      contextOf(templateData(), { tab: 'general', presentation: 'page' }),
+    ) as JSXChild,
+  )
+  assert.match(page, /data-record-close="true"/)
+  assert.match(page, /product_backend\.action\.back/)
+  assert.doesNotMatch(page, /product_backend\.action\.close/)
+  // A page's actions sit in its header, so the menu has room below the trigger.
+  assert.match(page, /data-ui="menu"[^>]*data-placement="bottom"/)
+
+  const creating = render(
+    templateModalDefinition.actions!(
+      contextOf(templateData(), { creating: true, presentation: 'page' }),
+    ) as JSXChild,
+  )
+  assert.match(creating, /data-record-close="true"/)
+  assert.match(creating, /product_backend\.action\.back/)
+  assert.doesNotMatch(creating, /name="__command"/, 'the create form submits from its body')
+})
+
+test("product page: runtime copy is in the reader's language before and after the read", () => {
+  const labels = templateModalDefinition.labels as () => Record<string, string>
+  // The test environment has no document language, so the definition falls back to Vietnamese.
+  assert.equal(labels()['recordModal.saved'], 'Thay đổi đã được ghi nhận.')
+  assert.equal(labels()['recordModal.loading'], 'Đang tải…')
 })

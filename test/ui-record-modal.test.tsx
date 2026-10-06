@@ -7,12 +7,14 @@ import {
   RECORD_NEW_ID,
   RECORD_PARAM,
   defineRecordModalIsland,
+  defineRecordPageIsland,
   isRecordModalCreate,
   readRecordModalTarget,
   recordModalClosedHref,
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageLoading,
 } from '@ketvietlab/ketsuite/ui'
 
 import {
@@ -172,6 +174,7 @@ test('record modal: cross-collection navigation opens its target without resetti
     'open',
     'show',
     'hide',
+    'page',
     listener[1]!,
   )
   const calls: unknown[][] = []
@@ -185,6 +188,7 @@ test('record modal: cross-collection navigation opens its target without resetti
       () => current,
       show,
       () => calls.push(['closed']),
+      null,
     )
   invoke('product.template', null)
   assert.deepEqual(calls, [['one', 'variants', 'none', undefined, undefined]])
@@ -706,4 +710,53 @@ test('record modal: child view state is isolated and cleared with its draft life
   assert.ok(resets.length > 0)
   for (const reset of resets)
     assert.match(runtime.slice(reset.index, reset.index + 120), /dialogViewState\.set\(\{\}\)/u)
+})
+
+test('record page: the server renders the RecordPage loading state the client adopts', () => {
+  const props = {
+    id: 'tpl',
+    title: 'Áo thun',
+    loading: 'Đang tải…',
+    back: '/admin/product/templates?lang=vi',
+    width: 'wide',
+  }
+  const island = defineRecordPageIsland({ kind: 'product.template', client: 'p.mjs', export: 'templatePage' })
+  assert.deepEqual(island.key, ['id'])
+  const controller = island.view(props) as { view: () => ReturnType<typeof recordPageLoading> }
+  const html = renderToString(controller.view())
+  assert.equal(
+    html,
+    renderToString(recordPageLoading(props)),
+    'server and first client render are the same markup',
+  )
+  assert.match(html, /data-ui="record-page"/u)
+  assert.match(html, /Áo thun/u)
+  assert.match(html, /Đang tải…/u)
+  assert.throws(
+    () => defineRecordPageIsland({ kind: 'Product', client: 'p.mjs', export: 'x' }),
+    /invalid record kind/u,
+  )
+})
+
+test('record page: the record runtime renders a page that leaves for its collection and owns no history', () => {
+  // One controller serves both presentations; a page is not a layer.
+  assert.match(runtime, /export const createRecordPage =/u)
+  assert.match(
+    runtime,
+    /const layerSelector = page \? `\[data-ui="record-page"\], \$\{MODAL_LAYER\}` : MODAL_LAYER/u,
+  )
+  assert.match(runtime, /if \(page\) return pageView\(page\)/u)
+  // Closing a page (Close, a delete that closes) leaves through the shell's link handling.
+  const hide = runtime.slice(runtime.indexOf('const hide = ('), runtime.indexOf('const close = ('))
+  assert.match(hide, /if \(page && how !== 'none'\) \{\s*leave\(\)\s*return/u)
+  // Nothing outside the page turns inert and focus is not forced into it.
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  assert.ok(show.indexOf('if (page) {') < show.indexOf('releaseInert = inertOutside(root)'))
+  // Back and forward are the shell's on a page.
+  assert.match(runtime, /'ket:popstate',\s*\(event\) => \{\s*\/\/[^\n]*\n\s*if \(page\) return/u)
+  assert.match(runtime, /'ket:navigation-complete',\s*\(\) => \{\s*if \(page\) return/u)
+  // A page re-reads its own context; the shell has no collection behind it to refresh.
+  assert.match(runtime, /\.\.\.\(page \? \{ page: true \} : \{\}\)/u)
+  const refresh = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(refresh, /detail\?\.page\) return/u)
 })

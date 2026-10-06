@@ -10,7 +10,15 @@
 // own query state working the same way everywhere:
 //
 //   /admin/<collection>?<list state>&record=<kind>:<id>&tab=<tab>
+//
+// A record kind may instead own a full page (`defineRecordPageIsland`): the same
+// definition renders client-side inside a RecordPage at its own path,
+//
+//   /admin/<collection>/<id>?tab=<tab>      (and /admin/<collection>/new)
+//
+// and the server renders only the page's loading state.
 
+import { LoadingState, RecordPage } from '@ketvietlab/design-system'
 import type { IslandDefinition, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = ['record-modal-host'] as const
@@ -121,5 +129,50 @@ export const defineRecordModalIsland = (options: {
     client: options.client,
     export: options.export,
     view: () => ({ view: () => recordModalHost(options.kind) }),
+  }
+}
+
+/** What the server hands a record page: identity and words only, never record data. */
+export type RecordPageIslandProps = {
+  /** The record id, or `new` for the create form. */
+  id: string
+  /** The tab named in the address, if any. */
+  tab?: string
+  /** The page title until the record has loaded: its name, or the create title. */
+  title: string
+  /** The loading label, in the page's language. */
+  loading: string
+  /** Where Close and a finished delete return to: the collection, with its locale. */
+  back: string
+  /** RecordPage width: `wide` for a dense record, as `large` is for a modal. */
+  width?: string
+}
+
+/**
+ * The record page before its context has loaded. The server renders exactly this,
+ * and so does the browser's first render, so hydration adopts it unchanged.
+ */
+export const recordPageLoading = (props: RecordPageIslandProps): TemplateResult =>
+  RecordPage({
+    variant: 'operational',
+    width: props.width === 'wide' ? 'wide' : 'default',
+    title: props.title,
+    body: LoadingState({ label: props.loading }),
+  })
+
+/** The island declaration for a record kind that owns a full page instead of a modal. */
+export const defineRecordPageIsland = (options: {
+  kind: string
+  /** Browser module, relative to the declaring module's assets directory. */
+  client: string
+  export: string
+}): IslandDefinition<RecordPageIslandProps> => {
+  if (!isRecordKind(options.kind)) throw new TypeError(`invalid record kind "${options.kind}"`)
+  return {
+    props: { id: 'text', tab: 'text?', title: 'text', loading: 'text', back: 'text', width: 'text?' },
+    key: ['id'],
+    client: options.client,
+    export: options.export,
+    view: (props) => ({ view: () => recordPageLoading(props) }),
   }
 }
