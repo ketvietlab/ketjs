@@ -1,7 +1,6 @@
 import { styleKeys, studioStyleDefaults } from '../../website/studio-style.ts'
 import type { StudioPreset } from '../../website/studio-style.ts'
 import { pageTemplates } from '../../website/studio-content.ts'
-import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
 import { entryProjection } from './context.ts'
 import { CUSTOMER_SIGNIN_PATH } from './public.ts'
@@ -11,6 +10,44 @@ type Req = Parameters<Route>[1]
 export type StudioOptions = {
   /** The look a site made in the Studio starts with. Sites that already exist keep theirs. */
   defaultPreset?: StudioPreset
+  /** Who serves the sites, when that is not whoever runs the deployment. */
+  domains?: StudioDomainPolicy
+}
+/** Calls a server function as the person using the Studio; a refusal fails the Studio request. */
+export type StudioCall = (name: string, input?: Row) => Promise<unknown>
+/** A host as whoever serves it sees it, in the terms the domain screens show. */
+export type StudioDomainStatus = {
+  state: 'pending' | 'verified' | 'failed'
+  tls: 'pending' | 'ready'
+  checkedAt: string | null
+  reason: string | null
+  /** The record the host's owner still has to add, if any. */
+  challenge: { type: string; name: string; value: string } | null
+  /** What a decision about the host rests on, so a stale screen cannot act on it. */
+  revision: string
+}
+/**
+ * How a host a site owner adds comes to be served, for an operator serving many owners' sites
+ * from one place: proving the name is theirs, then a certificate. Without one, the deployment's
+ * own operator points a name at the server, and the host answers as soon as it is added.
+ */
+export type StudioDomainPolicy = {
+  status: (domain: Row) => StudioDomainStatus
+  /** Runs once the Studio has added a host, before the host is shown. */
+  added?: (call: StudioCall, domain: Row) => Promise<void>
+  /** Checks the host again. The Studio reads it afresh afterwards. */
+  verify: (call: StudioCall, domain: Row) => Promise<void>
+}
+const servedByOwner: StudioDomainPolicy = {
+  status: () => ({
+    state: 'verified',
+    tls: 'ready',
+    checkedAt: null,
+    reason: null,
+    challenge: null,
+    revision: '',
+  }),
+  verify: async () => {},
 }
 export type Snapshot = {
   sites: Row[]
@@ -221,42 +258,32 @@ const termResource = (term: Row, entries: Row[]) => {
     archived: !!term.archivedAt,
   }
 }
-/**
- * A host as the domain screens read it. One without a proof value was connected by Két Việt
- * before verification existed, so it is taken as verified and serving.
- */
-const domainResource = (d: Row) => {
-  const connected = !d.verifyToken
-  const result = d.checkResult == null ? null : String(d.checkResult)
+/** A host as the domain screens read it. */
+const domainResource = (d: Row, policy: StudioDomainPolicy) => {
+  const status = policy.status(d)
   return {
     id: d.id,
     siteId: d.siteId,
     title: d.host,
     host: d.host,
     role: d.primary ? 'primary' : 'redirect',
-    state: connected || d.verifiedAt ? 'verified' : result && result !== 'matched' ? 'failed' : 'pending',
-    tls: connected || d.servingAt ? 'ready' : 'pending',
-    checkedAt: d.checkedAt ?? null,
-    reason: result,
-    challenge: connected
-      ? null
-      : {
-          type: 'TXT',
-          name: domainProofName(String(d.host)),
-          value: domainProofValue(String(d.verifyToken)),
-        },
-    attempts: d.checkedAt
+    state: status.state,
+    tls: status.tls,
+    checkedAt: status.checkedAt,
+    reason: status.reason,
+    challenge: status.challenge,
+    attempts: status.checkedAt
       ? [
           {
-            id: `${d.id}:${d.checkedAt}`,
-            at: d.checkedAt,
-            result: result === 'matched' ? 'verified' : 'failed',
-            reason: result,
+            id: `${d.id}:${status.checkedAt}`,
+            at: status.checkedAt,
+            result: status.state === 'verified' ? 'verified' : 'failed',
+            reason: status.reason,
           },
         ]
       : [],
     // Domains keep no revision of their own; what a decision rests on stands in for one.
-    revisionId: [d.id, d.primary, d.verifiedAt, d.checkedAt, d.servingAt].join(':'),
+    revisionId: [d.id, d.primary, status.revision].join(':'),
   }
 }
 /** Pages and posts are what search engines index; their SEO lives in the entry's own fields. */
@@ -280,6 +307,8 @@ const seoResource = (entry: Row) => {
   }
 }
 export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: StudioOptions = {}) {
+  const domains = options.domains ?? servedByOwner
+  const domainOf = (d: Row) => domainResource(d, domains)
   const call = async (name: string, input: Row = {}) => {
     const result = await ctx.call(name, input, url, req, {
       idempotencyKey:
@@ -705,7 +734,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       }
       if (input.kind === 'domains') {
         const domain = data.domains.find((d) => d.id === input.id)
-        return domain ? domainResource(domain) : fail('notFound', 'Không tìm thấy tên miền.')
+        return domain ? domainOf(domain) : fail('notFound', 'Không tìm thấy tên miền.')
       }
       if (input.kind === 'seo') {
         const entry = seoEntries(data.entries).find((e) => e.id === input.id)
@@ -829,13 +858,16 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           const host = String(values.host ?? '')
             .trim()
             .toLowerCase()
-          if (host)
+          if (host) {
             await call('website.saveDomain', {
               id: `${input.id}-domain`,
               siteId: input.id,
               host,
               primary: true,
             })
+            const added = (await snapshot(input.id)).domains.find((d) => d.id === `${input.id}-domain`)
+            if (added) await domains.added?.(call, added)
+          }
           return siteRecord((await snapshot(input.id)).site!)
         }
         // A retried create answers with what it made.
@@ -861,7 +893,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           .toLowerCase()
         const existing = data.domains.find((d) => d.id === input.id)
         // A retried add answers with what it made; another name is another domain to prove.
-        if (existing && existing.host === host) return domainResource(existing)
+        if (existing && existing.host === host) return domainOf(existing)
         if (existing) fail('validation', 'Muốn đổi tên miền thì thêm tên miền mới.')
         await call('website.saveDomain', {
           id: input.id,
@@ -870,8 +902,8 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           // The first host is the site's address; later ones redirect to it until switched.
           primary: !data.domains.some((d) => d.primary),
         })
-        const saved = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!
-        return domainResource(saved)
+        await domains.added?.(call, (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!)
+        return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!)
       }
       if (input.kind === 'seo') {
         const entry = seoEntries((await snapshot(input.siteId)).entries).find((e) => e.id === input.id)
@@ -917,7 +949,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       if (input.kind === 'templates') return { rows: pageTemplates }
       if (input.kind === 'themes') return { rows: [themeResource(data.site!)] }
       if (input.kind === 'menus') return { rows: [await menuOf(data.site!)], creatable: false }
-      if (input.kind === 'domains') return { rows: data.domains.map(domainResource) }
+      if (input.kind === 'domains') return { rows: data.domains.map(domainOf) }
       if (input.kind === 'sites') return { rows: data.sites.map((s) => publicSite(s, data.domains)) }
       if (input.kind === 'seo') {
         const entries = seoEntries(data.entries)
@@ -1064,17 +1096,21 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     'website_studio.verifyDomain': async (input) => {
       const domain = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)
       if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
-      if (input.expectedRevisionId !== domainResource(domain).revisionId)
+      if (input.expectedRevisionId !== domainOf(domain).revisionId)
         fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi kiểm tra.')
-      // The lookup is the server's own; nothing the browser sends counts as proof.
-      await call('website.verifyDomain', { id: domain.id })
-      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+      // Checking a host is managing it. The policy's own functions answer for themselves too, but
+      // the Studio does not hand it a request it would refuse to make itself.
+      if (!(await ctx.allows('website.saveDomain', url, req)))
+        fail('forbidden', 'Bạn không có quyền quản lý tên miền.')
+      // Whoever serves the host checks it on the server; nothing the browser sends counts as proof.
+      await domains.verify(call, domain)
+      return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
     },
     'website_studio.setPrimaryDomain': async (input) => {
       const data = await snapshot(input.siteId)
       const domain = data.domains.find((d) => d.id === input.id)
       if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
-      const current = domainResource(domain)
+      const current = domainOf(domain)
       const primary = data.domains.find((d) => d.primary)
       if (
         input.expectedRevisionId !== current.revisionId ||
@@ -1092,7 +1128,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         primary: true,
         redirectToPrimary: domain.redirectToPrimary,
       })
-      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+      return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
     },
     'website_studio.savePageSettings': async (input) => {
       const { entry } = await forEntry(input.id)
