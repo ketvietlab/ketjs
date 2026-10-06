@@ -87,6 +87,7 @@ export { collectionTable, dataTable, visibleColumns } from './table.tsx'
 export {
   collectionActions,
   collectionControls,
+  collectionSelection,
   collectionGridLabels,
   prepareCollectionGrid,
   prepareCollectionTable,
@@ -140,6 +141,7 @@ export {
   RECORD_TAB_PARAM,
   RECORD_DIALOG_PARAM,
   defineRecordModalIsland,
+  defineRecordPageIsland,
   isRecordKind,
   isRecordModalCreate,
   readRecordModalTarget,
@@ -147,13 +149,16 @@ export {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageFrame,
+  recordPageShell,
 } from './record-modal.tsx'
-export type { RecordModalTarget } from './record-modal.tsx'
+export type { RecordModalTarget, RecordPageIslandProps, RecordPageTrailItem } from './record-modal.tsx'
 export {
   RECORD_COMMAND_FIELD,
   RECORD_DIALOG_ATTRIBUTE,
   callRecordFunction,
   createRecordModal,
+  createRecordPage,
   recordLayerHasDraft,
 } from './client/record-modal.tsx'
 export {
@@ -171,6 +176,7 @@ export type {
   RecordModalDefinition,
   RecordModalDialog,
   RecordModalTab,
+  RecordRuntimeOptions,
 } from './client/record-modal.tsx'
 export type {
   RecordBreadcrumbs,

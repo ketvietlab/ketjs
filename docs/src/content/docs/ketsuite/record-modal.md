@@ -8,6 +8,9 @@ The design system settles *what* happens when a reader opens a row: the record o
 (see "Collections open records in a modal" in `@ketvietlab/design-system`). This page is *how* every
 KetSuite module does it, so a care task, a sales case and a partner behave identically.
 
+Administration profiles — a user, a role, an access policy — are the exception: they open on their own
+page on the same runtime. See [Record pages](#record-pages-for-administration-profiles) below.
+
 ## URL
 
 One shape for every module:
@@ -194,3 +197,23 @@ wrong draft. For an inline Cancel action, pass `resetFields: [name]` to discard 
 editor's draft while preserving other fields and tabs. State triggers do not save a record.
 
 Desktop `fixedHeight` is carried by `--kv-modal-fixed-height`; it never overrides the mobile full-screen height. Avoid inline `height: … !important` on a ModalSheet.
+
+## Record pages for administration profiles
+
+A profile the reader studies, links to and returns to lives at `/admin/<things>/{id}` as a
+`RecordPage` (56rem, no tabs). It reuses the record runtime, so dialogs, commands, drafts and
+refusals behave exactly as in the modal.
+
+1. Declare the island with `defineRecordPageIsland({ kind, client, export })`. Its props are
+   `{ id, title, loadingLabel, trail?, trailLabel?, envelope? }`, keyed by `id`.
+2. The detail route calls the module's `modalContext` itself and passes the result as `envelope`,
+   with the collection's `returnTo` as the last trail link. The server writes `recordPageShell`,
+   the client adopts the same markup and then shows the record without another request.
+3. The client exports `createRecordPage(definition)`: the modal definition without `header` and
+   `tabs`, with `body` for the blocks — one titled `Surface` each, returned as siblings so the page
+   owns the gap between them — and `pageActions` for the header's commands.
+4. Rows link to the page with the collection's state in `returnTo`. Creating stays a modal over the
+   collection; its command `navigate`s to the new page. `?record=<kind>:<id>` redirects to the page.
+
+`close`, `reload`, `open` and tab afters only close the top dialog; the page itself never closes,
+and `ket:records-changed` for its id reloads it in place.
