@@ -61,8 +61,15 @@ test('Studio domains: a host the deployment serves itself answers once added', a
   const first = await add('d-main', 'Lanh.Test')
   assert.equal(first.status, 200, String(first.message))
   assert.deepEqual(
-    [first.value.title, first.value.role, first.value.state, first.value.tls, first.value.challenge],
-    ['lanh.test', 'primary', 'verified', 'ready', null],
+    [
+      first.value.title,
+      first.value.role,
+      first.value.state,
+      first.value.tls,
+      first.value.challenge,
+      first.value.route,
+    ],
+    ['lanh.test', 'primary', 'verified', 'ready', null, null],
   )
   const second = (await add('d-new', 'moi.lanh.test')).value
   assert.deepEqual([second.role, second.state, second.attempts], ['redirect', 'verified', []])
@@ -115,6 +122,16 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
         reason: proof?.checks ? (proof.verified ? 'matched' : 'missing') : null,
         challenge:
           proof && !proof.verified ? { type: 'TXT', name: `_proof.${d.host}`, value: proof.token } : null,
+        route:
+          proof?.token && !proof.serving
+            ? {
+                type: 'CNAME',
+                name: String(d.host),
+                value: 'sites.operator.test',
+                apex: !String(d.host).includes('.', String(d.host).indexOf('.') + 1),
+                check: proof.checks ? (proof.verified ? 'routed' : 'missing') : null,
+              }
+            : null,
         revision: proof ? `${proof.verified}:${proof.serving}:${proof.checks}` : '',
       }
     },
@@ -155,6 +172,15 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
     name: '_proof.moi.lanh.test',
     value: 'token-moi.lanh.test',
   })
+  // Where to point the host, until it answers there.
+  assert.deepEqual(second.route, {
+    type: 'CNAME',
+    name: 'moi.lanh.test',
+    value: 'sites.operator.test',
+    apex: false,
+    check: null,
+  })
+  assert.equal((first.route as Row).apex, true)
   // A retried add is the same host: the policy is not handed it twice.
   await add('d-new', 'moi.lanh.test')
   assert.deepEqual(calls, ['added:lanh.test', 'added:moi.lanh.test'])
@@ -185,6 +211,7 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
   )
   const proven = (await verify('d-new')).value
   assert.deepEqual([proven.state, proven.tls, proven.challenge], ['verified', 'pending', null])
+  assert.equal((proven.route as Row).check, 'routed')
   assert.deepEqual(
     (proven.attempts as Row[]).map((a) => [a.result, a.reason]),
     [['verified', 'matched']],
@@ -198,6 +225,7 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
   const switched = await switchTo('d-new', true, 'd-main')
   assert.equal(switched.status, 200, String(switched.message))
   assert.equal(switched.value.role, 'primary')
+  assert.equal(switched.value.route, null, 'a host that answers needs no pointing')
 
   // A new site gets the operator's address first; a host typed with it waits behind that address.
   const made = await designer('website_studio.saveResource', {

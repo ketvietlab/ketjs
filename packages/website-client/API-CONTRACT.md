@@ -695,8 +695,10 @@ The host owns the behaviour below.
   deployment points their own names at it. An operator serving many owners' sites from one place
   passes a `StudioDomainPolicy` as `websiteBackendWith({ domains })`:
   - `status(domain)` gives what the screens show: `state: pending | verified | failed`,
-    `tls: pending | ready`, `checkedAt`, `reason`, `challenge: { type, name, value } | null` and a
-    `revision` folded into the domain's `revisionId`. A `checkedAt` shows as the one `attempts` entry.
+    `tls: pending | ready`, `checkedAt`, `reason`, `challenge: { type, name, value } | null`, an optional
+    `route: { type, name, value, apex, check } | null` (the record pointing the host at the operator,
+    shown until `tls` is `ready`; `apex` warns that the zone top often takes no CNAME, `check` is
+    `routed | elsewhere | missing | unreachable | null`) and a `revision` folded into the domain's `revisionId`. A `checkedAt` shows as the one `attempts` entry.
   - `siteCreated(call, site)` runs once the Studio has made a site, before a host typed with it, so an
     operator can give every site an address of its own. The first host a site gets is its address;
     a host typed at creation after that waits as a redirect until switched to.

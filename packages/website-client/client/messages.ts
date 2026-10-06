@@ -618,6 +618,18 @@ export const coreMessages = {
     'website.domain.reason.taken': 'Tên miền này đang được một website khác sử dụng.',
     'website.domain.reason.reserved': 'Tên miền này do nơi lưu trữ cấp, không cần thêm và xác minh.',
     'website.domain.check': 'Kiểm tra domain',
+    'website.domain.route': 'Trỏ tên miền về website',
+    'website.domain.routeHow': 'Thêm bản ghi này tại nơi quản lý tên miền',
+    'website.domain.routeHelp':
+      'Bản ghi này đưa khách truy cập tên miền tới website. HTTPS được cấp sau khi tên miền đã xác minh và trỏ đúng.',
+    'website.domain.routeApex': 'Tên miền gốc',
+    'website.domain.routeApexHelp':
+      'Nhiều nhà cung cấp DNS không cho đặt CNAME ở tên miền gốc. Hãy chọn kiểu ALIAS, ANAME hoặc CNAME flattening nếu có; nếu không, dùng tên miền có www và chuyển hướng tên miền gốc sang đó.',
+    'website.domain.routeFailed': 'Tên miền chưa trỏ về website',
+    'website.domain.route.elsewhere':
+      'Tên miền đang trỏ tới nơi khác. Sửa bản ghi theo giá trị bên trên, chờ cập nhật rồi kiểm tra lại.',
+    'website.domain.route.missing': 'Chưa thấy bản ghi trỏ tên miền. Thêm bản ghi bên trên rồi kiểm tra lại.',
+    'website.domain.route.unreachable': 'Chưa hỏi được DNS lúc này. Thử lại sau ít phút.',
     'website.domain.switch': 'Đặt làm domain chính',
     'website.domain.switchHelp':
       'Domain hiện tại được giữ làm địa chỉ chuyển hướng. Việc chuyển không thay đổi bản nội dung đang công khai.',

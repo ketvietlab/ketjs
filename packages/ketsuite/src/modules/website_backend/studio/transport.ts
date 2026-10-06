@@ -23,6 +23,12 @@ export type StudioDomainStatus = {
   reason: string | null
   /** The record the host's owner still has to add, if any. */
   challenge: { type: string; name: string; value: string } | null
+  /**
+   * The record that sends the host's visitors to whoever serves it, shown until the host answers.
+   * `apex` marks a name at the top of its zone, where many DNS providers take no CNAME; `check` is
+   * what the last look found: routed, elsewhere, missing or unreachable.
+   */
+  route?: { type: string; name: string; value: string; apex: boolean; check: string | null } | null
   /** What a decision about the host rests on, so a stale screen cannot act on it. */
   revision: string
 }
@@ -277,6 +283,7 @@ const domainResource = (d: Row, policy: StudioDomainPolicy) => {
     checkedAt: status.checkedAt,
     reason: status.reason,
     challenge: status.challenge,
+    route: status.route ?? null,
     attempts: status.checkedAt
       ? [
           {
