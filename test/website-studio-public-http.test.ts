@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { bootWebsiteStudio } from './fixtures/website-studio.ts'
 
-test('public Studio delivery uses the published style, native menu and server-rendered LiveDoc', async (t) => {
-  const { app, fixture } = await bootWebsiteStudio(undefined, { worker: true })
+test('public Studio delivery uses live site style, native menu and server-rendered LiveDoc', async (t) => {
+  const { app, fixture } = await bootWebsiteStudio(undefined, { worker: true, deployment: 'commerce' })
   t.after(() => app.close())
   await fixture('website.saveDomain', {
     id: 'public-domain',
@@ -62,7 +62,9 @@ test('public Studio delivery uses the published style, native menu and server-re
     expectedRevisionId: style.revisionId,
     values: { preset: 'default', footer: 'Scheduled footer' },
   })
-  assert.match(await (await anonymous.get('/post')).text(), /Published footer/)
+  const updatedStyle = await (await anonymous.get('/post')).text()
+  assert.match(updatedStyle, /Scheduled footer/)
+  assert.match(updatedStyle, /data-theme-preset="default"/)
   await fixture('website.publishEntry', {
     id: 'public-post',
     expectedRevisionId: saved.revisionId,
@@ -71,7 +73,7 @@ test('public Studio delivery uses the published style, native menu and server-re
   await fixture('website.saveStudioStyle', {
     siteId: 'site-a',
     expectedRevisionId: changed.revisionId,
-    values: { footer: 'Private later footer' },
+    values: { footer: 'Latest site footer' },
   })
   await app.fixture.withTenant('', async ({ adapter }) => {
     await adapter.run(
@@ -83,13 +85,13 @@ test('public Studio delivery uses the published style, native menu and server-re
   })
   await app.drainJobs()
   const delivered = await (await anonymous.get('/post')).text()
-  assert.match(delivered, /Scheduled footer/)
+  assert.match(delivered, /Latest site footer/)
   assert.match(delivered, /data-theme-preset="default"/)
-  assert.doesNotMatch(delivered, /Private later footer/)
+  assert.doesNotMatch(delivered, /Scheduled footer/)
   await fixture(
     'website.saveDomain',
     { id: 'ambiguous', siteId: 'site-b', host: '127.0.0.1', primary: true },
     'studio-b',
   )
-  assert.doesNotMatch(await (await anonymous.get('/post')).text(), /Scheduled footer|Nội dung public/)
+  assert.doesNotMatch(await (await anonymous.get('/post')).text(), /Latest site footer|Nội dung public/)
 })

@@ -604,11 +604,13 @@
     line-height: var(--kv-line-sm);
   }
 
-  @media (max-width: 48rem) {
+  @media (max-width: 47.9375rem) {
     :where([data-kv-design-system]) [data-ui="grid"] {
       grid-template-columns: 1fr;
     }
+  }
 
+  @media (max-width: 48rem) {
     :where([data-kv-design-system]) [data-ui="section-head"] {
       flex-direction: column;
     }
