@@ -1042,8 +1042,8 @@ const recordController =
         afterRender(() => (target?.isConnected ? target : null))
         return
       }
-      // A page is left by navigating away, which the browser guards itself.
-      if (page) return
+      // Route-context pages stay open; client-read pages return through their back action.
+      if (serverPage) return
       if (!mayDiscard(recordLayer())) return
       hide('history')
     }
@@ -1469,9 +1469,9 @@ const recordController =
               // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
               // marks a module's own labeled close button placed elsewhere in the body
               // (the two can't share one attribute — a labeled button needs `data-ui="action"`
-              // for its styling, not the icon-only close control's). A page has no close.
+              // for its styling, not the icon-only close control's). Route-context pages have no close.
               if (
-                inModal.matches('[data-ui="modal-layer"]') &&
+                (!serverPage || inModal.matches('[data-ui="modal-layer"]')) &&
                 element?.closest('[data-ui="modal-close"], [data-ui="modal-backdrop"], [data-record-close]')
               ) {
                 event.preventDefault()
