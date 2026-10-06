@@ -21,3 +21,25 @@ test('TreeGrid localizes its hierarchy heading and keeps metadata in independent
   assert.equal((localized.match(/<td>/g) || []).length, 2)
   assert.match(renderToString(<TreeGrid {...props} />), />Name</)
 })
+
+test('TreeGrid rowHref makes the whole row one link in the hierarchy cell, without nesting links', () => {
+  const props = {
+    label: 'Danh mục',
+    rows: [
+      { row: { id: 'a', title: 'Cha' }, level: 1, hasChildren: true },
+      { row: { id: 'b', title: 'Con' }, level: 2 },
+    ],
+    id: (r: { id: string }) => r.id,
+    primary: (r: { title: string }) => r.title,
+    columns: [{ key: 'id', label: 'Mã', cell: (r: { id: string }) => r.id }],
+  }
+  const linked = renderToString(<TreeGrid {...props} rowHref={(r) => `/c/${r.id}`} />)
+  assert.match(
+    linked,
+    /<th scope="row"[^>]*data-linked="true"[^>]*>(?:<!--[^>]*-->)*<a data-ui="tree-grid-link" href="\/c\/b">/,
+  )
+  assert.equal((linked.match(/data-ui="tree-grid-link"/g) || []).length, 2)
+  assert.equal((linked.match(/<td>/g) || []).length, 2, 'metadata cells stay plain')
+  const plain = renderToString(<TreeGrid {...props} />)
+  assert.doesNotMatch(plain, /tree-grid-link|data-linked/)
+})
