@@ -153,7 +153,17 @@ export function builderToolbar(
     label: tr('website.builder.details'),
     href: ctx.href('entry-details', { id: entry.id }),
   }
-  const save = () => command('save', { disabled: !canWrite || !draft.dirty || busy })
+  const save = () =>
+    command('save', {
+      label: entry.catalog
+        ? tr(
+            entry.catalog.mode === 'product'
+              ? 'website.catalog.saveOverride'
+              : 'website.catalog.saveTemplate',
+          )
+        : tr('website.builder.save'),
+      disabled: !canWrite || !draft.dirty || busy,
+    })
   const publish = (mobile = false) =>
     command('publish', {
       label: tr(mobile ? 'website.builder.publishShort' : 'website.builder.publish'),
@@ -183,12 +193,14 @@ export function builderToolbar(
             <Section title={tr('website.builder.devices')} body={devices()} />,
             <Section title={tr('website.builder.zoom')} body={zoomTools()} />,
             <ActionGroup label={tr('website.builder.historyActions')} actions={[undo(), undo(true)]} />,
-            command('schedule', {
-              label: tr('website.entryPublish.schedule'),
-              value: commandValue('builder.openSchedule'),
-              disabled: busy || !ctx.can('website.publish'),
-            }),
-            <LinkButton label={details.label} href={details.href} size="compact" />,
+            entry.catalog
+              ? null
+              : command('schedule', {
+                  label: tr('website.entryPublish.schedule'),
+                  value: commandValue('builder.openSchedule'),
+                  disabled: busy || !ctx.can('website.publish'),
+                }),
+            entry.catalog ? null : <LinkButton label={details.label} href={details.href} size="compact" />,
             <LinkButton
               label={tr('website.builder.dialog.commands')}
               href={ctx.href(
@@ -214,18 +226,20 @@ export function builderToolbar(
               pressed: !!interactive,
               disabled: busy || !canWrite,
             }),
-            command('preview', { disabled: busy }),
+            entry.catalog ? null : command('preview', { disabled: busy }),
             devices(),
             zoomTools(),
             undo(),
             undo(true),
             save(),
-            command('schedule', {
-              label: tr('website.entryPublish.schedule'),
-              value: commandValue('builder.openSchedule'),
-              disabled: busy || !ctx.can('website.publish'),
-            }),
-            publish(),
+            entry.catalog
+              ? null
+              : command('schedule', {
+                  label: tr('website.entryPublish.schedule'),
+                  value: commandValue('builder.openSchedule'),
+                  disabled: busy || !ctx.can('website.publish'),
+                }),
+            entry.catalog ? null : publish(),
             <Menu
               id="builder-more"
               label={tr('website.builder.more')}
@@ -233,7 +247,7 @@ export function builderToolbar(
               size="compact"
               align="end"
               items={[
-                details,
+                ...(entry.catalog ? [] : [details]),
                 {
                   id: 'commands',
                   label: tr('website.builder.dialog.commands'),
@@ -254,9 +268,9 @@ export function builderToolbar(
           pressed: !!interactive,
           disabled: busy || !canWrite,
         })}
-        {command('preview', { disabled: busy, variant: 'tertiary' })}
+        {entry.catalog ? null : command('preview', { disabled: busy, variant: 'tertiary' })}
         {save()}
-        {publish(true)}
+        {entry.catalog ? null : publish(true)}
         {mobileTools}
       </div>
     </>

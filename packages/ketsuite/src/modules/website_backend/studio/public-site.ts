@@ -16,7 +16,12 @@ export type PublicSite = {
  * the home page's. Null when the host is no Studio site or the site has no home page yet: such a
  * page is not served before the site is.
  */
-export const publicSiteOf = async (ctx: ServeContext, url: URL, req: Req): Promise<PublicSite | null> => {
+export const publicSiteOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  fallbackPath?: string,
+): Promise<PublicSite | null> => {
   let host = ''
   try {
     host = new URL(`http://${String(req.headers.host ?? url.host).trim()}`).hostname.replace(/^\[|\]$/g, '')
@@ -31,9 +36,15 @@ export const publicSiteOf = async (ctx: ServeContext, url: URL, req: Req): Promi
     googleTagManagerId?: string | null
   } | null
   if (!site?.id || site.id === '__legacy__') return null
-  const home = (await ctx.call('website.getEntryByPath', { siteId: site.id, path: '/' }, url, req)) as {
+  let home = (await ctx.call('website.getEntryByPath', { siteId: site.id, path: '/' }, url, req)) as {
     appearance?: Record<string, unknown> | null
   } | null
+  if (!home?.appearance && fallbackPath && fallbackPath !== '/') {
+    const resolve = ctx.manifest.functions['website_catalog.getEntryByPath']
+      ? 'website_catalog.getEntryByPath'
+      : 'website.getEntryByPath'
+    home = (await ctx.call(resolve, { siteId: site.id, path: fallbackPath }, url, req)) as typeof home
+  }
   if (!home?.appearance) return null
   const menu = (await ctx.call('website_menu.publicMenu', { siteId: site.id }, url, req)) ?? []
   return {

@@ -25,8 +25,8 @@ export type Site = {
   id: string
   name: string
   host: string
-  /** Where visitors open the site; empty until it has a primary domain. */
   url?: string
+  publicOrigin?: string
   locales: string[]
   defaultLocale?: string
   timezone: string
@@ -172,6 +172,8 @@ export type MenuItem = {
   id: string
   label: string
   href: string
+  /** Stable website merchandising target. */
+  catalogCategoryId?: string
   parentId: string | null
   position: number
 }
@@ -187,6 +189,16 @@ export type EntrySeo = {
 }
 /** A page or post as `website.getEntry` answers it: its draft, and where it stands publicly. */
 export type Entry = {
+  sectionData?: Record<string, unknown>
+  /** Business-backed builder document: never persisted as a CMS entry. */
+  catalog?: {
+    mode: 'product' | 'template'
+    productId: string
+    bindingId: string
+    templateId: string
+    fields: Record<string, string>
+    sourceLayout: Placement[]
+  }
   id: string
   type: string
   title: string
@@ -218,6 +230,7 @@ export type Entry = {
 
 /** A site's theme resource: the look every page shares, and the footer text. */
 export type SiteTheme = {
+  account?: string
   id?: string
   revisionId?: string
   title?: string
@@ -226,12 +239,11 @@ export type SiteTheme = {
   font?: string
   spacing?: string
   buttons?: string
-  account?: string
   footer?: string
-  stylesheet?: string
-  theme?: { key: string; versionId: string; version: string; settings: Record<string, string | boolean> }
-  frame?: Partial<Record<'topbar' | 'header' | 'footer' | 'beforeMain' | 'afterMain', string>> | null
   logo?: string
+  theme?: { key: string; versionId: string; version: string; settings: Record<string, string | boolean> }
+  stylesheet?: string
+  frame?: Partial<Record<'topbar' | 'header' | 'footer' | 'beforeMain' | 'afterMain', string>> | null
 }
 
 /** A category or tag as `website_taxonomy.Term` answers it; a new one has no revision yet. */

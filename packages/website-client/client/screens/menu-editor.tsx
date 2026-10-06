@@ -39,9 +39,19 @@ export type MenuDraft = {
   warnings?: { target: string; state: string }[]
 }
 /** Something the site already has that a menu can link to. */
-type MenuChoice = { id: string; title: string; path: string; type: string; key: string }
+type MenuChoice = {
+  id: string
+  title: string
+  path: string
+  type: string
+  key: string
+  catalogCategoryId?: string
+}
 type EntryRow = { id: string; title: string; path: string }
-type MenuEditorScreen = Screen<MenuDraft> & { commands: Commands; dispose(): void }
+type MenuEditorScreen = Screen<MenuDraft> & {
+  commands: Commands
+  dispose(): void
+}
 
 export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
   const tr = ctx.tr
@@ -61,7 +71,10 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
       touch()
     }
   }
-  const error = () => Object.assign(new Error(tr('website.resource.validation')), { code: 'validation' })
+  const error = () =>
+    Object.assign(new Error(tr('website.resource.validation')), {
+      code: 'validation',
+    })
   const mutateOrder = (fn: (items: MenuItem[]) => MenuItem[]) =>
     change(() => {
       draft!.items = fn(draft!.items)
@@ -73,6 +86,8 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
         post: tr('website.route.posts'),
         category: tr('website.route.categories'),
         tag: tr('website.route.tags'),
+        productCategory: tr('website.catalogCategory.categories'),
+        collection: tr('website.catalogCategory.collections'),
       }) as Record<string, string>
     )[type]
   // These controls edit the draft as they change; nothing submits them, so the name only labels them.
@@ -118,6 +133,7 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
           id: newId('menu-item'),
           label: row.title,
           href: row.path,
+          ...(row.catalogCategoryId ? { catalogCategoryId: row.catalogCategoryId } : {}),
           parentId: null,
           position: draft!.items.length,
         })
@@ -240,7 +256,9 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
                           tr('website.resource.row.target'),
                           item.href,
                           (value) => {
-                            draft!.items.find((row) => row.id === item.id)!.href = value
+                            const row = draft!.items.find((row) => row.id === item.id)!
+                            row.href = value
+                            delete row.catalogCategoryId
                           },
                           { required: true },
                         ),
@@ -249,10 +267,16 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
                           tr('website.resource.menuParent'),
                           item.parentId ?? '',
                           [
-                            { value: '', label: tr('website.resource.noMenuParent') },
+                            {
+                              value: '',
+                              label: tr('website.resource.noMenuParent'),
+                            },
                             ...rows
                               .filter((row) => !branch.has(row.id))
-                              .map((row) => ({ value: row.id, label: row.label })),
+                              .map((row) => ({
+                                value: row.id,
+                                label: row.label,
+                              })),
                           ],
                           changeParent,
                         ),
@@ -296,7 +320,7 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
     read: async (route, signal) => {
       const key = `${ctx.site().id}:${route.params.id}`
       if (loadedKey === key && draft) return draft
-      const [resource, pages, posts, taxonomy] = await Promise.all([
+      const [resource, pages, posts, taxonomy, catalog] = await Promise.all([
         route.params.id === 'new'
           ? {
               id: newId('menus'),
@@ -326,6 +350,13 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
           { siteId: ctx.site().id, kind: 'taxonomy' },
           { signal },
         ),
+        ctx.can('website.catalog')
+          ? ctx.call<{ rows: { id: string; title: string; path: string; kind: string }[] }>(
+              'website_catalog.listCategories',
+              { siteId: ctx.site().id },
+              { signal },
+            )
+          : Promise.resolve({ rows: [] }),
       ])
       choices = [
         ...pages.rows.map((row) => ({ ...row, type: 'page' })),
@@ -336,6 +367,11 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
           title: row.title as string,
           type: row.taxonomyType ?? 'category',
           path: `/${row.taxonomyType === 'tag' ? 'tag' : 'category'}/${row.slug}`,
+        })),
+        ...catalog.rows.map((row) => ({
+          ...row,
+          catalogCategoryId: row.id,
+          type: row.kind === 'collection' ? 'collection' : 'productCategory',
         })),
       ].map((row) => ({ ...row, key: `${row.type}:${row.id}` }))
       draft = structuredClone(resource) as MenuDraft
@@ -399,8 +435,14 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
                             tr('website.resource.menus.position'),
                             draft!.position ?? 'header',
                             [
-                              { value: 'header', label: tr('website.option.header') },
-                              { value: 'footer', label: tr('website.option.footer') },
+                              {
+                                value: 'header',
+                                label: tr('website.option.header'),
+                              },
+                              {
+                                value: 'footer',
+                                label: tr('website.option.footer'),
+                              },
                             ],
                             (value) => {
                               draft!.position = value
@@ -445,43 +487,45 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
                                 />
                               </div>,
                               action(tr('website.menuEditor.addSelected'), addSelected, selected.size === 0),
-                              ...['page', 'post', 'category', 'tag'].map((type) => (
-                                <Disclosure
-                                  summary={sourceLabel(type)}
-                                  open={type === 'page' || !!query}
-                                  body={
-                                    <div
-                                      class="website-menu-sources website-form-field"
-                                      onChange={(e: Event) => {
-                                        if (!editable()) return
-                                        const box = e.target as HTMLInputElement
-                                        if (box.checked) selected.add(box.value)
-                                        else selected.delete(box.value)
-                                        touch()
-                                      }}
-                                    >
-                                      {filtered.some((row) => row.type === type) ? (
-                                        <CheckboxGroup
-                                          id={`menu-source-${type}`}
-                                          name={`menu-source-${type}`}
-                                          label={tr('website.menuEditor.choose')}
-                                          disabled={!editable()}
-                                          optionsOrientation="vertical"
-                                          options={filtered
-                                            .filter((row) => row.type === type)
-                                            .map((row) => ({
-                                              value: row.key,
-                                              label: row.title,
-                                              checked: selected.has(row.key),
-                                            }))}
-                                        />
-                                      ) : (
-                                        <small>{tr('website.menuEditor.noSources')}</small>
-                                      )}
-                                    </div>
-                                  }
-                                />
-                              )),
+                              ...['page', 'post', 'category', 'tag', 'productCategory', 'collection'].map(
+                                (type) => (
+                                  <Disclosure
+                                    summary={sourceLabel(type)}
+                                    open={type === 'page' || !!query}
+                                    body={
+                                      <div
+                                        class="website-menu-sources website-form-field"
+                                        onChange={(e: Event) => {
+                                          if (!editable()) return
+                                          const box = e.target as HTMLInputElement
+                                          if (box.checked) selected.add(box.value)
+                                          else selected.delete(box.value)
+                                          touch()
+                                        }}
+                                      >
+                                        {filtered.some((row) => row.type === type) ? (
+                                          <CheckboxGroup
+                                            id={`menu-source-${type}`}
+                                            name={`menu-source-${type}`}
+                                            label={tr('website.menuEditor.choose')}
+                                            disabled={!editable()}
+                                            optionsOrientation="vertical"
+                                            options={filtered
+                                              .filter((row) => row.type === type)
+                                              .map((row) => ({
+                                                value: row.key,
+                                                label: row.title,
+                                                checked: selected.has(row.key),
+                                              }))}
+                                          />
+                                        ) : (
+                                          <small>{tr('website.menuEditor.noSources')}</small>
+                                        )}
+                                      </div>
+                                    }
+                                  />
+                                ),
+                              ),
                               <Disclosure
                                 summary={tr('website.menuEditor.custom')}
                                 body={
@@ -545,7 +589,9 @@ export function createMenuEditor(ctx: StudioContext): MenuEditorScreen {
     commands: {
       'menu.save': async () => {
         if (!ctx.can('website.content.write'))
-          throw Object.assign(new Error(tr('website.resource.validation')), { code: 'permission' })
+          throw Object.assign(new Error(tr('website.resource.validation')), {
+            code: 'permission',
+          })
         if (!draft!.title?.trim() || menuIssues(draft!.items).length) throw error()
         const values = {
           title: draft!.title.trim(),

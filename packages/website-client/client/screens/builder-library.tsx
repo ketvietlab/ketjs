@@ -1,5 +1,5 @@
-import { EmptyState, IconButton, SearchField, Section, Stack } from '@ketvietlab/design-system'
-import { commandValue, icon } from '../ui.tsx'
+import { Button, EmptyState, SearchField, Section, Stack } from '@ketvietlab/design-system'
+import { commandValue } from '../ui.tsx'
 import { walkLayout } from '../renderer.tsx'
 import type { Placement, Translate } from '../types.ts'
 import type { SectionCatalogue } from './builder-types.ts'
@@ -154,15 +154,15 @@ export function blockPicker({
                     items={group.sections.map((section) => (
                       <div class="website-block-picker-item">
                         <div class="website-block-picker-copy">
-                          <strong>{section.title}</strong>
+                          <strong id={`block-picker-${section.type}`}>{section.title}</strong>
                           {section.description ? <small>{section.description}</small> : null}
                         </div>
-                        <IconButton
-                          label={tr('website.builder.library.add', { name: section.title })}
-                          icon={icon('plus')}
+                        <Button
+                          label={tr('website.builder.library.insert')}
+                          describedBy={`block-picker-${section.type}`}
                           name="command"
                           value={commandValue('builder.add', { type: section.type })}
-                          size="prominent"
+                          size="default"
                           disabled={disabled}
                         />
                       </div>

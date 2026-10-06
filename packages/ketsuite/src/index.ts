@@ -67,6 +67,8 @@ export type {
   ChannelRouteSpec,
 } from './modules/channel_api/index.ts'
 export { default as website } from './modules/website/index.ts'
+export { productMediaWithWebsiteCatalog } from './modules/website_catalog/integration.ts'
+export { default as websiteCatalog } from './modules/website_catalog/index.ts'
 export { default as websiteMenu } from './modules/website_menu/index.ts'
 export { default as websiteSeo } from './modules/website_seo/index.ts'
 export { default as websiteSearch } from './modules/website_search/index.ts'

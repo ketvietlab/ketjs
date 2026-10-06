@@ -14,6 +14,7 @@ const project = (row: Row) => ({
   id: String(row.id),
   label: String(row.label),
   href: String(row.href),
+  ...(row.catalogCategoryId ? { catalogCategoryId: String(row.catalogCategoryId) } : {}),
   position: Number(row.position ?? 0),
   parentId: row.parentId == null ? null : String(row.parentId),
 })
@@ -112,56 +113,60 @@ export const menuState = defineFn({
  * tree between them. The editor sends the full tree in display order and the
  * revision it started from; anything else saved in between is refused.
  */
-export const saveMenu = defineFn({
-  input: { siteId: 'id', expectedRevisionId: 'text', title: 'text?', items: 'json' },
-  output: { ok: 'bool', revisionId: 'text?', errors: 'json?' },
-  effects: [
-    'read:website.Site',
-    'read:website.SiteMember',
-    'read:website_menu.Menu',
-    'write:website_menu.Menu',
-    'read:website_menu.MenuItem',
-    'write:website_menu.MenuItem',
-  ],
-  idempotent: true,
-  handler: async (ctx: Ctx, args) => {
-    const plan = planMenu(args.items)
-    if ('field' in plan) return issue(plan.field, plan.message)
-    const title = args.title == null ? null : String(args.title).trim() || null
-    if (title && title.length > 200) return issue('title', 'website.error.invalidTitle')
-    return ctx.tx(async (tx) => {
-      if (!(await canManageStructure(tx, args.siteId))) return issue('siteId', 'website.error.forbidden')
-      const state = (await tx.db.select('website_menu.Menu', { siteId: args.siteId }))[0]
-      const current = String(state?.revision ?? 'initial')
-      if (args.expectedRevisionId !== current)
-        return issue('expectedRevisionId', 'website.error.editConflict')
-      // An id already used by another site's item would move that item here.
-      const own = new Set((await siteItems(tx, args.siteId)).map((row) => String(row.id)))
-      for (const item of plan.items)
-        if (!own.has(item.id) && (await tx.db.select('website_menu.MenuItem', { id: item.id }))[0])
-          return issue('items', 'website.error.immutableOwnership')
-      // Nothing is written before this point, so every refusal above leaves the menu as it was.
-      const revision = randomUUID()
-      const claimed = state
-        ? await tx.db.compareAndSet(
-            'website_menu.Menu',
-            { id: state.id },
-            { revision: current },
-            { revision, title },
-          )
-        : await tx.db.insertIfAbsent('website_menu.Menu', {
-            id: args.siteId,
-            siteId: args.siteId,
-            title,
-            revision,
-          })
-      if (!('dryRun' in claimed) && !('matched' in claimed ? claimed.matched : claimed.inserted))
-        return issue('expectedRevisionId', 'website.error.editConflict')
-      const M = tx.table('website_menu.MenuItem')
-      await tx.db.del(deleteFrom(M).where(eq(M.siteId, args.siteId)))
-      for (const item of plan.items)
-        await tx.db.insert('website_menu.MenuItem', { ...item, siteId: args.siteId })
-      return { ok: true, revisionId: revision }
-    })
-  },
-})
+export const createSaveMenu = (options: { inTransaction?: boolean } = {}) =>
+  defineFn({
+    input: { siteId: 'id', expectedRevisionId: 'text', title: 'text?', items: 'json' },
+    output: { ok: 'bool', revisionId: 'text?', errors: 'json?' },
+    effects: [
+      'read:website.Site',
+      'read:website.SiteMember',
+      'read:website_menu.Menu',
+      'write:website_menu.Menu',
+      'read:website_menu.MenuItem',
+      'write:website_menu.MenuItem',
+    ],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const plan = planMenu(args.items)
+      if ('field' in plan) return issue(plan.field, plan.message)
+      const title = args.title == null ? null : String(args.title).trim() || null
+      if (title && title.length > 200) return issue('title', 'website.error.invalidTitle')
+      const save = async (tx: Ctx) => {
+        if (!(await canManageStructure(tx, args.siteId))) return issue('siteId', 'website.error.forbidden')
+        const state = (await tx.db.select('website_menu.Menu', { siteId: args.siteId }))[0]
+        const current = String(state?.revision ?? 'initial')
+        if (args.expectedRevisionId !== current)
+          return issue('expectedRevisionId', 'website.error.editConflict')
+        // An id already used by another site's item would move that item here.
+        const own = new Set((await siteItems(tx, args.siteId)).map((row) => String(row.id)))
+        for (const item of plan.items)
+          if (!own.has(item.id) && (await tx.db.select('website_menu.MenuItem', { id: item.id }))[0])
+            return issue('items', 'website.error.immutableOwnership')
+        // Nothing is written before this point, so every refusal above leaves the menu as it was.
+        const revision = randomUUID()
+        const claimed = state
+          ? await tx.db.compareAndSet(
+              'website_menu.Menu',
+              { id: state.id },
+              { revision: current },
+              { revision, title },
+            )
+          : await tx.db.insertIfAbsent('website_menu.Menu', {
+              id: args.siteId,
+              siteId: args.siteId,
+              title,
+              revision,
+            })
+        if (!('dryRun' in claimed) && !('matched' in claimed ? claimed.matched : claimed.inserted))
+          return issue('expectedRevisionId', 'website.error.editConflict')
+        const M = tx.table('website_menu.MenuItem')
+        await tx.db.del(deleteFrom(M).where(eq(M.siteId, args.siteId)))
+        for (const item of plan.items)
+          await tx.db.insert('website_menu.MenuItem', { ...item, siteId: args.siteId })
+        return { ok: true, revisionId: revision }
+      }
+      return options.inTransaction ? save(ctx) : ctx.tx(save)
+    },
+  })
+
+export const saveMenu = createSaveMenu()

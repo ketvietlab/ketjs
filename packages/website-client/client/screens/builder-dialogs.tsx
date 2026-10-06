@@ -69,10 +69,17 @@ export function builderDialog(ctx: StudioContext, { draft, sections, workspace, 
         />
         <Stack
           items={[
-            ...BUILDER_PANELS.map((panel) =>
-              link(tr(`website.tools.${panel}`), { panel, section: undefined }),
-            ),
-            ...['save', 'undo', 'redo', 'preview', 'publish'].map(command),
+            ...BUILDER_PANELS.filter(
+              (panel) =>
+                !draft.entry.catalog ||
+                (draft.entry.catalog.mode === 'product'
+                  ? panel === 'structure'
+                  : ['structure', 'library', 'styles'].includes(panel)),
+            ).map((panel) => link(tr(`website.tools.${panel}`), { panel, section: undefined })),
+            ...(draft.entry.catalog
+              ? ['save', 'undo', 'redo']
+              : ['save', 'undo', 'redo', 'preview', 'publish']
+            ).map(command),
             ...workspace
               .pages()
               .map((entry) => (
