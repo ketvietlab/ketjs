@@ -624,3 +624,11 @@
   font-size: var(--kv-text-xs);
   margin: 0;
 }
+
+/* Interaction is a full-width website snapshot; editing panels return with Edit. */
+.website-builder[data-theme-interactive="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.website-builder[data-theme-interactive="true"] > .website-builder-panel {
+  display: none;
+}
