@@ -195,12 +195,12 @@
     display: block;
   }
 
-  [data-ui="bulk-actions"] {
+  details[data-ui="bulk-actions"] {
     position: relative;
     display: none;
   }
 
-  [data-ui="bulk-form"]:not([hidden]) > [data-ui="bulk-actions"] {
+  [data-ui="bulk-form"]:not([hidden]) > details[data-ui="bulk-actions"] {
     display: block;
   }
 
@@ -911,7 +911,9 @@
     box-shadow: var(--admin-shadow-card);
   }
 
-  [data-ui="table-scroll"][data-gutter="compact"] {
+  /* The legacy table's inset. A design-system DataTable owns its own frame, and
+     inside a card or modal has none: a margin here pushed it past the card's edge. */
+  [data-ui="table-scroll"][data-gutter="compact"]:not([data-pattern="data-table"]) {
     margin: 10px;
     border-radius: 4px;
   }
