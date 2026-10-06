@@ -11,9 +11,15 @@
     border: 0;
   }
 
+  /*
+   * The box sits on the label's first line, so a label that wraps hangs below it. One line still
+   * sits in the middle of the control height, level with the inputs beside it.
+   */
   :where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"] {
     min-height: var(--kv-control-height);
     grid-template-columns: 1rem minmax(0, 1fr);
+    align-items: start;
+    align-content: center;
     column-gap: var(--kv-gap-control);
   }
 
@@ -158,7 +164,7 @@
     min-height: 1rem;
     padding: 0;
     box-shadow: none;
-    margin: 0;
+    margin: calc((var(--kv-line-sm) - 1rem) / 2) 0 0;
     accent-color: var(--kv-color-accent);
   }
 
@@ -196,7 +202,7 @@
 
   :where([data-kv-design-system]) [data-ui="field-option"] {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--kv-space-2);
     color: var(--kv-color-ink-secondary);
     font-size: var(--kv-text-sm);
@@ -208,7 +214,7 @@
     min-height: 1rem;
     padding: 0;
     box-shadow: none;
-    margin: 0;
+    margin: calc((var(--kv-line-sm) - 1rem) / 2) 0 0;
     flex: 0 0 auto;
     accent-color: var(--kv-color-accent);
   }
