@@ -697,6 +697,9 @@ The host owns the behaviour below.
   - `status(domain)` gives what the screens show: `state: pending | verified | failed`,
     `tls: pending | ready`, `checkedAt`, `reason`, `challenge: { type, name, value } | null` and a
     `revision` folded into the domain's `revisionId`. A `checkedAt` shows as the one `attempts` entry.
+  - `siteCreated(call, site)` runs once the Studio has made a site, before a host typed with it, so an
+    operator can give every site an address of its own. The first host a site gets is its address;
+    a host typed at creation after that waits as a redirect until switched to.
   - `added(call, domain)` runs once the Studio has added a host (site creation included), and
     `verify(call, domain)` when `website_studio.verifyDomain` `{ siteId, id, expectedRevisionId }` is
     asked for. `call` calls server functions as the person using the Studio. The Studio checks

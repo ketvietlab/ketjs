@@ -24,7 +24,7 @@ export type Domain = {
   state?: string
   tls?: string
   checkedAt?: string | null
-  /** What the last check found: matched, missing, mismatch or unreachable. */
+  /** What the last check found: matched, missing, mismatch, unreachable, taken or reserved. */
   reason?: string | null
   /** The DNS record that proves ownership, when whoever serves the site asks for one. */
   challenge?: { type: string; name: string; value: string } | null

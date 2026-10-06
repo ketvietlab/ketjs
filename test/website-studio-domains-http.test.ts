@@ -118,6 +118,16 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
         revision: proof ? `${proof.verified}:${proof.serving}:${proof.checks}` : '',
       }
     },
+    siteCreated: async (call, site) => {
+      calls.push(`site:${site.id}`)
+      await call('website.saveDomain', {
+        id: `${site.id}-address`,
+        siteId: site.id,
+        host: `${site.id}.operator.test`,
+        primary: true,
+      })
+      proofs.set(`${site.id}-address`, { token: '', verified: true, serving: true, checks: 0 })
+    },
     added: async (call, d) => {
       // The hook calls as the person adding the host: it can read what they can.
       assert.ok(Array.isArray(await call('website.listDomains', { siteId: d.siteId })))
@@ -188,4 +198,31 @@ test('Studio domains: an operator policy proves and serves the hosts', async (t)
   const switched = await switchTo('d-new', true, 'd-main')
   assert.equal(switched.status, 200, String(switched.message))
   assert.equal(switched.value.role, 'primary')
+
+  // A new site gets the operator's address first; a host typed with it waits behind that address.
+  const made = await designer('website_studio.saveResource', {
+    siteId: 'site-a',
+    kind: 'sites',
+    id: 'site-new',
+    expectedRevisionId: null,
+    values: { title: 'Mới', host: 'moi.test' },
+  })
+  assert.equal(made.status, 200, String(made.message))
+  const roles = async () =>
+    Object.fromEntries(
+      (
+        (await designer('website_studio.listResources', { siteId: 'site-new', kind: 'domains' })).value
+          .rows as Row[]
+      ).map((d) => [d.title, d.role]),
+    )
+  assert.deepEqual(await roles(), { 'site-new.operator.test': 'primary', 'moi.test': 'redirect' })
+  // A retried create is the same site: the operator is not handed it twice.
+  await designer('website_studio.saveResource', {
+    siteId: 'site-a',
+    kind: 'sites',
+    id: 'site-new',
+    expectedRevisionId: null,
+    values: { title: 'Mới', host: 'moi.test' },
+  })
+  assert.equal(calls.filter((c) => c === 'site:site-new').length, 1)
 })
