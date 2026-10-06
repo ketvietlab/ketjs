@@ -407,6 +407,17 @@ export const attachDesignSystemInteractions = (root = document) => {
           : []
       )
       const activeIndex = rows.indexOf(treeGridRow)
+      // A focused row opens its record the same way its row link does.
+      const rowLink = treeGridRow.querySelector('[data-ui="tree-grid-link"]')
+      if (
+        event.key === 'Enter' &&
+        document.activeElement === treeGridRow &&
+        rowLink instanceof HTMLAnchorElement
+      ) {
+        rowLink.click()
+        event.preventDefault()
+        return
+      }
       const nextIndex =
         event.key === 'ArrowDown'
           ? Math.min(rows.length - 1, activeIndex + 1)

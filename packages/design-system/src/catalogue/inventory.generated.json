@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 157,
     "cssFiles": 82,
-    "cssLines": 17098
+    "cssLines": 17171
   },
   "rows": [
     {
@@ -12311,8 +12311,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/data-display/tree/styles.css",
-      "lines": 46,
-      "hooks": ["tree", "tree-grid", "tree-grid-row", "tree-item", "tree-link"]
+      "lines": 119,
+      "hooks": ["tree", "tree-grid", "tree-grid-link", "tree-grid-row", "tree-item", "tree-link"]
     },
     {
       "layer": "public",

@@ -2409,6 +2409,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
                 id={(row) => row.id}
                 primary={(row) => `${row.id} · ${row.name}`}
+                rowHref={(row) => `#account-${row.id}`}
                 columns={[{ key: 'balance', label: 'Balance', cell: (row) => row.balance }]}
               />,
             ]}
