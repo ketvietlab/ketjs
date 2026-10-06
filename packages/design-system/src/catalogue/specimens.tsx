@@ -1779,6 +1779,13 @@ export const componentGroups: readonly ComponentGroup[] = [
                 closeHref="#dialog"
                 closeLabel="Cancel"
                 confirmLabel="Archive"
+                details={
+                  <Checkbox
+                    id="archive-understood"
+                    name="understood"
+                    label="Keep it out of active worklists"
+                  />
+                }
               />,
             ]}
           />
