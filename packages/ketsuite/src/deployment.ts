@@ -54,6 +54,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.websiteSeo,
       suite.websiteSearch,
       suite.websiteTheme,
+      suite.websiteCatalog,
       suite.websiteForm,
       suite.websiteFormMail,
       suite.websiteBackend,

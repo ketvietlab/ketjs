@@ -96,17 +96,6 @@ export const models: Record<string, ModelDef> = {
       primary: 'bool',
       primaryKey: 'text?',
       redirectToPrimary: 'bool',
-      /**
-       * The TXT value that proves whoever adds the host controls its DNS. Hosts from before
-       * it existed were connected by Két Việt and carry none.
-       */
-      verifyToken: 'text?',
-      verifiedAt: 'datetime?',
-      checkedAt: 'datetime?',
-      /** The last check: matched, missing, mismatch or unreachable. */
-      checkResult: 'text?',
-      /** Set by Két Việt once the host answers over HTTPS; until then it cannot become primary. */
-      servingAt: 'datetime?',
     },
     indexes: {
       host_company: { fields: ['companyId', 'host'], unique: true },

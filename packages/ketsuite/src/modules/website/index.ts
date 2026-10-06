@@ -49,8 +49,7 @@ export default defineModule({
       'error.payloadTooLarge': 'Dữ liệu vượt quá giới hạn cho phép.',
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
-      'error.domainNotFound': 'Không tìm thấy tên miền.',
-      'error.domainUnverified': 'Tên miền chưa được xác minh.',
+      'error.immutableHost': 'Muốn đổi tên miền thì thêm tên miền mới.',
       'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
       'error.invalidLogo': 'Logo phải là ảnh tải lên hoặc một đường dẫn https://.',
       'error.invalidTokenValue':
@@ -148,8 +147,7 @@ export default defineModule({
       'error.payloadTooLarge': 'The payload exceeds the allowed size.',
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
-      'error.domainNotFound': 'The domain was not found.',
-      'error.domainUnverified': 'The domain has not been verified.',
+      'error.immutableHost': 'To use another name, add it as a new domain.',
       'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
       'error.invalidLogo': 'The logo has to be an uploaded image or an https:// address.',
       'error.invalidTokenValue':
