@@ -71,6 +71,7 @@ export async function acceptImageFiles(
     const image = root.querySelector('img')!
     image.src = safeImage(stored.url)
     image.hidden = false
+    for (const details of root.querySelectorAll<HTMLElement>('[data-image-details]')) details.hidden = false
     status.textContent = ctx.tr('website.taxonomy.imageUploaded')
   } catch {
     if (root.isConnected) {
@@ -86,7 +87,6 @@ export async function acceptImageFiles(
     root.querySelector<HTMLInputElement>('input[type="file"]')!.value = ''
   }
 }
-/** `describe: false` drops the alt text field, for an image whose owner already names it - a site logo. */
 export type TaxonomyImageProps = ImageOwner & {
   value?: string
   alt?: string
@@ -102,8 +102,8 @@ export function TaxonomyImage(
     value = '',
     alt = '',
     disabled = false,
-    resModel = 'website.TaxonomyTerm',
     describe = true,
+    resModel = 'website.TaxonomyTerm',
   }: TaxonomyImageProps,
 ) {
   const receive = (root: HTMLElement, files: FileList | readonly File[]) =>
@@ -155,6 +155,8 @@ export function TaxonomyImage(
           // biome-ignore lint/a11y/noStaticElementInteractions: Delegates clicks from native buttons, which already handle Enter and Space.
           // biome-ignore lint/a11y/useKeyWithClickEvents: Delegates clicks from native buttons, which already handle Enter and Space.
           <span
+            data-image-details
+            hidden={!value}
             onClick={(event) => {
               if (disabled || !(event.target as Element).closest('button')) return
               const root = (event.currentTarget as Element).closest('.website-taxonomy-image')!
@@ -162,6 +164,11 @@ export function TaxonomyImage(
               const image = root.querySelector('img')!
               image.hidden = true
               image.removeAttribute('src')
+              // Without an image there is nothing to remove or describe.
+              for (const details of root.querySelectorAll<HTMLElement>('[data-image-details]'))
+                details.hidden = true
+              const altInput = root.querySelector<HTMLInputElement>(`input[name="${field}Alt"]`)
+              if (altInput) altInput.value = ''
               root.querySelector('[data-image-status]')!.textContent = ctx.tr('website.taxonomy.dropImage')
             }}
           >
@@ -173,13 +180,15 @@ export function TaxonomyImage(
             />
           </span>,
           describe ? (
-            <TextField
-              id={`${id}-${field}-alt`}
-              name={`${field}Alt`}
-              label={ctx.tr('website.taxonomy.imageAlt')}
-              value={alt}
-              disabled={disabled}
-            />
+            <div data-image-details hidden={!value}>
+              <TextField
+                id={`${id}-${field}-alt`}
+                name={`${field}Alt`}
+                label={ctx.tr('website.taxonomy.imageAlt')}
+                value={alt}
+                disabled={disabled}
+              />
+            </div>
           ) : null,
         ]}
       />

@@ -254,6 +254,8 @@ Report each to ketjs. A fix there, then an override bump, removes the workaround
 | `ds-narrow-workspace-controls` | Narrow builder panels and taxonomy upload fields retain two columns; buttons can overflow. | Container-scoped rules in `ds-gaps.css`; all builder content panels and the block inspector establish the container. A select and its chevron are pinned to the row under the label, as in `ds-form-stacked-fields`. | Container-aware field layout and wrapping action labels; remove when the pin includes them. |
 | `ds-livedoc-controls` | Public LiveDoc relies on legacy host control CSS. | Standalone control styles, hidden read-only toolbar, token mapping, taller article canvas (28–40rem desktop, 22rem mobile) and an article editor that fills the record column instead of stopping at 52rem. | Ship self-contained toolbar styling with the public editor. |
 
+The builder editing canvas uses the selected company stylesheet and compiled KTL frame. Theme JavaScript runs only after selecting Tương tác, in an opaque `sandbox="allow-scripts"` iframe of a saved draft snapshot (five-minute bearer preview). Dirty drafts save before opening it; editing a block returns to the editing canvas. Header/footer remain shared and fixed. Interactive previews never enable GTM and suppress native link navigation and form submission. Normal previews and staff pages still do not mount theme scripts.
+
 ## 7. Known limits of the mock
 
 - The builder supports empty slots, cross-slot moves, duplication, templates, media, undo/redo and

@@ -1,3 +1,7 @@
+import { createCatalogScreens } from './catalog.tsx'
+import { createCatalogCategoryScreens } from './catalog-categories.tsx'
+import { createCatalogProductScreens } from './catalog-product.tsx'
+import { catalogBuilderContext } from './catalog-builder.ts'
 import { createPostEditor } from './post-editor.tsx'
 import { createTaxonomyScreens } from './taxonomy.tsx'
 import { createDomainScreens } from './domains.tsx'
@@ -14,6 +18,9 @@ import { createCustomerScreens } from './customers.tsx'
 import type { Screen, StudioContext } from '../types.ts'
 
 export const createCoreScreens = (ctx: StudioContext): Record<string, Screen> => ({
+  ...createCatalogScreens(ctx),
+  ...createCatalogCategoryScreens(ctx),
+  ...createCatalogProductScreens(ctx),
   ...createResourceScreens(ctx),
   ...createTaxonomyScreens(ctx),
   ...createDomainScreens(ctx),
@@ -23,7 +30,7 @@ export const createCoreScreens = (ctx: StudioContext): Record<string, Screen> =>
   preview: createPreview(ctx),
   pages: createEntryList(ctx, 'page'),
   'page-new': createPageNew(ctx),
-  builder: createBuilder(ctx),
+  builder: createBuilder(catalogBuilderContext(ctx)),
   posts: createEntryList(ctx, 'post'),
   'post-new': createPostEditor(ctx, true),
   'post-edit': createPostEditor(ctx),

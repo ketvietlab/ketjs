@@ -25,7 +25,7 @@ test('every operation the Studio client calls is answered by the host', async (t
       names.add(match[1]!)
   }
   assert.ok(names.size > 30, `found ${names.size} operations; the scan no longer sees the client's calls`)
-  const { app, fixture } = await bootWebsiteStudio()
+  const { app, fixture } = await bootWebsiteStudio(undefined, { deployment: 'commerce' })
   t.after(() => app.close())
   const designer = app.client.anonymous()
   await designer.login({ login: 'studio-designer', password: 'studio-local' })
