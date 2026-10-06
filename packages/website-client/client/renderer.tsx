@@ -25,10 +25,12 @@ export type PublicFormData = {
 }
 export type RenderOptions = {
   mode?: 'public' | 'builder'
+  /** Staff interaction previews keep native forms visible without permitting a submission. */
+  readonlyForms?: boolean
   selected?: string | null
   unknownLabel?: (type: string) => string
   /** Server answers per placement id; today only form sections read one. */
-  sectionData?: Record<string, PublicFormData | null | undefined>
+  sectionData?: Record<string, PublicFormData | PublicCatalogCard | null | undefined>
   formText?: { send?: string; missing?: string }
   headingLevel?: number
   viewport?: Viewport
@@ -41,7 +43,17 @@ export type RenderOptions = {
   controls?: (placement: Placement) => View
 }
 /** A section renderer also learns which placement it draws and that placement's server data. */
-export type SectionOptions = RenderOptions & { placementId?: string; data?: PublicFormData | null }
+type PublicCatalogCard = {
+  id: string
+  name: string
+  description: string
+  path: string
+  gallery: { src: string; alt?: string }[]
+}
+export type SectionOptions = RenderOptions & {
+  placementId?: string
+  data?: PublicFormData | PublicCatalogCard | null
+}
 export type SectionRenderer = (settings: SectionSettings, options?: SectionOptions) => TemplateResult
 
 const imageStyle = (s: SectionSettings) => {
@@ -58,8 +70,8 @@ const richBody = (settings: SectionSettings) => {
   if (!settings.bodyDoc) return null
   try {
     const blocks = JSON.parse(String(settings.bodyDoc))
-    return Array.isArray(blocks) ? (
-      <div data-ui="flow-editor-content">{trustedMarkup(documentHtml(blocks, 'vi'))}</div>
+    return Array.isArray(blocks) && blocks.length ? (
+      <div class="wt-document">{trustedMarkup(documentHtml(blocks, 'vi'))}</div>
     ) : null
   } catch {
     return null
@@ -124,6 +136,36 @@ export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
       </a>
     </section>
   ),
+  'website_catalog.product_card': (s, options = {}) => {
+    const product = options.data as PublicCatalogCard | null
+    if (!product)
+      return options.mode === 'builder' ? (
+        <div class="wt-unknown" role="note">
+          Sản phẩm chưa được hiển thị trên website
+        </div>
+      ) : (
+        <></>
+      )
+    return (
+      <>
+        {product.gallery[0]?.src
+          ? SECTION_RENDERERS['website.image']!(
+              { image: product.gallery[0].src, alt: product.name, imageFit: s.imageFit ?? 'contain' },
+              options,
+            )
+          : null}
+        {SECTION_RENDERERS['website.callout']!(
+          {
+            heading: product.name,
+            body: product.description,
+            ctaLabel: s.ctaLabel ?? 'Xem chi tiết',
+            ctaHref: product.path,
+          },
+          options,
+        )}
+      </>
+    )
+  },
   'website.quote': (s) => (
     <blockquote class="wt-text">
       <p>{s.body ?? ''}</p>
@@ -170,9 +212,9 @@ export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
   // A form section draws what `website_form.publicForm` answered for this placement
   // (`options.data`). Public pages post it to `/forms/{id}`; the builder shows it inert.
   'website_form.form': (_s, options = {}) => {
-    const form = options.data
+    const form = options.data as PublicFormData | null | undefined
     const text = options.formText ?? {}
-    const builder = options.mode === 'builder'
+    const builder = options.mode === 'builder' || options.readonlyForms === true
     if (!form?.id)
       return builder ? (
         <div class="wt-unknown" role="note">

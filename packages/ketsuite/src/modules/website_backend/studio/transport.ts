@@ -53,6 +53,13 @@ const menuResource = (site: Row, state: Row) => ({
 const postKeys = ['author', 'excerpt', 'category', 'tags', 'cover', 'coverAlt', 'publishedAt']
 const capabilities: Record<string, string[]> = {
   'website.content.write': ['website.saveEntry'],
+  'website.catalog': ['website_catalog.listBindings'],
+  'website.catalog.configure': [
+    'website_catalog.saveBuilder',
+    'website_catalog.saveBinding',
+    'website_catalog.saveCategory',
+  ],
+  'product.configure': ['product.saveTemplate', 'product.archiveTemplate'],
   'website.publish': ['website.publishEntry', 'website.cancelScheduledEntry'],
   'website.site.manage': ['website.saveSite', 'website.saveStudioStyle'],
   'website.form.manage': ['website_form.saveForm', 'website_form.archiveForm'],
@@ -468,7 +475,13 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     },
     'website.getEntry': async (input) => {
       const { dataSet, entry } = await forEntry(input.id)
-      return { entry, sections: dataSet.sections }
+      return {
+        entry: {
+          ...entry,
+          sectionData: await ctx.resolveSectionData(entry.layout, String(entry.siteId), url, req),
+        },
+        sections: dataSet.sections,
+      }
     },
     'website_studio.overview': async (input) => {
       const data = await snapshot(input.siteId)
@@ -847,7 +860,12 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           (values.locale ?? data.site!.defaultLocale) !== data.site!.defaultLocale
         )
           return fail('validation', 'Website hiện chỉ có menu đầu trang theo ngôn ngữ mặc định.')
-        await call('website_menu.saveMenu', {
+        const catalogMenu = !!(await ctx.live(req)).functions['website_catalog.saveMenu']
+        if (catalogMenu && !(await ctx.allows('website_menu.saveMenu', url, req)))
+          fail('forbidden', 'Không có quyền sửa menu.')
+        await (catalogMenu
+          ? (input: Row) => ctx.callUnchecked('website_catalog.saveMenu', input, url, req)
+          : (input: Row) => call('website_menu.saveMenu', input))({
           siteId: data.site!.id,
           expectedRevisionId: input.expectedRevisionId,
           title: values.title ?? null,
@@ -1350,6 +1368,52 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       })
     },
   }
+  for (const name of [
+    'listBindings',
+    'getBinding',
+    'addProduct',
+    'saveBinding',
+    'removeBinding',
+    'getTemplate',
+    'getBuilder',
+    'saveBuilder',
+    'listCategories',
+    'getCategory',
+    'saveCategory',
+    'archiveCategory',
+    'productCandidates',
+    'previewCategory',
+  ])
+    queries[`website_catalog.${name}`] = async (input) => {
+      const result = row(await call(`website_catalog.${name}`, input))
+      if (name === 'getBuilder' || name === 'getTemplate') {
+        const data = await snapshot(input.siteId)
+        return {
+          ...result,
+          ...(name === 'getBuilder' ? { sections: data.sections } : {}),
+          theme: await themeResource(data.site!),
+        }
+      }
+      return result
+    }
+  queries['product.getTemplate'] = async (input) => {
+    await call('product.getTemplate', { id: input.id })
+    return ctx.callUnchecked('website_catalog.getSource', input, url, req)
+  }
+  queries['product.listCategories'] = () => call('product.listCategories')
+  queries['product.saveTemplate'] = async (input) => {
+    if (input.expectedRevisionId == null && input.siteId) {
+      if (
+        !(await ctx.allows('product.saveTemplate', url, req)) ||
+        !(await ctx.allows('website_catalog.addProduct', url, req))
+      )
+        fail('forbidden', 'Không có quyền tạo sản phẩm và liên kết website.')
+      const result = row(await ctx.callUnchecked('website_catalog.createProduct', input, url, req))
+      return { id: result.productId, binding: result }
+    }
+    return call('product.saveTemplate', input)
+  }
+  queries['product.archiveTemplate'] = (input) => call('product.archiveTemplate', input)
   for (const name of [
     'website.publishEntry',
     'website.cancelScheduledEntry',

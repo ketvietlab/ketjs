@@ -93,7 +93,26 @@ export function productPermissions(
     ),
     roleTemplates: {
       ...roleTemplates,
-      ...(names.includes('website_backend') ? suite.websiteRoleTemplates : {}),
+      ...(names.includes('website_backend')
+        ? Object.fromEntries(
+            Object.entries(suite.websiteRoleTemplates).map(([key, value]) => [
+              key,
+              names.includes('website_catalog')
+                ? {
+                    ...value,
+                    version: value.version + 1,
+                    bundles: [
+                      ...value.bundles,
+                      'website_catalog.view',
+                      ...(key === 'website.reader' || key === 'website.customers'
+                        ? []
+                        : ['website_catalog.configure']),
+                    ],
+                  }
+                : value,
+            ]),
+          )
+        : {}),
       ...(names.includes('website_customer_mail') ? suite.websiteCustomerMailRoleTemplates : {}),
       ...(names.includes('website_theme') ? suite.websiteThemeRoleTemplates : {}),
     },

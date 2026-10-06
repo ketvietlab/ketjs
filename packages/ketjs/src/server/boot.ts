@@ -75,6 +75,13 @@ export type Route = (
  * deployment screens can read live state without reaching for module-level globals.
  */
 export type ServeContext = {
+  /** Resolve placement data for a custom public route using the deployment's native section contracts. */
+  resolveSectionData: (
+    layout: unknown,
+    siteId: string | null,
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<Record<string, unknown>>
   /** The immutable manifest selected by this deployment. */
   manifest: Manifest
   /** The authored deployment and its external-client compatibility policy. */
@@ -811,6 +818,7 @@ export async function bootDeployment(
     })
 
   const ctx: ServeContext = {
+    resolveSectionData: (layout, siteId, url, req) => resolveSectionData(layout, siteId, url, req),
     manifest,
     deploymentName: spec.name,
     clientCompatibility: serve.clientCompatibility ?? null,

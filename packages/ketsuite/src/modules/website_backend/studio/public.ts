@@ -202,6 +202,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   const image = meta.ogImage && safeHref(meta.ogImage) !== '#' ? safeHref(meta.ogImage) : ''
   const options = {
     mode: 'public' as const,
+    readonlyForms: scope.readonlyForms === true,
     locale,
     preset: appearance.preset,
     sectionData: object(scope.sectionData),
