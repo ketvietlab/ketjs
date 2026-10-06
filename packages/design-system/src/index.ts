@@ -297,6 +297,7 @@ export type {
   BulkActionsProps,
   ListChromeProps,
   ListFacet,
+  ListFiltersToggle,
   ListSearch,
   ListSort,
   ListSortChoice,

@@ -306,6 +306,7 @@ const ListDemoChrome = (props: { id: string; selected?: number }): TemplateResul
       { id: 'table', label: 'Table', href: `#${props.id}`, active: true },
       { id: 'kanban', label: 'Kanban', href: `#${props.id}` },
     ]}
+    filtersToggle={{ label: 'Filters' }}
     sort={{
       id: `${props.id}-sort`,
       action: `#${props.id}`,

@@ -72,13 +72,24 @@ export type PagerBarProps = {
   label?: string
 }
 
+export type ListFiltersToggle = {
+  label: string
+  count?: number
+}
+
 export type ListChromeProps = {
   filtersLabel?: string
   /**
-   * Filters that pick from a list rather than toggle — a compact `Menu` each.
-   * They lead the facet row, at the facets' height.
+   * Filters that pick from a list rather than toggle — a `Menu` each, whose
+   * default size is the facets' height. They lead the facet row.
    */
   filterMenus?: JSXChild
+  /**
+   * Folds the filter menus, facets, views and sort into one disclosure on a
+   * phone, where they would take several lines; wider screens show them in the
+   * row. `count` is the number of filters in force, shown on the toggle.
+   */
+  filtersToggle?: ListFiltersToggle
   viewsLabel?: string
   search?: ListSearch
   facets?: readonly ListFacet[]
@@ -97,6 +108,9 @@ export const HOOKS = [
   'list-search-label',
   'list-search-input',
   'list-search-submit',
+  'list-filters',
+  'list-filters-toggle',
+  'list-filters-count',
   'list-filter-menus',
   'list-facets',
   'list-facet',
@@ -293,7 +307,7 @@ export const PagerBar = (props: PagerBarProps): TemplateResult => (
 )
 
 export const ListChrome = (props: ListChromeProps): TemplateResult => {
-  const filters =
+  const filterRow =
     props.filterMenus !== undefined ||
     (props.facets?.length ?? 0) > 0 ||
     (props.views?.length ?? 0) > 0 ||
@@ -319,6 +333,19 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
         {props.sort && <SortControl {...props.sort} />}
       </div>
     ) : null
+  const toggle = filterRow ? props.filtersToggle : undefined
+  const filters = toggle ? (
+    <details data-ui="list-filters" data-active={(toggle.count ?? 0) > 0 ? 'true' : null}>
+      {/* As the menu trigger: a button by role, with the open state from `details` itself. */}
+      <summary data-ui="list-filters-toggle" role="button">
+        {toggle.label}
+        {(toggle.count ?? 0) > 0 && <span data-ui="list-filters-count">{String(toggle.count)}</span>}
+      </summary>
+      {filterRow}
+    </details>
+  ) : (
+    filterRow
+  )
   const meta =
     props.status !== undefined || props.actions !== undefined || props.pager ? (
       <div data-ui="list-chrome-row" data-row="meta">
@@ -335,7 +362,7 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
       </div>
     ) : null
   return (
-    <div data-ui="list-chrome" data-pattern="list-chrome">
+    <div data-ui="list-chrome" data-pattern="list-chrome" data-filters={toggle ? 'collapsible' : null}>
       <div data-ui="list-chrome-row" data-row="query">
         {props.search && <SearchControl {...props.search} />}
         {tail}

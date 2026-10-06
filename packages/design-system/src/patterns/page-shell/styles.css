@@ -116,6 +116,22 @@
     :where([data-kv-design-system]) [data-kv-page-identity="actions"] {
       justify-content: flex-start;
     }
+
+    /* As on an operational list: the header's actions share the line and the
+       primary one takes the room left, so every page's header reads the same. */
+    :where([data-kv-design-system])
+      [data-variant="operational"]
+      [data-kv-page-identity="actions"]
+      > [data-ui="action-group"] {
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-variant="operational"]
+      [data-kv-page-identity="actions"]
+      [data-ui="action"][data-variant="primary"] {
+      flex: 1 1 auto;
+    }
   }
 
   /* The compact Suite shell tightens the band of every operational full page by
