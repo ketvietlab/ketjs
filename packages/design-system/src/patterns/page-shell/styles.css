@@ -117,4 +117,14 @@
       justify-content: flex-start;
     }
   }
+
+  /* The compact Suite shell tightens the band of every operational full page by
+     the same amount at every width, so moving between a list, a record and a
+     workspace never shifts the title. RecordPage renders its own header element
+     for its slot API, so it is named beside the shared band. */
+  :where([data-kv-design-system][data-density="compact"])
+    [data-variant="operational"]
+    > :is([data-kv-page-identity="header"], [data-ui="record-page-header"]) {
+    padding-block: var(--kv-space-2);
+  }
 }
