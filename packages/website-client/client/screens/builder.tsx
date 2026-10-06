@@ -763,6 +763,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                 />
                 <div
                   class="website-builder"
+                  data-theme-interactive={interactive?.entryId === entry.id ? 'true' : null}
                   data-panel={panel}
                   data-template-preview={templatePreview ? 'true' : null}
                 >
