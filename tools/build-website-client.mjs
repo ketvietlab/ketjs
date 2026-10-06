@@ -6,6 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export async function buildWebsiteClient() {
   const out = resolve(root, 'packages/ketsuite/src/modules/website_backend/client')
   mkdirSync(out, { recursive: true })
+  cpSync(resolve(root, 'packages/website-client/client/gtm.mjs'), resolve(out, 'gtm.mjs'))
   // Bundle the same pure renderer used by the builder into the server package.
   await build({
     entryPoints: [resolve(root, 'packages/website-client/client/renderer.tsx')],

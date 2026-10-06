@@ -47,6 +47,104 @@ const files = (overrides: Record<string, string | null> = {}, theme: Row = manif
 const codes = (result: ReturnType<typeof checkThemePackage>) =>
   result.ok ? [] : result.errors.map((e) => e.code)
 
+test('commerce builder gets real CSS/KTL and runs scripts only in an opaque interactive preview', async (t) => {
+  let base: Storage | null = null
+  const { app, fixture } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
+    openStorage: (config) => (base = storageFromConfig(config)),
+  })
+  t.after(() => app.close())
+  const installed = await installThemePackage(
+    {
+      storage: namespacedStorage(base!, 'commerce'),
+      call: async (fn, input) =>
+        (
+          await app.fixture.call<Row>(fn, input, {
+            scope: { company: 'studio-a', branches: null },
+          })
+        ).value,
+    },
+    files(
+      { 'frame-header.ktl': '<header class="real-header">{{ brand.title }}</header>' },
+      manifest({ frame: ['header'] }),
+    ),
+    { available: true },
+  )
+  assert.equal(installed.ok, true, JSON.stringify(installed))
+  if (!installed.ok) return
+  await fixture('website_theme.selectTheme', {
+    siteId: 'site-a',
+    expectedRevisionId: 'initial',
+    versionId: installed.id,
+    settings: { tone: 'cool' },
+  })
+  await fixture('website.saveDomain', {
+    id: 'builder-domain',
+    siteId: 'site-a',
+    host: '127.0.0.1',
+    primary: true,
+  })
+  await fixture('website.saveSite', {
+    id: 'site-a',
+    name: 'site-a',
+    title: 'site-a',
+    defaultLocale: 'vi',
+    theme: 'theme_paper',
+    googleTagManagerId: 'GTM-WN52Z58',
+    active: true,
+  })
+  const designer = app.client.anonymous()
+  await designer.login({ login: 'studio-designer', password: 'studio-local' })
+  const send = async (fn: string, input: Row) => {
+    const response = await designer.post('/website/api/' + fn, JSON.stringify(input), {
+      headers: { 'content-type': 'application/json' },
+    })
+    assert.equal(response.status, 200, await response.clone().text())
+    return ((await response.json()) as { value: Row }).value
+  }
+  const resource = await send('website_studio.getResource', {
+    siteId: 'site-a',
+    kind: 'themes',
+    id: 'site-a',
+  })
+  assert.equal(resource.stylesheet, `/_theme/${installed.id}/theme.css`)
+  assert.match(String((resource.frame as Row).header), /real-header/)
+  const entry = (await fixture('website.getEntry', { id: 'page-site-a' })).entry as Row
+  const link = await send('website_studio.createPreview', {
+    siteId: 'site-a',
+    id: entry.id,
+    revisionId: entry.revisionId,
+    audience: 'link',
+    minutes: 5,
+  })
+  const path = '/_ket/preview?token=' + encodeURIComponent(String(link.token))
+  const visitor = app.client.anonymous()
+  const regular = await visitor.get(path)
+  assert.equal(regular.status, 200)
+  assert.doesNotMatch(await regular.text(), /_boot\.mjs|data-website-gtm/)
+  const interactive = await visitor.get(path + '&themeInteractive=1')
+  assert.equal(interactive.status, 200)
+  const html = await interactive.text()
+  assert.match(html, /_boot\.mjs/)
+  assert.match(html, /"interactivePreview":true/)
+  assert.doesNotMatch(html, /data-website-gtm|googletagmanager/)
+  const policy = interactive.headers.get('content-security-policy')!
+  assert.match(policy, /(?:^|;\s*)sandbox allow-scripts(?:;|$)/)
+  assert.match(policy, /frame-ancestors \*/)
+  assert.match(policy, /form-action 'none'/)
+  assert.doesNotMatch(policy, /allow-same-origin|allow-forms|unsafe-eval|googletagmanager/)
+  const boot = await visitor.get(`/_theme/${installed.id}/_boot.mjs`)
+  assert.equal(boot.headers.get('access-control-allow-origin'), '*')
+  assert.equal(boot.headers.get('cross-origin-resource-policy'), 'cross-origin')
+  assert.match(await boot.text(), /interactivePreview === true/)
+  const module = await visitor.get(`/_theme/${installed.id}/theme.mjs`)
+  assert.equal(module.headers.get('access-control-allow-origin'), '*')
+  await send('website_studio.revokePreview', { siteId: 'site-a', id: entry.id, token: link.token })
+  const revoked = await visitor.get(path + '&themeInteractive=1')
+  assert.notEqual(revoked.status, 200)
+  assert.doesNotMatch(await revoked.text(), /_boot\.mjs|data-website-gtm/)
+})
+
 test('a theme package is refused for every way it could reach outside its own site root', () => {
   assert.equal(checkThemePackage(files()).ok, true, JSON.stringify(codes(checkThemePackage(files()))))
   const refused: Array<[string, Record<string, string | null>, Row?]> = [
@@ -66,8 +164,19 @@ test('a theme package is refused for every way it could reach outside its own si
     ['cssKeyframes', { 'theme.css': '@keyframes fade { from { opacity: 0 } }' }],
     ['cssSyntax', { 'theme.css': '[data-site-theme="acme"] p { color: red /* open' }],
     ['scriptBudget', { 'theme.mjs': `export const x = '${randomBytes(200_000).toString('base64')}'` }],
-    ['frameUnsupported', {}, manifest({ frame: ['header'] })],
-    ['fileType', { 'frame-header.ktl': '<header></header>' }],
+    ['frameMissing', {}, manifest({ frame: ['header'] })],
+    ['frameUndeclared', { 'frame-header.ktl': '<header></header>' }],
+    ['frameInvalid', { 'frame-header.ktl': '<script>alert(1)</script>' }, manifest({ frame: ['header'] })],
+    [
+      'frameInvalid',
+      { 'frame-header.ktl': '<a href="javascript:alert(1)">x</a>' },
+      manifest({ frame: ['header'] }),
+    ],
+    [
+      'frameInvalid',
+      { 'frame-header.ktl': '<header>{{{ brand.title }}}</header>' },
+      manifest({ frame: ['header'] }),
+    ],
     ['fileName', { 'Theme.CSS': 'x' }],
     ['fileName', { '_boot.mjs': 'export {}' }],
     ['scriptUndeclared', {}, manifest({ script: undefined })],
@@ -128,6 +237,15 @@ test('an installed theme is offered, chosen, published and served from tenant st
     })
     return { status: response.status, value: ((await response.json()) as { value: Row }).value }
   }
+
+  const cssOnly = await install(
+    files({ 'theme.mjs': null }, manifest({ version: '0.9.0', script: undefined })),
+  )
+  assert.equal(cssOnly.ok, true, JSON.stringify(cssOnly))
+  assert.deepEqual(
+    await install(files({ 'theme.mjs': null }, manifest({ version: '0.9.0', script: undefined }))),
+    cssOnly,
+  )
 
   const installed = await install(files())
   assert.equal(installed.ok, true, JSON.stringify(installed))
@@ -285,6 +403,12 @@ test('an installed theme is offered, chosen, published and served from tenant st
   assert.equal(css.headers.get('cache-control'), 'public, max-age=31536000, immutable')
   assert.equal(css.headers.get('x-content-type-options'), 'nosniff')
   assert.match(css.headers.get('content-type') ?? '', /^text\/css/)
+  const svg = await anonymous.get(`/_theme/${versionId}/logo.svg`)
+  assert.equal(svg.status, 200)
+  assert.equal(await svg.text(), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+  assert.match(svg.headers.get('content-type') ?? '', /^image\/svg\+xml/)
+  assert.match(svg.headers.get('content-security-policy') ?? '', /(?:^|;\s*)sandbox(?:;|$)/)
+  assert.equal(svg.headers.get('x-content-type-options'), 'nosniff')
   const boot = await anonymous.get(`/_theme/${versionId}/_boot.mjs`)
   assert.equal(boot.status, 200)
   assert.match(await boot.text(), /import \* as theme from '\.\/theme\.mjs'/)
@@ -307,4 +431,55 @@ test('an installed theme is offered, chosen, published and served from tenant st
   assert.equal((await anonymous.get(`/_theme/${versionId}/theme.css`)).status, 404)
   assert.equal((await anonymous.get(`/_theme/${versionId}/_boot.mjs`)).status, 404)
   assert.equal((await anonymous.get('/')).status, 200)
+})
+
+test('stored KTL frame compiles at install and replaces only its declared slots', async (t) => {
+  let base: Storage | null = null
+  const { app, fixture } = await bootWebsiteStudio(undefined, {
+    deployment: 'commerce',
+    openStorage: (config) => (base = storageFromConfig(config)),
+  })
+  t.after(() => app.close())
+  const packaged = files({
+    'theme.json': JSON.stringify(manifest({ version: '2.0.0', frame: ['topbar', 'header', 'footer'] })),
+    'frame-topbar.ktl': '<div class="theme-topbar">{{ settings.tone }}</div>',
+    'frame-header.ktl': '<header class="theme-header"><a href="/">{{ brand.title }}</a></header>',
+    'frame-footer.ktl': '<footer class="theme-footer">{{ site.title }}</footer>',
+  })
+  const installed = await installThemePackage(
+    {
+      storage: namespacedStorage(base!, 'commerce'),
+      call: async (fn, input) =>
+        (await app.fixture.call<Row>(fn, input, { scope: { company: 'studio-a', branches: null } })).value,
+    },
+    packaged,
+    { available: true },
+  )
+  assert.equal(installed.ok, true, JSON.stringify(installed))
+  if (!installed.ok) return
+  const choice = await fixture('website_theme.selectTheme', {
+    siteId: 'site-a',
+    expectedRevisionId: 'initial',
+    versionId: installed.id,
+    settings: { tone: 'cool' },
+  })
+  assert.equal(choice.ok, true)
+  await fixture('website.saveDomain', {
+    id: 'theme-domain',
+    siteId: 'site-a',
+    host: '127.0.0.1',
+    primary: true,
+  })
+  const entry = (await fixture('website.getEntry', { id: 'page-site-a' })).entry as Row
+  await fixture('website.publishEntry', { id: 'page-site-a', expectedRevisionId: entry.revisionId })
+  const response = await app.client.anonymous().get('/')
+  const html = await response.text()
+  assert.match(html, /class="theme-topbar">cool/)
+  assert.match(html, /class="theme-header"/)
+  assert.match(html, /class="theme-footer"/)
+  assert.match(html, /<main>/)
+  assert.doesNotMatch(html, /class="wt-theme-header"/)
+  assert.doesNotMatch(html, /class="wt-theme-footer"/)
+  assert.ok(html.indexOf('theme-header') < html.indexOf('<main>'))
+  assert.ok(html.indexOf('theme-footer') > html.indexOf('</main>'))
 })

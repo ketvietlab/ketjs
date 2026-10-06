@@ -275,13 +275,15 @@ tenant's KetJS storage:
 
 ```text
 # File: themes/acme (package layout)
-theme.json    manifest: engine website-theme/1, key, version, tier private, title, settings, script
+theme.json    manifest: engine website-theme/1, key, version, tier private, title, settings, frame, script
 theme.css     every selector under [data-site-theme="<key>"]
+frame-*.ktl   optional KTL fragments for topbar, header, footer, beforeMain, afterMain
 theme.mjs     optional browser module exporting mount(root, ctx)
 *.svg|png|jpg|webp|avif|woff2   files the stylesheet names by bare file name
 ```
 
-Only metadata goes into the database. The files go through the `Storage` abstraction under
+Metadata and validated frame sources go into the database so public delivery can render synchronously.
+The files go through the `Storage` abstraction under
 `website-theme/<key>/<versionId>/`, so a self-hosted server on the `local` driver needs no bucket, CDN
 or public URL; S3-compatible Object Storage works the same way.
 
@@ -311,7 +313,7 @@ Install refuses a package that could reach beyond its own site root:
 | `cssImport`, `cssUrl` | `@import`, a remote or `data:` URL, or a file the package does not contain. |
 | `cssAtRule`, `cssKeyframes` | Global at-rules such as `@property`, and keyframes not prefixed `<key>-`. |
 | `scriptBudget`, `scriptUndeclared` | A module over its gzip budget (120 KB unless the manifest lowers or raises it, at most 256 KB), or a module the manifest does not declare. |
-| `frameUnsupported` | KTL frame slots are not compiled from storage yet. |
+| `frameMissing`, `frameUndeclared`, `frameInvalid` | A declared frame file is absent, an undeclared frame file is present, or its KTL/HTML is unsafe. |
 | `fileName`, `fileType` | A nested or upper-case name, a name starting with `_`, or a type outside the list above. |
 
 ### Choosing and applying
@@ -344,7 +346,9 @@ Without them the Studio shows the setting's name and raw values.
 ### What the page gets
 
 A themed page adds, after `public.css`, the theme's stylesheet and `data-site-theme="<key>"` on the
-site root. It also answers with a `content-security-policy` whose `script-src` is `'self'`, with the
+site root. Declared KTL frame slots replace only their matching native shell slots; Builder shows
+the same frame without making header or footer draggable. It also answers with a
+`content-security-policy` whose `script-src` is `'self'`, with the
 manifest's `connect` and `frame` origins added. The browser module loads through a generated
 `/_theme/<versionId>/_boot.mjs`, which calls `mount(root, ctx)` with the site root and a frozen
 context: `settings`, `locale`, `page`, and `asset(file)`. The module is left out when the request is a
@@ -1345,3 +1349,21 @@ and pixel parity are not yet verified.
 `websiteAnonymousScope` resolves an exact configured hostname inside the selected tenant database.
 Multiple matching companies fail closed; an unknown domain delegates to existing anonymous scope
 handling. Private fleet composition preserves this result before applying its tenant fallback.
+
+### Site-level Google Tag Manager
+
+Settings → general information exposes the optional `googleTagManagerId` field. A blank value
+disables tracking. `website.saveSite` validates container identifiers; omitted values preserve the
+existing configuration and an empty value clears it. The Studio resource preserves its revision
+check and site administration permission. Save takes effect on published pages immediately.
+
+The same-origin `/_ket/asset/website_backend/gtm.mjs` loader keeps queued data-layer events, adds
+one asynchronous Google script and records readiness on the document root. It never loads in
+preview or a staff session. Its source lives in the public website-client package and is copied by
+the normal build, independently of company theme packages.
+
+An enabled visitor page adds Google script/connect/frame origins to its content security policy.
+Custom JavaScript variables in existing containers require `unsafe-eval`; inline scripts remain
+disallowed. Sites without a container and staff/preview pages keep their existing strict policy.
+See [Google's CSP guidance](https://developers.google.com/tag-platform/security/guides/csp).
+A loaded container does not prove that a conversion trigger matched or that Ads received an event.

@@ -71,7 +71,12 @@ export type CheckboxProps = ScalarFieldBase & {
 export type ChoiceGroupProps = ScalarFieldBase & Pick<CommonProps, 'options' | 'optionsOrientation' | 'value'>
 export type SelectProps = ScalarFieldBase &
   Pick<CommonProps, 'value' | 'options' | 'placeholder' | 'selectionHidden' | 'appearance'>
-export type SwitchProps = ScalarFieldBase & { checked?: boolean; value?: string }
+export type SwitchProps = ScalarFieldBase & {
+  checked?: boolean
+  value?: string
+  /** Keep the label and control together in compact toolbars, including on mobile. */
+  inline?: boolean
+}
 
 const normalize = (props: CommonProps): FieldProps => ({
   ...props,
@@ -137,6 +142,7 @@ export const Switch = (props: SwitchProps): TemplateResult => {
       span={props.span}
       size={props.size}
       kind="switch"
+      layout={props.inline ? 'inline' : undefined}
       control={
         <label data-ui="switch-control">
           <input

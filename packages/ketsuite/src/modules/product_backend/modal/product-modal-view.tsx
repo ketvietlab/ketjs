@@ -37,6 +37,7 @@ import {
 } from '../../../ui/client/record-modal-form.tsx'
 
 export type TemplateRecord = {
+  revisionId?: string
   id: string
   name: string
   type: string
@@ -738,6 +739,7 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
       fn: 'product.saveTemplate',
       input: (form, c) => ({
         id: c.id,
+        expectedRevisionId: c.data.record.revisionId,
         name: text(form, 'name'),
         type: text(form, 'type') || 'goods',
         uomId: text(form, 'uomId') || null,
@@ -806,7 +808,12 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
     },
     archive: {
       fn: 'product.archiveTemplate',
-      input: (_form, c) => ({ id: c.id, active: !c.data.record.active }),
+      input: (_form, c) => ({
+        id: c.id,
+        active: !c.data.record.active,
+        expectedRevisionId: c.data.record.revisionId,
+        confirmed: true,
+      }),
       after: 'refresh',
     },
     delete: {
