@@ -10,14 +10,14 @@
     "publicExports": 314,
     "runtimeExports": 147,
     "registeredComponents": 138,
-    "compatibilityExports": 270,
+    "compatibilityExports": 272,
     "compatibilityModules": 43,
     "plannedComponents": 0,
     "publicGaps": 168,
     "runtimeGaps": 9,
     "typeGaps": 159,
     "cssFiles": 82,
-    "cssLines": 17282
+    "cssLines": 17417
   },
   "rows": [
     {
@@ -4224,7 +4224,9 @@
       "testFiles": [
         "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
-        "test/sale-order-detail-screen.test.tsx"
+        "test/product-stock-e2e.test.ts",
+        "test/sale-order-detail-screen.test.tsx",
+        "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-009"
     },
@@ -5249,6 +5251,7 @@
       "testFiles": [
         "test/design-system-control-size.test.tsx",
         "test/design-system-normalization.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-020"
@@ -5947,7 +5950,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-tree-grid.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-032"
     },
     {
@@ -6958,7 +6961,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7012,7 +7015,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7224,7 +7227,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -7247,7 +7250,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7526,7 +7529,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -7754,7 +7757,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8534,7 +8537,9 @@
       "testFiles": [
         "test/design-system-page-header.test.tsx",
         "test/design-system.test.tsx",
-        "test/sale-order-detail-screen.test.tsx"
+        "test/product-stock-e2e.test.ts",
+        "test/sale-order-detail-screen.test.tsx",
+        "test/ui-record-modal.test.tsx"
       ],
       "gapTask": "DS-007"
     },
@@ -8550,6 +8555,24 @@
       "target": "Public core",
       "wave": 2,
       "consumers": 7,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-015"
+    },
+    {
+      "scope": "compatibility",
+      "name": "RecordPageOptions",
+      "imported": "RecordPageOptions",
+      "kind": "type",
+      "source": "./client/record-modal.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -8693,7 +8716,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9345,7 +9368,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9475,7 +9498,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -9623,6 +9646,7 @@
         "test/accounting.test.ts",
         "test/backend-ui.test.ts",
         "test/design-system-context-controls.test.tsx",
+        "test/design-system-control-size.test.tsx",
         "test/design-system-dates.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system-primitives.test.tsx",
@@ -10014,6 +10038,8 @@
         "test/user-set-workplaces.test.ts",
         "test/user-users-list-http.test.ts",
         "test/view.test.ts",
+        "test/website-catalog-http.test.ts",
+        "test/website-catalog.test.ts",
         "test/website-form-route.test.ts",
         "test/website-form-version.test.ts",
         "test/website-preview-renderer.test.ts",
@@ -10025,6 +10051,7 @@
         "test/website-studio-public-http.test.ts",
         "test/website-studio-publishing.test.ts",
         "test/website-studio-taxonomy-http.test.ts",
+        "test/website-theme.test.ts",
         "test/websocket.test.ts",
         "test/workspace.test.ts"
       ],
@@ -10176,6 +10203,8 @@
         "test/design-system-dates.test.tsx",
         "test/design-system-demo.test.ts",
         "test/design-system-normalization.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
+        "test/design-system-tree-grid.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-controls.test.tsx",
         "test/experience-collection-tables.test.tsx",
@@ -10292,8 +10321,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -10310,8 +10339,8 @@
       "consumers": 0,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
       "gapTask": "DS-015"
     },
     {
@@ -10425,7 +10454,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -10453,11 +10482,13 @@
         "test/backend-ui.test.ts",
         "test/flow-editor-view.test.ts",
         "test/flow-markdown.test.ts",
+        "test/website-catalog.test.ts",
         "test/website-search-index.test.ts",
         "test/website-studio-archive-http.test.ts",
         "test/website-studio-content-http.test.ts",
         "test/website-studio-images-http.test.ts",
         "test/website-studio-public-http.test.ts",
+        "test/website-studio-rich-document-http.test.ts",
         "test/website-studio-search-http.test.ts",
         "test/website-studio-taxonomy-http.test.ts"
       ],
@@ -10618,7 +10649,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -10780,6 +10811,7 @@
         "test/crm-e2e.test.ts",
         "test/design-system-layout-audit.test.ts",
         "test/design-system-primitives.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-tables.test.tsx",
         "test/list-bulk-selection.test.tsx",
@@ -10790,7 +10822,8 @@
         "test/stock-picking-types-screens.test.tsx",
         "test/ui-modal-large-dialog.test.tsx",
         "test/ui-record-modal.test.tsx",
-        "test/website-search-index.test.ts"
+        "test/website-search-index.test.ts",
+        "test/website-tracking.test.ts"
       ],
       "gapTask": "DS-010"
     },
@@ -10917,7 +10950,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -11743,6 +11776,24 @@
     },
     {
       "scope": "compatibility",
+      "name": "recordPageLoading",
+      "imported": "recordPageLoading",
+      "kind": "runtime",
+      "source": "./record-modal.tsx",
+      "owner": "Overlays",
+      "maturity": "compatibility",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "consumers": 7,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "present",
+      "testFiles": ["test/ui-record-modal.test.tsx"],
+      "gapTask": "DS-015"
+    },
+    {
+      "scope": "compatibility",
       "name": "recordPageShell",
       "imported": "recordPageShell",
       "kind": "runtime",
@@ -11788,7 +11839,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -11936,7 +11987,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "present",
@@ -12143,6 +12194,7 @@
         "test/identity-engine.test.ts",
         "test/menu.test.ts",
         "test/partner-e2e.test.ts",
+        "test/product-modal-view.test.tsx",
         "test/roles.test.ts",
         "test/serve.test.ts",
         "test/staff-hospitality-channel.test.ts",
@@ -12278,7 +12330,8 @@
         "test/backend-ui.test.ts",
         "test/hospitality-e2e.test.ts",
         "test/partner-e2e.test.ts",
-        "test/partner-form-screen.test.tsx"
+        "test/partner-form-screen.test.tsx",
+        "test/website-catalog.test.ts"
       ],
       "gapTask": "DS-010"
     },
@@ -12347,7 +12400,7 @@
       "decision": "refactor",
       "target": "Public core",
       "wave": 1,
-      "consumers": 146,
+      "consumers": 147,
       "specimen": "not-applicable",
       "specimenFiles": [],
       "tests": "gap",
@@ -12502,8 +12555,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/data-display/tree/styles.css",
-      "lines": 46,
-      "hooks": ["tree", "tree-grid", "tree-grid-row", "tree-item", "tree-link"]
+      "lines": 119,
+      "hooks": ["tree", "tree-grid", "tree-grid-link", "tree-grid-row", "tree-item", "tree-link"]
     },
     {
       "layer": "public",
@@ -12604,8 +12657,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/scalar-fields/styles.css",
-      "lines": 71,
-      "hooks": ["field", "switch-control", "switch-track"]
+      "lines": 87,
+      "hooks": ["field", "field-label", "switch-control", "switch-track"]
     },
     {
       "layer": "public",
@@ -12652,8 +12705,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/dialog/styles.css",
-      "lines": 11,
-      "hooks": ["confirm-dialog-message", "dialog"]
+      "lines": 40,
+      "hooks": ["confirm-dialog-message", "dialog", "modal-layer", "modal-sheet"]
     },
     {
       "layer": "public",
@@ -12960,7 +13013,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 761,
+      "lines": 763,
       "hooks": [
         "card-actions",
         "card-body",
@@ -13252,7 +13305,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/modal-sheet/styles.css",
-      "lines": 262,
+      "lines": 271,
       "hooks": [
         "action",
         "modal-actions",
@@ -13369,7 +13422,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/field/styles.css",
-      "lines": 412,
+      "lines": 418,
       "hooks": [
         "date-inputs",
         "date-range",

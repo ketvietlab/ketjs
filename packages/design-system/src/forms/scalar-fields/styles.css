@@ -68,4 +68,20 @@
     grid-column: 1;
     grid-row: 1;
   }
+  :where([data-kv-design-system]) [data-ui="field"][data-kind="switch"][data-layout="inline"] {
+    grid-template-columns: max-content auto;
+    column-gap: var(--kv-space-2);
+  }
+  :where([data-kv-design-system])
+    [data-ui="field"][data-kind="switch"][data-layout="inline"]
+    > [data-ui="field-label"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  :where([data-kv-design-system])
+    [data-ui="field"][data-kind="switch"][data-layout="inline"]
+    > [data-ui="switch-control"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }

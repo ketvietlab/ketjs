@@ -50,8 +50,8 @@ test('Studio cancels only the expected entry schedule, preserves live content an
     })
     assert.equal(
       ((await publicPage()).appearance as Row).footer,
-      'Published footer',
-      'draft style stays private',
+      'Scheduled footer',
+      'saved site style applies without publishing page content',
     )
     const second = await call('website.saveEntry', {
       ...entry,
@@ -66,7 +66,7 @@ test('Studio cancels only the expected entry schedule, preserves live content an
     await call('website.saveStudioStyle', {
       siteId: 'site',
       expectedRevisionId: nextStyle.revisionId,
-      values: { footer: 'Later draft' },
+      values: { footer: 'Latest site footer' },
     })
     const scheduledRow = (await db.all('SELECT * FROM website_entry WHERE id = ?', [entry.id]))[0]!
     const scheduledAppearance =
@@ -74,7 +74,7 @@ test('Studio cancels only the expected entry schedule, preserves live content an
         ? JSON.parse(scheduledRow.scheduledAppearance)
         : scheduledRow.scheduledAppearance
     assert.equal(scheduledAppearance.footer, 'Scheduled footer')
-    assert.equal(((await publicPage()).appearance as Row).footer, 'Published footer')
+    assert.equal(((await publicPage()).appearance as Row).footer, 'Latest site footer')
     const input = {
       id: entry.id,
       expectedRevisionId: second.revisionId,
@@ -113,9 +113,9 @@ test('Studio cancels only the expected entry schedule, preserves live content an
     assert.equal(row.scheduledRevisionId, null)
     assert.equal(row.status, 'published')
     assert.equal(row.scheduledAppearance, null)
-    assert.equal(((await publicPage()).appearance as Row).footer, 'Published footer')
+    assert.equal(((await publicPage()).appearance as Row).footer, 'Latest site footer')
     await call('website.publishEntry', { id: entry.id, expectedRevisionId: second.revisionId })
-    assert.equal(((await publicPage()).appearance as Row).footer, 'Later draft')
+    assert.equal(((await publicPage()).appearance as Row).footer, 'Latest site footer')
     await call('website.unpublishEntry', { id: entry.id })
     assert.equal(await publicPage(), null)
     const unpublished = (await db.all('SELECT * FROM website_entry WHERE id = ?', [entry.id]))[0]!

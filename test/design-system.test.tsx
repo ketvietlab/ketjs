@@ -20,6 +20,7 @@ import {
   Button,
   CardGrid,
   ConfirmDialog,
+  Dialog,
   Combobox,
   ContentCard,
   DatePicker,
@@ -1518,6 +1519,14 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     /@media \(max-width: 47\.9375rem\)[\s\S]*?\[data-ui="modal-sheet"\]\[data-size\][\s\S]*?border-radius: 0/,
   )
 
+  const phoneConfirm =
+    css.match(
+      /@media \(max-width: 47\.9375rem\)[\s\S]*?\[data-kind="confirm"\][\s\S]*?\[data-ui="modal-sheet"\]\[data-size\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(phoneConfirm, /height: auto/, 'a confirmation stays a card on a phone, not a full-screen page')
+  assert.match(phoneConfirm, /border-radius: var\(--kv-radius-lg\)/)
+  assert.match(css, /\[data-ui="confirm-dialog-message"\] \+ \* \{\s*margin-top: var\(--kv-space-4\)/)
+
   const largeDialog =
     css.match(
       /\[data-ui="modal-layer"\]\[data-presentation="dialog"\]\s+\[data-ui="modal-sheet"\]\[data-size="large"\]\s*\{(?<body>[^}]+)\}/,
@@ -2103,9 +2112,31 @@ test('design system: interaction essentials preserve native and accessible fallb
       closeLabel="Cancel"
       confirmLabel="Archive"
       confirmForm="archive-form"
+      confirmDisabled
+      details={<span>I understand</span>}
     />,
   )
   assert.match(confirm, /role="dialog"[^>]*aria-modal="true"/)
+  assert.match(confirm, /^<div data-ui="dialog" data-kind="confirm">/)
+  assert.match(confirm, /data-presentation="dialog"/)
+  assert.match(confirm, /data-ui="modal-sheet"[^>]*data-size="small"/, 'a confirmation is small by default')
+  assert.match(
+    confirm,
+    /data-ui="confirm-dialog-message"[^>]*>(?:<!--[^>]*-->)*This remains[\s\S]*I understand/,
+  )
+  assert.match(confirm, /<button[^>]*value="confirm"[^>]*disabled/)
+  const plain = renderToString(
+    <Dialog
+      id="assign"
+      title="Assign"
+      body={<p>Queue</p>}
+      closeHref="/record"
+      closeLabel="Close"
+      size="small"
+    />,
+  )
+  assert.match(plain, /^<div data-ui="dialog">/)
+  assert.match(plain, /data-ui="modal-sheet"[^>]*data-size="small"/)
   assert.match(confirm, /type="submit"[^>]*value="confirm"[^>]*form="archive-form"/)
 
   const feedback = renderToString(
@@ -2865,4 +2896,45 @@ test('design system: navigation groups can expand all branches independently', (
     <AppNavigation id="single" label="Menu" groups={[{ id: 'work', items }]} />,
   )
   assert.match(defaultNavigation, /name="single-drawer-branches"/)
+})
+
+test('design system: modal bands stay toolbar-dense and a checkbox hangs from its first label line', () => {
+  const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  const rule = (source: string, selector: string) => {
+    const start = source.indexOf(`${selector} {`)
+    assert.notEqual(start, -1, selector)
+    return source.slice(start, source.indexOf('}', start))
+  }
+  const head = rule(modal, ':where([data-kv-design-system]) [data-ui="modal-head"]')
+  assert.match(
+    head,
+    /padding: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-surface-inset\)/,
+  )
+  assert.match(
+    rule(modal, ':where([data-kv-design-system]) [data-ui="modal-actions"]'),
+    /padding: var\(--kv-space-3\) var\(--kv-surface-inset\)/,
+  )
+  const close = rule(modal, ':where([data-kv-design-system]) [data-ui="modal-close"]')
+  assert.match(close, /height: var\(--kv-control-height-sm\)/)
+  assert.match(
+    close,
+    /margin-block: calc\(\(var\(--kv-line-xl\) - var\(--kv-control-height-sm\)\) \/ 2\)/,
+    'the close target must not grow the head',
+  )
+
+  const field = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  const checkbox = rule(field, ':where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"]')
+  assert.match(checkbox, /align-items: start/)
+  assert.match(checkbox, /align-content: center/, 'a one-line checkbox stays level with the inputs beside it')
+  const box = 'margin: calc((var(--kv-line-sm) - 1rem) / 2) 0 0'
+  assert.ok(
+    rule(field, ':where([data-kv-design-system]) input[type="checkbox"][data-ui="field-control"]').includes(
+      box,
+    ),
+  )
+  assert.match(
+    rule(field, ':where([data-kv-design-system]) [data-ui="field-option"]'),
+    /align-items: flex-start/,
+  )
+  assert.ok(rule(field, ':where([data-kv-design-system]) [data-ui="field-option-input"]').includes(box))
 })

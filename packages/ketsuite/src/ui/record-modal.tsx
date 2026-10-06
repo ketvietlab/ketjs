@@ -10,6 +10,13 @@
 // own query state working the same way everywhere:
 //
 //   /admin/<collection>?<list state>&record=<kind>:<id>&tab=<tab>
+//
+// A record kind may instead own a full page (`defineRecordPageIsland`): the same
+// definition renders client-side inside a RecordPage at its own path,
+//
+//   /admin/<collection>/<id>?tab=<tab>      (and /admin/<collection>/new)
+//
+// and the server renders only the page's loading state.
 
 import type { IslandDefinition, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { Breadcrumbs, LoadingState, RecordPage } from '@ketvietlab/design-system'
@@ -141,7 +148,12 @@ export type RecordPageIslandProps = {
   /** The record's name, shown while the browser takes over. */
   title: string
   /** Translated text of the loading state. */
-  loadingLabel: string
+  loadingLabel?: string
+  /** Client-read page loading label and navigation context. */
+  loading?: string
+  back?: string
+  tab?: string
+  width?: string
   /** From the collection to the record itself. */
   trail?: readonly RecordPageTrailItem[] | null
   /** Accessible name of the trail. */
@@ -207,7 +219,16 @@ export const recordPageShell = (props: RecordPageIslandProps): TemplateResult =>
     title: props.title,
     trail: props.trail,
     trailLabel: props.trailLabel,
-    body: LoadingState({ label: props.loadingLabel }),
+    body: LoadingState({ label: props.loadingLabel ?? props.loading ?? props.title }),
+  })
+
+/** Loading frame for a page whose context is read entirely in the client. */
+export const recordPageLoading = (props: RecordPageIslandProps): TemplateResult =>
+  RecordPage({
+    variant: 'operational',
+    width: props.width === 'wide' ? 'wide' : 'default',
+    title: props.title,
+    body: LoadingState({ label: props.loading ?? props.loadingLabel ?? props.title }),
   })
 
 /**
@@ -226,7 +247,11 @@ export const defineRecordPageIsland = (options: {
     props: {
       id: 'id',
       title: 'text',
-      loadingLabel: 'text',
+      loadingLabel: 'text?',
+      loading: 'text?',
+      back: 'text?',
+      tab: 'text?',
+      width: 'text?',
       trail: 'json?',
       trailLabel: 'text?',
       envelope: 'json?',
@@ -234,6 +259,6 @@ export const defineRecordPageIsland = (options: {
     key: ['id'],
     client: options.client,
     export: options.export,
-    view: (props) => ({ view: () => recordPageShell(props) }),
+    view: (props) => ({ view: () => (props.back ? recordPageLoading(props) : recordPageShell(props)) }),
   }
 }

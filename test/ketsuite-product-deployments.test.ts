@@ -17,6 +17,7 @@ import { ketsuiteRoleTemplates } from '../packages/ketsuite/src/role-templates.t
 import {
   websiteCustomerMailRoleTemplates,
   websiteRoleTemplates,
+  websiteThemeRoleTemplates,
 } from '../packages/ketsuite/src/website-role-templates.ts'
 
 const moduleNames = (deployment: DeploymentDeclaration): string[] =>
@@ -65,11 +66,12 @@ for (const [name, deployment, templates] of products)
 
     // Only this product's roles are declared: another product's jobs are not offered here.
     // Every product runs a website, so the Website jobs come with each of them; the customer
-    // mail's only where its bridge is composed.
+    // mail's and the theme registry's only where they are composed.
     const roleKeys = Object.keys({
       ...templates,
       ...websiteRoleTemplates,
       ...(booted.manifest.modules.website_customer_mail ? websiteCustomerMailRoleTemplates : {}),
+      ...(booted.manifest.modules.website_theme ? websiteThemeRoleTemplates : {}),
     }).sort()
     assert.deepEqual(Object.keys(booted.manifest.permissions.roleTemplates).sort(), roleKeys)
 

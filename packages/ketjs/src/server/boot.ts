@@ -75,6 +75,13 @@ export type Route = (
  * deployment screens can read live state without reaching for module-level globals.
  */
 export type ServeContext = {
+  /** Resolve placement data for a custom public route using the deployment's native section contracts. */
+  resolveSectionData: (
+    layout: unknown,
+    siteId: string | null,
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<Record<string, unknown>>
   /** The immutable manifest selected by this deployment. */
   manifest: Manifest
   /** The authored deployment and its external-client compatibility policy. */
@@ -811,6 +818,7 @@ export async function bootDeployment(
     })
 
   const ctx: ServeContext = {
+    resolveSectionData: (layout, siteId, url, req) => resolveSectionData(layout, siteId, url, req),
     manifest,
     deploymentName: spec.name,
     clientCompatibility: serve.clientCompatibility ?? null,
@@ -1137,7 +1145,14 @@ export async function bootDeployment(
     return data
   }
 
-  type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
+  type ResolvedSite = {
+    id?: string
+    title?: string
+    locale?: string
+    theme?: string
+    tokens?: unknown
+    googleTagManagerId?: string | null
+  }
   const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
   const requestHost = (url: URL, req: IncomingMessage): string => {
     const raw = String(req.headers.host ?? url.host).trim()
@@ -1378,11 +1393,20 @@ export async function bootDeployment(
               id: resolvedSite?.id,
               title: resolvedSite?.title ?? pages.siteTitle ?? spec.name,
               theme: resolvedSite?.theme ?? fallbackTheme?.name,
+              googleTagManagerId: resolvedSite?.googleTagManagerId ?? null,
             }
             // The theme's layout writes <html lang>, so the locale has to reach it.
             // It was hardcoded there, which made i18n untrue on the first tag of every
             // storefront page.
             const locale = resolvedSite?.locale ?? localeOf(url, req)
+            // What a renderer needs to know about the request itself, not the page: whether it is a
+            // preview, and whether a staff session came with it. Code a site runs in the browser must
+            // never share a page with either.
+            const request = {
+              preview: isPreviewRequest(url),
+              themeInteractive: isPreviewRequest(url) && url.searchParams.get('themeInteractive') === '1',
+              staff: (await requestIdentityOf(url, req)) !== null,
+            }
             // A preview reads by token, not by path: the draft has no address
             // on the site yet, which is the whole reason a link is needed.
             const row = (
@@ -1414,6 +1438,7 @@ export async function bootDeployment(
               return {
                 site,
                 locale,
+                request,
                 page: { path: url.pathname, title: pages.notFound ? _(pages.notFound) : 'Not found' },
                 sections: [],
                 // Answered as a page, but a crawler must not index it as one.
@@ -1438,6 +1463,7 @@ export async function bootDeployment(
             return {
               site,
               locale,
+              request,
               menu,
               page: { id: row.id, path: row.path ?? url.pathname, title: row.title, type: row.type },
               fields: row.fields ?? {},

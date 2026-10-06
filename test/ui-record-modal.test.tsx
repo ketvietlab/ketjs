@@ -14,6 +14,7 @@ import {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageLoading,
   recordPageShell,
 } from '@ketvietlab/ketsuite/ui'
 
@@ -21,6 +22,8 @@ import {
   RECORD_MODAL_LABELS,
   callRecordFunction,
   callRecordRoute,
+  createRecordModal,
+  createRecordPage,
   delayedFlag,
   openerHref,
   resolveRecordModalIssue,
@@ -174,6 +177,7 @@ test('record modal: cross-collection navigation opens its target without resetti
     'open',
     'show',
     'hide',
+    'page',
     listener[1]!,
   )
   const calls: unknown[][] = []
@@ -187,6 +191,7 @@ test('record modal: cross-collection navigation opens its target without resetti
       () => current,
       show,
       () => calls.push(['closed']),
+      null,
     )
   invoke('product.template', null)
   assert.deepEqual(calls, [['one', 'variants', 'none', undefined, undefined]])
@@ -710,6 +715,52 @@ test('record modal: child view state is isolated and cleared with its draft life
     assert.match(runtime.slice(reset.index, reset.index + 120), /dialogViewState\.set\(\{\}\)/u)
 })
 
+test('record page: the server renders the RecordPage loading state the client adopts', () => {
+  const props = {
+    id: 'tpl',
+    title: 'Áo thun',
+    loading: 'Đang tải…',
+    back: '/admin/product/templates?lang=vi',
+    width: 'wide',
+  }
+  const island = defineRecordPageIsland({ kind: 'product.template', client: 'p.mjs', export: 'templatePage' })
+  assert.deepEqual(island.key, ['id'])
+  const controller = island.view(props) as { view: () => ReturnType<typeof recordPageLoading> }
+  const html = renderToString(controller.view())
+  assert.equal(
+    html,
+    renderToString(recordPageLoading(props)),
+    'server and first client render are the same markup',
+  )
+  assert.match(html, /data-ui="record-page"/u)
+  assert.match(html, /Áo thun/u)
+  assert.match(html, /Đang tải…/u)
+  assert.throws(
+    () => defineRecordPageIsland({ kind: 'Product', client: 'p.mjs', export: 'x' }),
+    /invalid record kind/u,
+  )
+})
+
+test('record page: the record runtime renders a page that leaves for its collection and owns no history', () => {
+  // One controller serves both presentations; a page is not a layer.
+  assert.match(runtime, /export const createRecordPage =/u)
+  assert.match(runtime, /: page\s*\? `\[data-ui="record-page"\], \$\{MODAL_LAYER\}`\s*: MODAL_LAYER/u)
+  assert.match(runtime, /if \(page\) return pageView\(page\)/u)
+  // Closing a page (Close, a delete that closes) leaves through the shell's link handling.
+  const hide = runtime.slice(runtime.indexOf('const hide = ('), runtime.indexOf('const close = ('))
+  assert.match(hide, /if \(page && how !== 'none'\) \{\s*leave\(\)\s*return/u)
+  // Nothing outside the page turns inert and focus is not forced into it.
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  assert.ok(show.indexOf('if (page) {') < show.indexOf('releaseInert = inertOutside(root)'))
+  // Back and forward are the shell's on a page.
+  assert.match(runtime, /'ket:popstate',\s*\(event\) => \{\s*\/\/[^\n]*\n\s*if \(page\) return/u)
+  assert.match(runtime, /'ket:navigation-complete',\s*\(\) => \{\s*if \(page\) return/u)
+  // A page re-reads its own context; the shell has no collection behind it to refresh.
+  assert.match(runtime, /\.\.\.\(page \? \{ page: true \} : \{\}\)/u)
+  const refresh = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(refresh, /detail\?\.page\) return/u)
+})
+
 // ── Record pages ──────────────────────────────────────────────────────────────
 
 test('record page: the server writes the frame the browser adopts, titled and on its trail', () => {
@@ -750,6 +801,10 @@ test('record page: the server writes the frame the browser adopts, titled and on
     'id',
     'title',
     'loadingLabel',
+    'loading',
+    'back',
+    'tab',
+    'width',
     'trail',
     'trailLabel',
     'envelope',
@@ -763,24 +818,84 @@ test('record page: the server writes the frame the browser adopts, titled and on
 test('record page: the runtime keeps a page a page — no history, no fence, no close', () => {
   // Hydration adopts exactly the server frame before the record is drawn.
   assert.match(runtime, /if \(!adopted\(\)\) return recordPageShell\(pageProps!\)/u)
-  assert.match(runtime, /if \(page\) \{\s*adopted\.set\(true\)/u)
+  assert.match(runtime, /if \(serverPage\) \{\s*adopted\.set\(true\)/u)
   // Links naming records, back/forward and the deep link stay with the modal hosts.
-  const click = runtime.slice(runtime.indexOf('const inModal = element?.closest(RECORD_LAYER)'))
-  assert.match(click.slice(0, click.indexOf('const href = openerHref(element)')), /if \(page\) return\s*$/u)
+  const click = runtime.slice(runtime.indexOf('const inModal = element?.closest(layerSelector)'))
+  assert.match(click.slice(0, click.indexOf('const href = openerHref(element)')), /if \(serverPage\) return/u)
   const mount = runtime.slice(runtime.indexOf('mount: ({ root: host, lifetime })'))
   assert.ok(
-    mount.indexOf('if (page) {') < mount.indexOf("'ket:popstate'"),
+    mount.indexOf('if (serverPage) {') < mount.indexOf("'ket:popstate'"),
     'a page returns before it listens to history',
   )
   // The rest of the document is fenced off only while a dialog is over the page.
-  assert.match(runtime, /if \(root && !releaseInert && !page\) releaseInert = inertOutside\(root\)/u)
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  assert.ok(show.indexOf('if (page) {') < show.indexOf('releaseInert = inertOutside(root)'))
   assert.match(
     runtime,
     /if \(currentLayers\.length > 1\) \{\s*if \(root && !releaseInert\) releaseInert = inertOutside\(root\)/u,
   )
   // Closing a dialog leaves the address alone; the page itself never closes.
-  assert.match(runtime, /if \(current && !page\)\s*history\.replaceState/u)
-  assert.match(runtime, /if \(page\) return\s*if \(!mayDiscard\(recordLayer\(\)\)\) return/u)
+  assert.match(runtime, /if \(current && !serverPage\)\s*history\.replaceState/u)
+  assert.match(runtime, /if \(serverPage\) return\s*if \(!mayDiscard\(recordLayer\(\)\)\) return/u)
   // What would close the modal closes the dialog and reads the record again in place.
-  assert.match(runtime, /page &&[\s\S]{0,200}declared === 'close'[\s\S]{0,200}\? \{ dialog: null \}/u)
+  assert.match(runtime, /serverPage &&[\s\S]{0,200}declared === 'close'[\s\S]{0,200}\? \{ dialog: null \}/u)
+})
+
+test('record page: both client-read and route-context factories adopt their server frame', () => {
+  const definition = {
+    kind: 'test.record',
+    title: () => 'Record',
+    context: { fn: 'test.context' },
+  }
+  const clientProps = {
+    id: 'new',
+    title: 'Create',
+    loading: 'Loading',
+    back: '/admin/records',
+    width: 'wide',
+  }
+  const client = createRecordPage(definition, { path: (id) => `/admin/records/${id}` })(clientProps)
+  assert.equal(renderToString(client.view()), renderToString(recordPageLoading(clientProps)))
+  const routeProps = {
+    id: 'r-1',
+    title: 'Record',
+    loadingLabel: 'Loading',
+    trail: [{ label: 'Records', href: '/admin/records' }],
+    envelope: { data: { name: 'Record' }, messages: {} },
+  }
+  for (const factory of [
+    createRecordPage(definition),
+    createRecordModal(definition, { presentation: 'page' }),
+  ]) {
+    const page = factory(routeProps)
+    assert.equal(renderToString(page.view()), renderToString(recordPageShell(routeProps)))
+  }
+})
+
+test('record page: Back guards client-read drafts and returns; route-context profiles stay open', () => {
+  const close = runtime.slice(runtime.indexOf('const close = ('), runtime.indexOf('const run = async'))
+  const tail = close.slice(close.indexOf('// Route-context pages'), close.lastIndexOf('}'))
+  const run = new Function('serverPage', 'mayDiscard', 'recordLayer', 'hide', tail)
+  const calls: string[] = []
+  const layer = {}
+  const invoke = (serverPage: boolean, discard: boolean) =>
+    run(
+      serverPage,
+      (current: unknown) => {
+        assert.equal(current, layer)
+        calls.push('guard')
+        return discard
+      },
+      () => layer,
+      (how: string) => calls.push(how),
+    )
+  invoke(false, true)
+  assert.deepEqual(calls, ['guard', 'history'])
+  calls.length = 0
+  invoke(false, false)
+  assert.deepEqual(calls, ['guard'], 'canceling discard keeps the client-read page')
+  calls.length = 0
+  invoke(true, true)
+  assert.deepEqual(calls, [], 'a route-context profile has no close action')
+  assert.match(runtime, /\(!serverPage \|\| inModal\.matches\('\[data-ui="modal-layer"\]'\)\)/u)
 })

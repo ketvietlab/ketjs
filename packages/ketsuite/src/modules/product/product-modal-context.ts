@@ -10,6 +10,7 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { recordTabsFor } from './product-record-tabs.ts'
+import { TEMPLATE_RECORD_LABELS } from './template-record-labels.ts'
 import { AUTHORIZATION_EFFECTS, effectiveFunctionKeys } from '../user/authorization.ts'
 import { PRODUCT_TYPES } from './types.ts'
 import { variantSetupOf } from './variant-setup.ts'
@@ -139,6 +140,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
         data: {
           record: {
             id: String(record.id ?? ''),
+            revisionId: String(record.revisionId ?? 'initial'),
             name: String(record.name ?? ''),
             type: String(record.type ?? 'goods'),
             categoryId: record.categoryId == null ? null : String(record.categoryId),
@@ -170,7 +172,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
           lang,
           extensionTabs: creating ? [] : recordTabsFor(ctx, lang),
         },
-        messages: messagesFor(ctx, lang),
+        messages: { ...messagesFor(ctx, lang), ...TEMPLATE_RECORD_LABELS[lang] },
       }
     },
   }),

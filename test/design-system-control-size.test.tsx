@@ -4,6 +4,22 @@ import { readFileSync } from 'node:fs'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import { Button, IconButton, LinkButton } from '../packages/design-system/src/primitives/actions/index.tsx'
 import { TextField, Switch } from '../packages/design-system/src/forms/scalar-fields/index.tsx'
+test('icon-only links keep native navigation, accessible names and square action geometry', () => {
+  for (const state of [{}, { disabled: true }, { loading: true }]) {
+    const html = renderToString(
+      <LinkButton label="Open record" href="/record" icon="package" iconOnly {...state} />,
+    )
+    assert.match(html, /data-icon-only="true"/)
+    assert.match(html, /aria-label="Open record"/)
+    assert.match(html, /title="Open record"/)
+    assert.doesNotMatch(html, /data-ui="action-label"/)
+    if (!state.disabled && !state.loading) assert.match(html, /<a[^>]+href="\/record"/)
+    else assert.match(html, /<button[^>]+disabled/)
+  }
+  assert.doesNotMatch(renderToString(<LinkButton label="Back" href="/record" />), /data-icon-only="true"/)
+  const css = readFileSync('packages/design-system/src/primitives/actions/styles.css', 'utf8')
+  assert.match(css, /\[data-ui="action"\]\[data-icon-only="true"\]/)
+})
 test('large actions preserve native semantics and size hook', () => {
   for (const view of [
     <Button label="Continue" type="submit" size="large" />,

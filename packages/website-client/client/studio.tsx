@@ -9,7 +9,7 @@ import { routes, websiteExtensions, ownerOf, INSTANCE_HOOKS } from './extensions
 import { matchRoute, buildHref } from './routes.ts'
 import { tr } from './i18n.ts'
 import { createCoreScreens } from './screens/index.ts'
-import { studioFrame, loadingView, failureView } from './shell.tsx'
+import { studioFrame, loadingView, failureView, activeEntry } from './shell.tsx'
 import { handleArchiveClick } from './archive-actions.tsx'
 import { parseCommand } from './ui.tsx'
 import type { WebsiteExtensionInstance } from './extensions.ts'
@@ -311,6 +311,13 @@ export function createWebsiteStudio(props: StudioProps = {}, dependencies: Studi
     go(url.href)
   }
 
+  /** The list a record route belongs to, for leaving a missing record. */
+  const listOf = (key: string) => {
+    const owner = activeEntry(key)
+    return owner && owner !== key && routes[owner]
+      ? { label: tr('website.error.backTo', { title: tr(routes[owner].title) }), href: ctx.href(owner) }
+      : undefined
+  }
   const content = () => {
     const current = route()
     const loaded = data()
@@ -322,7 +329,7 @@ export function createWebsiteStudio(props: StudioProps = {}, dependencies: Studi
       body: !ready
         ? null
         : failure()
-          ? failureView(failure())
+          ? failureView(failure(), listOf(current.key))
           : screenOf(current.key)?.view(loaded!.value, current),
       background: back && ready && !failure() ? screenOf(back)?.view(loaded!.back, current) : null,
     }
