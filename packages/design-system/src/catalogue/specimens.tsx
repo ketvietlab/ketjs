@@ -355,6 +355,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Unavailable" disabled />,
               <LinkButton label="Opening record" href="#record-page" loading />,
               <IconButton label="Toggle theme" icon="☾" />,
+              <LinkButton label="Open record" href="#record-page" icon="package" iconOnly />,
               <Button label="Collapse details" variant="tertiary" expanded controls="button-details" />,
             ]}
           />
