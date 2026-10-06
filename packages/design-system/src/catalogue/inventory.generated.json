@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 157,
     "cssFiles": 82,
-    "cssLines": 17082
+    "cssLines": 17098
   },
   "rows": [
     {
@@ -5209,6 +5209,7 @@
       "testFiles": [
         "test/design-system-control-size.test.tsx",
         "test/design-system-normalization.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
         "test/design-system.test.tsx"
       ],
       "gapTask": "DS-020"
@@ -10058,6 +10059,7 @@
         "test/design-system-dates.test.tsx",
         "test/design-system-demo.test.ts",
         "test/design-system-normalization.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
         "test/design-system-tree-grid.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-controls.test.tsx",
@@ -10628,6 +10630,7 @@
         "test/crm-e2e.test.ts",
         "test/design-system-layout-audit.test.ts",
         "test/design-system-primitives.test.tsx",
+        "test/design-system-switch-inline.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-tables.test.tsx",
         "test/list-bulk-selection.test.tsx",
@@ -12410,8 +12413,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/forms/scalar-fields/styles.css",
-      "lines": 71,
-      "hooks": ["field", "switch-control", "switch-track"]
+      "lines": 87,
+      "hooks": ["field", "field-label", "switch-control", "switch-track"]
     },
     {
       "layer": "public",

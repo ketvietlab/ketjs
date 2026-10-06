@@ -1988,6 +1988,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
               />,
               <Switch id="notify" name="notify" label="Notify owner" checked />,
+              <Switch id="selected-only" name="selected-only" label="Selected" inline />,
               <Select
                 id="warehouse"
                 name="warehouse"
