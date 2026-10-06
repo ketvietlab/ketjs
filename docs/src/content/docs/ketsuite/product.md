@@ -149,7 +149,7 @@ Brand and origin are template fields. Brand is a managed relation, so another mo
 catalogue without copying brand names into free text; origin remains text because no country-of-origin
 catalogue is required by the product domain.
 
-The template modal loads its Attributes & variants editor as the nested `product.variant-editor`
+The template record page loads its Attributes & variants editor as the nested `product.variant-editor`
 island. `tools/build-backend-client.mjs` bundles `ui/client/variant-editor-view.tsx` into the product
 backend's `client/variant-editor.mjs` asset on every build. The product modal context tests verify that
 every declared product island client is served, including clients loaded only after switching tabs.
@@ -171,8 +171,8 @@ does not delete the variants that use it — their rows become incomplete until 
 picks another value, and ticking the value again restores its saved extra. Step 2 names the missing
 combinations in a notice with one Create action, then lists one compact row per variant: its
 combination as text, SKU, status, and computed price. Edit opens the row in place, with `aria-expanded`
-on the toggle, to change its combination, codes, measures, and image. Saving is still the modal
-footer's Save; Reset in the tab footer restores the last saved setup.
+on the toggle, to change its combination, codes, measures, and image. Saving is still the record
+header's Save; Reset in the tab footer restores the last saved setup.
 
 ## Units of measure
 
@@ -203,10 +203,16 @@ only a button would ship a link to a 404.
 | Route | Screen |
 |---|---|
 | `/admin/product/templates` | Catalogue, list and kanban, with search, filters, grouping and saved searches |
-| `/admin/product/templates/new` | Create |
-| `/admin/product/templates/{id}` | Template detail: general, attributes and variants, images |
+| `/admin/product/templates/new` | Create, on the template record page |
+| `/admin/product/templates/{id}` | Template record page: general, attributes and variants; `?tab=media` is the server-rendered images page |
 | `/admin/product/templates/{id}/variants/{variantId}` | Variant detail |
 | `/admin/product/attributes` | Attributes and their values |
+
+Catalogue rows, kanban cards, global search results and the create action open a template on its
+record page (`product.template-page`), a client-rendered `RecordPage` (see
+[Record pages](/ketsuite/record-modal/#record-pages)). The page's header carries Save, More and
+**Back to list**; there is no breadcrumb. `?record=product.template:<id>` links from the earlier modal
+redirect to the page.
 
 Reference fields are relation pickers — a select with a search dialog that can also create the record
 it is missing — rather than bare selects. The list functions behind them accept `search` and `limit`,
