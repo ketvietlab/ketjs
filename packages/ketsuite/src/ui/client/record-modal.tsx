@@ -12,7 +12,7 @@
 
 import { signal } from '@ketvietlab/ketjs-view'
 import type { IslandController, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { Button, LoadingState, ModalSheet, Notice, TabbedView } from '@ketvietlab/design-system'
+import { Button, LoadingState, ModalSheet, Notice, RecordPage, TabbedView } from '@ketvietlab/design-system'
 import {
   RECORD_NEW_ID,
   RECORD_PARAM,
@@ -22,7 +22,9 @@ import {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageLoading,
 } from '../record-modal.tsx'
+import type { RecordModalTarget, RecordPageIslandProps } from '../record-modal.tsx'
 
 // ── Function calls ────────────────────────────────────────────────────────────
 
@@ -149,6 +151,13 @@ export type RecordModalContext<Data> = {
   busy: boolean
   dialog: { name: string; params: Record<string, string> } | null
   href: (tab: string) => string
+  /**
+   * Whether the record is shown in a modal over its collection or on its own page.
+   * Views place controls by it: a page's actions sit in its header, a modal's in
+   * its footer, so a menu opens downward on a page and upward in a modal.
+   * The runtime always sets it; absent (a hand-built context) reads as a modal.
+   */
+  presentation?: 'modal' | 'page'
   /** View-local state, set by `data-record-state` controls (click, or change for inputs). */
   state: (key: string, fallback?: string) => string
 }
@@ -537,9 +546,78 @@ export const openerHref = (element: Element | null): string | null => {
  * The returned factory is what a module exports as its island client:
  * `export const followupModal = createRecordModal(definition)`.
  */
-export const createRecordModal =
-  <Data,>(definition: RecordModalDefinition<Data>) =>
+export const createRecordModal = <Data,>(definition: RecordModalDefinition<Data>): (() => IslandController) =>
+  recordController(definition, null)
+
+/** Where a record kind's page lives, for `createRecordPage`. */
+export type RecordPageOptions = {
+  /** The path of one record's page, without query: `new` names the create form. */
+  path: (id: string) => string
+}
+
+/**
+ * The same record, on its own page instead of in a modal over its collection.
+ *
+ * The definition is unchanged — context read, tabs, dialogs, commands, drafts and
+ * refusals behave exactly as in the modal. What differs is presentation: the record
+ * renders client-side inside a RecordPage, tabs change `?tab=` on the page's own
+ * path, nothing outside it turns inert or traps focus, Close returns to the
+ * collection, and a created record replaces `new` in the address with its id.
+ * Nested dialogs stay modal layers over the page.
+ */
+export const createRecordPage =
+  <Data,>(definition: RecordModalDefinition<Data>, options: RecordPageOptions) =>
+  (props: RecordPageIslandProps): IslandController =>
+    recordController(definition, { ...options, props })()
+
+type PageMode = RecordPageOptions & { props: RecordPageIslandProps }
+
+const MODAL_LAYER = '[data-ui="modal-layer"][data-client-modal="true"]'
+
+const recordController =
+  <Data,>(definition: RecordModalDefinition<Data>, page: PageMode | null) =>
   (): IslandController => {
+    // A page's record layer is its RecordPage; nested dialogs are modal layers in either case.
+    const layerSelector = page ? `[data-ui="record-page"], ${MODAL_LAYER}` : MODAL_LAYER
+    const hrefFor = (id: string, tab: string | null, dialogName?: string | null): string => {
+      if (!page) return recordModalHref(location.href, { kind: definition.kind, id, tab, dialog: dialogName })
+      const url = new URL(page.path(id), location.href)
+      const lang = new URL(location.href).searchParams.get('lang')
+      if (lang) url.searchParams.set('lang', lang)
+      if (tab) url.searchParams.set(RECORD_TAB_PARAM, tab)
+      return `${url.pathname}${url.search}`
+    }
+    // A link this record answers: in a modal, one naming its kind on the same
+    // collection; on a page, one to the page's own path (a tab).
+    const targetOf = (url: URL): RecordModalTarget | null => {
+      if (!page) {
+        const target = readRecordModalTarget(url)
+        return target?.kind === definition.kind ? target : null
+      }
+      if (url.pathname !== location.pathname) return null
+      const tab = url.searchParams.get(RECORD_TAB_PARAM)
+      const current = open()
+      const data = envelope()?.data
+      // A tab another route serves (a server-rendered page on the same path) is a navigation.
+      if (
+        tab &&
+        current &&
+        data !== undefined &&
+        !visibleTabs(contextFor(current, data)).some((item) => item.id === tab)
+      )
+        return null
+      return { kind: definition.kind, id: current?.id ?? page.props.id, tab }
+    }
+    // Leave the page through the shell's own link handling, as a click on a link would.
+    const leave = (): void => {
+      if (!page) return
+      const link = document.createElement('a')
+      link.href = page.props.back
+      link.hidden = true
+      document.body.append(link)
+      link.click()
+      link.remove()
+    }
     const open = signal<{ id: string; tab: string } | null>(null)
     const status = signal<Status>('idle')
     const envelope = signal<RecordContextEnvelope<Data> | null>(null)
@@ -641,7 +719,8 @@ export const createRecordModal =
         },
         busy: busy(),
         dialog: dialog(),
-        href: (tab) => recordModalHref(location.href, { kind: definition.kind, id: current.id, tab }),
+        href: (tab) => hrefFor(current.id, tab),
+        presentation: page ? 'page' : 'modal',
         state: (key, fallback = '') =>
           (scope === 'dialog' ? dialogViewState()[key] : undefined) ?? viewState()[key] ?? fallback,
       }
@@ -701,8 +780,7 @@ export const createRecordModal =
       }
     }
 
-    const layers = (): HTMLElement[] =>
-      root ? [...root.querySelectorAll<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')] : []
+    const layers = (): HTMLElement[] => (root ? [...root.querySelectorAll<HTMLElement>(layerSelector)] : [])
     const recordLayer = (): HTMLElement | null => layers()[0] ?? null
     const topLayer = (): HTMLElement | null => layers().at(-1) ?? null
 
@@ -845,12 +923,7 @@ export const createRecordModal =
         dialog.set({ name: entryDialog, params: {} })
       }
       open.set({ id, tab: nextTab })
-      const href = recordModalHref(location.href, {
-        kind: definition.kind,
-        id,
-        tab: nextTab || null,
-        dialog: entryDialog,
-      })
+      const href = hrefFor(id, nextTab || null, entryDialog)
       if (how === 'push') {
         // The shell's own navigation snapshots scroll onto the entry it leaves
         // before pushing (`saveScroll` in packages/ketjs/src/server/http.ts) so
@@ -864,11 +937,21 @@ export const createRecordModal =
         history.pushState({ ...(history.state ?? {}), __ketRecordModal: definition.kind }, '', href)
         pushed = true
       } else if (how === 'replace') history.replaceState(history.state ?? {}, '', href)
+      if (page) {
+        // A page is not a layer: the reader keeps their place, nothing else turns inert.
+        if (preferredFocus) afterRender(preferredFocus)
+        return
+      }
       if (root && !releaseInert) releaseInert = inertOutside(root)
       afterRender(preferredFocus)
     }
 
     const hide = (how: 'history' | 'replace' | 'none'): void => {
+      // Closing a page is leaving it, for the collection it came from.
+      if (page && how !== 'none') {
+        leave()
+        return
+      }
       request?.abort()
       open.set(null)
       tallestRecordHeight = 0
@@ -904,12 +987,7 @@ export const createRecordModal =
         dialogReturnFocus = null
         dialog.set(null)
         const current = open()
-        if (current)
-          history.replaceState(
-            history.state ?? {},
-            '',
-            recordModalHref(location.href, { kind: definition.kind, id: current.id, tab: current.tab }),
-          )
+        if (current) history.replaceState(history.state ?? {}, '', hrefFor(current.id, current.tab || null))
         dialogDrafts.set(emptyDraftState())
         dialogViewState.set({})
         issues.set([])
@@ -927,7 +1005,7 @@ export const createRecordModal =
       const data = envelope()?.data
       if (!command || !current || data === undefined || running()) return
       const formData = new FormData(form, submitter instanceof HTMLButtonElement ? submitter : null)
-      const currentLayer = form.closest<HTMLElement>('[data-ui="modal-layer"][data-client-modal="true"]')
+      const currentLayer = form.closest<HTMLElement>(layerSelector)
       const scope: DraftScope = dialog() && currentLayer === topLayer() ? 'dialog' : 'record'
       keepDrafts(currentLayer, scope)
       const context = contextFor(current, data, scope)
@@ -1040,7 +1118,13 @@ export const createRecordModal =
         const announce = (): void => {
           document.dispatchEvent(
             new CustomEvent('ket:records-changed', {
-              detail: { kind: definition.kind, ids: [createdId ?? current.id] },
+              // `page`: no collection sits behind a record page, so the shell
+              // has nothing to refresh; the page re-reads its own context.
+              detail: {
+                kind: definition.kind,
+                ids: [createdId ?? current.id],
+                ...(page ? { page: true } : {}),
+              },
             }),
           )
         }
@@ -1074,11 +1158,7 @@ export const createRecordModal =
           dialog.set(null)
           dialogDrafts.set(emptyDraftState())
           dialogViewState.set({})
-          history.replaceState(
-            history.state ?? {},
-            '',
-            recordModalHref(location.href, { kind: definition.kind, id: current.id, tab: current.tab }),
-          )
+          history.replaceState(history.state ?? {}, '', hrefFor(current.id, current.tab || null))
           await load(current.id)
           afterRender(() => (target?.isConnected ? target : null))
         } else if (after === 'refresh') await load(current.id, true)
@@ -1203,9 +1283,41 @@ export const createRecordModal =
       })
     }
 
+    const pageView = (mode: PageMode): TemplateResult => {
+      const current = open()
+      const data = envelope()?.data
+      const context = current && data !== undefined ? contextFor(current, data) : null
+      // Until the record has loaded, the page is exactly what the server rendered.
+      if (!current || (status() !== 'error' && !context)) return recordPageLoading(mode.props)
+      const size =
+        typeof definition.size === 'function'
+          ? context
+            ? definition.size(context)
+            : 'default'
+          : (definition.size ?? 'default')
+      const title = context ? definition.title(context) : t('recordModal.loadFailed')
+      // The document title follows the record, as a server-rendered page's would:
+      // a created record replaces `new`, a rename shows after saving.
+      if (context && document.title !== title) queueMicrotask(() => (document.title = title))
+      return (
+        <>
+          {RecordPage({
+            variant: 'operational',
+            width: size === 'large' ? 'wide' : 'default',
+            title,
+            status: context ? definition.status?.(context) : undefined,
+            actions: context ? definition.actions?.(context) : undefined,
+            body: recordBody(),
+          })}
+          {dialogLayer()}
+        </>
+      )
+    }
+
     return {
       view: () => {
         version()
+        if (page) return pageView(page)
         const current = open()
         if (!current) return recordModalHost(definition.kind)
         const data = envelope()?.data
@@ -1259,11 +1371,12 @@ export const createRecordModal =
             )
               return
             const element = event.target instanceof Element ? event.target : null
-            const inModal = element?.closest('[data-ui="modal-layer"][data-client-modal="true"]')
+            const inModal = element?.closest(layerSelector)
             if (inModal && root?.contains(inModal)) {
               // A child control can open its own dialog inside this record.
               // Close/backdrop actions in that layer belong to the child.
-              if (element?.closest('[data-ui="modal-layer"]') !== inModal) return
+              const nearestModal = element?.closest('[data-ui="modal-layer"]')
+              if (nearestModal && nearestModal !== inModal) return
               // `data-ui="modal-close"` is the chrome's own × control; `data-record-close`
               // marks a module's own labeled close button placed elsewhere in the body
               // (the two can't share one attribute — a labeled button needs `data-ui="action"`
@@ -1327,12 +1440,14 @@ export const createRecordModal =
                 return
               }
             }
+            // A page answers only its own links; the shell's links on the same path stay navigations.
+            if (page && !(element && root?.contains(element))) return
             const href = openerHref(element)
             if (!href) return
             const url = new URL(href, location.href)
             if (url.origin !== location.origin || url.pathname !== location.pathname) return
-            const target = readRecordModalTarget(url)
-            if (!target || target.kind !== definition.kind) return
+            const target = targetOf(url)
+            if (!target) return
             event.preventDefault()
             const current = open()
             const contextQuery = 'route' in definition.context ? (definition.context.query ?? []) : []
@@ -1384,11 +1499,12 @@ export const createRecordModal =
             if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
             const element = event.target instanceof Element ? event.target : null
             if (!element?.matches('[data-row-href][tabindex="0"]')) return
+            if (page && !root?.contains(element)) return
             const href = element.getAttribute('data-row-href')
             const url = href ? new URL(href, location.href) : null
             if (!url || url.origin !== location.origin || url.pathname !== location.pathname) return
-            const target = readRecordModalTarget(url)
-            if (!target || target.kind !== definition.kind) return
+            const target = targetOf(url)
+            if (!target) return
             event.preventDefault()
             show(target.id, target.tab ?? null, 'push', undefined, target.dialog)
           },
@@ -1415,9 +1531,8 @@ export const createRecordModal =
           'keydown',
           (event) => {
             if (!open()) return
-            const layers = root?.querySelectorAll<HTMLElement>(
-              '[data-ui="modal-layer"][data-client-modal="true"]',
-            )
+            // Only modal layers trap keys: a page answers Escape and Tab only while a dialog is up.
+            const layers = root?.querySelectorAll<HTMLElement>(MODAL_LAYER)
             const top = layers?.[layers.length - 1]
             if (!top) return
             if (event.key === 'Escape') {
@@ -1598,6 +1713,8 @@ export const createRecordModal =
         document.addEventListener(
           'ket:popstate',
           (event) => {
+            // A page's entries are the shell's: back leaves it like any other page.
+            if (page) return
             const target = readRecordModalTarget(location.href)
             const mine = target?.kind === definition.kind
             if (!mine && !open()) return
@@ -1615,6 +1732,7 @@ export const createRecordModal =
         document.addEventListener(
           'ket:navigation-complete',
           () => {
+            if (page) return
             const target = readRecordModalTarget(location.href)
             if (target?.kind === definition.kind) {
               if (open()?.id !== target.id)
@@ -1624,9 +1742,14 @@ export const createRecordModal =
           { signal: lifetime },
         )
 
-        const initial = readRecordModalTarget(location.href)
-        if (initial?.kind === definition.kind)
-          show(initial.id, initial.tab ?? null, 'none', undefined, initial.dialog)
+        if (page) {
+          const tab = new URL(location.href).searchParams.get(RECORD_TAB_PARAM) ?? page.props.tab ?? null
+          show(page.props.id, tab, 'none')
+        } else {
+          const initial = readRecordModalTarget(location.href)
+          if (initial?.kind === definition.kind)
+            show(initial.id, initial.tab ?? null, 'none', undefined, initial.dialog)
+        }
 
         lifetime.addEventListener('abort', () => {
           request?.abort()

@@ -1,7 +1,9 @@
-// The product template record modal, client side (KetSuite record-modal contract).
+// The product template record, client side (KetSuite record runtime, page presentation).
 //
-// The catalogue collection opens a template here, and its create action opens the
-// same modal with an empty record. Only the General and Attributes & variants tabs are covered
+// A template opens on its own page, `/admin/product/templates/{id}`; the catalogue's
+// create action opens `/admin/product/templates/new`. The server renders the page in
+// its loading state and this definition renders the record. Only the General and
+// Attributes & variants tabs are covered
 // — Media and the description's rich-text controller stay on the server-rendered
 // detail page (`/admin/product/templates/{id}?tab=media`) until a nested-island
 // composition path (`recordIsland`) for them is proven elsewhere first.
@@ -15,6 +17,7 @@
 //
 // Bundled by tools/build-backend-client.mjs into product_backend/client/.
 
+import { TEMPLATE_RECORD_LABELS } from '../../product/template-record-labels.ts'
 import { ActionMenu, Badge, Button, Notice, RecordActions, Section, Stack } from '@ketvietlab/design-system'
 import type {
   FieldOption,
@@ -25,7 +28,7 @@ import type {
   RelationSelectLabels,
 } from '@ketvietlab/design-system'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import { createRecordModal, recordIsland } from '../../../ui/client/record-modal.tsx'
+import { createRecordPage, recordIsland } from '../../../ui/client/record-modal.tsx'
 import type { RecordModalContext, RecordModalDefinition } from '../../../ui/client/record-modal.tsx'
 import type { VariantEditorSetup } from '../../../ui/client/variant-editor-view.tsx'
 import {
@@ -255,10 +258,16 @@ const menuForm = (c: Context, id: string): JSXChild => RecordCommandForm({ kind:
 /**
  * A labeled Close button placed in the header, next to Save and More.
  * `data-record-close` (not `data-ui="modal-close"`, the icon-only corner
- * control's own attribute) is what the runtime's click handler recognizes.
+ * control's own attribute) is what the runtime's click handler recognizes;
+ * on a page, closing is going back to the catalogue.
  */
 const closeButton = (c: Context): JSXChild =>
-  RecordCloseTrigger({ children: Button({ label: t(c, 'action.close'), variant: 'secondary' }) })
+  RecordCloseTrigger({
+    children: Button({
+      label: t(c, c.presentation === 'page' ? 'action.back' : 'action.close'),
+      variant: 'secondary',
+    }),
+  })
 
 // ── General tab ─────────────────────────────────────────────────────────────
 
@@ -590,7 +599,12 @@ const statusBadge = (c: Context): JSXChild =>
  * second line saying the same thing.
  */
 const actions = (c: Context): JSXChild | undefined => {
-  if (c.creating) return undefined
+  // The create form submits from its body. A modal needs no footer for it; a page
+  // still offers the way back to the catalogue.
+  if (c.creating)
+    return c.presentation === 'page'
+      ? RecordActions({ label: t(c, 'action.more'), actions: [closeButton(c)] })
+      : undefined
   const editable = canSave(c)
   const menuItems = moreMenuItems(c)
   return Stack({
@@ -637,10 +651,10 @@ const actions = (c: Context): JSXChild | undefined => {
                 label: t(c, 'action.more'),
                 triggerLabel: t(c, 'action.moreShort'),
                 items: menuItems,
-                // The trigger sits in the footer, at the sheet's bottom edge — opening
-                // downward like the default would run past it and be clipped, since
-                // the sheet itself clips overflow.
-                placement: 'top',
+                // In a modal the trigger sits in the footer, at the sheet's bottom edge —
+                // opening downward would run past it and be clipped, since the sheet
+                // clips overflow. A page's actions sit in its header.
+                placement: c.presentation === 'page' ? 'bottom' : 'top',
               })
             : '',
         ],
@@ -689,6 +703,7 @@ const createView = (c: Context): JSXChild =>
 
 export const templateModalDefinition: RecordModalDefinition<TemplateModalData> = {
   kind: 'product.template',
+  labels: () => TEMPLATE_RECORD_LABELS[pageLang()],
   size: (c) => (c.creating ? 'default' : 'large'),
   context: {
     fn: 'product.templateModalContext',
@@ -818,4 +833,6 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
   },
 }
 
-export const templateModal = createRecordModal(templateModalDefinition)
+export const templatePage = createRecordPage(templateModalDefinition, {
+  path: (id) => `/admin/product/templates/${encodeURIComponent(id)}`,
+})

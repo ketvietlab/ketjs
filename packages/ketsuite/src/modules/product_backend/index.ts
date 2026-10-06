@@ -72,6 +72,9 @@ export default defineModule({
     'template.editor': { props: { identity: 'text', templateId: 'id', lang: 'text?' } },
     'variant.editor': { props: { identity: 'text', productId: 'id', lang: 'text?' } },
     'media.upload': { props: { identity: 'text', action: 'text', label: 'text' } },
+    'template.page': {
+      props: { id: 'text', tab: 'text?', title: 'text', loading: 'text', back: 'text', width: 'text?' },
+    },
   },
   messages: {
     vi: {
@@ -161,6 +164,7 @@ export default defineModule({
       'action.more': 'Thêm thao tác',
       'action.moreShort': 'Thêm',
       'action.close': 'Đóng',
+      'action.back': 'Về danh sách',
       'action.actions': 'Thao tác sản phẩm',
       'action.cancel': 'Hủy',
       'favorite.create': 'Lưu tìm kiếm hiện tại',
@@ -492,6 +496,7 @@ export default defineModule({
       'action.more': 'More actions',
       'action.moreShort': 'More',
       'action.close': 'Close',
+      'action.back': 'Back to list',
       'action.actions': 'Product actions',
       'action.cancel': 'Cancel',
       'favorite.create': 'Save current search',
@@ -741,10 +746,12 @@ export default defineModule({
     'product_backend:template.editor': `{% island "product.editor" %}`,
     'product_backend:variant.editor': `{% island "product.editor" %}`,
     'product_backend:media.upload': `{% island "product.media-upload" %}`,
-    // The catalogue's rows and its create action open a template in a client-side
-    // record modal (KetSuite record-modal contract): a closed host on every admin
-    // page, opened by a link naming `product.template`.
-    'backend:runtime': `{% island "product.template-modal" %}{% island "product.attribute-modal" %}`,
+    // A template opens on its own page (`/admin/product/templates/{id}`), rendered
+    // client side by the KetSuite record runtime in its page presentation.
+    'product_backend:template.page': `{% island "product.template-page" %}`,
+    // Attributes still open in a client-side record modal: a closed host on every
+    // admin page, opened by a link naming `product.attribute`.
+    'backend:runtime': `{% island "product.attribute-modal" %}`,
   },
 })
 

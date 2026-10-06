@@ -29,7 +29,7 @@ const providers = [
     label: 'products',
     fn: 'product.listTemplates',
     path: '/admin/product/templates',
-    href: (id: string) => `/admin/product/templates?record=${encodeURIComponent(`product.template:${id}`)}`,
+    href: (id: string) => `/admin/product/templates/${encodeURIComponent(id)}`,
   },
   {
     label: 'partners',
