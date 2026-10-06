@@ -1011,9 +1011,131 @@ test('design system: stacked table rules outrank the table rules they replace', 
 test('design system: a list toolbar wraps on a phone instead of pushing facets off screen', () => {
   const chrome = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
   const phone = chrome.slice(chrome.indexOf('@media (max-width: 47.9375rem)'))
-  assert.match(phone, /:is\(\[data-row="query"\], \[data-row="tail"\]\) \{\s*flex-wrap: wrap;/)
+  assert.match(chrome, /\[data-row="query"\] \{\s*flex-wrap: wrap;/)
   assert.match(phone, /\[data-ui="list-search"\] \{\s*flex-basis: 100%;/)
   assert.match(phone, /\[data-row="filters"\] \{\s*flex: 1 1 100%;/)
+  // The last line starts with the actions and ends with the pager, and wraps rather than overflowing.
+  assert.match(phone, /\[data-row="meta"\] \{\s*flex: 1 1 100%;\s*flex-wrap: wrap;/)
+  assert.match(phone, /\[data-row="meta"\]\s*> \[data-ui="pager-bar"\] \{\s*margin-left: auto;/)
+  // A pager button is as tall as the controls beside it, which grow on a phone.
+  assert.match(
+    chrome,
+    /\[data-ui="pager-link"\],[^{]*\[data-ui="pager-page"\] \{[^}]*height: var\(--kv-control-height\);/,
+  )
+  // No other stylesheet lays out the toolbar rows: a second phone layout once moved the pager above the facets.
+  for (const path of globSync('packages/design-system/src/**/*.css')) {
+    if (path.endsWith('list-chrome/styles.css')) continue
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /\[data-ui="list-chrome-row"\]/, path)
+  }
+})
+
+test('design system: a list toolbar folds its filters into one disclosure on a phone', () => {
+  const facets = [{ id: 'all', label: 'All', href: '/orders', active: true }]
+  // Hydration markers sit between every element; the order of the elements is what matters here.
+  const folded = renderToString(
+    <ListChrome
+      search={{ action: '/orders', name: 'q' }}
+      filterMenus={<span>menus</span>}
+      facets={facets}
+      filtersToggle={{ label: 'Filters', count: 2 }}
+      pager={{ summary: '1-25 of 148' }}
+    />,
+  ).replace(/<!--k\[?-->/g, '')
+  assert.match(folded, /data-ui="list-chrome"[^>]*data-filters="collapsible"/)
+  assert.match(
+    folded,
+    /<details data-ui="list-filters" data-active="true"><summary data-ui="list-filters-toggle" role="button">Filters<span data-ui="list-filters-count">2<\/span><\/summary><div data-ui="list-chrome-row" data-row="filters">[\s\S]*data-ui="list-facets"[\s\S]*<\/details>[\s\S]*data-ui="pager-bar"/,
+  )
+  const idle = renderToString(<ListChrome facets={facets} filtersToggle={{ label: 'Filters' }} />)
+  assert.doesNotMatch(idle, /"list-filters" data-active|list-filters-count/)
+  // Without filters there is nothing to fold, and without the option nothing changes.
+  assert.doesNotMatch(
+    renderToString(<ListChrome filtersToggle={{ label: 'Filters' }} />),
+    /list-filters|data-filters/,
+  )
+  assert.doesNotMatch(renderToString(<ListChrome facets={facets} />), /list-filters|data-filters/)
+
+  const chrome = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const wide = chrome.slice(
+    chrome.indexOf('@media (min-width: 48rem)'),
+    chrome.indexOf('@media (max-width: 47.9375rem)'),
+  )
+  // Wide screens keep the filters in the row; a browser without ::details-content keeps the toggle.
+  assert.match(
+    wide,
+    /@supports selector\(::details-content\) \{[\s\S]*\[data-ui="list-filters-toggle"\] \{\s*display: none;/,
+  )
+  assert.match(wide, /\[data-ui="list-filters"\]::details-content \{\s*content-visibility: visible;/)
+  const phone = chrome.slice(chrome.indexOf('@media (max-width: 47.9375rem)'))
+  assert.match(
+    phone,
+    /\[data-filters="collapsible"\]\s*\[data-ui="list-chrome-row"\]\[data-row="tail"\] \{\s*display: contents;/,
+  )
+  assert.match(phone, /\[data-filters="collapsible"\]\s*\[data-ui="list-search"\] \{\s*flex: 1 1 8rem;/)
+  assert.match(
+    phone,
+    /\[data-ui="list-filters"\]\s*> \[data-row="filters"\] \{\s*position: absolute;\s*z-index: var\(--kv-layer-menu\);/,
+  )
+})
+
+test('design system: a header folds a secondary action into its overflow menu on a phone', () => {
+  const html = renderToString(
+    <>
+      <ActionMenu
+        id="more"
+        label="More"
+        items={[
+          { id: 'create', label: 'Create', href: '/new', viewport: 'phone' },
+          { id: 'rule', kind: 'separator' },
+          { id: 'archive', label: 'Archive', href: '/archive' },
+        ]}
+      />
+      <Button label="Create" viewport="wide" />
+    </>,
+  ).replace(/<!--k\[?-->/g, '')
+  assert.match(html, /<a data-ui="menu-item" data-viewport="phone"[^>]*href="\/new"/)
+  assert.doesNotMatch(html.match(/<a data-ui="menu-item"[^>]*href="\/archive"/)?.[0] ?? '', /data-viewport/)
+  assert.match(
+    html,
+    /<button[^>]*data-ui="action"[^>]*data-viewport="wide"|<button[^>]*data-viewport="wide"[^>]*data-ui="action"/,
+  )
+  const css = (path: string) => readFileSync(`packages/design-system/src/${path}`, 'utf8')
+  for (const [path, hook] of [
+    ['primitives/actions/styles.css', 'action'],
+    ['interactions/menu/styles.css', 'menu-item'],
+  ]) {
+    assert.match(
+      css(path),
+      new RegExp(
+        `@media \\(max-width: 47\\.9375rem\\) \\{\\s*:where\\(\\[data-kv-design-system\\]\\) \\[data-ui="${hook}"\\]\\[data-viewport="wide"\\][,\\s][^{]*\\{\\s*display: none;`,
+      ),
+      path,
+    )
+    assert.match(
+      css(path),
+      new RegExp(
+        `@media \\(min-width: 48rem\\) \\{\\s*:where\\(\\[data-kv-design-system\\]\\) \\[data-ui="${hook}"\\]\\[data-viewport="phone"\\][,\\s][^{]*\\{\\s*display: none;`,
+      ),
+      path,
+    )
+  }
+  // The folded item leads the panel; on a wide screen its separator goes with it instead of opening the panel.
+  assert.match(html, /href="\/new"[^>]*>(?:(?!<a ).)*<\/a><hr data-ui="menu-separator"/)
+  const wide = css('interactions/menu/styles.css').slice(
+    css('interactions/menu/styles.css').indexOf('@media (min-width: 48rem) {'),
+  )
+  assert.match(
+    wide,
+    /^[^}]*\[data-viewport="phone"\]:first-child\s+\+ \[data-ui="menu-separator"\],[^}]*\[data-ui="menu-separator"\]:has\(\+ \[data-ui="menu-item"\]\[data-viewport="phone"\]:last-child\) \{\s*display: none;/,
+  )
+  // Every operational page, not only a list, gives the primary action the room left beside the menu.
+  const phone = css('patterns/page-shell/styles.css').slice(
+    css('patterns/page-shell/styles.css').indexOf('@media (max-width: 42rem)'),
+  )
+  assert.match(
+    phone,
+    /\[data-variant="operational"\]\s*\[data-kv-page-identity="actions"\]\s*\[data-ui="action"\]\[data-variant="primary"\] \{\s*flex: 1 1 auto;/,
+  )
 })
 
 test('design system: short table values do not break across lines', () => {
@@ -1155,11 +1277,12 @@ test('design system: ListChrome assembles URL-driven collection controls', () =>
   )
   assert.doesNotMatch(renderToString(<ListChrome />), /data-row="query"[\s\S]*data-ui="list-search"/)
   const patterns = patternCss
-  assert.match(patterns, /\[data-row="query"\] \{\s*flex-wrap: nowrap;\s*align-items: center/)
+  // Search, filters and pager share a line while they fit; otherwise a whole group wraps.
+  assert.match(patterns, /\[data-row="query"\] \{\s*flex-wrap: wrap;\s*align-items: center/)
   assert.match(patterns, /\[data-ui="list-search"\] \{\s*display: flex;\s*flex: 1 1 16rem/)
   assert.match(patterns, /max-width: 32rem/)
   assert.match(patterns, /\[data-row="filters"\] \{\s*flex: 0 1 auto;\s*min-width: 0/)
-  assert.match(patterns, /\[data-row="tail"\] \{\s*flex: 0 1 auto/)
+  assert.match(patterns, /\[data-row="tail"\] \{[^}]*flex: 1 1 auto;\s*flex-wrap: wrap;/)
   assert.match(patterns, /\[data-row="meta"\] \{\s*flex: 0 0 auto/)
   assert.match(patterns, /\[data-ui="pager-bar"\] \{\s*display: flex;\s*flex-wrap: nowrap/)
   assert.match(patterns, /\[data-ui="bulk-actions"\]:not\(\[data-has-selection="true"\]\) \{\s*display: none/)
@@ -2351,7 +2474,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 313)
+  assert.equal(designSystemInventory.summary.publicExports, 314)
   assert.equal(designSystemInventory.summary.runtimeExports, 147)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)

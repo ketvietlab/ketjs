@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 313,
+    "publicExports": 314,
     "runtimeExports": 147,
     "registeredComponents": 138,
     "compatibilityExports": 262,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 167,
+    "publicGaps": 168,
     "runtimeGaps": 9,
-    "typeGaps": 158,
+    "typeGaps": 159,
     "cssFiles": 82,
-    "cssLines": 17092
+    "cssLines": 17240
   },
   "rows": [
     {
@@ -2937,6 +2937,24 @@
       "scope": "public",
       "name": "ListFacet",
       "imported": "ListFacet",
+      "kind": "type",
+      "source": "./patterns/list-chrome/index.tsx",
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "refactor",
+      "target": "@ketvietlab/design-system",
+      "wave": 0,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-027"
+    },
+    {
+      "scope": "public",
+      "name": "ListFiltersToggle",
+      "imported": "ListFiltersToggle",
       "kind": "type",
       "source": "./patterns/list-chrome/index.tsx",
       "owner": "Data operations",
@@ -12532,7 +12550,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/menu/styles.css",
-      "lines": 198,
+      "lines": 222,
       "hooks": [
         "menu",
         "menu-group",
@@ -12983,7 +13001,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/list-chrome/styles.css",
-      "lines": 397,
+      "lines": 526,
       "hooks": [
         "bulk-action-list",
         "bulk-actions",
@@ -12996,6 +13014,9 @@
         "list-facet-count",
         "list-facets",
         "list-filter-menus",
+        "list-filters",
+        "list-filters-count",
+        "list-filters-toggle",
         "list-search",
         "list-search-input",
         "list-search-label",
@@ -13086,8 +13107,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/page-shell/styles.css",
-      "lines": 130,
-      "hooks": ["form-actions", "record-form", "record-page-header"]
+      "lines": 146,
+      "hooks": ["action", "action-group", "form-actions", "record-form", "record-page-header"]
     },
     {
       "layer": "public",
@@ -13111,9 +13132,8 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/patterns/record-form/styles.css",
-      "lines": 139,
+      "lines": 104,
       "hooks": [
-        "bulk-action-list",
         "date-inputs",
         "date-range",
         "date-time-picker",
@@ -13121,11 +13141,6 @@
         "form-actions",
         "form-errors",
         "form-grid",
-        "list-actions",
-        "list-chrome-row",
-        "list-search",
-        "pager-actions",
-        "pager-pages",
         "record-form"
       ]
     },
@@ -13162,7 +13177,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/actions/styles.css",
-      "lines": 217,
+      "lines": 231,
       "hooks": ["action", "action-group", "action-label", "action-leading", "action-spinner", "link"]
     },
     {

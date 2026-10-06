@@ -34,6 +34,8 @@ export type MenuItem = {
   checked?: boolean
   /** Visible keyboard hint; the browser interaction remains owned by the application. */
   shortcut?: string
+  /** Shows the item at one width only, as an action's `viewport` does. */
+  viewport?: 'phone' | 'wide'
 }
 
 export type MenuLabel = { id: string; kind: 'label'; label: string }
@@ -121,6 +123,7 @@ const menuItem = (item: MenuItem, selectionMode: MenuProps['selectionMode']): Te
       // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
       <span
         data-ui="menu-item"
+        data-viewport={item.viewport ?? null}
         role={role}
         aria-checked={item.checked === undefined ? null : String(item.checked)}
         aria-disabled="true"
@@ -134,6 +137,7 @@ const menuItem = (item: MenuItem, selectionMode: MenuProps['selectionMode']): Te
       // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
       <a
         data-ui="menu-item"
+        data-viewport={item.viewport ?? null}
         data-destructive={item.destructive ? 'true' : null}
         role={role}
         aria-checked={item.checked === undefined ? null : String(item.checked)}
@@ -146,6 +150,7 @@ const menuItem = (item: MenuItem, selectionMode: MenuProps['selectionMode']): Te
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
     <button
       data-ui="menu-item"
+      data-viewport={item.viewport ?? null}
       data-destructive={item.destructive ? 'true' : null}
       role={role}
       aria-checked={item.checked === undefined ? null : String(item.checked)}

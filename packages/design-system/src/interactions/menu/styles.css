@@ -185,6 +185,30 @@
 }
 
 @layer ket.app {
+  /* An item shown at one width only, as an action's `viewport`. Hidden at the edge of the panel, it takes
+     the separator that set it apart along, so the panel does not open on a rule. */
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="menu-item"][data-viewport="wide"],
+    :where([data-kv-design-system])
+      [data-ui="menu-item"][data-viewport="wide"]:first-child
+      + [data-ui="menu-separator"],
+    :where([data-kv-design-system])
+      [data-ui="menu-separator"]:has(+ [data-ui="menu-item"][data-viewport="wide"]:last-child) {
+      display: none;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="menu-item"][data-viewport="phone"],
+    :where([data-kv-design-system])
+      [data-ui="menu-item"][data-viewport="phone"]:first-child
+      + [data-ui="menu-separator"],
+    :where([data-kv-design-system])
+      [data-ui="menu-separator"]:has(+ [data-ui="menu-item"][data-viewport="phone"]:last-child) {
+      display: none;
+    }
+  }
+
   @media (max-width: 767px) {
     :where([data-kv-design-system]) [data-ui="menu"][data-mobile-align="start"] [data-ui="menu-panel"] {
       left: 0;
