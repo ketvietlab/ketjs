@@ -656,7 +656,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
   resolveSite: defineFn({
     anonymous: true,
     input: { host: 'text' },
-    output: { id: 'id', title: 'text', locale: 'text', theme: 'text', tokens: 'json?' },
+    output: {
+      id: 'id',
+      title: 'text',
+      locale: 'text',
+      theme: 'text',
+      tokens: 'json?',
+      googleTagManagerId: 'text?',
+    },
     effects: ['read:website.Site', 'read:website.SiteDomain'],
     handler: async (ctx: Ctx, args) => {
       const host = cleanHost(args.host)
@@ -686,6 +693,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             locale: site.defaultLocale,
             theme: site.theme,
             tokens: site.tokens ?? null,
+            googleTagManagerId: site.googleTagManagerId ?? null,
           }
         : null
     },
@@ -747,6 +755,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       defaultLocale: 'text',
       theme: 'text',
       tokens: 'json?',
+      googleTagManagerId: 'text?',
       siteGroup: 'text?',
       active: 'bool?',
     },
@@ -768,6 +777,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (selected?.kind !== 'theme') return invalid('theme', 'website.error.invalidTheme')
       const existing = await siteById(ctx, args.id)
       if (existing && !(await canAdministerSite(ctx, args.id))) return forbidden()
+      const googleTagManagerId =
+        args.googleTagManagerId === undefined
+          ? (existing?.googleTagManagerId ?? null)
+          : String(args.googleTagManagerId ?? '').trim() || null
+      if (googleTagManagerId && !/^GTM-[A-Z0-9]{4,20}$/.test(String(googleTagManagerId)))
+        return invalid('googleTagManagerId', 'website.error.invalidGoogleTagManagerId')
       const name = String(args.name ?? '').trim()
       const title = String(args.title ?? '').trim()
       const locale = String(args.defaultLocale ?? '').trim()
@@ -788,8 +803,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
       )
       if (duplicate) return invalid('name', 'website.error.duplicateName')
       const cs = ctx
-        .change('website.Site', { ...args, name, title, defaultLocale: locale }, existing)
-        .cast(['id', 'name', 'title', 'defaultLocale', 'theme', 'tokens', 'siteGroup', 'active'])
+        .change('website.Site', { ...args, name, title, defaultLocale: locale, googleTagManagerId }, existing)
+        .cast([
+          'id',
+          'name',
+          'title',
+          'defaultLocale',
+          'theme',
+          'tokens',
+          'siteGroup',
+          'active',
+          'googleTagManagerId',
+        ])
         .required(['name', 'title', 'defaultLocale', 'theme'])
         .put('active', args.active ?? existing?.active ?? true)
       if (!cs.valid) return { ok: false, errors: cs.errors }

@@ -391,6 +391,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     title: site.title,
     code: site.name,
     defaultLocale: site.defaultLocale,
+    googleTagManagerId: site.googleTagManagerId ?? '',
     revisionId: String(site.updatedAt ?? site.id),
   })
   const signInUrl = (host: unknown) => (host ? `https://${String(host)}${CUSTOMER_SIGNIN_PATH}` : null)
@@ -848,6 +849,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
             name: String(values.code || title).trim(),
             title,
             defaultLocale: String(values.defaultLocale || 'vi'),
+            googleTagManagerId: String(values.googleTagManagerId ?? ''),
             theme,
           })
           if (options.defaultPreset)
@@ -877,6 +879,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           name: String(values.code ?? site.name).trim(),
           title: String(values.title ?? site.title).trim(),
           defaultLocale: String(values.defaultLocale || site.defaultLocale),
+          googleTagManagerId: String(values.googleTagManagerId ?? site.googleTagManagerId ?? ''),
           theme: site.theme,
           tokens: site.tokens ?? null,
           siteGroup: site.siteGroup ?? null,

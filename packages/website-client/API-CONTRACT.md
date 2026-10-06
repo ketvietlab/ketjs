@@ -383,6 +383,11 @@ listResources(kind=domains). website.saveSite remains a legacy fixture handler, 
 write contract. ERP owns staff membership; website.listSiteMembers and kind=members were removed
 from the mock, including generic create/update/archive support. Actor capabilities remain enforced.
 
+`sites.googleTagManagerId` is optional site configuration saved by the Settings resource. Empty
+disables tracking; nonempty values must match `GTM-[A-Z0-9]{4,20}`. Save applies immediately without
+republishing entries. Native pages load the container only for visitors on the configured site host,
+outside preview and staff sessions. Container triggers govern events and device conditions.
+
 
 ### Object Storage ownership — 2026-09-30
 

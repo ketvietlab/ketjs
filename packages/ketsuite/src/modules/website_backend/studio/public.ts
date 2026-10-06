@@ -212,12 +212,16 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   // session, and only on a host the site answers as its own. A scope that does not say fails closed.
   const siteTheme = selectedThemeOf(appearance.theme)
   const request = object(scope.request)
-  const scripted =
-    !!siteTheme?.entry &&
+  const publicVisitor =
     request.preview === false &&
     request.staff === false &&
     typeof site.id === 'string' &&
     site.id !== '__legacy__'
+  const scripted = !!siteTheme?.entry && publicVisitor
+  const googleTagManagerId =
+    publicVisitor && /^GTM-[A-Z0-9]{4,20}$/.test(String(site.googleTagManagerId ?? ''))
+      ? String(site.googleTagManagerId)
+      : null
   const navigation = (parent: unknown, ancestors = new Set<string>()): WebsitePublicNavItem[] =>
     menu
       .filter((item) => (item.parentId ?? null) === parent && !ancestors.has(String(item.id)))
@@ -235,6 +239,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
       ...(typeof scope.status === 'number' ? { status: scope.status } : {}),
       body: websitePublicDocument({
         locale,
+        googleTagManagerId,
         head: {
           title: String(meta.title || record.title || ''),
           description: meta.metaDescription,
@@ -286,7 +291,14 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
     }),
     {
       'cache-control': 'no-cache',
-      ...(siteTheme ? { 'content-security-policy': themeContentSecurityPolicy(siteTheme) } : {}),
+      ...(siteTheme || googleTagManagerId
+        ? {
+            'content-security-policy': themeContentSecurityPolicy(
+              siteTheme ?? { connect: [], frame: [] },
+              !!googleTagManagerId,
+            ),
+          }
+        : {}),
     },
   )
 }

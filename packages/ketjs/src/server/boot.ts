@@ -1137,7 +1137,14 @@ export async function bootDeployment(
     return data
   }
 
-  type ResolvedSite = { id?: string; title?: string; locale?: string; theme?: string; tokens?: unknown }
+  type ResolvedSite = {
+    id?: string
+    title?: string
+    locale?: string
+    theme?: string
+    tokens?: unknown
+    googleTagManagerId?: string | null
+  }
   const siteRecords = new WeakMap<IncomingMessage, Promise<ResolvedSite | null>>()
   const requestHost = (url: URL, req: IncomingMessage): string => {
     const raw = String(req.headers.host ?? url.host).trim()
@@ -1378,6 +1385,7 @@ export async function bootDeployment(
               id: resolvedSite?.id,
               title: resolvedSite?.title ?? pages.siteTitle ?? spec.name,
               theme: resolvedSite?.theme ?? fallbackTheme?.name,
+              googleTagManagerId: resolvedSite?.googleTagManagerId ?? null,
             }
             // The theme's layout writes <html lang>, so the locale has to reach it.
             // It was hardcoded there, which made i18n untrue on the first tag of every

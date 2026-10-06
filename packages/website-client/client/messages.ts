@@ -1159,6 +1159,8 @@ export const coreMessages = {
     'website.settings.general': 'Thông tin chung',
     'website.settings.name': 'Tên website',
     'website.settings.nameRequired': 'Cần tên website.',
+    'website.settings.googleTagManagerId': 'Google Tag Manager (để trống để tắt)',
+    'website.settings.invalidGoogleTagManagerId': 'Mã container phải có dạng GTM-XXXXXXX.',
     'website.settings.defaultLocale': 'Ngôn ngữ mặc định',
     'website.settings.saved': 'Đã lưu cài đặt',
     'website.settings.domains': 'Tên miền',

@@ -40,18 +40,42 @@ export function selectedThemeOf(value: unknown): SelectedTheme | null {
 
 /**
  * The policy of a page that loads a theme. Scripts come only from this origin, which is where the
- * theme's module is served, and never inline; `eval` stays off. Styles allow attributes because
- * article markup carries alignment and image widths in them.
+ * theme's module is served, and never inline. An explicitly configured public GTM container adds
+ * Google's delivery origins. Its Custom JavaScript variables require eval (the published Inlano
+ * device condition uses one); sites without GTM and staff/preview pages keep eval disabled.
+ * Styles allow attributes because article markup carries alignment and image widths in them.
  */
-export const themeContentSecurityPolicy = (theme: SelectedTheme): string =>
+export const themeContentSecurityPolicy = (
+  theme: Pick<SelectedTheme, 'connect' | 'frame'>,
+  googleTagManager = false,
+): string =>
   [
     "default-src 'self'",
-    "script-src 'self'",
+    googleTagManager
+      ? "script-src 'self' 'unsafe-eval' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com"
+      : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
     "font-src 'self'",
-    ["connect-src 'self'", ...theme.connect].join(' '),
-    `frame-src ${theme.frame.length ? theme.frame.join(' ') : "'none'"}`,
+    [
+      "connect-src 'self'",
+      ...theme.connect,
+      ...(googleTagManager
+        ? [
+            'https://*.google-analytics.com',
+            'https://*.analytics.google.com',
+            'https://*.googletagmanager.com',
+            'https://www.googleadservices.com',
+            'https://googleads.g.doubleclick.net',
+            'https://stats.g.doubleclick.net',
+            'https://pagead2.googlesyndication.com',
+            'https://www.google.com',
+            'https://www.google.com.vn',
+            'https://ad.doubleclick.net',
+          ]
+        : []),
+    ].join(' '),
+    `frame-src ${[...theme.frame, ...(googleTagManager ? ['https://www.googletagmanager.com'] : [])].join(' ') || "'none'"}`,
     "worker-src 'none'",
     "frame-ancestors 'self'",
     "base-uri 'none'",

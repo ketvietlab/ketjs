@@ -3,7 +3,7 @@ import type { Route, ServeContext } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
 
 export type PublicSite = {
-  site: { id: string; title: string; theme?: string }
+  site: { id: string; title: string; theme?: string; googleTagManagerId?: string | null }
   locale: string
   appearance: Record<string, unknown>
   menu: unknown
@@ -28,6 +28,7 @@ export const publicSiteOf = async (ctx: ServeContext, url: URL, req: Req): Promi
     title?: string
     locale?: string
     theme?: string
+    googleTagManagerId?: string | null
   } | null
   if (!site?.id || site.id === '__legacy__') return null
   const home = (await ctx.call('website.getEntryByPath', { siteId: site.id, path: '/' }, url, req)) as {
@@ -36,7 +37,12 @@ export const publicSiteOf = async (ctx: ServeContext, url: URL, req: Req): Promi
   if (!home?.appearance) return null
   const menu = (await ctx.call('website_menu.publicMenu', { siteId: site.id }, url, req)) ?? []
   return {
-    site: { id: site.id, title: site.title ?? '', theme: site.theme },
+    site: {
+      id: site.id,
+      title: site.title ?? '',
+      theme: site.theme,
+      googleTagManagerId: site.googleTagManagerId,
+    },
     locale: String(site.locale ?? 'vi'),
     appearance: home.appearance,
     menu,
