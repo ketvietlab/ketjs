@@ -1,4 +1,4 @@
-import { streamed, text, withHeaders } from '@ketvietlab/ketjs'
+import { raw, streamed, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { themeBootModule } from './boot.ts'
 
@@ -10,7 +10,9 @@ const IMMUTABLE = {
   'cache-control': 'public, max-age=31536000, immutable',
   'x-content-type-options': 'nosniff',
   'content-security-policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
-  'cross-origin-resource-policy': 'same-origin',
+  // Published, reader-authorized assets also serve the opaque-origin interactive canvas.
+  'cross-origin-resource-policy': 'cross-origin',
+  'access-control-allow-origin': '*',
 }
 const missing = () => withHeaders(text('not found', { status: 404 }), { 'cache-control': 'no-store' })
 
@@ -55,6 +57,16 @@ export const routes: Record<string, RouteEntry> = {
         }
         const object = await storage.get(String(file.storeKey))
         if (!object) return missing()
+        // SVG is intentional markup. Keep its opaque-origin sandbox even when opened directly;
+        // the octet response helpers deliberately reject active markup content types.
+        if (type === 'image/svg+xml') {
+          const chunks: Uint8Array[] = []
+          for await (const chunk of object.body) chunks.push(chunk)
+          return withHeaders(raw(Buffer.concat(chunks).toString('utf8'), { type }), {
+            ...IMMUTABLE,
+            'content-length': String(object.meta.size),
+          })
+        }
         return withHeaders(streamed(object.body, { type }), {
           ...IMMUTABLE,
           'content-length': String(object.meta.size),

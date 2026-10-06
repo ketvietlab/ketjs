@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canAdministerSite } from '../../website/access.ts'
+import { frameTemplatesOf } from '../frame.ts'
 import { resolveThemeSettings } from '../package.ts'
 import type { SelectedTheme, ThemeManifest } from '../types.ts'
 
@@ -35,6 +36,7 @@ export async function selectThemeHandler(ctx: Ctx, args: Row) {
       connect: manifest.script?.connect ?? [],
       frame: manifest.script?.frame ?? [],
       settings: settings.settings,
+      frameTemplates: frameTemplatesOf(version.frameTemplates),
     }
   } else if (args.settings != null) return issue('settings', 'website_theme.error.invalidSetting')
   if (args.expectedRevisionId !== (site.styleRevision ?? 'initial'))

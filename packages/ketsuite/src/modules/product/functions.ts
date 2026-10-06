@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { liveDocument } from '../../ui/live-document.ts'
 import {
   asc,
   bucketEq,
@@ -10,6 +12,7 @@ import {
   ilike,
   inArray,
   isNull,
+  KetError,
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, ListState, Row } from '@ketvietlab/ketjs'
 import { PRODUCT_TYPES } from './types.ts'
@@ -340,6 +343,159 @@ const dropProductUoms = async (
       await ctx.db.del(deleteFrom(U).where(eq(U.id, row.id)))
 }
 
+export const saveTemplateFunction = (options: { inTransaction?: boolean } = {}) =>
+  defineFn({
+    input: {
+      id: 'id',
+      name: 'text',
+      type: 'text',
+      categoryId: 'id?',
+      brandId: 'id?',
+      uomId: 'id?',
+      origin: 'text?',
+      description: 'text?',
+      summaryDoc: 'text?',
+      descriptionDoc: 'text?',
+      expectedRevisionId: 'text?',
+      listPrice: 'decimal?',
+      saleOk: 'bool?',
+      purchaseOk: 'bool?',
+      defaultCode: 'text?',
+      barcode: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Brand',
+      'read:product.Category',
+      'read:uom.Unit',
+      'write:uom.Unit',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      args = { ...args }
+      if (!PRODUCT_TYPES.includes(args.type as never))
+        return {
+          ok: false,
+          errors: [{ field: 'type', message: `phải là một trong: ${PRODUCT_TYPES.join(', ')}` }],
+        }
+      if (args.categoryId && !(await ctx.db.select('product.Category', { id: args.categoryId }))[0])
+        return { ok: false, errors: [{ field: 'categoryId', message: 'Nhóm sản phẩm không tồn tại.' }] }
+      if (args.uomId && !(await ctx.db.select('uom.Unit', { id: args.uomId }))[0])
+        return { ok: false, errors: [{ field: 'uomId', message: 'không có đơn vị nào mang id này' }] }
+      if (args.brandId && !(await ctx.db.select('product.Brand', { id: args.brandId }))[0])
+        return { ok: false, errors: [{ field: 'brandId', message: 'thương hiệu không tồn tại' }] }
+      const existing = (await ctx.db.select('product.Template', { id: args.id }))[0]
+      if (existing && ctx.manifest.modules.website_catalog && args.expectedRevisionId == null)
+        return {
+          ok: false,
+          errors: [{ field: 'expectedRevisionId', message: 'Conflict: Tải lại sản phẩm trước khi lưu.' }],
+        }
+      if (existing && ctx.manifest.modules.website_catalog && args.type !== existing.type)
+        return {
+          ok: false,
+          errors: [
+            { field: 'type', message: 'Không đổi loại sản phẩm đã tạo. Tạo sản phẩm mới nếu loại khác.' },
+          ],
+        }
+      if (args.description != null && args.summaryDoc == null)
+        args.summaryDoc = JSON.stringify([
+          { id: 'summary', type: 'p', delta: [{ insert: String(args.description) }] },
+        ])
+      if (args.expectedRevisionId != null && args.expectedRevisionId !== (existing?.revisionId ?? 'initial'))
+        return {
+          ok: false,
+          errors: [{ field: 'expectedRevisionId', message: 'Conflict: sản phẩm đã thay đổi.' }],
+        }
+      for (const key of ['summaryDoc', 'descriptionDoc']) {
+        if (args[key] != null)
+          args[key] = liveDocument(typeof args[key] === 'string' ? args[key] : JSON.stringify(args[key]), {
+            images: false,
+          }).doc
+      }
+      const revisionId = randomUUID()
+      const products = await ctx.db.select('product.Product', { templateId: args.id })
+      const defaultVariant = products.find((product) => String(product.combinationKey) === '')
+      if (args.barcode) {
+        const collision = (await ctx.db.select('product.Product', { barcode: args.barcode }))[0]
+        if (collision && collision.id !== defaultVariant?.id)
+          return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng' }] }
+      }
+      let changes = ctx
+        .change('product.Template', args, existing ?? null)
+        .cast([
+          'id',
+          'name',
+          'type',
+          'categoryId',
+          'brandId',
+          'uomId',
+          'origin',
+          'description',
+          'summaryDoc',
+          'descriptionDoc',
+          'listPrice',
+          'saleOk',
+          'purchaseOk',
+        ])
+        .required(['name', 'type'])
+      if (!existing) {
+        changes = changes
+          .put('listPrice', args.listPrice ?? '0')
+          .put('saleOk', args.saleOk ?? true)
+          .put('purchaseOk', args.purchaseOk ?? true)
+          .put('active', true)
+      }
+      changes = changes.put('revisionId', revisionId)
+      if (!changes.valid) return { ok: false, errors: changes.errors }
+      const save = async (tx: Ctx) => {
+        if (existing && args.expectedRevisionId != null) {
+          const cas = await tx.db.compareAndSet(
+            'product.Template',
+            { id: args.id },
+            { revisionId: existing.revisionId ?? null },
+            { revisionId },
+          )
+          if (!('dryRun' in cas) && !cas.matched) return false
+        }
+        await tx.db.commit(changes, existing ? { id: args.id } : undefined)
+        const generated = products.some(
+          (product) => String(product.combinationKey) !== '' && product.active !== false,
+        )
+        const identity = {
+          ...(Object.hasOwn(args, 'defaultCode') ? { defaultCode: args.defaultCode ?? null } : {}),
+          ...(Object.hasOwn(args, 'barcode') ? { barcode: args.barcode ?? null } : {}),
+          active: !generated,
+        }
+        if (defaultVariant) await tx.db.update('product.Product', { id: defaultVariant.id }, identity)
+        else
+          await tx.db.insert('product.Product', {
+            id: `${String(args.id)}:default`,
+            templateId: args.id,
+            defaultCode: args.defaultCode ?? null,
+            barcode: args.barcode ?? null,
+            weight: '0',
+            volume: '0',
+            combinationKey: '',
+            active: !generated,
+          })
+        if (args.uomId) await tx.db.update('uom.Unit', { id: args.uomId }, { locked: true })
+        return true
+      }
+      const saved = options.inTransaction ? await save(ctx) : await ctx.tx(save)
+      if (!saved)
+        return {
+          ok: false,
+          errors: [{ field: 'expectedRevisionId', message: 'Conflict: sản phẩm đã thay đổi.' }],
+        }
+      return { ok: true, id: args.id }
+    },
+  })
+
 export const functions: Record<string, FnSpec> = {
   /**
    * The variants of one template, or of the whole catalogue.
@@ -611,6 +767,9 @@ export const functions: Record<string, FnSpec> = {
       uomId: 'id?',
       origin: 'text?',
       description: 'text?',
+      summaryDoc: 'text?',
+      descriptionDoc: 'text?',
+      revisionId: 'text?',
       listPrice: 'decimal',
       saleOk: 'bool',
       purchaseOk: 'bool',
@@ -639,103 +798,7 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
-  saveTemplate: defineFn({
-    input: {
-      id: 'id',
-      name: 'text',
-      type: 'text',
-      categoryId: 'id?',
-      brandId: 'id?',
-      uomId: 'id?',
-      origin: 'text?',
-      description: 'text?',
-      listPrice: 'decimal?',
-      saleOk: 'bool?',
-      purchaseOk: 'bool?',
-      defaultCode: 'text?',
-      barcode: 'text?',
-    },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: [
-      'read:product.Template',
-      'write:product.Template',
-      'read:product.Product',
-      'write:product.Product',
-      'read:product.Brand',
-      'read:uom.Unit',
-      'write:uom.Unit',
-    ],
-    idempotent: true,
-    agent: true,
-    handler: async (ctx, args) => {
-      if (!PRODUCT_TYPES.includes(args.type as never))
-        return {
-          ok: false,
-          errors: [{ field: 'type', message: `phải là một trong: ${PRODUCT_TYPES.join(', ')}` }],
-        }
-      if (args.uomId && !(await ctx.db.select('uom.Unit', { id: args.uomId }))[0])
-        return { ok: false, errors: [{ field: 'uomId', message: 'không có đơn vị nào mang id này' }] }
-      if (args.brandId && !(await ctx.db.select('product.Brand', { id: args.brandId }))[0])
-        return { ok: false, errors: [{ field: 'brandId', message: 'thương hiệu không tồn tại' }] }
-      const existing = (await ctx.db.select('product.Template', { id: args.id }))[0]
-      const products = await ctx.db.select('product.Product', { templateId: args.id })
-      const defaultVariant = products.find((product) => String(product.combinationKey) === '')
-      if (args.barcode) {
-        const collision = (await ctx.db.select('product.Product', { barcode: args.barcode }))[0]
-        if (collision && collision.id !== defaultVariant?.id)
-          return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng' }] }
-      }
-      let changes = ctx
-        .change('product.Template', args, existing ?? null)
-        .cast([
-          'id',
-          'name',
-          'type',
-          'categoryId',
-          'brandId',
-          'uomId',
-          'origin',
-          'description',
-          'listPrice',
-          'saleOk',
-          'purchaseOk',
-        ])
-        .required(['name', 'type'])
-      if (!existing) {
-        changes = changes
-          .put('listPrice', args.listPrice ?? '0')
-          .put('saleOk', args.saleOk ?? true)
-          .put('purchaseOk', args.purchaseOk ?? true)
-          .put('active', true)
-      }
-      if (!changes.valid) return { ok: false, errors: changes.errors }
-      await ctx.tx(async (tx) => {
-        await tx.db.commit(changes, existing ? { id: args.id } : undefined)
-        const generated = products.some(
-          (product) => String(product.combinationKey) !== '' && product.active !== false,
-        )
-        const identity = {
-          ...(Object.hasOwn(args, 'defaultCode') ? { defaultCode: args.defaultCode ?? null } : {}),
-          ...(Object.hasOwn(args, 'barcode') ? { barcode: args.barcode ?? null } : {}),
-          active: !generated,
-        }
-        if (defaultVariant) await tx.db.update('product.Product', { id: defaultVariant.id }, identity)
-        else
-          await tx.db.insert('product.Product', {
-            id: `${String(args.id)}:default`,
-            templateId: args.id,
-            defaultCode: args.defaultCode ?? null,
-            barcode: args.barcode ?? null,
-            weight: '0',
-            volume: '0',
-            combinationKey: '',
-            active: !generated,
-          })
-        if (args.uomId) await tx.db.update('uom.Unit', { id: args.uomId }, { locked: true })
-      })
-      return { ok: true, id: args.id }
-    },
-  }),
+  saveTemplate: saveTemplateFunction(),
 
   listBrands: defineFn({
     input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
@@ -1227,13 +1290,35 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   archiveTemplate: defineFn({
-    input: { id: 'id', active: 'bool' },
+    input: { id: 'id', active: 'bool', expectedRevisionId: 'text?', confirmed: 'bool?' },
     output: { id: 'id', active: 'bool' },
-    effects: ['write:product.Template'],
+    effects: ['read:product.Template', 'write:product.Template'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      await ctx.db.update('product.Template', { id: args.id }, { active: args.active } as Row)
+      const existing = (await ctx.db.select('product.Template', { id: args.id }))[0]
+      if (!existing) throw new KetError({ code: 'notFound', message: 'Không tìm thấy sản phẩm.' })
+      if (ctx.manifest.modules.website_catalog && args.expectedRevisionId == null)
+        throw new KetError({
+          code: 'conflict',
+          message: 'Conflict: Tải lại sản phẩm trước khi đổi trạng thái.',
+        })
+      if (
+        args.expectedRevisionId != null &&
+        (args.confirmed !== true || args.expectedRevisionId !== (existing.revisionId ?? 'initial'))
+      )
+        throw new KetError({
+          code: 'conflict',
+          message: 'Conflict: xác nhận hoặc phiên bản sản phẩm không hợp lệ.',
+        })
+      const result = await ctx.db.compareAndSet(
+        'product.Template',
+        { id: args.id },
+        { revisionId: existing.revisionId ?? null },
+        { active: args.active, revisionId: randomUUID() },
+      )
+      if (!('dryRun' in result) && !result.matched)
+        throw new KetError({ code: 'conflict', message: 'Conflict: sản phẩm đã thay đổi.' })
       return { id: args.id, active: args.active }
     },
   }),

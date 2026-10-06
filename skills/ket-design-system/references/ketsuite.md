@@ -39,12 +39,23 @@ permissions, native routes and form behavior while applying the visual contract.
   never a private CSS width. At a 16px root, centred dialogs are capped at 34rem
   (544px), 56rem (896px) and 75rem (1200px), respectively. Side sheets use 34rem
   for small/default and 56rem for large. Dialogs retain the owner's 24px viewport
-  gutter on desktop; all non-embedded modals become fullscreen below 768px.
-- Choose small for a brief confirmation or a short single-column form; default
+  gutter on desktop; below 768px every non-embedded modal becomes fullscreen,
+  except a ConfirmDialog, which stays a small centred card.
+- Choose small for a short single-column form; default
   for ordinary record details and two-column forms; large for line-item tables,
   rich editors or the three-column purchase form. Choose once for the record,
   accounting for all its tabs; do not resize width as tabs change. A confirmation
-  inside an existing record keeps that record's width.
+  step rendered inside an existing record keeps that record's width.
+
+- A separate confirmation before a hard-to-undo action is a `ConfirmDialog`,
+  never a `ModalSheet` in its default side-sheet presentation and never a drawer.
+  It is small by default. The title names the action ("Archive collection"), the
+  message states the consequence, and the body does not repeat the title as a
+  Notice heading. Put an impact notice or an acknowledgement checkbox in
+  `details`, inside the form named by `confirmForm`; gate the button with
+  `confirmDisabled`. Its footer always has the cancel link back to `closeHref`
+  beside the confirm button; route a product command through
+  `confirmName`/`confirmValue` rather than rebuilding the actions.
 
 - `RecordForm.columns={3}` groups three peer controls in one row when the form
   container is at least 56rem wide on desktop. Smaller desktop containers use

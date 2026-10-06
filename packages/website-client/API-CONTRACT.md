@@ -383,6 +383,11 @@ listResources(kind=domains). website.saveSite remains a legacy fixture handler, 
 write contract. ERP owns staff membership; website.listSiteMembers and kind=members were removed
 from the mock, including generic create/update/archive support. Actor capabilities remain enforced.
 
+`sites.googleTagManagerId` is optional site configuration saved by the Settings resource. Empty
+disables tracking; nonempty values must match `GTM-[A-Z0-9]{4,20}`. Save applies immediately without
+republishing entries. Native pages load the container only for visitors on the configured site host,
+outside preview and staff sessions. Container triggers govern events and device conditions.
+
 
 ### Object Storage ownership — 2026-09-30
 
@@ -767,3 +772,7 @@ that already exist keep the look they render with.
   next publish.
 - A setting may carry `label`, and an enum setting `labels` per value, from the theme's manifest. The
   Studio shows those words and falls back to the setting name and raw value.
+
+### Builder theme rendering
+
+Theme resources expose a host-owned relative `stylesheet` and compiled `frame` slots for the editing canvas. `createPreview` + `preview` provide the saved snapshot URL; `themeInteractive=1` enables theme JS only on a valid native preview. The response enforces an opaque script-only sandbox, blocks forms, and excludes GTM. Immutable theme modules allow anonymous CORS for this opaque frame; public anonymous pages allow read-only CORS for theme navigation data. Studio APIs retain their authentication and origin checks. Local `*.localhost` preview URLs retain the Studio port.
