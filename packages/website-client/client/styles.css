@@ -721,13 +721,15 @@
     align-items: center;
   }
 }
-@media (max-width: 767px) {
+@media (max-width: 1119px) {
   .website-catalog-picker-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }
   .website-catalog-picker-controls {
     width: 100%;
   }
+}
+@media (max-width: 767px) {
   .website-catalog-picker-controls .website-catalog-picker-search {
     width: 100%;
   }
