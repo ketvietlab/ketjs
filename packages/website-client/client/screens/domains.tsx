@@ -26,14 +26,14 @@ export type Domain = {
   checkedAt?: string | null
   /** What the last check found: matched, missing, mismatch or unreachable. */
   reason?: string | null
-  /** The DNS record that proves ownership; a host Két Việt connected before needs none. */
+  /** The DNS record that proves ownership, when whoever serves the site asks for one. */
   challenge?: { type: string; name: string; value: string } | null
   attempts?: { id: string; at: string; result: string; reason: string }[]
 }
 type DomainList = { rows: Domain[] }
 
 const tones: Record<string, Tone> = { verified: 'positive', pending: 'warning', failed: 'danger' }
-/** HTTPS follows ownership: Két Việt switches it on once the host is proven. */
+/** HTTPS follows ownership: whoever serves the site switches it on once the host is proven. */
 const tlsLabel = (row: Pick<Domain, 'state' | 'tls'>) =>
   row.tls === 'ready'
     ? 'website.domain.tlsReady'
