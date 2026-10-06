@@ -52,6 +52,7 @@ contract; never shrink text to fit. Zero default outer text margins.
 | Title block to content | 8px | Surface/Section |
 | Surface/card inset | 16px desktop, 12px mobile | Surface/object card |
 | Modal inset | 16px | Overlay |
+| Modal head/footer band | 12px block, 16px inline; the close target never makes the head taller than the title line | ModalSheet |
 | Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
 | Field groups | 16px | Form layout |
@@ -191,6 +192,15 @@ A drop must resolve the target lane, never require a target card.
 ModalSheet dialog sizes: `small` (34rem) for short single-column forms,
 `default` (56rem) for two-column forms or modest tables, and `large` (75rem)
 for dense workspaces. Choose by content structure, not field count.
+Modal head and footer are bands around the work, as dense as a toolbar: about
+49px and 57px on desktop with a 20/24 title and 32px buttons. Do not pad them
+back to the 16px modal inset.
+ConfirmDialog is always a small centred dialog; below 768px it stays a card
+instead of becoming fullscreen.
+
+A checkbox or choice box aligns with the first line of its label, so a wrapped
+label hangs below the text, not around the box. A one-line checkbox still sits
+in the middle of the control height, level with the inputs beside it.
 
 ## Credential completion
 

@@ -21,6 +21,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
 import { studioAppearance } from './studio-style.ts'
+
 import {
   canAccessSite,
   canAdministerSite,
@@ -30,12 +31,23 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { claimImages, imageClaimEffects } from './image-assets.ts'
-import { isSafeUrl, studioFields, termDescription } from './studio-content.ts'
+import { isSafeUrl, liveDocument, studioFields, termDescription } from './studio-content.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
 
+/** Content publication stays frozen; site-wide appearance is read at delivery. */
+const liveSiteAppearance = (published: unknown, site: Row): Row | null => {
+  const hasPublished = !!published && typeof published === 'object' && !Array.isArray(published)
+  const hasStyle =
+    !!site.studioStyle && typeof site.studioStyle === 'object' && !Array.isArray(site.studioStyle)
+  if (!hasPublished && !hasStyle) return null
+  const appearance = hasPublished ? (published as Row) : {}
+  const style = hasStyle ? (site.studioStyle as Row) : {}
+  const { theme: _old, ...rest } = appearance
+  return { ...rest, ...style }
+}
 /**
  * What a person typed in the title box, as a literal.
  *
@@ -541,8 +553,7 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
   if (pageNo > pageCount) return null
   const base = `/${kind}/${term.slug}`
   const shown = posts.slice((pageNo - 1) * ARCHIVE_PAGE_SIZE, pageNo * ARCHIVE_PAGE_SIZE)
-  // The archive wears the style its newest post went out with, so it never shows a style
-  // an editor has saved but not yet published.
+  // Page content is frozen, but saved site appearance takes effect on the whole site.
   const home = shown.length
     ? null
     : await ctx.db.one(from(Entry).where(eq(Entry.siteId, site.id), eq(Entry.path, '/')))
@@ -555,8 +566,10 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
     title: term.name,
     excerpt: term.description ?? null,
     layout: [],
-    appearance:
+    appearance: liveSiteAppearance(
       (shown[0]?.appearance as Row | null) ?? home?.publishedAppearance ?? studioAppearance(ctx, site),
+      site,
+    ),
     fields: {
       seo: {
         title: seo.title || term.name,
@@ -643,7 +656,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
   resolveSite: defineFn({
     anonymous: true,
     input: { host: 'text' },
-    output: { id: 'id', title: 'text', locale: 'text', theme: 'text', tokens: 'json?' },
+    output: {
+      id: 'id',
+      title: 'text',
+      locale: 'text',
+      theme: 'text',
+      tokens: 'json?',
+      googleTagManagerId: 'text?',
+    },
     effects: ['read:website.Site', 'read:website.SiteDomain'],
     handler: async (ctx: Ctx, args) => {
       const host = cleanHost(args.host)
@@ -673,6 +693,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             locale: site.defaultLocale,
             theme: site.theme,
             tokens: site.tokens ?? null,
+            googleTagManagerId: site.googleTagManagerId ?? null,
           }
         : null
     },
@@ -734,6 +755,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       defaultLocale: 'text',
       theme: 'text',
       tokens: 'json?',
+      googleTagManagerId: 'text?',
       siteGroup: 'text?',
       active: 'bool?',
     },
@@ -755,6 +777,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (selected?.kind !== 'theme') return invalid('theme', 'website.error.invalidTheme')
       const existing = await siteById(ctx, args.id)
       if (existing && !(await canAdministerSite(ctx, args.id))) return forbidden()
+      const googleTagManagerId =
+        args.googleTagManagerId === undefined
+          ? (existing?.googleTagManagerId ?? null)
+          : String(args.googleTagManagerId ?? '').trim() || null
+      if (googleTagManagerId && !/^GTM-[A-Z0-9]{4,20}$/.test(String(googleTagManagerId)))
+        return invalid('googleTagManagerId', 'website.error.invalidGoogleTagManagerId')
       const name = String(args.name ?? '').trim()
       const title = String(args.title ?? '').trim()
       const locale = String(args.defaultLocale ?? '').trim()
@@ -775,8 +803,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
       )
       if (duplicate) return invalid('name', 'website.error.duplicateName')
       const cs = ctx
-        .change('website.Site', { ...args, name, title, defaultLocale: locale }, existing)
-        .cast(['id', 'name', 'title', 'defaultLocale', 'theme', 'tokens', 'siteGroup', 'active'])
+        .change('website.Site', { ...args, name, title, defaultLocale: locale, googleTagManagerId }, existing)
+        .cast([
+          'id',
+          'name',
+          'title',
+          'defaultLocale',
+          'theme',
+          'tokens',
+          'siteGroup',
+          'active',
+          'googleTagManagerId',
+        ])
         .required(['name', 'title', 'defaultLocale', 'theme'])
         .put('active', args.active ?? existing?.active ?? true)
       if (!cs.valid) return { ok: false, errors: cs.errors }
@@ -1137,7 +1175,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
-            appearance: entry.publishedAppearance ?? null,
+            appearance: liveSiteAppearance(entry.publishedAppearance, site),
             // The head metadata travels with the page it describes. Without it
             // the storefront handed the theme an empty meta, so the fields
             // website_seo declares were stored and never rendered.
@@ -1252,7 +1290,74 @@ export const cmsFunctions: Record<string, FnSpec> = {
       // Ids are assigned here rather than trusted from the client, so content
       // written before identity existed gains it on its first save and keeps it
       // on every save after. A client that already carries ids keeps its own.
-      const layout = withPlacementIds(args.layout as Placement[], sha256)
+      const documents = (nodes: Placement[]): Placement[] =>
+        nodes.map((node) => {
+          const settings = node.settings ?? {}
+          if (node.type === 'website.gallery' && settings.images) {
+            const album = JSON.parse(String(settings.images))
+            const imageSource = (value: unknown) =>
+              typeof value === 'string' &&
+              value.length <= 3000 &&
+              (!value || /^(\/(?!\/)|https?:\/\/)/i.test(value))
+            if (
+              !Array.isArray(album) ||
+              album.length > 200 ||
+              album.some(
+                (item) =>
+                  !item ||
+                  !imageSource(item.src) ||
+                  (item.mobileSrc != null && !imageSource(item.mobileSrc)) ||
+                  (item.alt != null && (typeof item.alt !== 'string' || item.alt.length > 500)),
+              )
+            )
+              throw new Error('Invalid gallery album')
+            if (
+              settings.galleryLayout &&
+              !['grid', 'slideshow', 'activity', 'clients'].includes(String(settings.galleryLayout))
+            )
+              throw new Error('Invalid gallery mode')
+            for (const [key, max] of [
+              ['rows', 3],
+              ['interval', 60],
+            ] as const)
+              if (
+                settings[key] != null &&
+                (!Number.isInteger(Number(settings[key])) ||
+                  Number(settings[key]) < 1 ||
+                  Number(settings[key]) > max)
+              )
+                throw new Error('Invalid gallery motion')
+            settings.images = JSON.stringify(
+              album.map((item) => ({
+                src: item.src,
+                ...(item.mobileSrc ? { mobileSrc: item.mobileSrc } : {}),
+                alt: item.alt || '',
+              })),
+            )
+          }
+          const doc =
+            node.type === 'website.rich_text' && settings.bodyDoc
+              ? liveDocument(settings.bodyDoc, { images: false })
+              : null
+          return {
+            ...node,
+            ...(doc ? { settings: { ...settings, bodyDoc: doc.doc, body: doc.text } } : {}),
+            ...(node.slots
+              ? {
+                  slots: Object.fromEntries(
+                    Object.entries(node.slots).map(([slot, children]) => [slot, documents(children)]),
+                  ),
+                }
+              : {}),
+          }
+        })
+      let normalized: Placement[]
+      try {
+        normalized = documents(args.layout as Placement[])
+      } catch {
+        return invalid('layout', 'website.error.invalidFields')
+      }
+      const layout = withPlacementIds(normalized, sha256)
       args.fields = studioFields(String(args.type), args.fields)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }

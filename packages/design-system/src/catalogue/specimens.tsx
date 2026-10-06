@@ -355,6 +355,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Unavailable" disabled />,
               <LinkButton label="Opening record" href="#record-page" loading />,
               <IconButton label="Toggle theme" icon="☾" />,
+              <LinkButton label="Open record" href="#record-page" icon="package" iconOnly />,
               <Button label="Collapse details" variant="tertiary" expanded controls="button-details" />,
             ]}
           />
@@ -1778,6 +1779,13 @@ export const componentGroups: readonly ComponentGroup[] = [
                 closeHref="#dialog"
                 closeLabel="Cancel"
                 confirmLabel="Archive"
+                details={
+                  <Checkbox
+                    id="archive-understood"
+                    name="understood"
+                    label="Keep it out of active worklists"
+                  />
+                }
               />,
             ]}
           />
@@ -1987,6 +1995,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
               />,
               <Switch id="notify" name="notify" label="Notify owner" checked />,
+              <Switch id="selected-only" name="selected-only" label="Selected" inline />,
               <Select
                 id="warehouse"
                 name="warehouse"
@@ -2396,6 +2405,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               />,
               <TreeGrid
                 label="Account hierarchy"
+                primaryLabel="Account"
                 rows={[
                   {
                     row: { id: '100', name: 'Assets', balance: '120.000.000 ₫' },
@@ -2406,6 +2416,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
                 id={(row) => row.id}
                 primary={(row) => `${row.id} · ${row.name}`}
+                rowHref={(row) => `#account-${row.id}`}
                 columns={[{ key: 'balance', label: 'Balance', cell: (row) => row.balance }]}
               />,
             ]}

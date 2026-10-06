@@ -4,7 +4,7 @@ import type { WebsiteRoute } from './extensions.ts'
 // live in the KetAtlas bundle, never here. Extensions add routes through extensions.ts.
 
 /** Sidebar groups in display order. Extensions may only place entries in these groups. */
-export const navGroups = Object.freeze(['home', 'content', 'experience', 'settings'])
+export const navGroups = Object.freeze(['home', 'content', 'products', 'experience', 'settings'])
 
 export const coreRoutes: Record<string, WebsiteRoute> = {
   overview: {
@@ -17,6 +17,103 @@ export const coreRoutes: Record<string, WebsiteRoute> = {
     path: 'pages',
     nav: { group: 'content', icon: 'file-text' },
     query: ['q', 'status'],
+  },
+  catalog: {
+    capability: 'website.catalog',
+    title: 'website.route.catalog',
+    path: 'catalog',
+    query: ['q', 'status', 'page'],
+    nav: { group: 'products', icon: 'package' },
+  },
+  'catalog-categories': {
+    capability: 'website.catalog',
+    title: 'website.catalogCategory.categories',
+    path: 'catalog/categories',
+    query: ['q'],
+    nav: { group: 'products', icon: 'list' },
+  },
+  'catalog-collections': {
+    capability: 'website.catalog',
+    title: 'website.catalogCategory.collections',
+    path: 'catalog/collections',
+    query: ['q'],
+    nav: { group: 'products', icon: 'layout-grid' },
+  },
+  'catalog-category-edit': {
+    title: 'website.catalogCategory.edit',
+    path: 'catalog/categories/:id',
+    query: ['kind'],
+  },
+  'catalog-category-preview': {
+    title: 'website.catalog.preview',
+    path: 'catalog/categories/:id/preview',
+    query: ['brand', 'q', 'page'],
+    frame: 'workspace',
+  },
+  'catalog-category-archive': {
+    title: 'website.catalogCategory.archive',
+    path: 'catalog/categories/:id/archive',
+    capability: 'website.content.write',
+    modal: { back: 'catalog-category-edit' },
+  },
+  'catalog-collection-edit': {
+    title: 'website.catalogCategory.edit',
+    path: 'catalog/collections/:id',
+    query: ['kind'],
+  },
+  'catalog-collection-preview': {
+    title: 'website.catalog.preview',
+    path: 'catalog/collections/:id/preview',
+    query: ['brand', 'q', 'page'],
+    frame: 'workspace',
+  },
+  'catalog-collection-archive': {
+    title: 'website.catalogCategory.archive',
+    path: 'catalog/collections/:id/archive',
+    capability: 'website.content.write',
+    modal: { back: 'catalog-collection-edit' },
+  },
+  'catalog-edit': {
+    title: 'website.catalog.websiteSettings',
+    path: 'catalog/items/:id',
+  },
+  'catalog-remove': {
+    title: 'website.catalog.removeTitle',
+    path: 'catalog/items/:id/remove',
+    capability: 'website.content.write',
+    modal: { back: 'catalog-edit' },
+  },
+  'catalog-new': {
+    title: 'website.catalog.chooseERP',
+    path: 'catalog/new',
+    capability: 'website.content.write',
+    modal: { back: 'catalog' },
+  },
+  'catalog-product-new': {
+    title: 'website.catalog.createProduct',
+    path: 'catalog/products/new',
+    capability: 'product.configure',
+  },
+  'catalog-product-edit': {
+    title: 'website.catalog.productContent',
+    path: 'catalog/products/:id',
+  },
+  'catalog-product-archive': {
+    title: 'website.catalog.lifecycle',
+    path: 'catalog/products/:id/lifecycle',
+    capability: 'product.configure',
+    modal: { back: 'catalog-product-edit' },
+  },
+  'catalog-template': {
+    title: 'website.catalog.serviceTemplate',
+    path: 'catalog/templates/:id',
+    query: ['product', 'device'],
+    frame: 'workspace',
+  },
+  'catalog-preview': {
+    title: 'website.catalog.preview',
+    path: 'catalog/items/:id/preview',
+    frame: 'workspace',
   },
   'page-new': {
     title: 'website.route.pageNew',

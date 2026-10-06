@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { compileThemeFrame } from '../frame.ts'
+import { THEME_FRAME_FILES } from '../types.ts'
+import type { ThemeFrameTemplates } from '../types.ts'
 import { checkThemeManifest } from '../package.ts'
 import type { ThemeFileEntry, ThemeIssue } from '../package.ts'
 import { THEME_FILE, THEME_LIMITS, themeFileType, themeStoragePrefix } from '../types.ts'
@@ -51,6 +54,31 @@ export async function stageThemeVersionHandler(ctx: Ctx, args: Row) {
       ok: false,
       errors: problems.map((p) => ({ field: p.detail, message: `website_theme.error.${p.code}` })),
     }
+  const frameTemplates: ThemeFrameTemplates = {}
+  const sources = args.frameTemplates ?? {}
+  if (
+    !sources ||
+    typeof sources !== 'object' ||
+    Array.isArray(sources) ||
+    Object.keys(sources).some((slot) => !manifest.frame.includes(slot as keyof typeof THEME_FRAME_FILES))
+  )
+    return issue('frameTemplates', 'website_theme.error.invalidPackage')
+  for (const slot of manifest.frame) {
+    const source = (sources as Row)[slot]
+    const file = files.find((entry) => entry.name === THEME_FRAME_FILES[slot])!
+    if (
+      typeof source !== 'string' ||
+      Buffer.byteLength(source) !== file.size ||
+      createHash('sha256').update(source).digest('hex') !== file.sha256
+    )
+      return issue('frameTemplates', 'website_theme.error.invalidPackage')
+    try {
+      compileThemeFrame(source, slot)
+    } catch {
+      return issue('frameTemplates', 'website_theme.error.invalidPackage')
+    }
+    frameTemplates[slot] = source
+  }
   const sorted = [...files].sort((a, b) => (a.name < b.name ? -1 : 1))
   const hash = createHash('sha256')
     .update(sorted.map((file) => `${file.name}\0${file.size}\0${file.sha256}\n`).join(''))
@@ -79,6 +107,7 @@ export async function stageThemeVersionHandler(ctx: Ctx, args: Row) {
       hash,
       manifest,
       files: sorted,
+      frameTemplates,
       storagePrefix,
       status: 'staged',
       statusReason: null,
@@ -133,7 +162,7 @@ export async function setThemeVersionStatusHandler(ctx: Ctx, args: Row) {
 export const registryFunctions: Record<string, FnSpec> = {
   stageThemeVersion: defineFn({
     exposure: 'internal',
-    input: { manifest: 'json', hash: 'text', files: 'json' },
+    input: { manifest: 'json', hash: 'text', files: 'json', frameTemplates: 'json?' },
     output: { ok: 'bool', id: 'id?', storagePrefix: 'text?', status: 'text?', errors: 'json?' },
     effects: registryEffects,
     handler: stageThemeVersionHandler,

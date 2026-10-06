@@ -36,7 +36,11 @@ const searchPage =
     const found =
       q.length >= 2
         ? ((await ctx.call(
-            'website_search.searchIndexed',
+            (
+              await ctx.live(req)
+            ).functions['website_catalog.searchIndexed']
+              ? 'website_catalog.searchIndexed'
+              : 'website_search.searchIndexed',
             {
               siteId: site.id,
               q,

@@ -11,7 +11,10 @@ import {
 } from './common.ts'
 
 const modules = [
-  ...commonBusinessModules,
+  ...commonBusinessModules.map((m) =>
+    m.name === 'product_media' ? suite.productMediaWithWebsiteCatalog() : m,
+  ),
+  suite.websiteCatalog,
   suite.pricing,
   suite.account,
   suite.businessReportStaffChannel,
@@ -36,8 +39,26 @@ export const createCommerceDeployment = (openStore: OpenStore = sqliteStore) =>
     name: 'commerce',
     datastore: 'commerce',
     modules,
-    permissions: productPermissions(modules, commerceRoleTemplates),
+    permissions: productPermissions(
+      modules,
+      Object.fromEntries(
+        Object.entries(commerceRoleTemplates).map(([key, value]) => [
+          key,
+          key === 'commerce.company-administrator'
+            ? {
+                ...value,
+                version: value.version + 1,
+                bundles: [...value.bundles, 'website_catalog.view', 'website_catalog.configure'],
+              }
+            : value,
+        ]),
+      ),
+    ),
     theme: suite.paperTheme,
     worker: { queues: productQueues },
-    serve: { ...productServe(openStore), defaults: productDefaults('commerce') },
+    serve: {
+      ...productServe(openStore),
+      pages: { ...productServe(openStore).pages!, resolve: 'website_catalog.getEntryByPath' },
+      defaults: productDefaults('commerce'),
+    },
   })

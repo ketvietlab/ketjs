@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canAdministerSite } from '../../website/access.ts'
+import { frameTemplatesOf } from '../frame.ts'
 import { resolveThemeSettings } from '../package.ts'
 import type { SelectedTheme, ThemeManifest } from '../types.ts'
 
@@ -11,9 +12,8 @@ const issue = (field: string, message: string) => ({ ok: false, errors: [{ field
  * Put a site on one of its company's available theme versions, or back on its bundled preset.
  *
  * It writes `studioStyle.theme` under the same revision check as `website.saveStudioStyle`, which
- * merges its own keys and so keeps the theme. Like any style change it is a draft until the site
- * publishes: publishing freezes the theme with the rest of the appearance, and a rollback renders with
- * the version that was live then.
+ * merges its own keys and so keeps the theme. Delivery reads site appearance live; page publication
+ * freezes content only. A later theme choice therefore applies across existing published pages.
  */
 export async function selectThemeHandler(ctx: Ctx, args: Row) {
   const site = (await ctx.db.select('website.Site', { id: args.siteId }))[0]
@@ -36,6 +36,7 @@ export async function selectThemeHandler(ctx: Ctx, args: Row) {
       connect: manifest.script?.connect ?? [],
       frame: manifest.script?.frame ?? [],
       settings: settings.settings,
+      frameTemplates: frameTemplatesOf(version.frameTemplates),
     }
   } else if (args.settings != null) return issue('settings', 'website_theme.error.invalidSetting')
   if (args.expectedRevisionId !== (site.styleRevision ?? 'initial'))
