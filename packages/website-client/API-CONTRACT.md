@@ -686,8 +686,8 @@ The host owns the behaviour below.
   SEO cannot be created or archived. The list `audit` is `{ publicationId, indexState, rows }` and lists
   only published entries missing a description or image, or whose draft differs from what is served.
 - Real Δ `kind: 'domains'`: adding a host goes through `website.saveDomain`; the site's first host is
-  primary. Each host has its own proof: a TXT record at `_ketviet.<host>` with the value
-  `ketviet-verify=<token>`, returned as `challenge: { type: 'TXT', name, value }` until it is proven.
+  primary. Each host has its own proof: a TXT record at `_ketsuite.<host>` with the value
+  `ketsuite-verify=<token>`, returned as `challenge: { type: 'TXT', name, value }` until it is proven.
   Retrying an add with the same host answers the same domain; another host under that id is refused.
   A host renamed outside the Studio gets a new token and must be proven again.
 - NEW `website.verifyDomain` `{ id }` (configure) looks the record up from the server. The result is
