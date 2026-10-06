@@ -77,13 +77,15 @@ export const TreeGrid = <Row,>(props: {
   rows: readonly TreeGridRow<Row>[]
   id: (row: Row) => string
   primary: (row: Row) => JSXChild
+  /** Localized heading for the hierarchy column. */
+  primaryLabel?: string
   columns: readonly TreeGridColumn<Row>[]
 }): TemplateResult => (
   // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA treegrid intentionally augments the native table model with expandable hierarchical rows.
   <table data-ui="tree-grid" role="treegrid" aria-label={props.label}>
     <thead>
       <tr>
-        <th scope="col">Name</th>
+        <th scope="col">{props.primaryLabel ?? 'Name'}</th>
         {each(
           props.columns,
           (column) => column.key,

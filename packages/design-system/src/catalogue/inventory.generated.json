@@ -5907,7 +5907,7 @@
         "packages/design-system/src/catalogue/specimens.tsx"
       ],
       "tests": "present",
-      "testFiles": ["test/design-system.test.tsx"],
+      "testFiles": ["test/design-system-tree-grid.test.tsx", "test/design-system.test.tsx"],
       "gapTask": "DS-032"
     },
     {
@@ -10058,6 +10058,7 @@
         "test/design-system-dates.test.tsx",
         "test/design-system-demo.test.ts",
         "test/design-system-normalization.test.tsx",
+        "test/design-system-tree-grid.test.tsx",
         "test/design-system.test.tsx",
         "test/experience-collection-controls.test.tsx",
         "test/experience-collection-tables.test.tsx",
