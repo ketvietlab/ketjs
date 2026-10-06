@@ -9524,6 +9524,7 @@
         "test/accounting.test.ts",
         "test/backend-ui.test.ts",
         "test/design-system-context-controls.test.tsx",
+        "test/design-system-control-size.test.tsx",
         "test/design-system-dates.test.tsx",
         "test/design-system-normalization.test.tsx",
         "test/design-system-primitives.test.tsx",
@@ -10303,6 +10304,7 @@
         "test/website-studio-content-http.test.ts",
         "test/website-studio-images-http.test.ts",
         "test/website-studio-public-http.test.ts",
+        "test/website-studio-rich-document-http.test.ts",
         "test/website-studio-search-http.test.ts",
         "test/website-studio-taxonomy-http.test.ts"
       ],
@@ -10635,7 +10637,8 @@
         "test/stock-picking-types-screens.test.tsx",
         "test/ui-modal-large-dialog.test.tsx",
         "test/ui-record-modal.test.tsx",
-        "test/website-search-index.test.ts"
+        "test/website-search-index.test.ts",
+        "test/website-tracking.test.ts"
       ],
       "gapTask": "DS-010"
     },
