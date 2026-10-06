@@ -787,6 +787,34 @@ test('product modal commands: delete removes only this template and asks before 
   assert.match(commands.delete!.confirm!(contextOf(templateData()))!, /archive\.deleteConfirm/)
 })
 
+test('product page: all record blocks render in peer cards without tabs, with independent save targets', () => {
+  const data = templateData({
+    extensionTabs: [{ id: 'extra', label: 'Extra', island: 'product.extra' }],
+  })
+  const page = contextOf(data, { presentation: 'page', tab: 'variants' })
+  const body = render(templateModalDefinition.body!(page))
+  assert.equal((body.match(/data-ui="surface"/g) ?? []).length, 3)
+  assert.match(body, /product-template-general-form/)
+  assert.match(body, /product\.extra/)
+  assert.doesNotMatch(body, /data-ui="tabbed-view"/)
+  assert.ok(templateModalDefinition.tabs!.every((tab) => !tab.visible!(page)))
+  assert.deepEqual(templateModalDefinition.extensionTabs!(page), [])
+  const creating = render(
+    templateModalDefinition.body!(contextOf(data, { creating: true, presentation: 'page' })),
+  )
+  assert.match(creating, /^<div data-ui="surface"/)
+  assert.equal((creating.match(/data-ui="surface"/g) ?? []).length, 1)
+  const header = render(templateModalDefinition.actions!(page) as JSXChild)
+  assert.match(header, /form="product-template-general-form"/)
+  assert.match(header, /product_backend\.action\.saveGeneral/)
+  assert.doesNotMatch(header, / disabled|product-variant-editor-tpl-1-save/)
+  assert.doesNotMatch(render(generalTab(contextOf(data))), /data-ui="surface"/)
+  assert.doesNotMatch(
+    render(templateModalDefinition.body!(contextOf(data, { creating: true }))),
+    /data-ui="surface"/,
+  )
+})
+
 test('product page: the header goes back to the catalogue and More opens downward, create included', () => {
   const page = render(
     templateModalDefinition.actions!(

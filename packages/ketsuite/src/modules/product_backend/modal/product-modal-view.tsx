@@ -3,7 +3,7 @@
 // A template opens on its own page, `/admin/product/templates/{id}`; the catalogue's
 // create action opens `/admin/product/templates/new`. The server renders the page in
 // its loading state and this definition renders the record. Only the General and
-// Attributes & variants tabs are covered
+// Attributes & variants blocks are covered (the compatibility modal retains tabs)
 // — Media and the description's rich-text controller stay on the server-rendered
 // detail page (`/admin/product/templates/{id}?tab=media`) until a nested-island
 // composition path (`recordIsland`) for them is proven elsewhere first.
@@ -11,14 +11,23 @@
 // `product.saveTemplate` does not touch stock tracking or tax — those are separate
 // modules' functions (`stock.configureProduct`, `account.setProductTax`), and a
 // function handler cannot call another function. So the one "save" command the
-// General tab offers runs all three in sequence (`RecordModalCommand.also`),
+// General form offers runs all three in sequence (`RecordModalCommand.also`),
 // skipping whichever module is not installed or not permitted — one button, one
 // busy state, one success notice, even though three calls happen underneath.
 //
 // Bundled by tools/build-backend-client.mjs into product_backend/client/.
 
 import { TEMPLATE_RECORD_LABELS } from '../../product/template-record-labels.ts'
-import { ActionMenu, Badge, Button, Notice, RecordActions, Section, Stack } from '@ketvietlab/design-system'
+import {
+  ActionMenu,
+  Badge,
+  Button,
+  Notice,
+  RecordActions,
+  Section,
+  Stack,
+  Surface,
+} from '@ketvietlab/design-system'
 import type {
   FieldOption,
   FieldProps,
@@ -616,7 +625,7 @@ const actions = (c: Context): JSXChild | undefined => {
       RecordActions({
         label: t(c, 'action.more'),
         actions: [
-          c.tab === 'variants'
+          c.presentation !== 'page' && c.tab === 'variants'
             ? c.data.variantSetup && c.data.permissions.saveVariantSetup === true
               ? // The variant editor island owns this save: the button submits the
                 // island's own form, and the island enables it once there is a
@@ -636,12 +645,13 @@ const actions = (c: Context): JSXChild | undefined => {
                   type: 'submit',
                   name: COMMAND_FIELD,
                   value: 'save',
-                  label: t(c, 'action.save'),
+                  label: t(c, c.presentation === 'page' ? 'action.saveGeneral' : 'action.save'),
                   variant: 'primary',
                   loading: c.busy,
                   form: GENERAL_FORM_ID,
-                  // The General tab's form only exists in the DOM while that tab is active.
-                  disabled: c.tab !== 'general',
+                  // A page shows the General block continuously; a modal still
+                  // only mounts its form while the General tab is active.
+                  disabled: c.presentation !== 'page' && c.tab !== 'general',
                 })
               : '',
           closeButton(c),
@@ -701,6 +711,39 @@ const createView = (c: Context): JSXChild =>
 
 // ── Definition ────────────────────────────────────────────────────────────────
 
+// A durable record's forms live on peer working cards, using the Polaris-style
+// canvas/card hierarchy. Sections and nested tables stay flat within each card.
+// A modal already supplies its own surface, so it does not gain another frame.
+const recordCard = (c: Context, body: JSXChild): JSXChild =>
+  c.presentation === 'page' ? Surface({ body }) : body
+
+const pageBlocks = (c: Context): JSXChild =>
+  Stack({
+    items: [
+      Surface({ body: generalTab(c) }),
+      Surface({
+        title: t(c, 'tabs.variants'),
+        actions:
+          c.data.variantSetup && c.data.permissions.saveVariantSetup === true
+            ? Button({
+                type: 'submit',
+                label: t(c, 'variantEditor.save'),
+                variant: 'primary',
+                form: `${variantEditorId(c)}-save`,
+                disabled: true,
+              })
+            : undefined,
+        body: variantsTab(c),
+      }),
+      ...(c.data.extensionTabs ?? []).map((block) =>
+        Surface({
+          title: block.label,
+          body: recordIsland(block.island, { templateId: c.id, locale: c.data.lang }),
+        }),
+      ),
+    ],
+  })
+
 export const templateModalDefinition: RecordModalDefinition<TemplateModalData> = {
   kind: 'product.template',
   labels: () => TEMPLATE_RECORD_LABELS[pageLang()],
@@ -712,13 +755,23 @@ export const templateModalDefinition: RecordModalDefinition<TemplateModalData> =
   title: (c) => (c.creating ? t(c, 'create.title') : c.data.record.name),
   status: statusBadge,
   actions,
-  body: (c) => (c.creating ? createView(c) : ''),
+  body: (c) => (c.creating ? recordCard(c, createView(c)) : c.presentation === 'page' ? pageBlocks(c) : ''),
   tabs: [
-    { id: 'general', label: (c) => t(c, 'tabs.general'), visible: (c) => !c.creating, view: generalTab },
-    { id: 'variants', label: (c) => t(c, 'tabs.variants'), visible: (c) => !c.creating, view: variantsTab },
+    {
+      id: 'general',
+      label: (c) => t(c, 'tabs.general'),
+      visible: (c) => !c.creating && c.presentation !== 'page',
+      view: generalTab,
+    },
+    {
+      id: 'variants',
+      label: (c) => t(c, 'tabs.variants'),
+      visible: (c) => !c.creating && c.presentation !== 'page',
+      view: variantsTab,
+    },
   ],
   extensionTabs: (c) =>
-    c.creating
+    c.creating || c.presentation === 'page'
       ? []
       : (c.data.extensionTabs ?? []).map((tab) => ({
           id: tab.id,

@@ -12042,6 +12042,7 @@
         "test/identity-engine.test.ts",
         "test/menu.test.ts",
         "test/partner-e2e.test.ts",
+        "test/product-modal-view.test.tsx",
         "test/roles.test.ts",
         "test/serve.test.ts",
         "test/staff-hospitality-channel.test.ts",
