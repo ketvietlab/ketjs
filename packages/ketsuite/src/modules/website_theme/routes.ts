@@ -1,4 +1,4 @@
-import { streamed, text, withHeaders } from '@ketvietlab/ketjs'
+import { raw, streamed, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { themeBootModule } from './boot.ts'
 
@@ -55,6 +55,16 @@ export const routes: Record<string, RouteEntry> = {
         }
         const object = await storage.get(String(file.storeKey))
         if (!object) return missing()
+        // SVG is intentional markup. Keep its opaque-origin sandbox even when opened directly;
+        // the octet response helpers deliberately reject active markup content types.
+        if (type === 'image/svg+xml') {
+          const chunks: Uint8Array[] = []
+          for await (const chunk of object.body) chunks.push(chunk)
+          return withHeaders(raw(Buffer.concat(chunks).toString('utf8'), { type }), {
+            ...IMMUTABLE,
+            'content-length': String(object.meta.size),
+          })
+        }
         return withHeaders(streamed(object.body, { type }), {
           ...IMMUTABLE,
           'content-length': String(object.meta.size),
