@@ -56,8 +56,9 @@ test('public production permission catalogue covers every function owned by its 
     // 91: the public form section's fields and the form receipt, both website_form.
     // 95: customer password reset (request, complete, and its mail bridge) and the operator's
     // mark that a domain serves.
+    // 99: the website theme registry: the operator's three install steps and the /_theme file route.
     // The reasons live beside their declarations.
-    Object.keys(manifest.permissions.exemptions).length <= 95,
+    Object.keys(manifest.permissions.exemptions).length <= 99,
     'a new permission exemption was added — say why, in the declaration',
   )
 

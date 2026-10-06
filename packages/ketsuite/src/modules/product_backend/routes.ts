@@ -697,7 +697,15 @@ export const routes: Record<string, RouteEntry> = {
       const returnTo = form.returnTo?.startsWith('/admin/product/templates') ? form.returnTo : fallback
       if (!ids.length) return seeOther(returnTo)
       if (form.action === 'archive') {
-        for (const id of ids) await ctx.call('product.archiveTemplate', { id, active: false }, url, req)
+        for (const id of ids) {
+          const current = (await ctx.call('product.getTemplate', { id }, url, req)) as { revisionId?: string }
+          await ctx.call(
+            'product.archiveTemplate',
+            { id, active: false, expectedRevisionId: current.revisionId ?? 'initial', confirmed: true },
+            url,
+            req,
+          )
+        }
         return seeOther(returnTo)
       }
       if (form.action === 'delete') {

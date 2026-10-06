@@ -46,6 +46,7 @@ perform; the server checks again on every call.
 | `website.submission.manage` | Core | Open, hold and export submissions          |
 | `website.analytics.read` | Pro   | Analytics screen and the overview card            |
 | `website.portfolio.read` | Pro   | The company-wide site list                        |
+| `website.theme.select` | Core    | Pick one of the company's installed themes for a site (only where `website_theme` is composed) |
 
 KetSuite's permission catalogue speaks in `read`/`configure`/`security` grants per function. The host maps
 those grants to these capability names when it builds the bootstrap; the client never sees grants.
@@ -381,6 +382,11 @@ using the resource revision and preserving unedited fields. Its read combines si
 listResources(kind=domains). website.saveSite remains a legacy fixture handler, not the current UI
 write contract. ERP owns staff membership; website.listSiteMembers and kind=members were removed
 from the mock, including generic create/update/archive support. Actor capabilities remain enforced.
+
+`sites.googleTagManagerId` is optional site configuration saved by the Settings resource. Empty
+disables tracking; nonempty values must match `GTM-[A-Z0-9]{4,20}`. Save applies immediately without
+republishing entries. Native pages load the container only for visitors on the configured site host,
+outside preview and staff sessions. Container triggers govern events and device conditions.
 
 
 ### Object Storage ownership — 2026-09-30
@@ -762,3 +768,23 @@ that already exist keep the look they render with.
   the customer channel's own partner-scoped endpoints; the public page does not accept a partner ID.
 - Két Việt composes `website_retail` in commerce and cosmetic, and `website_hospitality` in hospitality.
   F&B and office do not show either history section unless they later compose a matching channel.
+
+## Company themes in the Studio (2026-10-05)
+
+- Where the deployment composes `website_theme` and the actor may run both `website_theme.listThemes`
+  and `website_theme.selectTheme`, the bootstrap grants `website.theme.select`. An unrestricted actor
+  gets it only when those functions exist; the same check now applies to every capability.
+- `website_studio.getResource` for `kind: 'themes'` adds `companyThemes`: the company's own themes at
+  their newest available version, each `{id, key, title, version, settings, script}`. `theme` is the
+  site's current selection from its draft style, `{key, versionId, version, settings, ...}`, or absent.
+- `website_studio.selectCompanyTheme` takes `{siteId, id, expectedRevisionId, versionId, settings?}`.
+  `id` is the site id, as for the themes resource. `versionId: null` returns the site to its preset
+  and ignores `settings`. It runs `website_theme.selectTheme` with the style revision as CAS and
+  returns the themes resource as `getResource` does. The choice is a draft: visitors see it after the
+  next publish.
+- A setting may carry `label`, and an enum setting `labels` per value, from the theme's manifest. The
+  Studio shows those words and falls back to the setting name and raw value.
+
+### Builder theme rendering
+
+Theme resources expose a host-owned relative `stylesheet` and compiled `frame` slots for the editing canvas. `createPreview` + `preview` provide the saved snapshot URL; `themeInteractive=1` enables theme JS only on a valid native preview. The response enforces an opaque script-only sandbox, blocks forms, and excludes GTM. Immutable theme modules allow anonymous CORS for this opaque frame; public anonymous pages allow read-only CORS for theme navigation data. Studio APIs retain their authentication and origin checks. Local `*.localhost` preview URLs retain the Studio port.

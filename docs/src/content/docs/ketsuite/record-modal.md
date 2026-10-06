@@ -10,6 +10,8 @@ KetSuite module does it, so a care task, a sales case and a partner behave ident
 
 A record that is a workspace of its own opens on its page instead (see [Record pages](#record-pages)):
 the same definition, rendered by the same client runtime in its page presentation.
+Administration profiles — a user, a role, an access policy — are the exception: they open on their own
+page on the same runtime with route-provided context. See [Administration profiles](#record-pages-for-administration-profiles) below.
 
 ## URL
 
@@ -201,8 +203,8 @@ Desktop `fixedHeight` is carried by `--kv-modal-fixed-height`; it never override
 ## Record pages
 
 Product templates open on their own page: `/admin/product/templates/{id}`, and
-`/admin/product/templates/new` for the create action. The record is still rendered client side; only
-where it sits changes.
+`/admin/product/templates/new` for the create action. The record is still rendered client side. General and Attributes & variants are peer Surface cards,
+shown together without page tabs; each form keeps its own save action.
 
 ```
 # File: URL shape of a record page
@@ -228,3 +230,23 @@ where it sits changes.
 - A successful command announces `ket:records-changed` with `page: true`. The page reads its own
   context again, so the shell does not re-fetch the route behind it.
 - Links from the modal era (`?record=<kind>:<id>`) on the collection redirect to the page.
+
+## Record pages for administration profiles
+
+A profile the reader studies, links to and returns to lives at `/admin/<things>/{id}` as a
+`RecordPage` (56rem, no tabs). It reuses the record runtime, so dialogs, commands, drafts and
+refusals behave exactly as in the modal.
+
+1. Declare the island with `defineRecordPageIsland({ kind, client, export })`. Its props are
+   `{ id, title, loadingLabel, trail?, trailLabel?, envelope? }`, keyed by `id`.
+2. The detail route calls the module's `modalContext` itself and passes the result as `envelope`,
+   with the collection's `returnTo` as the last trail link. The server writes `recordPageShell`,
+   the client adopts the same markup and then shows the record without another request.
+3. The client exports `createRecordPage(definition)`: the modal definition without `header` and
+   `tabs`, with `body` for the blocks — one titled `Surface` each, returned as siblings so the page
+   owns the gap between them — and `pageActions` for the header's commands.
+4. Rows link to the page with the collection's state in `returnTo`. Creating stays a modal over the
+   collection; its command `navigate`s to the new page. `?record=<kind>:<id>` redirects to the page.
+
+`close`, `reload`, `open` and tab afters only close the top dialog; the page itself never closes,
+and `ket:records-changed` for its id reloads it in place.

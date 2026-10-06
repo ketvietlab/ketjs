@@ -6,9 +6,17 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { profileScreen, usersGrid, usersScreen } from './screens/index.ts'
+import { profileScreen, userPageScreen, usersGrid, usersScreen } from './screens/index.ts'
 import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
-import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import {
+  RECORD_NEW_ID,
+  readRecordModalTarget,
+  recordModalClosedHref,
+  recordModalCreateHref,
+} from '../../ui/record-modal.tsx'
+import type { RecordPageIslandProps } from '../../ui/record-modal.tsx'
+import { pageTrailItems } from '../../ui/navigation.tsx'
+import { USER_RECORD_MODAL_LABELS } from '../user/modal-labels.ts'
 import type { TableSelection, TailMenu } from '../../ui/index.ts'
 import { tableGrid } from '../backend/ket-table.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
@@ -161,6 +169,12 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const live = await ctx.live(req)
       if (live.routes['/admin/users/directory']) return seeOther(`/admin/users/directory${url.search}`)
+      // A person is read on their own page; links written for the old modal land there.
+      const named = readRecordModalTarget(url)
+      if (named?.kind === 'user.user' && named.id !== RECORD_NEW_ID) {
+        const closed = new URL(recordModalClosedHref(url.href), url)
+        return seeOther(userDetailPath(url, named.id, `${closed.pathname}${closed.search}`))
+      }
       // An identity adapter that owns account creation keeps its own page; only the
       // deployments without one open the create action in the record modal.
       const deploymentCreatesAccounts = !!live.routes[accountCreationRoute]
@@ -195,12 +209,9 @@ export const routes: Record<string, RouteEntry> = {
             spec: userListSearch,
             rows: allRows.map((row) => ({
               ...row,
-              // A row opens the person in the record modal; the collection behind it
-              // keeps its query, page and archive state.
-              detailHref: recordModalHref(`${url.pathname}${url.search}`, {
-                kind: 'user.user',
-                id: row.id,
-              }),
+              // A row opens the person's page; its way back keeps the collection's
+              // query, page and archive state.
+              detailHref: userDetailPath(url, row.id, returnTo),
             })),
             frame,
             name: 'user-people-filter',
@@ -223,6 +234,7 @@ export const routes: Record<string, RouteEntry> = {
                 formId: 'user-people-bulk',
                 action: inLocale(url, '/admin/users/bulk'),
                 hidden: { returnTo },
+                presentation: 'bar',
                 actions: [
                   { id: 'activate', label: _('user_backend.action.activateSelected') },
                   { id: 'deactivate', label: _('user_backend.action.deactivateSelected'), tone: 'danger' },
@@ -232,10 +244,7 @@ export const routes: Record<string, RouteEntry> = {
           const prepared = usersGrid(_, search.frame, {
             rows: search.rows,
             ...(search.groups ? { groups: search.groups } : {}),
-            rowHrefTemplate: recordModalHref(`${url.pathname}${url.search}`, {
-              kind: 'user.user',
-              id: '__row__',
-            }).replace('__row__', '{id}'),
+            rowHrefTemplate: userDetailPath(url, '__row__', returnTo).replace('__row__', '{id}'),
             selection,
           })
           const grid = await tableGrid(ctx, url, req, 'user-people-table', prepared.config)
@@ -296,15 +305,46 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const user = await ctx.call('user.getUser', { id: params.id }, url, req)
-      if (!user) return text('not found', { status: 404 })
-      return seeOther(
-        recordModalHref(new URL(safeUserReturnTo(url, url.searchParams.get('returnTo')), url), {
-          kind: 'user.user',
-          id: params.id,
-          tab: url.searchParams.get('tab') ?? 'overview',
-        }),
-      )
+      const lang = ctx.localeOf(url, req) === 'en' ? 'en' : 'vi'
+      // The page arrives with the same permission-checked read the browser would make.
+      const envelope = (await ctx.call(
+        'user.userModalContext',
+        { id: params.id, locale: lang },
+        url,
+        req,
+      )) as {
+        data?: { record?: { name?: string; login?: string } }
+      } | null
+      const record = envelope?.data?.record
+      if (!record) return text('not found', { status: 404 })
+      const title = record.name || record.login || params.id
+      const returnTo = safeUserReturnTo(url, url.searchParams.get('returnTo'))
+      return adminPage(ctx, url, req, {
+        title,
+        translate: false,
+        active: '/admin/users',
+        body: async (_, frame) => {
+          // The collection step returns to the list as it was left.
+          const trail = pageTrailItems(title, frame).map((item) => ({
+            label: item.label,
+            href: 'href' in item && item.href ? (item.href === '/admin/users' ? returnTo : item.href) : null,
+          }))
+          const props: RecordPageIslandProps = {
+            id: params.id,
+            title,
+            loadingLabel: USER_RECORD_MODAL_LABELS[lang]['recordModal.loading']!,
+            trail,
+            trailLabel: _('user_backend.users.title'),
+            envelope,
+          }
+          return userPageScreen(
+            _,
+            title,
+            await ctx.joint(url, req, 'user_backend:user.record-page', props),
+            frame,
+          )
+        },
+      })
     },
   '/admin/users/{id}/sessions/{sessionId}':
     (ctx: ServeContext): Route =>

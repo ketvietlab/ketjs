@@ -140,6 +140,7 @@ export const productModalContextFunctions: Record<string, FnSpec> = {
         data: {
           record: {
             id: String(record.id ?? ''),
+            revisionId: String(record.revisionId ?? 'initial'),
             name: String(record.name ?? ''),
             type: String(record.type ?? 'goods'),
             categoryId: record.categoryId == null ? null : String(record.categoryId),

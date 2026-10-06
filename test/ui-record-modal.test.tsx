@@ -15,12 +15,15 @@ import {
   recordModalHost,
   recordModalHref,
   recordPageLoading,
+  recordPageShell,
 } from '@ketvietlab/ketsuite/ui'
 
 import {
   RECORD_MODAL_LABELS,
   callRecordFunction,
   callRecordRoute,
+  createRecordModal,
+  createRecordPage,
   delayedFlag,
   openerHref,
   resolveRecordModalIssue,
@@ -439,7 +442,7 @@ test('record modal: a command that leaves the modal open says it worked', () => 
     'the positive notice stands where the danger notice would',
   )
   // One that closes says it by closing.
-  assert.match(runtime, /if \(after !== 'close'\) saved\.set\(true\)/u)
+  assert.match(runtime, /if \(after !== 'close' && after === declared\) saved\.set\(true\)/u)
   // It is never stale: a new submit, another record and closing all clear it.
   assert.match(runtime, /showBusy\.set\(value\)\s*\n\s*if \(value\) saved\.set\(false\)/u)
   const show = runtime.slice(runtime.indexOf('const show = '))
@@ -741,10 +744,7 @@ test('record page: the server renders the RecordPage loading state the client ad
 test('record page: the record runtime renders a page that leaves for its collection and owns no history', () => {
   // One controller serves both presentations; a page is not a layer.
   assert.match(runtime, /export const createRecordPage =/u)
-  assert.match(
-    runtime,
-    /const layerSelector = page \? `\[data-ui="record-page"\], \$\{MODAL_LAYER\}` : MODAL_LAYER/u,
-  )
+  assert.match(runtime, /: page\s*\? `\[data-ui="record-page"\], \$\{MODAL_LAYER\}`\s*: MODAL_LAYER/u)
   assert.match(runtime, /if \(page\) return pageView\(page\)/u)
   // Closing a page (Close, a delete that closes) leaves through the shell's link handling.
   const hide = runtime.slice(runtime.indexOf('const hide = ('), runtime.indexOf('const close = ('))
@@ -759,4 +759,115 @@ test('record page: the record runtime renders a page that leaves for its collect
   assert.match(runtime, /\.\.\.\(page \? \{ page: true \} : \{\}\)/u)
   const refresh = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
   assert.match(refresh, /detail\?\.page\) return/u)
+})
+
+// ── Record pages ──────────────────────────────────────────────────────────────
+
+test('record page: the server writes the frame the browser adopts, titled and on its trail', () => {
+  const props = {
+    id: 'u-1',
+    title: 'Minh Trang',
+    loadingLabel: 'Đang tải…',
+    trail: [
+      { label: 'Hệ thống' },
+      { label: 'Người dùng', href: '/admin/users?q=tr' },
+      { label: 'Minh Trang' },
+    ],
+    trailLabel: 'Người dùng',
+    envelope: { data: {}, messages: {} },
+  }
+  const html = renderToString(recordPageShell(props))
+  assert.match(html, /^<div data-record-layer="page">(?:<!--k\[-->)*<section data-ui="record-page"/u)
+  assert.match(html, /data-width="default"/u, 'an administrative profile is a bounded column')
+  assert.match(
+    html,
+    /data-variant="operational"/u,
+    'it sits in the operational shell like every other record screen',
+  )
+  assert.match(
+    html,
+    /data-variant="operational"/u,
+    'it sits in the operational shell like every other record screen',
+  )
+  assert.match(html, /<nav data-ui="breadcrumbs"[^>]*aria-label="Người dùng"/u)
+  assert.match(html, /href="\/admin\/users\?q=tr"/u, 'the way back keeps the collection as it was left')
+  assert.match(html, /Minh Trang/u)
+  assert.match(html, /Đang tải…/u)
+  // The record data rides in the island props, never in the frame itself.
+  assert.doesNotMatch(html, /messages/u)
+
+  const island = defineRecordPageIsland({ kind: 'user.user', client: 'user-modal.mjs', export: 'userPage' })
+  assert.deepEqual(Object.keys(island.props ?? {}), [
+    'id',
+    'title',
+    'loadingLabel',
+    'loading',
+    'back',
+    'tab',
+    'width',
+    'trail',
+    'trailLabel',
+    'envelope',
+  ])
+  assert.deepEqual(island.key, ['id'])
+  const view = island.view(props)
+  assert.equal(renderToString((typeof view === 'function' ? view : view.view)()), html)
+  assert.throws(() => defineRecordPageIsland({ kind: 'Bad Kind', client: 'x.mjs', export: 'x' }), TypeError)
+})
+
+test('record page: the runtime keeps a page a page — no history, no fence, no close', () => {
+  // Hydration adopts exactly the server frame before the record is drawn.
+  assert.match(runtime, /if \(!adopted\(\)\) return recordPageShell\(pageProps!\)/u)
+  assert.match(runtime, /if \(serverPage\) \{\s*adopted\.set\(true\)/u)
+  // Links naming records, back/forward and the deep link stay with the modal hosts.
+  const click = runtime.slice(runtime.indexOf('const inModal = element?.closest(layerSelector)'))
+  assert.match(click.slice(0, click.indexOf('const href = openerHref(element)')), /if \(serverPage\) return/u)
+  const mount = runtime.slice(runtime.indexOf('mount: ({ root: host, lifetime })'))
+  assert.ok(
+    mount.indexOf('if (serverPage) {') < mount.indexOf("'ket:popstate'"),
+    'a page returns before it listens to history',
+  )
+  // The rest of the document is fenced off only while a dialog is over the page.
+  const show = runtime.slice(runtime.indexOf('const show = ('), runtime.indexOf('const hide = ('))
+  assert.ok(show.indexOf('if (page) {') < show.indexOf('releaseInert = inertOutside(root)'))
+  assert.match(
+    runtime,
+    /if \(currentLayers\.length > 1\) \{\s*if \(root && !releaseInert\) releaseInert = inertOutside\(root\)/u,
+  )
+  // Closing a dialog leaves the address alone; the page itself never closes.
+  assert.match(runtime, /if \(current && !serverPage\)\s*history\.replaceState/u)
+  assert.match(runtime, /if \(page\) return\s*if \(!mayDiscard\(recordLayer\(\)\)\) return/u)
+  // What would close the modal closes the dialog and reads the record again in place.
+  assert.match(runtime, /serverPage &&[\s\S]{0,200}declared === 'close'[\s\S]{0,200}\? \{ dialog: null \}/u)
+})
+
+test('record page: both client-read and route-context factories adopt their server frame', () => {
+  const definition = {
+    kind: 'test.record',
+    title: () => 'Record',
+    context: { fn: 'test.context' },
+  }
+  const clientProps = {
+    id: 'new',
+    title: 'Create',
+    loading: 'Loading',
+    back: '/admin/records',
+    width: 'wide',
+  }
+  const client = createRecordPage(definition, { path: (id) => `/admin/records/${id}` })(clientProps)
+  assert.equal(renderToString(client.view()), renderToString(recordPageLoading(clientProps)))
+  const routeProps = {
+    id: 'r-1',
+    title: 'Record',
+    loadingLabel: 'Loading',
+    trail: [{ label: 'Records', href: '/admin/records' }],
+    envelope: { data: { name: 'Record' }, messages: {} },
+  }
+  for (const factory of [
+    createRecordPage(definition),
+    createRecordModal(definition, { presentation: 'page' }),
+  ]) {
+    const page = factory(routeProps)
+    assert.equal(renderToString(page.view()), renderToString(recordPageShell(routeProps)))
+  }
 })

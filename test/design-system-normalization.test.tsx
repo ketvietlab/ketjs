@@ -274,6 +274,13 @@ test('stacked data tables override desktop fixed row height at the owning select
   assert.ok(
     legacy.includes('[data-ui="table-scroll"]:not([data-pattern="data-table"]):not([data-gutter="compact"])'),
   )
+  // The legacy compact inset never reaches a DataTable: in a card it pushed the table past the edge.
+  const flat = legacy.replace(/\s+/g, ' ')
+  assert.match(
+    flat,
+    /\[data-ui="table-scroll"\]\[data-gutter="compact"\]:not\(\[data-pattern="data-table"\]\) \{ margin: 10px;/,
+  )
+  assert.doesNotMatch(flat, /\[data-ui="table-scroll"\]\[data-gutter="compact"\] \{ margin: 10px/)
 })
 
 test('page gutter and card gaps share the responsive layout token', () => {

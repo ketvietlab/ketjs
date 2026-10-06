@@ -598,7 +598,7 @@ test("product modal: the footer's More menu names archive vs restore by the reco
 
   const archived = render(
     templateModalDefinition.actions!(
-      contextOf(templateData({ record: record({ active: false }) })),
+      contextOf(templateData({ record: record({ active: false, revisionId: 'rev-2' }) })),
     ) as JSXChild,
   )
   assert.match(archived, /product_backend\.archive\.restore/)
@@ -765,18 +765,27 @@ test('product modal commands: save runs template, stock and tax in sequence, eac
   assert.equal(also[1]!.when!(noPermission), false)
 })
 
-test('product modal commands: archive carries the record id with no extra form fields', () => {
-  assert.deepEqual(commands.archive!.input(new FormData(), contextOf(templateData()), {}), {
-    id: 'tpl-1',
-    active: false,
-  })
+test('product modal commands: archive carries the current revision and confirmation', () => {
   assert.deepEqual(
     commands.archive!.input(
       new FormData(),
-      contextOf(templateData({ record: record({ active: false }) })),
+      contextOf(templateData({ record: record({ revisionId: 'rev-1' }) })),
       {},
     ),
-    { id: 'tpl-1', active: true },
+    {
+      id: 'tpl-1',
+      active: false,
+      expectedRevisionId: 'rev-1',
+      confirmed: true,
+    },
+  )
+  assert.deepEqual(
+    commands.archive!.input(
+      new FormData(),
+      contextOf(templateData({ record: record({ active: false, revisionId: 'rev-2' }) })),
+      {},
+    ),
+    { id: 'tpl-1', active: true, expectedRevisionId: 'rev-2', confirmed: true },
   )
 })
 

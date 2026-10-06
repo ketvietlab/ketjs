@@ -20,6 +20,9 @@ export type LiveDescriptionProps = {
   readOnly?: boolean
   /** A form field: the document and its plain text post with the form. */
   field?: boolean
+  documentField?: string
+  textField?: string
+  notify?: boolean
   images?: LiveImageProps
 }
 
@@ -31,6 +34,9 @@ export function LiveDescription({
   label,
   readOnly = false,
   field = false,
+  documentField = 'descriptionDoc',
+  textField = 'description',
+  notify = false,
   images,
 }: LiveDescriptionProps) {
   return (
@@ -59,12 +65,12 @@ export function LiveDescription({
             blocks: descriptionBlocks(value, text),
             onChange: field
               ? (next) => {
-                  root.querySelector<HTMLInputElement>('[name="descriptionDoc"]')!.value = JSON.stringify(
+                  const doc = root.querySelector<HTMLInputElement>(`[name="${documentField}"]`)!
+                  doc.value = JSON.stringify(next.blocks)
+                  root.querySelector<HTMLInputElement>(`[name="${textField}"]`)!.value = descriptionText(
                     next.blocks,
                   )
-                  root.querySelector<HTMLInputElement>('[name="description"]')!.value = descriptionText(
-                    next.blocks,
-                  )
+                  if (notify) doc.dispatchEvent(new Event('input', { bubbles: true }))
                 }
               : undefined,
           },
@@ -74,8 +80,8 @@ export function LiveDescription({
     >
       {field ? (
         <>
-          <input type="hidden" name="descriptionDoc" value={value} />
-          <input type="hidden" name="description" value={text} />
+          <input type="hidden" name={documentField} value={value} />
+          <input type="hidden" name={textField} value={text} />
         </>
       ) : null}
       {images ? LiveImage(images) : null}
