@@ -57,7 +57,9 @@ export const routes: Record<string, RouteEntry> = {
         if (req.method !== 'GET' && req.method !== 'HEAD') return notAllowed()
         const site = await siteFor(ctx, url, req)
         const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
-        return cached(text(robotsTxt(originOf(req), { indexable: site !== null, prefixes })))
+        // Theme files are what a crawler needs to render a themed page the way a visitor sees it.
+        const allow = prefixes.includes('/_theme') ? ['/_theme'] : []
+        return cached(text(robotsTxt(originOf(req), { indexable: site !== null, prefixes, allow })))
       },
   },
 
@@ -73,7 +75,11 @@ export const routes: Record<string, RouteEntry> = {
         // not call it; through ctx.call every anonymous request was refused and the file was
         // never served. The site here is the one this host resolved to, not one the caller named.
         const entries = (await ctx.callUnchecked(
-          'website_seo.sitemapEntries',
+          (
+            await ctx.live(req)
+          ).functions['website_catalog.sitemapEntries']
+            ? 'website_catalog.sitemapEntries'
+            : 'website_seo.sitemapEntries',
           { siteId: site.id },
           url,
           req,
