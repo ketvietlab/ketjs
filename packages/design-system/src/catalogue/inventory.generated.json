@@ -17,7 +17,7 @@
     "runtimeGaps": 9,
     "typeGaps": 157,
     "cssFiles": 82,
-    "cssLines": 17215
+    "cssLines": 17217
   },
   "rows": [
     {
@@ -9914,6 +9914,8 @@
         "test/user-set-workplaces.test.ts",
         "test/user-users-list-http.test.ts",
         "test/view.test.ts",
+        "test/website-catalog-http.test.ts",
+        "test/website-catalog.test.ts",
         "test/website-form-route.test.ts",
         "test/website-form-version.test.ts",
         "test/website-preview-renderer.test.ts",
@@ -10302,6 +10304,7 @@
         "test/backend-ui.test.ts",
         "test/flow-editor-view.test.ts",
         "test/flow-markdown.test.ts",
+        "test/website-catalog.test.ts",
         "test/website-search-index.test.ts",
         "test/website-studio-archive-http.test.ts",
         "test/website-studio-content-http.test.ts",
@@ -12087,7 +12090,8 @@
         "test/backend-ui.test.ts",
         "test/hospitality-e2e.test.ts",
         "test/partner-e2e.test.ts",
-        "test/partner-form-screen.test.tsx"
+        "test/partner-form-screen.test.tsx",
+        "test/website-catalog.test.ts"
       ],
       "gapTask": "DS-010"
     },
@@ -12768,7 +12772,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/layout/styles.css",
-      "lines": 743,
+      "lines": 745,
       "hooks": [
         "card-actions",
         "card-body",
