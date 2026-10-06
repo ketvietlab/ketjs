@@ -2,6 +2,21 @@
 // under their own names and cannot redefine a core key (`registerMessages` rejects it).
 export const coreMessages = {
   vi: {
+    'website.builder.setting.images': 'Ảnh trong bộ sưu tập',
+    'website.builder.setting.galleryLayout': 'Kiểu trình bày',
+    'website.builder.setting.rows': 'Số hàng',
+    'website.builder.setting.interval': 'Thời gian chuyển (giây)',
+    'website.gallery.grid': 'Lưới ảnh',
+    'website.gallery.slideshow': 'Banner trình chiếu',
+    'website.gallery.activity': 'Ảnh hoạt động chuyển động',
+    'website.gallery.clients': 'Logo khách hàng chuyển động',
+    'website.gallery.add': 'Thêm ảnh',
+    'website.gallery.alt': 'Mô tả ảnh',
+    'website.gallery.mobile': 'Ảnh điện thoại',
+    'website.gallery.remove': 'Xóa ảnh',
+    'website.gallery.up': 'Đưa ảnh lên',
+    'website.gallery.failed': 'Chưa tải được ảnh. Vui lòng thử lại.',
+
     'website.entryPublish.now': 'Xuất bản ngay',
     'website.entryPublish.schedule': 'Lên lịch',
     'website.builder.schedule': 'Lên lịch',
@@ -259,7 +274,7 @@ export const coreMessages = {
     'website.workspace.invalidImageFrame': 'Điền mô tả ảnh, tỷ lệ hợp lệ và điểm lấy nét từ 0 đến 100%.',
     'website.workspace.previewLocation': 'Xem ảnh hưởng',
     'website.workspace.previewLocationHelp':
-      'Khung xem trước ở giữa phản ánh phong cách bản nháp đang lưu. Website công khai chỉ đổi sau khi xuất bản.',
+      'Khung xem trước ở giữa phản ánh phong cách đang chọn. Lưu giao diện để áp dụng ngay cho toàn website.',
     'website.option.draft': 'Bản nháp',
     'website.option.paused': 'Tạm dừng',
     'website.tools.panels': 'Công cụ biên tập trang',
