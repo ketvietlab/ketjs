@@ -8,6 +8,7 @@ export const HOOKS = [
   'menu-panel',
   'menu-search',
   'menu-search-input',
+  'menu-group',
   'menu-label',
   'menu-separator',
   'menu-item',
@@ -37,7 +38,15 @@ export type MenuItem = {
 
 export type MenuLabel = { id: string; kind: 'label'; label: string }
 export type MenuSeparator = { id: string; kind: 'separator' }
-export type MenuEntry = MenuItem | MenuLabel | MenuSeparator
+/**
+ * A named set of related commands — what a guest in the house needs, what the
+ * cashier does. It renders `role="group"` named by its visible heading, so a
+ * screen reader announces the set and not only a line of text, and a separator
+ * is drawn before every group that follows another entry, so callers do not
+ * place one by hand.
+ */
+export type MenuGroup = { id: string; kind: 'group'; label: string; items: readonly MenuItem[] }
+export type MenuEntry = MenuItem | MenuLabel | MenuSeparator | MenuGroup
 
 /**
  * A search field at the top of the panel, for a menu that picks from more choices
@@ -78,6 +87,76 @@ export type MenuProps = {
    * container's edge and be cut off rather than merely overlapping content.
    */
   placement?: 'top' | 'bottom'
+}
+
+/** One command: a link, a submit button or a disabled entry, as a menu item. */
+const menuItem = (item: MenuItem, selectionMode: MenuProps['selectionMode']): TemplateResult => {
+  const role =
+    item.checked === undefined
+      ? 'menuitem'
+      : selectionMode === 'single'
+        ? 'menuitemradio'
+        : 'menuitemcheckbox'
+  const content = (
+    <>
+      {item.checked !== undefined && (
+        <span data-ui="menu-item-check" aria-hidden="true">
+          {item.checked ? '✓' : ''}
+        </span>
+      )}
+      {item.leading !== undefined && (
+        <span data-ui="menu-item-leading" aria-hidden="true">
+          {item.leading}
+        </span>
+      )}
+      <span data-ui="menu-item-copy">
+        <span>{item.label}</span>
+        {item.description && <small>{item.description}</small>}
+      </span>
+      {item.shortcut && <kbd data-ui="menu-item-shortcut">{item.shortcut}</kbd>}
+    </>
+  )
+  if (item.disabled)
+    return (
+      // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
+      <span
+        data-ui="menu-item"
+        role={role}
+        aria-checked={item.checked === undefined ? null : String(item.checked)}
+        aria-disabled="true"
+        tabIndex="-1"
+      >
+        {content}
+      </span>
+    )
+  if (item.href)
+    return (
+      // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
+      <a
+        data-ui="menu-item"
+        data-destructive={item.destructive ? 'true' : null}
+        role={role}
+        aria-checked={item.checked === undefined ? null : String(item.checked)}
+        href={item.href}
+      >
+        {content}
+      </a>
+    )
+  return (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
+    <button
+      data-ui="menu-item"
+      data-destructive={item.destructive ? 'true' : null}
+      role={role}
+      aria-checked={item.checked === undefined ? null : String(item.checked)}
+      type="submit"
+      name={item.name ?? 'intent'}
+      value={item.value ?? item.id}
+      form={item.form ?? null}
+    >
+      {content}
+    </button>
+  )
 }
 
 export const Menu = (props: MenuProps): TemplateResult => (
@@ -127,7 +206,7 @@ export const Menu = (props: MenuProps): TemplateResult => (
       {each(
         props.items,
         (item) => item.id,
-        (item) => {
+        (item, index) => {
           if (item.kind === 'separator') return <hr data-ui="menu-separator" />
           if (item.kind === 'label')
             return (
@@ -135,72 +214,26 @@ export const Menu = (props: MenuProps): TemplateResult => (
                 {item.label}
               </span>
             )
-          const role =
-            item.checked === undefined
-              ? 'menuitem'
-              : props.selectionMode === 'single'
-                ? 'menuitemradio'
-                : 'menuitemcheckbox'
-          const content = (
-            <>
-              {item.checked !== undefined && (
-                <span data-ui="menu-item-check" aria-hidden="true">
-                  {item.checked ? '✓' : ''}
-                </span>
-              )}
-              {item.leading !== undefined && (
-                <span data-ui="menu-item-leading" aria-hidden="true">
-                  {item.leading}
-                </span>
-              )}
-              <span data-ui="menu-item-copy">
-                <span>{item.label}</span>
-                {item.description && <small>{item.description}</small>}
-              </span>
-              {item.shortcut && <kbd data-ui="menu-item-shortcut">{item.shortcut}</kbd>}
-            </>
-          )
-          if (item.disabled)
+          if (item.kind === 'group') {
+            const labelId = `${props.id}-${item.id}-label`
+            const previous = props.items[index - 1]
             return (
-              // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
-              <span
-                data-ui="menu-item"
-                role={role}
-                aria-checked={item.checked === undefined ? null : String(item.checked)}
-                aria-disabled="true"
-                tabIndex="-1"
-              >
-                {content}
-              </span>
+              <>
+                {previous !== undefined && previous.kind !== 'separator' && <hr data-ui="menu-separator" />}
+                <div data-ui="menu-group" role="group" aria-labelledby={labelId}>
+                  <span data-ui="menu-label" id={labelId} role="presentation">
+                    {item.label}
+                  </span>
+                  {each(
+                    item.items,
+                    (entry) => entry.id,
+                    (entry) => menuItem(entry, props.selectionMode),
+                  )}
+                </div>
+              </>
             )
-          if (item.href)
-            return (
-              // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
-              <a
-                data-ui="menu-item"
-                data-destructive={item.destructive ? 'true' : null}
-                role={role}
-                aria-checked={item.checked === undefined ? null : String(item.checked)}
-                href={item.href}
-              >
-                {content}
-              </a>
-            )
-          return (
-            // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is menuitemcheckbox whenever aria-checked is set; otherwise aria-checked is null and not rendered.
-            <button
-              data-ui="menu-item"
-              data-destructive={item.destructive ? 'true' : null}
-              role={role}
-              aria-checked={item.checked === undefined ? null : String(item.checked)}
-              type="submit"
-              name={item.name ?? 'intent'}
-              value={item.value ?? item.id}
-              form={item.form ?? null}
-            >
-              {content}
-            </button>
-          )
+          }
+          return menuItem(item, props.selectionMode)
         },
       )}
     </div>

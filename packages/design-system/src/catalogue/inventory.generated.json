@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 312,
+    "publicExports": 313,
     "runtimeExports": 147,
     "registeredComponents": 138,
     "compatibilityExports": 262,
     "compatibilityModules": 43,
     "plannedComponents": 0,
-    "publicGaps": 166,
+    "publicGaps": 167,
     "runtimeGaps": 9,
-    "typeGaps": 157,
+    "typeGaps": 158,
     "cssFiles": 82,
-    "cssLines": 17085
+    "cssLines": 17092
   },
   "rows": [
     {
@@ -3212,6 +3212,24 @@
       "scope": "public",
       "name": "MenuEntry",
       "imported": "MenuEntry",
+      "kind": "type",
+      "source": "./interactions/menu/index.tsx",
+      "owner": "Actions",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 2,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-013"
+    },
+    {
+      "scope": "public",
+      "name": "MenuGroup",
+      "imported": "MenuGroup",
       "kind": "type",
       "source": "./interactions/menu/index.tsx",
       "owner": "Actions",
@@ -12514,9 +12532,10 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/menu/styles.css",
-      "lines": 191,
+      "lines": 198,
       "hooks": [
         "menu",
+        "menu-group",
         "menu-item",
         "menu-item-check",
         "menu-item-copy",

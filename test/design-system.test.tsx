@@ -1785,6 +1785,74 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.doesNotMatch(plainAction, /aria-expanded|aria-controls/)
 })
 
+test('design system: a grouped menu names each set of commands and separates the sets itself', () => {
+  const grouped = renderToString(
+    <ActionMenu
+      id="stay"
+      label="More actions"
+      open
+      items={[
+        {
+          id: 'guest',
+          kind: 'group',
+          label: 'Guest',
+          items: [{ id: 'move', label: 'Move room', value: 'move' }],
+        },
+        {
+          id: 'cashier',
+          kind: 'group',
+          label: 'Cashier',
+          items: [
+            { id: 'pay', label: 'Take payment', value: 'pay' },
+            { id: 'folio', label: 'Open folio', href: '/folios/1' },
+          ],
+        },
+        { id: 'break', kind: 'separator' },
+        {
+          id: 'room',
+          kind: 'group',
+          label: 'Room',
+          items: [{ id: 'oos', label: 'Out of service', disabled: true }],
+        },
+      ]}
+    />,
+  ).replace(/<!--[\s\S]*?-->/gu, '')
+  const groups = [...grouped.matchAll(/<div data-ui="menu-group" role="group" aria-labelledby="([^"]+)">/gu)]
+  assert.deepEqual(
+    groups.map((match) => match[1]),
+    ['stay-guest-label', 'stay-cashier-label', 'stay-room-label'],
+  )
+  for (const [id, label] of [
+    ['stay-guest-label', 'Guest'],
+    ['stay-cashier-label', 'Cashier'],
+    ['stay-room-label', 'Room'],
+  ])
+    assert.match(
+      grouped,
+      new RegExp(`<span data-ui="menu-label" id="${id}" role="presentation">${label}</span>`),
+    )
+  // Items keep their roles inside the group, so the runtime and the panel style still reach them.
+  assert.match(
+    grouped,
+    /aria-labelledby="stay-cashier-label">[\s\S]*?role="menuitem" type="submit" name="intent" value="pay"[\s\S]*?role="menuitem" href="\/folios\/1"[\s\S]*?<\/div>/,
+  )
+  assert.match(grouped, /aria-labelledby="stay-room-label">[\s\S]*?role="menuitem" aria-disabled="true"/)
+  // One separator before every later group: none before the first, none doubled after an explicit one.
+  const panel = grouped.slice(grouped.indexOf('data-ui="menu-panel"'))
+  assert.equal(panel.match(/<hr data-ui="menu-separator"/gu)?.length, 2)
+  assert.doesNotMatch(panel, /role="menu"[^>]*><hr/, 'the first group opens the panel')
+  assert.match(
+    panel,
+    /<\/div><hr data-ui="menu-separator"\/?><div data-ui="menu-group"[^>]*stay-cashier-label/,
+  )
+  assert.match(panel, /<\/div><hr data-ui="menu-separator"\/?><div data-ui="menu-group"[^>]*stay-room-label/)
+  assert.match(
+    css,
+    /\[data-ui="menu-group"\]\s*\{\s*display: grid;\s*min-width: 0;\s*\}/,
+    'a group stacks like the panel and adds no inset',
+  )
+})
+
 test('design system: interaction essentials preserve native and accessible fallbacks', () => {
   const menu = renderToString(
     <Menu
@@ -2283,7 +2351,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 312)
+  assert.equal(designSystemInventory.summary.publicExports, 313)
   assert.equal(designSystemInventory.summary.runtimeExports, 147)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
