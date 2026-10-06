@@ -7,6 +7,7 @@ import {
   EmptyState,
   IconButton,
   Inline,
+  LinkButton,
   LoadingState,
   Menu,
   NavigationToggle,
@@ -235,14 +236,30 @@ export function studioFrame(ctx: StudioContext, content: StudioContent, toasts: 
 
 export const loadingView = () => <LoadingState label={tr('website.loading')} lines={3} />
 
-export function failureView(error: unknown) {
+/** A missing record is not an outage: no retry, and a way back to the list it belongs to. */
+export function failureView(error: unknown, back?: { label: string; href: string }) {
   const { code, message } = (error ?? {}) as { code?: string; message?: string }
-  const denied = code === 'forbidden'
+  const denied = code === 'forbidden',
+    missing = code === 'notFound'
   return (
     <EmptyState
-      title={tr(denied ? 'website.error.forbiddenTitle' : 'website.error.unavailableTitle')}
+      title={tr(
+        denied
+          ? 'website.error.forbiddenTitle'
+          : missing
+            ? 'website.error.notFoundTitle'
+            : 'website.error.unavailableTitle',
+      )}
       message={message ?? tr('website.error.request')}
-      actions={denied ? null : <CommandButton label={tr('website.action.retry')} command="studio.retry" />}
+      actions={
+        missing ? (
+          back ? (
+            <LinkButton label={back.label} href={back.href} leading={icon('chevron-left')} />
+          ) : null
+        ) : denied ? null : (
+          <CommandButton label={tr('website.action.retry')} command="studio.retry" />
+        )
+      }
     />
   )
 }

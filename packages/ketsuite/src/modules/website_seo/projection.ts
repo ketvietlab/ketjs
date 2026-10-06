@@ -113,15 +113,19 @@ export const sitemapXml = (origin: string, entries: readonly SitemapEntry[]): st
  */
 export const robotsTxt = (
   origin: string,
-  options: { indexable: boolean; prefixes: readonly string[] },
+  options: { indexable: boolean; prefixes: readonly string[]; allow?: readonly string[] },
 ): string => {
   const base = origin.replace(/\/$/, '')
   if (!options.indexable) return 'User-agent: *\nDisallow: /\n'
+  // A namespace a crawler must read to render the page, such as theme stylesheets, is allowed
+  // instead of disallowed. It stays reserved for publishing all the same.
+  const allow = options.allow ?? []
   // robots.txt matches by character prefix, so a bare `Disallow: /admin` would
   // also hide `/administrative-notes`. Each namespace is emitted as its subtree
   // plus an anchored exact match, which is the segment rule isReservedPath uses.
   const disallow = options.prefixes
+    .filter((prefix) => !allow.includes(prefix))
     .flatMap((prefix) => [`Disallow: ${prefix}/`, `Disallow: ${prefix}$`])
-    .join('\n')
-  return `User-agent: *\n${disallow}\n\nSitemap: ${base}/sitemap.xml\n`
+  const rules = [...allow.map((prefix) => `Allow: ${prefix}/`), ...disallow].join('\n')
+  return `User-agent: *\n${rules}\n\nSitemap: ${base}/sitemap.xml\n`
 }
