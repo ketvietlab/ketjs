@@ -1716,7 +1716,6 @@ const sources = {
       // Whoever can share a draft can take the link back.
       revokePreviewTokens: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
-      verifyDomain: ['configure', 'configure', 'website.configuration-audit'],
       saveEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       savePage: ['configure', ['configure', 'author'], 'website.configuration-audit'],
@@ -1734,8 +1733,6 @@ const sources = {
     exemptions: {
       // Only the Studio upload route, after it has checked `website.saveEntry` and the entry's site.
       stageImage: ['internal-route', 'website_backend.image-upload'],
-      // Két Việt sets it once a host answers over HTTPS; no tenant role reaches it.
-      markDomainServing: ['internal-route', 'website.domain-serving-operator'],
       completeImage: ['internal-route', 'website_backend.image-upload'],
       // Only the image file route; the handler serves published images and otherwise needs site access.
       imageForReader: ['internal-route', 'website_backend.image-download'],

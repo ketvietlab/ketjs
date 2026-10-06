@@ -844,6 +844,7 @@ export const coreMessages = {
     'website.domain.https': 'HTTPS',
     'website.domain.tlsReady': 'Đang hoạt động',
     'website.domain.tlsPending': 'Chờ xác minh quyền sở hữu',
+    'website.domain.tlsActivating': 'Đang kích hoạt',
     'website.domain.lastChecked': 'Kiểm tra gần nhất',
     'website.domain.notChecked': 'Chưa có lần kiểm tra',
     'website.domain.keepOld': 'Giữ domain cũ trong khi chuyển',
@@ -852,9 +853,9 @@ export const coreMessages = {
     'website.domain.empty': 'Chưa có domain',
     'website.domain.emptyHelp': 'Thêm tên miền để nhận hướng dẫn xác minh quyền sở hữu.',
     'website.domain.verify': 'Xác minh quyền sở hữu',
-    'website.domain.simulation': 'Mô phỏng DNS và HTTPS',
-    'website.domain.simulationHelp':
-      'Bản mẫu không truy vấn DNS thật. Thêm bản ghi bên dưới tại nơi quản lý domain; dùng ô kết quả DNS mô phỏng để thử thành công hoặc sai bản ghi.',
+    'website.domain.howTo': 'Thêm bản ghi TXT tại nơi quản lý tên miền',
+    'website.domain.howToHelp':
+      'Thêm đúng bản ghi bên dưới tại nhà cung cấp DNS, chờ vài phút để cập nhật rồi bấm Kiểm tra. Sau khi xác minh, HTTPS được kích hoạt cho tên miền.',
     'website.domain.recordType': 'Loại bản ghi',
     'website.domain.recordName': 'Tên bản ghi',
     'website.domain.recordValue': 'Giá trị cần cấu hình',
@@ -862,9 +863,27 @@ export const coreMessages = {
     'website.domain.proofHelp':
       'Dán giá trị TXT cần cấu hình để mô phỏng bản ghi khớp. Để trống hoặc nhập sai để kiểm tra lỗi.',
     'website.domain.failed': 'Chưa xác minh được domain',
-    'website.domain.failedHelp':
-      'Bản ghi TXT chưa khớp. Kiểm tra tên và giá trị tại nhà cung cấp DNS, chờ cập nhật rồi kiểm tra lại.',
+    'website.domain.reason.matched': 'Bản ghi TXT khớp.',
+    'website.domain.reason.missing':
+      'Chưa thấy bản ghi TXT. Kiểm tra tên bản ghi tại nhà cung cấp DNS, chờ cập nhật rồi kiểm tra lại.',
+    'website.domain.reason.mismatch':
+      'Có bản ghi TXT nhưng giá trị chưa khớp. Sao chép lại đúng giá trị bên trên rồi kiểm tra lại.',
+    'website.domain.reason.unreachable': 'Chưa hỏi được DNS lúc này. Thử lại sau ít phút.',
+    'website.domain.reason.taken': 'Tên miền này đang được một website khác sử dụng.',
+    'website.domain.reason.reserved': 'Tên miền này do nơi lưu trữ cấp, không cần thêm và xác minh.',
     'website.domain.check': 'Kiểm tra domain',
+    'website.domain.route': 'Trỏ tên miền về website',
+    'website.domain.routeHow': 'Thêm bản ghi này tại nơi quản lý tên miền',
+    'website.domain.routeHelp':
+      'Bản ghi này đưa khách truy cập tên miền tới website. HTTPS được cấp sau khi tên miền đã xác minh và trỏ đúng.',
+    'website.domain.routeApex': 'Tên miền gốc',
+    'website.domain.routeApexHelp':
+      'Nhiều nhà cung cấp DNS không cho đặt CNAME ở tên miền gốc. Hãy chọn kiểu ALIAS, ANAME hoặc CNAME flattening nếu có; nếu không, dùng tên miền có www và chuyển hướng tên miền gốc sang đó.',
+    'website.domain.routeFailed': 'Tên miền chưa trỏ về website',
+    'website.domain.route.elsewhere':
+      'Tên miền đang trỏ tới nơi khác. Sửa bản ghi theo giá trị bên trên, chờ cập nhật rồi kiểm tra lại.',
+    'website.domain.route.missing': 'Chưa thấy bản ghi trỏ tên miền. Thêm bản ghi bên trên rồi kiểm tra lại.',
+    'website.domain.route.unreachable': 'Chưa hỏi được DNS lúc này. Thử lại sau ít phút.',
     'website.domain.switch': 'Đặt làm domain chính',
     'website.domain.switchHelp':
       'Domain hiện tại được giữ làm địa chỉ chuyển hướng. Việc chuyển không thay đổi bản nội dung đang công khai.',
@@ -1457,7 +1476,7 @@ export const coreMessages = {
     'website.settings.role': 'Vai trò',
     'website.settings.state': 'Trạng thái',
     'website.settings.noDomains': 'Chưa gắn tên miền',
-    'website.settings.noDomainsMessage': 'Website đang chạy trên địa chỉ tạm của Két Việt.',
+    'website.settings.noDomainsMessage': 'Website đang chạy trên địa chỉ tạm.',
     'website.domain.role.primary': 'Chính',
     'website.domain.role.redirect': 'Chuyển hướng',
     'website.domain.state.verified': 'Đã xác minh',
@@ -1473,16 +1492,6 @@ export const coreMessages = {
     'website.workspace.logo': 'Logo',
     'website.workspace.logoHelp':
       'Hiện ở đầu trang thay cho tên site. Ảnh ngang, nền trong suốt trông gọn nhất.',
-    'website.domain.tlsActivating': 'Két Việt đang kích hoạt',
-    'website.domain.howTo': 'Thêm bản ghi TXT tại nơi quản lý tên miền',
-    'website.domain.howToHelp':
-      'Thêm đúng bản ghi bên dưới tại nhà cung cấp DNS, chờ vài phút để cập nhật rồi bấm Kiểm tra. Sau khi xác minh, Két Việt kích hoạt HTTPS cho tên miền.',
-    'website.domain.reason.matched': 'Bản ghi TXT khớp.',
-    'website.domain.reason.missing':
-      'Chưa thấy bản ghi TXT. Kiểm tra tên bản ghi tại nhà cung cấp DNS, chờ cập nhật rồi kiểm tra lại.',
-    'website.domain.reason.mismatch':
-      'Có bản ghi TXT nhưng giá trị chưa khớp. Sao chép lại đúng giá trị bên trên rồi kiểm tra lại.',
-    'website.domain.reason.unreachable': 'Chưa hỏi được DNS lúc này. Thử lại sau ít phút.',
     'website.settings.customers': 'Tài khoản đăng nhập của khách',
     'website.route.customers': 'Tài khoản đăng nhập',
     'website.route.customerNew': 'Cấp tài khoản đăng nhập',
