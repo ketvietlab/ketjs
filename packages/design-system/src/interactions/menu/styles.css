@@ -91,6 +91,13 @@
     box-shadow: var(--kv-shadow-popover);
   }
 
+  /* A group stacks its heading and items like the panel does, so grouping adds
+     no inset of its own; the separator before it owns the space between groups. */
+  :where([data-kv-design-system]) [data-ui="menu-group"] {
+    display: grid;
+    min-width: 0;
+  }
+
   :where([data-kv-design-system]) [data-ui="menu-label"] {
     padding: var(--kv-space-2) var(--kv-space-3) var(--kv-space-1);
     color: var(--kv-text-muted);

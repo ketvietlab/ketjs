@@ -156,7 +156,7 @@ export const componentRegistry: readonly ComponentRegistration[] = [
   entry('RecordForm', 'Forms', 'patterns/record-form', 'patterns', 'record-form'),
   entry('Menu', 'Actions', 'interactions/menu', 'interactions', 'menu'),
   entry('ContextButton', 'Navigation', 'interactions/context-button', 'interactions', 'context-button'),
-  entry('ActionMenu', 'Actions', 'interactions/menu', 'interactions', 'menu'),
+  entry('ActionMenu', 'Actions', 'interactions/menu', 'interactions', 'grouped-action-menu'),
   entry('Popover', 'Overlays', 'interactions/popover', 'interactions', 'popover'),
   entry('Tooltip', 'Overlays', 'interactions/tooltip', 'interactions', 'popover'),
   entry('Dialog', 'Overlays', 'interactions/dialog', 'interactions', 'dialog'),
