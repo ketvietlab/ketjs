@@ -23,6 +23,7 @@ import {
   productDetailScreen,
   productsScreen,
   templateColumns,
+  templatePageScreen,
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
@@ -37,7 +38,12 @@ import { tableGrid } from '../backend/ket-table.ts'
 import type { KetTableGroup } from '../backend/ket-table.ts'
 import type { TableSelection } from '../../ui/index.ts'
 import { backendPage } from '../../ui/index.ts'
-import { recordModalCreateHref, recordModalHref } from '../../ui/record-modal.tsx'
+import {
+  RECORD_NEW_ID,
+  RECORD_TAB_PARAM,
+  readRecordModalTarget,
+  recordModalCreateHref,
+} from '../../ui/record-modal.tsx'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { productListSearch } from '../product/search.ts'
@@ -96,6 +102,12 @@ const variantTabOf = (url: URL): VariantDetailTab => {
 }
 const isProductPartial = (req: Parameters<Route>[1], scope = 'product-detail'): boolean =>
   req.headers['x-ket-partial'] === scope
+// A template's own page; `new` is its create form.
+const templatePageHref = (url: URL, id: string, tab?: string | null): string =>
+  inLocale(
+    url,
+    `/admin/product/templates/${encodeURIComponent(id)}${tab ? `?${RECORD_TAB_PARAM}=${encodeURIComponent(tab)}` : ''}`,
+  )
 const seeProduct = (id: string, url: URL, tab: string = productTabOf(url)) =>
   withHeaders(text('', { status: 303 }), {
     location: inLocale(url, `/admin/product/templates/${id}?tab=${tab}`),
@@ -385,6 +397,9 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      // Templates used to open in a record modal over this list; their links now open the page.
+      const legacy = readRecordModalTarget(url)
+      if (legacy?.kind === 'product.template') return seeOther(templatePageHref(url, legacy.id, legacy.tab))
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const asked = url.searchParams.get('view')
@@ -581,10 +596,7 @@ export const routes: Record<string, RouteEntry> = {
                   total: count,
                   idField: 'id',
                   locale: _.locale === 'qps' ? 'en' : _.locale,
-                  rowHrefTemplate: recordModalHref(url, {
-                    kind: 'product.template',
-                    id: '__ROW_ID__',
-                  }).replace('__ROW_ID__', '{id}'),
+                  rowHrefTemplate: templatePageHref(url, '__ROW_ID__').replace('__ROW_ID__', '{id}'),
                   groupBy: state.groupBy.map((group) => group.key),
                   groups,
                   selection,
@@ -624,13 +636,13 @@ export const routes: Record<string, RouteEntry> = {
             _,
             decoratedRows,
             view,
-            (id) => recordModalHref(url, { kind: 'product.template', id }),
+            (id) => templatePageHref(url, id),
             {
               ...frame,
               chrome: {
                 create: {
                   label: _('product_backend.create.title'),
-                  path: recordModalCreateHref(url, { kind: 'product.template' }),
+                  path: templatePageHref(url, RECORD_NEW_ID),
                 },
                 selection,
                 searchContent: filterBar,
@@ -844,22 +856,34 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/product/templates/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      // General and Variants now open in the record-modal (`product.template`);
-      // this route only still renders a page for Media, which the modal does not
-      // cover yet (see product_backend/modal/product-modal-view.tsx).
+      // General and Variants are the template's record page, rendered client side
+      // (`product.template-page`); Media is still a server-rendered page, which the
+      // record does not cover yet (see product_backend/modal/product-modal-view.tsx).
+      if (req.method !== 'GET') return text('GET', { status: 405 })
       const askedTab = productTabOf(url)
-      if (req.method !== 'GET' || askedTab !== 'media') {
-        if (req.method !== 'GET') return text('GET', { status: 405 })
-        return seeOther(
-          recordModalHref(inLocale(url, '/admin/product/templates'), {
-            kind: 'product.template',
-            id: params.id,
-            tab: askedTab === 'variants' ? 'variants' : 'general',
-          }),
-        )
-      }
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
+      if (askedTab !== 'media') {
+        const creating = params.id === RECORD_NEW_ID
+        const found = creating
+          ? null
+          : ((await ctx.call('product.getTemplate', { id: params.id }, url, req)) as { name: string } | null)
+        if (!creating && !found) return text('Product not found', { status: 404 })
+        const title = found ? found.name : _('product_backend.create.title')
+        const island = await ctx.joint(url, req, 'product_backend:template.page', {
+          id: params.id,
+          tab: askedTab === 'variants' && !creating ? 'variants' : 'general',
+          title,
+          loading: _('backend.relation.loading'),
+          back: inLocale(url, '/admin/product/templates'),
+          ...(creating ? {} : { width: 'wide' }),
+        })
+        return backendPage(ctx, req, {
+          lang,
+          title,
+          body: templatePageScreen(_, title, island, await frameOf(ctx, url, req)),
+        })
+      }
       const locale = localeQuery(url)
       const row = (await ctx.call('product.getTemplate', { id: params.id }, url, req)) as {
         id: string
