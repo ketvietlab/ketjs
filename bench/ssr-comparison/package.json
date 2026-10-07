@@ -7,12 +7,13 @@
   },
   "dependencies": {
     "@vue/server-renderer": "3.5.43",
+    "astro": "7.3.5",
     "express": "5.2.1",
     "fastify": "5.12.5",
-    "preact": "11.0.0",
-    "preact-render-to-string": "6.8.0",
+    "ketjs-view-0.1.41": "npm:@ketvietlab/ketjs-view@0.1.41",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "svelte": "5.57.1",
     "vue": "3.5.43"
   }
 }

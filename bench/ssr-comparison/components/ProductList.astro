@@ -1,0 +1,5 @@
+---
+const { products } = Astro.props
+---
+
+<ul class="products">{products.map((product) => <li data-id={String(product.id)}><span>{product.name}</span><b>{String(product.qty)}</b></li>)}</ul>

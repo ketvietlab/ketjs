@@ -14,12 +14,42 @@ declare module 'react-dom/server' {
   export function renderToStaticMarkup(element: unknown): string
 }
 
-declare module 'preact' {
-  export function h(type: string, props: Record<string, unknown> | null, ...children: unknown[]): unknown
+declare module 'ketjs-view-0.1.41' {
+  export function renderToStaticString(result: unknown): string
 }
 
-declare module 'preact-render-to-string' {
-  export function renderToString(vnode: unknown): string
+declare module 'ketjs-view-0.1.41/jsx-runtime' {
+  export function jsx(type: string, props: Record<string, unknown>): unknown
+}
+
+declare module 'svelte/compiler' {
+  export function compile(
+    source: string,
+    options: { generate: 'server'; filename: string },
+  ): { js: { code: string } }
+}
+
+declare module 'svelte/server' {
+  export function render(component: unknown, options: { props: Record<string, unknown> }): { body: string }
+}
+
+declare module '@astrojs/compiler-rs' {
+  export function transform(
+    source: string,
+    options: {
+      filename: string
+      internalURL: string
+      compact: boolean
+      resolvePath: (specifier: string) => string
+    },
+  ): { code: string }
+}
+
+declare module 'astro/container' {
+  export class experimental_AstroContainer {
+    static create(): Promise<experimental_AstroContainer>
+    renderToString(component: unknown, options: { props: Record<string, unknown> }): Promise<string>
+  }
 }
 
 declare module 'vue' {
