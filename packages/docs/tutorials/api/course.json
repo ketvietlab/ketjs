@@ -1,0 +1,299 @@
+[
+  {
+    "slug": "orientation",
+    "title": "Choose your route through KetJS",
+    "stage": "Start here",
+    "duration": 15,
+    "lab": "Browser + terminal",
+    "order": 1,
+    "url": "https://ketjs.dev/learn/orientation/"
+  },
+  {
+    "slug": "first-project",
+    "title": "Create your first View project",
+    "stage": "Build the frontend",
+    "duration": 20,
+    "lab": "Terminal + browser",
+    "order": 2,
+    "url": "https://ketjs.dev/learn/first-project/"
+  },
+  {
+    "slug": "tsx",
+    "title": "Write a pure TSX page",
+    "stage": "Build the frontend",
+    "duration": 20,
+    "lab": "Browser playground",
+    "order": 3,
+    "url": "https://ketjs.dev/learn/tsx/"
+  },
+  {
+    "slug": "counter",
+    "title": "Build a counter with signals",
+    "stage": "Build the frontend",
+    "duration": 25,
+    "lab": "Browser playground",
+    "order": 4,
+    "url": "https://ketjs.dev/learn/counter/"
+  },
+  {
+    "slug": "todo",
+    "title": "Grow the counter into a todo list",
+    "stage": "Build the frontend",
+    "duration": 40,
+    "lab": "Browser playground",
+    "order": 5,
+    "url": "https://ketjs.dev/learn/todo/"
+  },
+  {
+    "slug": "forms",
+    "title": "Validate a form with a shared schema",
+    "stage": "Build the frontend",
+    "duration": 30,
+    "lab": "Browser playground",
+    "order": 6,
+    "url": "https://ketjs.dev/learn/forms/"
+  },
+  {
+    "slug": "lifecycle",
+    "title": "Own browser effects and cleanup",
+    "stage": "Build the frontend",
+    "duration": 30,
+    "lab": "Local View project",
+    "order": 7,
+    "url": "https://ketjs.dev/learn/lifecycle/"
+  },
+  {
+    "slug": "effects",
+    "title": "Understand effects and reactive dependencies",
+    "stage": "Build the frontend",
+    "duration": 35,
+    "lab": "Browser + local View project",
+    "order": 8,
+    "url": "https://ketjs.dev/learn/effects/"
+  },
+  {
+    "slug": "data-fetching",
+    "title": "Fetch data without render side effects",
+    "stage": "Build the frontend",
+    "duration": 45,
+    "lab": "Local View project",
+    "order": 9,
+    "url": "https://ketjs.dev/learn/data-fetching/"
+  },
+  {
+    "slug": "static-website",
+    "title": "Publish a small static website",
+    "stage": "Build the frontend",
+    "duration": 35,
+    "lab": "Terminal + browser",
+    "order": 10,
+    "url": "https://ketjs.dev/learn/static-website/"
+  },
+  {
+    "slug": "content-routing",
+    "title": "Generate pages from content",
+    "stage": "Build the frontend",
+    "duration": 35,
+    "lab": "Local View project",
+    "order": 11,
+    "url": "https://ketjs.dev/learn/content-routing/"
+  },
+  {
+    "slug": "server-project",
+    "title": "Start the local backend lab",
+    "stage": "Compose the backend",
+    "duration": 25,
+    "lab": "Node terminal",
+    "order": 12,
+    "url": "https://ketjs.dev/learn/server-project/"
+  },
+  {
+    "slug": "modules",
+    "title": "Compose a module and inspect its manifest",
+    "stage": "Compose the backend",
+    "duration": 30,
+    "lab": "Node terminal",
+    "order": 13,
+    "url": "https://ketjs.dev/learn/modules/"
+  },
+  {
+    "slug": "deployments",
+    "title": "Understand workspaces and deployment roles",
+    "stage": "Compose the backend",
+    "duration": 30,
+    "lab": "Node terminal",
+    "order": 14,
+    "url": "https://ketjs.dev/learn/deployments/"
+  },
+  {
+    "slug": "models",
+    "title": "Model tasks and company scope",
+    "stage": "Work with data",
+    "duration": 35,
+    "lab": "Node terminal",
+    "order": 15,
+    "url": "https://ketjs.dev/learn/models/"
+  },
+  {
+    "slug": "queries",
+    "title": "Read and order data with queries",
+    "stage": "Work with data",
+    "duration": 30,
+    "lab": "Node terminal",
+    "order": 16,
+    "url": "https://ketjs.dev/learn/queries/"
+  },
+  {
+    "slug": "changesets",
+    "title": "Validate writes with functions and changesets",
+    "stage": "Work with data",
+    "duration": 40,
+    "lab": "Node terminal",
+    "order": 17,
+    "url": "https://ketjs.dev/learn/changesets/"
+  },
+  {
+    "slug": "transactions",
+    "title": "Keep related writes atomic",
+    "stage": "Work with data",
+    "duration": 35,
+    "lab": "Node terminal",
+    "order": 18,
+    "url": "https://ketjs.dev/learn/transactions/"
+  },
+  {
+    "slug": "http-api",
+    "title": "Expose the Todo API through HTTP",
+    "stage": "Build the API",
+    "duration": 45,
+    "lab": "Node terminal",
+    "order": 19,
+    "url": "https://ketjs.dev/learn/http-api/"
+  },
+  {
+    "slug": "api-contracts",
+    "title": "Document and inspect API contracts",
+    "stage": "Build the API",
+    "duration": 30,
+    "lab": "Node terminal",
+    "order": 20,
+    "url": "https://ketjs.dev/learn/api-contracts/"
+  },
+  {
+    "slug": "connect-ui",
+    "title": "Connect an island to the API",
+    "stage": "Build the API",
+    "duration": 40,
+    "lab": "Browser + local API",
+    "order": 21,
+    "url": "https://ketjs.dev/learn/connect-ui/"
+  },
+  {
+    "slug": "sessions-tenants",
+    "title": "Separate tenants, companies and sessions",
+    "stage": "Protect the application",
+    "duration": 40,
+    "lab": "Node terminal",
+    "order": 22,
+    "url": "https://ketjs.dev/learn/sessions-tenants/"
+  },
+  {
+    "slug": "authorization",
+    "title": "Grant operations and bound their effects",
+    "stage": "Protect the application",
+    "duration": 35,
+    "lab": "Node terminal",
+    "order": 23,
+    "url": "https://ketjs.dev/learn/authorization/"
+  },
+  {
+    "slug": "themes",
+    "title": "Compose server rendering and themes",
+    "stage": "Present the application",
+    "duration": 40,
+    "lab": "Local server extension",
+    "order": 24,
+    "url": "https://ketjs.dev/learn/themes/"
+  },
+  {
+    "slug": "menus-i18n",
+    "title": "Build navigation and translated messages",
+    "stage": "Present the application",
+    "duration": 30,
+    "lab": "Local server extension",
+    "order": 25,
+    "url": "https://ketjs.dev/learn/menus-i18n/"
+  },
+  {
+    "slug": "jobs",
+    "title": "Run durable background work",
+    "stage": "Go beyond requests",
+    "duration": 45,
+    "lab": "Node terminal",
+    "order": 26,
+    "url": "https://ketjs.dev/learn/jobs/"
+  },
+  {
+    "slug": "storage-streams",
+    "title": "Handle files, outbound services and streams",
+    "stage": "Go beyond requests",
+    "duration": 45,
+    "lab": "Local server extension",
+    "order": 27,
+    "url": "https://ketjs.dev/learn/storage-streams/"
+  },
+  {
+    "slug": "reports-agents",
+    "title": "Expose reports and agent capabilities",
+    "stage": "Go beyond requests",
+    "duration": 40,
+    "lab": "Local server extension",
+    "order": 28,
+    "url": "https://ketjs.dev/learn/reports-agents/"
+  },
+  {
+    "slug": "testing",
+    "title": "Test the deployment you actually ship",
+    "stage": "Verify and operate",
+    "duration": 40,
+    "lab": "Node terminal",
+    "order": 29,
+    "url": "https://ketjs.dev/learn/testing/"
+  },
+  {
+    "slug": "migrations-postgres",
+    "title": "Evolve the schema and try PostgreSQL",
+    "stage": "Verify and operate",
+    "duration": 50,
+    "lab": "Node + optional PostgreSQL",
+    "order": 30,
+    "url": "https://ketjs.dev/learn/migrations-postgres/"
+  },
+  {
+    "slug": "observability",
+    "title": "Observe behavior and measure performance",
+    "stage": "Verify and operate",
+    "duration": 35,
+    "lab": "Node terminal",
+    "order": 31,
+    "url": "https://ketjs.dev/learn/observability/"
+  },
+  {
+    "slug": "deployment",
+    "title": "Prepare an evaluation deployment and upgrade",
+    "stage": "Verify and operate",
+    "duration": 45,
+    "lab": "Node terminal",
+    "order": 32,
+    "url": "https://ketjs.dev/learn/deployment/"
+  },
+  {
+    "slug": "capstone",
+    "title": "Finish and review your task application",
+    "stage": "Finish the path",
+    "duration": 60,
+    "lab": "Browser + Node terminal",
+    "order": 33,
+    "url": "https://ketjs.dev/learn/capstone/"
+  }
+]

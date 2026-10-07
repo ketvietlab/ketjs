@@ -109,6 +109,8 @@ total.dispose()
 - `batch()` coalesces several writes into one flush.
 - `effect()` returns a disposer and may return its own cleanup callback.
 
+For execution timing, lifecycle cleanup, async requests, SSR initial data and stale-response protection, read [Effects and data fetching](/docs/view-effects-data/). The step-by-step exercises are [Reactive effects](/learn/effects/) and [Data fetching](/learn/data-fetching/).
+
 ## Client rendering
 
 Mount a reactive view into a DOM container:
