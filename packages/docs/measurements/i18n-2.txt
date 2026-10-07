@@ -1,0 +1,6 @@
+i18n hot paths — v24.14.1
+plain translation                      50.71 ms   19,720,462 ops/s
+placeholder translation               119.94 ms    4,168,835 ops/s
+plural translation                    286.57 ms    1,744,804 ops/s
+cached date/time format               381.54 ms      655,233 ops/s
+timezone date bucket                  199.14 ms      502,159 ops/s

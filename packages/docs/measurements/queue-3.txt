@@ -1,0 +1,12 @@
+{
+  "driver": "sqlite",
+  "databases": 32,
+  "jobs": 3200,
+  "concurrency": 8,
+  "enqueueMs": 473.4,
+  "enqueuePerSecond": 6760,
+  "executeMs": 1607.2,
+  "executePerSecond": 1991,
+  "firstJobFairnessSpreadMs": 152.3,
+  "perDatabaseComplete": true
+}

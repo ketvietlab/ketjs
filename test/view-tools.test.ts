@@ -22,7 +22,7 @@ test('create-view scaffolds a complete static project without overwriting files'
     const output = scaffoldView('example-site', dir)
     assert.ok(output.some((line) => line.includes('npm run dev')))
     assert.equal(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name, 'example-site')
-    assert.ok(existsSync(join(dir, 'src/pages/index.ts')))
+    assert.ok(existsSync(join(dir, 'src/pages/index.tsx')))
     assert.throws(() => scaffoldView('example-site', dir), /refusing to overwrite/)
     assert.throws(() => scaffoldView('Not Valid', join(dir, 'invalid')), /invalid project name/)
   } finally {
@@ -46,7 +46,10 @@ test('view tools emit static pages and preserve markers only inside islands', as
 
     const home = readFileSync(join(dir, 'dist/index.html'), 'utf8')
     assert.match(home, /<div data-ket-island="" data-island="counter"/)
-    assert.equal(home.match(/<!--k(?:\[)?-->/g)?.length, 2)
+    const counter = /<div data-ket-island="" data-island="counter"[^>]*>([\s\S]*?)<\/div>/.exec(home)
+    assert.ok(counter)
+    assert.ok(counter[1].includes('<!--k'))
+    assert.ok(!home.replace(counter[0], '').includes('<!--k'))
     assert.match(home, /<script type="module" src="\.\/assets\/app-[A-Z0-9]+\.js"><\/script>/)
 
     const about = readFileSync(join(dir, 'dist/about/index.html'), 'utf8')
@@ -79,8 +82,8 @@ test('a site without islands emits CSS and no JavaScript', async () => {
   const dir = project()
   try {
     writeFileSync(
-      join(dir, 'src/pages/index.ts'),
-      `import { html } from '@ketvietlab/ketjs-view'\nimport { definePage } from '@ketvietlab/ketjs-view-tools'\nexport default definePage({ head: { title: 'Static' }, view: () => html\`<h1>Static</h1>\` })\n`,
+      join(dir, 'src/pages/index.tsx'),
+      `import { definePage } from '@ketvietlab/ketjs-view-tools'\nexport default definePage({ head: { title: 'Static' }, view: () => <h1>Static</h1> })\n`,
     )
     writeFileSync(
       join(dir, 'ket-view.config.ts'),

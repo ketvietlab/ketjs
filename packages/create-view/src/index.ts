@@ -10,9 +10,9 @@ const LAYOUT: Array<[string, string]> = [
   ['ket-view.config.ts.tmpl', 'ket-view.config.ts'],
   ['README.md.tmpl', 'README.md'],
   ['gitignore.tmpl', '.gitignore'],
-  ['index.ts.tmpl', 'src/pages/index.ts'],
-  ['about.ts.tmpl', 'src/pages/about.ts'],
-  ['counter.ts.tmpl', 'src/islands/counter.ts'],
+  ['index.ts.tmpl', 'src/pages/index.tsx'],
+  ['about.ts.tmpl', 'src/pages/about.tsx'],
+  ['counter.ts.tmpl', 'src/islands/counter.tsx'],
   ['main.css.tmpl', 'src/styles/main.css'],
   ['favicon.svg.tmpl', 'public/favicon.svg'],
 ]

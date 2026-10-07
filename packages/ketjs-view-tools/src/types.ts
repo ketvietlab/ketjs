@@ -1,7 +1,6 @@
 import type { IslandFactory, IslandProps, TemplateResult } from '@ketvietlab/ketjs-view'
 
-export type PageMeta = {
-  name: string
+export type PageMeta = ({ name: string; property?: never } | { property: string; name?: never }) & {
   content: string
 }
 
@@ -11,12 +10,22 @@ export type PageLink = {
   type?: string
 }
 
+export type PageScript = {
+  /** External head script. Classic scripts run before styles and the first body paint. */
+  src: string
+  type?: 'module'
+  defer?: boolean
+}
+
 export type PageHead = {
   title: string
   description?: string
   lang?: string
   meta?: readonly PageMeta[]
   links?: readonly PageLink[]
+  /** JSON-LD objects serialized safely into the static document head. */
+  structuredData?: readonly Readonly<Record<string, unknown>>[]
+  scripts?: readonly PageScript[]
 }
 
 export type PageDefinition = {

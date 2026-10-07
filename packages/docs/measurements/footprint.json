@@ -1,0 +1,23 @@
+[
+  {
+    "name": "@ketvietlab/ketjs-view",
+    "version": "0.1.41",
+    "installedPackages": 1,
+    "logicalBytes": 201746,
+    "scripts": false
+  },
+  {
+    "name": "@ketvietlab/ketjs-view-tools",
+    "version": "0.1.41",
+    "installedPackages": 4,
+    "logicalBytes": 11000584,
+    "scripts": false
+  },
+  {
+    "name": "@ketvietlab/ketjs",
+    "version": "0.1.41",
+    "installedPackages": 2,
+    "logicalBytes": 3374913,
+    "scripts": false
+  }
+]
