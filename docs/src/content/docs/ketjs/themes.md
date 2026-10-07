@@ -7,6 +7,10 @@ KetJS has two presentation languages. First-party behavior uses `@ketvietlab/ket
 code may run. Installable themes use KTL, a restricted template language that reads data and invokes
 named rendering contracts but cannot call JavaScript.
 
+That restriction is about the server. A Website Studio site may also use one of its company's own
+themes, which adds a stylesheet and a browser module served from the tenant's storage; neither runs in
+the server process. See Company themes and decision D3a.
+
 ## Define a theme
 
 ```ts

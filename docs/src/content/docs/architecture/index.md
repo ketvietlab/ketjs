@@ -4,7 +4,7 @@ description: Use accepted architecture decisions and open questions without mist
 ---
 
 This section records why KetJS and KetSuite behave the way they do. It supplements the task-oriented
-[KetJS](/ketjs/) and [KetSuite](/ketsuite/) guides; it is not the recommended starting point for
+[KetJS](/ketjs/) and KetSuite guides; it is not the recommended starting point for
 building a feature.
 
 ## Choose the right record
@@ -16,7 +16,7 @@ building a feature.
 | Check whether a design area is deliberately unfinished | [Open questions](/architecture/open-questions/) | Keep the uncertainty explicit instead of treating a proposal as a contract. |
 | Reproduce a performance claim | [Performance benchmarks](/operations/benchmarks/) | Run the documented workload and compare like-for-like evidence. |
 | Implement a framework capability | [KetJS framework guide](/ketjs/) | Follow the public contracts and task sequence. |
-| Implement application behavior | [KetSuite developer guide](/ketsuite/) | Follow module ownership, security, interface, and test guidance. |
+| Implement application behavior | KetSuite developer guide | Follow module ownership, security, interface, and test guidance. |
 
 ## When to update a record
 

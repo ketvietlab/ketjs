@@ -1,1 +1,0 @@
-<section class="copy" data-ket-section="rich-text" data-align="{{ align | default: 'left' }}">{% if heading %}<h2>{{ heading }}</h2>{% endif %}<div>{{ body }}</div></section>

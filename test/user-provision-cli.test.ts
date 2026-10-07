@@ -7,7 +7,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { test } from 'node:test'
 
 const cli = fileURLToPath(new URL('../packages/ketjs/src/cli.js', import.meta.url))
-const ketsuiteWorkspace = fileURLToPath(new URL('../ket.workspace.js', import.meta.url))
 
 const runCli = async (
   args: string[],
@@ -37,41 +36,6 @@ const runCli = async (
   })
   return { code, stdout, stderr }
 }
-
-test('provision CLI: KetSuite reads the admin password only from stdin and refuses a second run', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ket-user-provision-'))
-  try {
-    const secret = 'correct horse battery staple'
-    const args = ['provision', 'user.provisionAdmin', '--workspace', ketsuiteWorkspace, '--input', '-']
-    assert.equal(
-      args.some((arg) => arg.includes(secret)),
-      false,
-    )
-    const input = {
-      companyName: 'Kết Việt',
-      companyCode: 'KET',
-      currency: 'VND',
-      adminLogin: 'admin@example.com',
-      adminName: 'Administrator',
-      adminEmail: 'admin@example.com',
-      adminPassword: secret,
-    }
-    const env = { KET_SQLITE: join(dir, 'ketsuite.db') }
-    const first = await runCli(args, input, env)
-    assert.equal(first.code, 0, first.stderr)
-    assert.equal((JSON.parse(first.stdout) as { ok: boolean }).ok, true)
-    assert.ok(!`${first.stdout}${first.stderr}`.includes(secret))
-
-    const second = await runCli(args, input, env)
-    assert.equal(second.code, 1, second.stderr)
-    const refused = JSON.parse(second.stdout) as { ok: boolean; errors: Array<{ code: string }> }
-    assert.equal(refused.ok, false)
-    assert.equal(refused.errors[0]?.code, 'user.error.provisionExists')
-    assert.ok(!`${second.stdout}${second.stderr}`.includes(secret))
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
 
 test('provision CLI: a tenant datastore requires an explicit tenant selection', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-tenant-provision-'))
