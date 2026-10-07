@@ -1,0 +1,458 @@
+{
+  "scope": "Local SSG artifacts; not a production crawl or ranking audit",
+  "pages": 45,
+  "indexable": 43,
+  "errors": 0,
+  "reports": [
+    {
+      "route": "/404/",
+      "title": "Page not found | KetJS",
+      "description": "This KetJS page could not be found. Return to the homepage or browse the documentation to find the guide or example you need.",
+      "canonical": "https://ketjs.dev/404/",
+      "noindex": true,
+      "schemaTypes": [],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/blog/",
+      "title": "From the KetJS team",
+      "description": "Framework notes, architecture, and the ideas behind KetJS.",
+      "canonical": "https://ketjs.dev/blog/",
+      "noindex": false,
+      "schemaTypes": ["CollectionPage", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/blog/introducing-ketjs/",
+      "title": "Introducing KetJS",
+      "description": "One application contract, composable modules, and a view layer that starts with HTML.",
+      "canonical": "https://ketjs.dev/blog/introducing-ketjs/",
+      "noindex": false,
+      "schemaTypes": ["BlogPosting", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/api/",
+      "title": "Public API | KetJS",
+      "description": "Supported KetJS, theme, testing, view, and PostgreSQL package entrypoints.",
+      "canonical": "https://ketjs.dev/docs/api/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/architecture-decisions/",
+      "title": "Architecture decisions | KetJS",
+      "description": "Historical design rationale and trade-offs; current contracts live in the topic guides.",
+      "canonical": "https://ketjs.dev/docs/architecture-decisions/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/authorization/",
+      "title": "Authorization | KetJS",
+      "description": "Grant operations, enforce declared effects and keep tenant data isolated.",
+      "canonical": "https://ketjs.dev/docs/authorization/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/benchmarks/",
+      "title": "Benchmarks | KetJS",
+      "description": "Compare KetJS database execution, HTTP server and SSR performance with reproducible workloads, exact versions, HTML charts and raw measurement results.",
+      "canonical": "https://ketjs.dev/docs/benchmarks/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/cli-config/",
+      "title": "CLI and configuration | KetJS",
+      "description": "Inspect, build, run, migrate, and configure KetJS applications from the ket command line.",
+      "canonical": "https://ketjs.dev/docs/cli-config/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/configuration/",
+      "title": "Configuration | KetJS",
+      "description": "Configure workspace selection, deployment boundaries and runtime settings.",
+      "canonical": "https://ketjs.dev/docs/configuration/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/contributing/",
+      "title": "Contributing | KetJS",
+      "description": "Work on KetJS with explicit package ownership and focused verification.",
+      "canonical": "https://ketjs.dev/docs/contributing/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/data/",
+      "title": "Queries and changesets | KetJS",
+      "description": "Read and write KetJS data with immutable queries, validated changesets, and transactions.",
+      "canonical": "https://ketjs.dev/docs/data/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/deployment/",
+      "title": "Deployment | KetJS",
+      "description": "Build, migrate, release, scale, and operate KetJS HTTP and worker processes safely.",
+      "canonical": "https://ketjs.dev/docs/deployment/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/form-validation/",
+      "title": "Form validation | KetJS",
+      "description": "Share form schemas between server and browser, manage field state, and return structured HTTP 422 errors.",
+      "canonical": "https://ketjs.dev/docs/form-validation/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/functions/",
+      "title": "Functions and effects | KetJS",
+      "description": "Define KetJS operations with checked signatures, explicit effects, permissions, dry-run, and idempotency.",
+      "canonical": "https://ketjs.dev/docs/functions/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/http/",
+      "title": "HTTP routes and responses | KetJS",
+      "description": "Serve KetJS functions, module routes, dynamic paths, HTML, JSON, binary data, and streamed responses.",
+      "canonical": "https://ketjs.dev/docs/http/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/",
+      "title": "Documentation | KetJS",
+      "description": "Build your first KetJS application, understand its architecture, then find the contract you need.",
+      "canonical": "https://ketjs.dev/docs/",
+      "noindex": false,
+      "schemaTypes": ["CollectionPage", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/integrations/",
+      "title": "Storage, transport, and streams | KetJS",
+      "description": "Use tenant-namespaced blob storage, bounded uploads, outbound providers, and resumable streams.",
+      "canonical": "https://ketjs.dev/docs/integrations/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/jobs/",
+      "title": "Durable jobs and workers | KetJS",
+      "description": "Declare, enqueue, execute, retry, inspect, and operate KetJS background jobs.",
+      "canonical": "https://ketjs.dev/docs/jobs/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/logging/",
+      "title": "Operational logging | KetJS",
+      "description": "Drivers, the event catalogue, redaction, and how KetJS records what a deployment is doing.",
+      "canonical": "https://ketjs.dev/docs/logging/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/menus-i18n/",
+      "title": "Menus and localization | KetJS",
+      "description": "Compose permission-aware navigation and module-owned translated message catalogues.",
+      "canonical": "https://ketjs.dev/docs/menus-i18n/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/migrations/",
+      "title": "Migrations and adapters | KetJS",
+      "description": "Derive schemas, plan safe migrations, use SQLite or PostgreSQL, and migrate tenant fleets.",
+      "canonical": "https://ketjs.dev/docs/migrations/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/models/",
+      "title": "Models and scopes | KetJS",
+      "description": "Declare KetJS models, field types, indexes, relations, extensions, and row isolation.",
+      "canonical": "https://ketjs.dev/docs/models/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/module-discovery/",
+      "title": "Module discovery | KetJS",
+      "description": "Resolve selected KetJS modules from filesystem roots without making file presence executable.",
+      "canonical": "https://ketjs.dev/docs/module-discovery/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/modules/",
+      "title": "Modules and manifest | KetJS",
+      "description": "Build composable KetJS modules and understand the immutable manifest derived from a deployment.",
+      "canonical": "https://ketjs.dev/docs/modules/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/open-questions/",
+      "title": "Open questions | KetJS",
+      "description": "Known gaps, unsettled design questions, and weak spots in the current implementation.",
+      "canonical": "https://ketjs.dev/docs/open-questions/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/openapi/",
+      "title": "HTTP contracts and OpenAPI | KetJS",
+      "description": "Record transport-neutral HTTP contracts in the KetJS manifest and generate deployment-specific OpenAPI documents.",
+      "canonical": "https://ketjs.dev/docs/openapi/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/project-structure/",
+      "title": "Directory structure | KetJS",
+      "description": "Understand the files in a scaffolded application and how modules grow.",
+      "canonical": "https://ketjs.dev/docs/project-structure/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/quick-start/",
+      "title": "Quick start | KetJS",
+      "description": "Scaffold, inspect, and run a minimal KetJS application.",
+      "canonical": "https://ketjs.dev/docs/quick-start/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/release-notes/",
+      "title": "Release notes | KetJS",
+      "description": "The coordinated KetJS 0.1.41 release and its package boundaries.",
+      "canonical": "https://ketjs.dev/docs/release-notes/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/releasing/",
+      "title": "Publishing packages | KetJS",
+      "description": "Prepare, verify, and publish a coordinated KetJS release to npm.",
+      "canonical": "https://ketjs.dev/docs/releasing/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/rendering/",
+      "title": "Rendering and islands | KetJS",
+      "description": "Build first-party UI with ketjs-view signals, templates, SSR, hydration, JSX, and interactive islands.",
+      "canonical": "https://ketjs.dev/docs/rendering/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/reports/",
+      "title": "Reports and PDF | KetJS",
+      "description": "Declare business-owned reports and render constrained KTL as deterministic PDF documents.",
+      "canonical": "https://ketjs.dev/docs/reports/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/request-lifecycle/",
+      "title": "Request lifecycle | KetJS",
+      "description": "Follow a request through deployment composition, identity, domain behavior and rendering.",
+      "canonical": "https://ketjs.dev/docs/request-lifecycle/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/sessions-tenants/",
+      "title": "Sessions and tenants | KetJS",
+      "description": "Configure signed sessions, company and branch scope, permissions, and one-database-per-tenant isolation.",
+      "canonical": "https://ketjs.dev/docs/sessions-tenants/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/testing/",
+      "title": "Testing | KetJS",
+      "description": "Exercise KetJS applications through real HTTP, isolated datastores, sessions, tenants, and durable workers.",
+      "canonical": "https://ketjs.dev/docs/testing/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/themes/",
+      "title": "Themes and KTL | KetJS",
+      "description": "Build KetJS themes with KTL templates, browser JavaScript, styles, tokens, regions, joints, sections, and islands.",
+      "canonical": "https://ketjs.dev/docs/themes/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/upgrading/",
+      "title": "Upgrading KetJS",
+      "description": "Audit compatibility, physical schemas, queries, and tenant sessions before changing a KetJS version.",
+      "canonical": "https://ketjs.dev/docs/upgrading/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/view-static-sites/",
+      "title": "Static sites with ketjs-view | KetJS",
+      "description": "Scaffold, develop, and deliver plain HTML, CSS, and JavaScript with explicit interactive islands.",
+      "canonical": "https://ketjs.dev/docs/view-static-sites/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/docs/workspaces/",
+      "title": "Workspaces and deployments | KetJS",
+      "description": "Define immutable KetJS deployments, shared datastores, themes, HTTP roles, and workers.",
+      "canonical": "https://ketjs.dev/docs/workspaces/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/examples/",
+      "title": "Start with something real | KetJS",
+      "description": "Small, focused examples that show how KetJS fits together.",
+      "canonical": "https://ketjs.dev/examples/",
+      "noindex": false,
+      "schemaTypes": ["CollectionPage", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/examples/notes/",
+      "title": "Notes application | KetJS",
+      "description": "A SQLite-backed application with a module, model, function, migration, and HTTP route.",
+      "canonical": "https://ketjs.dev/examples/notes/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/examples/static-site/",
+      "title": "Static site with islands | KetJS",
+      "description": "Build plain HTML, CSS, and JavaScript with optional interactive islands and no application server.",
+      "canonical": "https://ketjs.dev/examples/static-site/",
+      "noindex": false,
+      "schemaTypes": ["TechArticle", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/",
+      "title": "KetJS — Composable TypeScript framework (Preview)",
+      "description": "Evaluate KetJS, a TypeScript framework for composable modules, checked contracts, reactive islands and durable jobs. Explore the preview docs and examples.",
+      "canonical": "https://ketjs.dev/",
+      "noindex": false,
+      "schemaTypes": ["WebPage", "WebSite", "SoftwareSourceCode"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/learn/",
+      "title": "Learn KetJS",
+      "description": "A practical path from your first deployment to a modular fullstack application.",
+      "canonical": "https://ketjs.dev/learn/",
+      "noindex": false,
+      "schemaTypes": ["CollectionPage", "BreadcrumbList"],
+      "issues": [],
+      "notes": []
+    },
+    {
+      "route": "/search/",
+      "title": "Search KetJS documentation",
+      "description": "Find KetJS documentation, learning guides and runnable examples. Browse topics including modules, data, rendering, authorization and jobs.",
+      "canonical": "https://ketjs.dev/search/",
+      "noindex": true,
+      "schemaTypes": [],
+      "issues": [],
+      "notes": []
+    }
+  ]
+}

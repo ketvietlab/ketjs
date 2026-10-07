@@ -8,7 +8,11 @@
     "node": ">=24.0.0"
   },
   "workspaces": [
-    "packages/*"
+    "packages/ketjs-view",
+    "packages/ketjs-view-tools",
+    "packages/create-view",
+    "packages/ketjs",
+    "packages/ketjs-postgres"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",

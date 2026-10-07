@@ -165,17 +165,25 @@ async function loadPages(
   const routes = new Map<string, string>()
   for (const file of discoverPages(config)) {
     const imported = await importSource(file, config.root)
-    const page = imported.default as PageDefinition | undefined
-    if (!page || typeof page !== 'object' || typeof page.view !== 'function')
-      throw new Error(`${relative(config.root, file)} must default-export definePage({ head, view })`)
-    if (!page.head || typeof page.head.title !== 'string')
-      throw new Error(`${relative(config.root, file)} must define head.title`)
-    const route = checkedRoute(page.path ?? inferredRoute(config, file), relative(config.root, file))
-    const previous = routes.get(route)
-    if (previous)
-      throw new Error(`duplicate page route "${route}": ${previous} and ${relative(config.root, file)}`)
-    routes.set(route, relative(config.root, file))
-    loaded.push({ source: file, route, page })
+    const collection = Array.isArray(imported.default)
+    const definitions = Array.isArray(imported.default) ? imported.default : [imported.default]
+    if (definitions.length === 0)
+      throw new Error(`${relative(config.root, file)} must export at least one page`)
+    for (const [index, definition] of definitions.entries()) {
+      const page = definition as PageDefinition | undefined
+      const source = `${relative(config.root, file)}${collection ? ` page ${index + 1}` : ''}`
+      if (!page || typeof page !== 'object' || typeof page.view !== 'function')
+        throw new Error(`${source} must define a page with head and view`)
+      if (!page.head || typeof page.head.title !== 'string')
+        throw new Error(`${source} must define head.title`)
+      if (collection && !page.path)
+        throw new Error(`${source} in a page collection must define an explicit path`)
+      const route = checkedRoute(page.path ?? inferredRoute(config, file), source)
+      const previous = routes.get(route)
+      if (previous) throw new Error(`duplicate page route "${route}": ${previous} and ${source}`)
+      routes.set(route, source)
+      loaded.push({ source: file, route, page })
+    }
   }
   return loaded
 }
@@ -244,6 +252,17 @@ async function bundleAssets(config: ResolvedViewConfig, write: boolean): Promise
       platform: 'browser',
       format: 'esm',
       target: 'es2022',
+      loader: {
+        '.woff': 'file',
+        '.woff2': 'file',
+        '.ttf': 'file',
+        '.otf': 'file',
+        '.svg': 'file',
+        '.png': 'file',
+        '.jpg': 'file',
+        '.jpeg': 'file',
+        '.webp': 'file',
+      },
       entryNames: 'assets/app-[hash]',
       assetNames: 'assets/[name]-[hash]',
       minify: write,
@@ -281,13 +300,25 @@ const documentHtml = (
     `<title>${escapeHtml(head.title)}</title>`,
     ...(head.description ? [`<meta name="description" content="${escapeHtml(head.description)}">`] : []),
     ...(head.meta ?? []).map(
-      (meta) => `<meta name="${escapeHtml(meta.name)}" content="${escapeHtml(meta.content)}">`,
+      (meta) =>
+        `<meta ${meta.property === undefined ? 'name' : 'property'}="${escapeHtml(meta.property ?? meta.name!)}" content="${escapeHtml(meta.content)}">`,
     ),
     ...(head.links ?? []).map(
       (link) =>
         `<link rel="${escapeHtml(link.rel)}" href="${escapeHtml(link.href)}"${link.type ? ` type="${escapeHtml(link.type)}"` : ''}>`,
     ),
+    ...(head.scripts ?? []).map(
+      (script) =>
+        `<script src="${escapeHtml(script.src)}"${script.type ? ` type="${escapeHtml(script.type)}"` : ''}${script.defer ? ' defer' : ''}></script>`,
+    ),
     ...css.map((file) => `<link rel="stylesheet" href="${assetUrl(config, htmlFile, file)}">`),
+    ...(head.structuredData ?? []).map((data) => {
+      const json = JSON.stringify(data).replace(
+        /[<>&\u2028\u2029]/g,
+        (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+      )
+      return `<script type="application/ld+json">${json}</script>`
+    }),
   ]
   const scripts = [
     ...(js && hasIslands ? [`<script type="module" src="${assetUrl(config, htmlFile, js)}"></script>`] : []),
@@ -304,7 +335,7 @@ const outputFile = (config: ResolvedViewConfig, route: string): string =>
   route === '/' ? join(config.outDir, 'index.html') : join(config.outDir, route.slice(1), 'index.html')
 
 const validateIslands = (config: ResolvedViewConfig, body: string): void => {
-  for (const match of body.matchAll(/\sdata-island="([^"]+)"/g)) {
+  for (const match of body.matchAll(/<[a-z][^>]*\sdata-island="([^"]+)"/gi)) {
     const name = match[1] as string
     if (!(name in config.islands))
       throw new Error(`page uses island "${name}", but ket-view.config.ts does not register it`)

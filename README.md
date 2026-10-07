@@ -54,12 +54,13 @@ an explicit key.
 
 ## Render on the server. Add interaction where it matters.
 
-The KetJS view layer combines server rendering with signals and targeted DOM updates. Explicit
+The ketjs-view layer combines server rendering with signals and targeted DOM updates. Explicit
 islands hydrate interactive regions while the rest of the page stays ordinary HTML. Write views
 in TypeScript and TSX, reuse browser-safe form schemas, and keep browser state in client runtimes.
 
-Themes use restricted KTL to change presentation without executing arbitrary JavaScript. Modules
-publish extension points so themes and add-ons can customize the UI through declared contracts.
+Themes combine KTL templates, styles, and browser JavaScript for interactive presentation. KTL's
+server expressions read declared data; browser modules own client-side effects. Modules publish
+extension points so themes and add-ons can customize the UI through declared contracts.
 
 The view layer also stands on its own: build static sites with HTML, CSS, and JavaScript, using the
 same templates and islands without a KetJS server.
@@ -98,7 +99,7 @@ HTML previews and deterministic PDF rendering for those report contracts.
 
 ## A small core, optional adapters
 
-The core uses Node built-ins and the separately published KetJS view package. SQLite uses Node's
+The core uses Node built-ins and the separately published ketjs-view package. SQLite uses Node's
 built-in driver; the PostgreSQL driver stays in its optional adapter. The browser-safe view package
 has no runtime dependencies.
 
@@ -146,6 +147,9 @@ npm run dev
 ```
 
 Build the generated site with `npm run build`; deploy the output in `dist/`.
+
+Website and framework guides: [ketjs.dev](https://ketjs.dev). The site source and local development
+instructions are in [packages/docs](packages/docs/README.md).
 
 ## Contributing
 

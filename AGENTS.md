@@ -6,8 +6,10 @@ This file is the canonical repository guide for coding agents and contributors.
 
 This repository holds the KetJS framework only: `ketjs`, `ketjs-view`, `ketjs-postgres`,
 `ketjs-view-tools` and `create-view`. KetSuite, the design system, Flow and Website clients live
-in the KetSuite source and consume KetJS from npm; do not add them back here. A framework change a
-consumer needs is released from this repository and then adopted by version.
+in the KetSuite source and consume KetJS from npm; do not add them back here.
+The framework marketing and documentation site lives in `packages/docs`; it is a private,
+independently installed ketjs-view consumer for `ketjs.dev`, not a published framework package.
+A framework change a consumer needs is released from this repository and then adopted by version.
 
 ## Language and branches
 

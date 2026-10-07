@@ -1,0 +1,37 @@
+{
+  "name": "@ketvietlab/ketjs-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "ket-view dev",
+    "build": "ket-view build && node site/verify.mjs",
+    "preview": "ket-view preview --host 127.0.0.1 --port 3700",
+    "check": "tsc --noEmit && ket-view check",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@ketvietlab/design-system": "0.1.40",
+    "@ketvietlab/ketjs-view": "file:../ketjs-view"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "5.2.8",
+    "@ketvietlab/ketjs-view-tools": "file:../ketjs-view-tools",
+    "@mermaid-js/tiny": "12.1.0",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/node": "^24.0.0",
+    "marked": "15.0.12",
+    "sanitize-html": "2.18.0",
+    "shiki": "3.13.0",
+    "typescript": "^7.0.2",
+    "yaml": "2.9.1"
+  },
+  "overrides": {
+    "@ketvietlab/design-system": {
+      "@ketvietlab/ketjs-view": "$@ketvietlab/ketjs-view"
+    }
+  }
+}
