@@ -60,7 +60,7 @@ test('global search requires authentication, keeps native URLs and enforces reco
     )
   }
   assert.match(html, /Needle &lt;product&gt;/)
-  assert.match(html, /record=product.template%3Aneedle-product&amp;lang=vi/)
+  assert.match(html, /href="\/admin\/product\/templates\/needle-product\?lang=vi"/)
   assert.match(html, /data-ui="global-search-input"[^>]*value="Needle"/)
   const empty = await (await app.client.get('/admin/search?lang=vi')).text()
   assert.doesNotMatch(empty, /Needle &lt;product&gt;/)
@@ -69,5 +69,5 @@ test('global search requires authentication, keeps native URLs and enforces reco
   const restricted = app.client.anonymous()
   await restricted.login({ login: 'search-restricted', password: 'search-test-password' })
   const forbidden = await (await restricted.get('/admin/search?q=Needle&lang=vi')).text()
-  assert.doesNotMatch(forbidden, /Needle &lt;product&gt;|record=product.template/)
+  assert.doesNotMatch(forbidden, /Needle &lt;product&gt;|admin\/product\/templates\/needle-product/)
 })

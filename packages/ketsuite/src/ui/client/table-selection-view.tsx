@@ -507,8 +507,10 @@ const installRouteModal = (signal: AbortSignal, navigation: BrowserNavigation): 
 const installRecordRefresh = (signal: AbortSignal, navigation: BrowserNavigation): void => {
   document.addEventListener(
     'ket:records-changed',
-    () => {
+    (event) => {
       if (!document.querySelector('[data-ket-slot="backend.content"]')) return
+      // A record page re-reads its own context; there is no collection behind it.
+      if ((event as CustomEvent<{ page?: boolean } | null>).detail?.page) return
       void navigation.navigate(location.href, { replace: true })
     },
     { signal },
