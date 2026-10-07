@@ -198,7 +198,7 @@ async function loadPages(
 
 const quoted = (value: string): string => JSON.stringify(value)
 
-const clientSource = (config: ResolvedViewConfig): string => {
+const clientSource = (config: ResolvedViewConfig, dev: boolean): string => {
   const imports: string[] = []
   const registry: string[] = []
   for (const [index, [name, definition]] of Object.entries(config.islands).entries()) {
@@ -216,7 +216,8 @@ const clientSource = (config: ResolvedViewConfig): string => {
   if (registry.length)
     imports.push(
       `import { domHost, hydrateIslands } from '@ketvietlab/ketjs-view'`,
-      `hydrateIslands(domHost(document), document, { ${registry.join(', ')} })`,
+      // Development fails loudly on a hydration mismatch; a built site renders the island on the client.
+      `hydrateIslands(domHost(document), document, { ${registry.join(', ')} }${dev ? `, { hydrationMismatch: 'throw' }` : ''})`,
     )
   return imports.join('\n')
 }
@@ -239,13 +240,13 @@ const listFiles = (directory: string): string[] => {
 // the same JSX transform or neither does: markup only hydrates with the one that rendered it.
 const jsxPlugins = (config: ResolvedViewConfig): Plugin[] => (config.compileJsx ? [ketJsxPlugin()] : [])
 
-async function bundleAssets(config: ResolvedViewConfig, write: boolean): Promise<string[]> {
+async function bundleAssets(config: ResolvedViewConfig, write: boolean, dev = false): Promise<string[]> {
   const hasIslands = Object.keys(config.islands).length > 0
   if (!hasIslands && config.styles.length === 0) return []
   const temporary = write ? null : mkdtempSync(join(tmpdir(), 'ket-view-check-'))
   const outdir = temporary ?? config.outDir
   const source = hasIslands
-    ? { contents: clientSource(config), sourcefile: 'ket-view-client.ts', loader: 'ts' as const }
+    ? { contents: clientSource(config, dev), sourcefile: 'ket-view-client.ts', loader: 'ts' as const }
     : {
         contents: config.styles
           .map((style) => `@import ${quoted(slash(resolve(config.root, style)))};`)
@@ -374,7 +375,7 @@ export async function buildProject(
   const stagedConfig = { ...config, outDir: stage }
   try {
     if (existsSync(config.publicDir)) cpSync(config.publicDir, stage, { recursive: true })
-    const assets = await bundleAssets(stagedConfig, true)
+    const assets = await bundleAssets(stagedConfig, true, options.reload ?? false)
     const output = []
     for (const { route, page } of pages) {
       const file = outputFile(stagedConfig, route)

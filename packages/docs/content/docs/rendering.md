@@ -409,6 +409,14 @@ manager.dispose(contentSlot)
 Only `<ket-island>` and `<div data-ket-island>` elements hydrate. Headings, layout, and other server
 HTML remain inert. Unknown islands fail in strict mode; `{ strict: false }` leaves intentionally
 server-only islands untouched.
+
+A `HydrationMismatch` stays inside its island. By default the manager discards that island's server DOM,
+renders it on the client and continues with the other islands, so one stale or altered island does not
+leave the rest of the page inert. Islands nested in the discarded markup are dropped, and the hosts the
+new render places are hydrated in their turn. Each recovered mismatch goes to `onHydrationMismatch(error, island)`, or to `console.error`
+when no handler is given. Pass `{ hydrationMismatch: 'throw' }` to fail the call instead; `ket-view dev`
+does this so a mismatch is visible while developing. Other island errors, such as unreadable props or
+an unknown island in strict mode, still throw.
 `hydrateIslands()` remains the compatibility wrapper for applications that do not reconcile slots.
 
 ## Fragment navigation and persistent islands

@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -25,6 +33,23 @@ test('create-view scaffolds a complete static project without overwriting files'
     assert.ok(existsSync(join(dir, 'src/pages/index.tsx')))
     assert.throws(() => scaffoldView('example-site', dir), /refusing to overwrite/)
     assert.throws(() => scaffoldView('Not Valid', join(dir, 'invalid')), /invalid project name/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('view tools fail on a hydration mismatch in development and recover in a built site', async () => {
+  const dir = project()
+  try {
+    const client = async (reload: boolean) => {
+      await buildProject(dir, { reload })
+      const assets = readdirSync(join(dir, 'dist/assets')).filter((file) => file.endsWith('.js'))
+      return assets.map((file) => readFileSync(join(dir, 'dist/assets', file), 'utf8')).join('\n')
+    }
+    // The runtime itself reads the option, so look for the object the entry passes to hydrateIslands.
+    const option = /\{\s*hydrationMismatch:\s*"throw"\s*\}/
+    assert.doesNotMatch(await client(false), option)
+    assert.match(await client(true), option)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
