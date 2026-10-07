@@ -3,18 +3,17 @@ title: Publishing packages
 description: Prepare, verify, and publish a coordinated KetJS release to npm.
 ---
 
-KetJS releases ten public packages with one version:
+KetJS releases five public packages with one version:
 
 1. `@ketvietlab/ketjs-view`
 2. `@ketvietlab/ketjs-view-tools`
 3. `@ketvietlab/create-view`
-4. `@ketvietlab/design-system`
-5. `@ketvietlab/ketjs`
-6. `@ketvietlab/ketjs-postgres`
-7. `@ketvietlab/ketsuite`
-8. `@ketvietlab/flow-ui`
-9. `@ketvietlab/flow-client`
-10. `@ketvietlab/website-client`
+4. `@ketvietlab/ketjs`
+5. `@ketvietlab/ketjs-postgres`
+
+From 0.1.41 the KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client` and
+`website-client`) are released from the KetSuite source, not from this repository. Their last release
+from here is 0.1.40.
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
 the package that names it.
@@ -34,10 +33,6 @@ account supports that transition.
 Update the root and all workspace package versions together. Also update every internal dependency and the
 version used by `ket new`. The release checker rejects drift between any of these locations.
 
-The design-system inventory reads tracked files and non-ignored new source files when Git metadata is
-available. Generated or ignored local bundles must not influence the committed inventory or release gate.
-Source archives without Git metadata use the same deterministic directory walk over their packaged files.
-
 The first coordinated scoped release was `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
 initial bootstrap attempt and is not part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
@@ -50,23 +45,18 @@ npm ci
 npm run release:check
 ```
 
-`release:check` performs the normal formatter, lint, build, dependency audit, tests, and type proof. It then:
+`release:check` performs the normal formatter, lint, build, dependency audit, type check and tests. It then:
 
 - verifies package metadata, repository links, license, exports, versions, and exact internal dependencies;
 - creates the same tarballs npm will receive and enforces package-size ceilings;
 - installs all tarballs into a clean consumer and imports every public entry point;
-- invokes the installed `ket new` binary;
+- invokes the installed `ket new` and `create-view` binaries;
 - installs the local tarballs into that generated project, resolves its development CLI entry, then runs its
   check and integration test.
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
-embedded by the deterministic PDF renderer. The design-system package has a 375 KB ceiling for its public
-component catalogue, machine-readable inventory and KetAtlas adapter. KetSuite has a 6.4 MB ceiling for its
-composed business modules, address catalogues, browser clients, and source maps. The 0.1.29 archive
-was inspected at 6,150,837 packed bytes across 3,623 files; the largest new entries are user/access-policy,
-product and CRM client source maps plus the two brand images. These ceilings leave limited
-headroom for accidental growth. A release that crosses a ceiling must inspect the tarball contents before
-changing the budget.
+embedded by the deterministic PDF renderer. A release that crosses a ceiling must inspect the tarball
+contents before changing the budget.
 
 To retain inspectable tarballs under `.release/`:
 
@@ -79,18 +69,18 @@ No publish command is part of either local script.
 
 ## Publish
 
-1. Create `release/<version>` from the current `develop` head. Do not release an arbitrary feature branch.
-2. Update the coordinated version when needed, then open the release pull request into `master` and let the
-   required checks pass. This is the only pull request that runs the full verification (quality contracts
-   and every Postgres test group); feature pull requests into `develop` are verified locally by their
-   authors, so a failure here is fixed on `develop` before the release is retried.
+1. Create `release/<version>` from `master` and merge the `develop` head into it. Do not release an
+   arbitrary feature branch.
+2. Update the coordinated version, then open the release pull request into `master` and let the required
+   checks pass. Feature pull requests are verified locally by their authors, so a failure here is fixed on
+   `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
 4. Create and publish GitHub release `v0.1.30` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
-6. Confirm all ten packages and provenance attestations on npm.
-7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
-   repository's release process. Never pin a moving branch name.
+6. Confirm all five packages and provenance attestations on npm.
+7. Update each downstream repository to the released npm version, then run that repository's release
+   process.
 8. Run the public smoke path without local tarballs:
 
 ```bash
@@ -102,8 +92,7 @@ npm test
 ```
 
 The workflow also supports manual dispatch for an existing tag. It refuses a tag that does not exactly match
-the coordinated package version. Release checkout retains full Git history so the design-system admission
-gate can compare the tagged source with `origin/develop` before publishing.
+the coordinated package version.
 
 ## Failure and recovery
 

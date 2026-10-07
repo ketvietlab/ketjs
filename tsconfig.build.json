@@ -8,16 +8,6 @@
     "sourceMap": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": [
-    "packages/*/src/**/*",
-    "apps/**/*",
-    "ket.workspace.ts",
-    "examples/**/*",
-    "test/**/*",
-    "tools/**/*.ts",
-    "bench/**/*",
-    "packages/website-client/client/**/*",
-    "packages/website-client/server/**/*"
-  ],
+  "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*.ts", "bench/**/*"],
   "exclude": [".build", "packages/*/dist", "node_modules"]
 }

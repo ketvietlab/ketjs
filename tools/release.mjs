@@ -23,74 +23,10 @@ const workspaces = [
     maxPackedBytes: 100_000,
   },
   { name: '@ketvietlab/create-view', dir: 'packages/create-view', maxPackedBytes: 75_000 },
-  {
-    name: '@ketvietlab/design-system',
-    dir: 'packages/design-system',
-    // 0.1.40 packs 423,822 bytes: 138 catalogue components (workspace context button), fixed
-    // date presets, temporal record fields, image dropzones and commerce form layouts. Audited archive contains only
-    // dist, docs and metadata; no tests, dependencies or build caches.
-    maxPackedBytes: 430_000,
-  },
   // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
   // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
   { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  // 0.1.24 packed 4,046,454 bytes: the record-modal tabs, the data-table pattern and the
-  // filter menu, with no stray files — about half the package is source maps.
-  // 0.1.26 packs 4.95 MB; new user/CRM record-modal bundles include source maps.
-  // 0.1.29 packs 6,150,837 bytes: reviewed user/access-policy, product and CRM client bundles,
-  // their source maps and the two brand images; no test/build caches in the 3,623-file archive.
-  // 0.1.30 packs 7,249,173 bytes (3,863 files): reviewed chart/LiveDoc and record
-  // bundles with source maps; no source, test, node_modules or build-cache directories.
-  // 0.1.32: 7,625,068 bytes / 3,942 files, including Website Studio bundles and maps;
-  // inspected archive contains no test, node_modules, atlas or build-cache directories.
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 8_000_000 },
-  {
-    name: '@ketvietlab/website-client',
-    dir: 'packages/website-client',
-    // Measured typed Website Studio package: 292,248 bytes / 258 files.
-    maxPackedBytes: 350_000,
-    requiredPaths: [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/client/index.js',
-      'dist/client/index.d.ts',
-      'dist/client/styles.css',
-      'dist/server/extensions.js',
-      'dist/server/extensions.d.ts',
-    ],
-  },
-  // Flow's component kit ships JavaScript modules; 0.1.27 packs 128 KB with its stylesheet and icons.
-  {
-    name: '@ketvietlab/flow-ui',
-    dir: 'packages/flow-ui',
-    maxPackedBytes: 160_000,
-    requiredPaths: [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/index.mjs',
-      'dist/index.d.mts',
-      'dist/styles.css',
-    ],
-  },
-  {
-    name: '@ketvietlab/flow-client',
-    dir: 'packages/flow-client',
-    // Measured import: 305 KB, including the bundled brand assets and three message catalogs.
-    maxPackedBytes: 350_000,
-    requiredPaths: [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/index.mjs',
-      'dist/workspace.mjs',
-      'dist/server-extensions.mjs',
-      'EXTENSIONS.md',
-      'NOTICE',
-    ],
-  },
 ]
 
 /** @param {string} message @returns {never} */
@@ -181,9 +117,6 @@ const verifyMetadata = () => {
   const scaffold = readFileSync(join(ROOT, 'packages/ketjs/src/scaffold/index.ts'), 'utf8')
   if (!scaffold.includes(`const VERSION = '${version}'`))
     fail(`ket new does not scaffold the release version ${version}`)
-  const suiteScaffold = readFileSync(join(ROOT, 'packages/ketsuite/src/scaffold/index.ts'), 'utf8')
-  if (!suiteScaffold.includes(`const VERSION = '${version}'`))
-    fail(`ketsuite new does not scaffold the release version ${version}`)
   const viewScaffold = readFileSync(join(ROOT, 'packages/create-view/src/index.ts'), 'utf8')
   if (!viewScaffold.includes(`const VERSION = '${version}'`))
     fail(`create-view does not scaffold the release version ${version}`)
@@ -218,25 +151,11 @@ const pack = (destination, version) => {
     if (result.size > workspace.maxPackedBytes)
       fail(`${workspace.name} grew to ${result.size} packed bytes (limit ${workspace.maxPackedBytes})`)
     const paths = new Set(result.files.map((file) => file.path))
-    const requiredPaths = workspace.requiredPaths ?? [
-      'LICENSE',
-      'README.md',
-      'package.json',
-      'dist/index.js',
-      'dist/index.d.ts',
-    ]
-    if (workspace.name === '@ketvietlab/design-system') {
-      requiredPaths.push('dist/styles.css', 'dist/foundations/tokens.css')
-    }
+    const requiredPaths = ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts']
     for (const required of requiredPaths)
       if (!paths.has(required)) {
         fail(`${workspace.name} tarball omitted ${required}`)
       }
-    if (workspace.name === '@ketvietlab/flow-client') {
-      for (const path of paths)
-        if (/(^|\/)(atlas|test|client|node_modules)(\/|$)/.test(path))
-          fail(`core tarball includes development source: ${path}`)
-    }
     const tarball = join(destination, result.filename)
     if (!existsSync(tarball)) fail(`${workspace.name} tarball was not written`)
     tarballs.set(workspace.name, tarball)
@@ -276,26 +195,7 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/record-modal-client'), import('@ketvietlab/ketsuite/backend'), import('@ketvietlab/flow-ui'), import('@ketvietlab/flow-ui/workspace'), import('@ketvietlab/flow-ui/documents'), import('@ketvietlab/flow-client'), import('@ketvietlab/flow-client/server'), import('@ketvietlab/website-client'), import('@ketvietlab/website-client/server')])`,
-    ],
-    { cwd: consumer },
-  )
-
-  // A tarball consumer has no private checkout or fixture runtime to fall back to.
-  run(
-    node,
-    [
-      '--input-type=module',
-      '--eval',
-      `
-    import assert from 'node:assert/strict';
-    import {createFlowWorkspace,routes} from '@ketvietlab/flow-client';
-    import {renderToStaticString} from '@ketvietlab/ketjs-view';
-    assert.equal(Object.keys(routes).length,76);
-    for(const key of ['performance','workload','goals','github','atlas','gantt','automations','epic-map']) assert.equal(routes[key],undefined);
-    assert.match(renderToStaticString(createFlowWorkspace({screen:'my-work'}).view()),/data-flow/);
-    assert.throws(()=>import.meta.resolve('@repo/flow-pro-client'));
-  `,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs-view-tools'), import('@ketvietlab/create-view'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres')])`,
     ],
     { cwd: consumer },
   )
@@ -333,38 +233,6 @@ const smoke = (tarballs, version, parent) => {
   run(node, ['tools/dev.mjs'], { cwd: generated })
   run(npm, ['run', 'check'], { cwd: generated })
   run(npm, ['test'], { cwd: generated })
-
-  const generatedSuite = join(parent, 'generated-suite')
-  run(node, [
-    join(consumer, 'node_modules/@ketvietlab/ketsuite/dist/cli.js'),
-    'new',
-    'release_suite',
-    '--dir',
-    generatedSuite,
-  ])
-  const generatedSuitePackage = readJson(join(generatedSuite, 'package.json'))
-  if (generatedSuitePackage.dependencies?.['@ketvietlab/ketsuite'] !== `^${version}`)
-    fail(
-      `ketsuite new generated @ketvietlab/ketsuite dependency ${generatedSuitePackage.dependencies?.['@ketvietlab/ketsuite']}`,
-    )
-  run(
-    npm,
-    [
-      'install',
-      '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
-      '--package-lock=false',
-      tarball('@ketvietlab/ketjs-view'),
-      tarball('@ketvietlab/design-system'),
-      tarball('@ketvietlab/ketjs'),
-      tarball('@ketvietlab/ketsuite'),
-    ],
-    { cwd: generatedSuite },
-  )
-  run(node, [join(generatedSuite, 'node_modules/@ketvietlab/ketsuite/dist/cli.js'), '--help'], {
-    cwd: generatedSuite,
-  })
 
   const generatedView = join(parent, 'generated-view')
   run(node, [

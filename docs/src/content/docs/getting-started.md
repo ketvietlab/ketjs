@@ -55,10 +55,8 @@ future developer needs to complete, and link it from the hub that owns that jour
 | Content | Location | Reader entry point |
 | --- | --- | --- |
 | Framework contracts and usage | `src/content/docs/ketjs/` | [KetJS framework](/ketjs/) |
-| KetSuite ownership and application behavior | `src/content/docs/ketsuite/` | [KetSuite developer guide](/ketsuite/) |
 | Deployment, migration, workers, storage, and measurements | Owning KetJS guide plus `operations/` evidence | [Operations reading map](/operations/) |
 | Accepted cross-cutting choices and unresolved design work | `src/content/docs/architecture/` | [Design records](/architecture/) |
-| Team-specific integration notes | `src/content/docs/handoffs/` | Contributing sidebar only; exclude from search when appropriate. |
 
 One concept should have one owning guide. Add links from related pages instead of copying the same
 contract into several sections. Every published page must be reachable from the explicit sidebar or

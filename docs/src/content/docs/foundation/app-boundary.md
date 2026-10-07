@@ -14,7 +14,7 @@ root npm workspace.
 | Locked dependency graph | `docs/package-lock.json` |
 | Source, content collection, and theme | `docs/src/` |
 | Static output | `docs/dist/` |
-| Framework and KetSuite applications | Root workspace `packages/*` |
+| Framework packages | Root workspace `packages/*` |
 
 The root workspace intentionally includes only `packages/*`. Installing or building the docs does
 not change the KetJS dependency graph, zero-dependency audit, or runtime artifacts.

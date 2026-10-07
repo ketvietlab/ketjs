@@ -4,7 +4,6 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { buildArtifactsExist } from './build-artifacts.mjs'
 import { buildCacheKey } from './ci-build-cache-key.mjs'
 
 /** @param {import('node:test').TestContext} t */
@@ -70,18 +69,4 @@ test('removing an input invalidates the key; an unreadable tracked input fails c
   assert.notEqual(buildCacheKey(root), before)
   rmSync(join(root, 'package-lock.json'))
   assert.throws(() => buildCacheKey(root), /ENOENT/)
-})
-
-test('Website Studio built artifacts use client/server layout and require declarations', (t) => {
-  const { root, put } = fixture(t)
-  put('.build/ket.workspace.js', '')
-  put('.types/website-client/client/index.d.ts', '')
-  for (const path of ['client/index.js', 'server/extensions.js']) {
-    put(`.build/packages/website-client/${path}`, '')
-    put(`packages/website-client/dist/${path}`, '')
-    put(`packages/website-client/dist/${path.replace(/\.js$/, '.d.ts')}`, '')
-  }
-  assert.equal(buildArtifactsExist(root, ['website-client']), true)
-  rmSync(join(root, 'packages/website-client/dist/server/extensions.d.ts'))
-  assert.equal(buildArtifactsExist(root, ['website-client']), false)
 })

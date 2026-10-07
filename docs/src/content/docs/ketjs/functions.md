@@ -7,7 +7,7 @@ A server function is a named business operation. Its input, output, data reach, 
 exposure, and safety properties are declared beside its handler and composed into the manifest.
 
 KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. KetSuite
-modules follow the [handler organization and migration rules](/ketsuite/module-development/): named
+modules follow the handler organization and migration rules: named
 handlers and descriptors grouped by capability, assembled with duplicate detection at
 `functions/index.ts`. The compact framework examples below illustrate the runtime contract, not an
 alternative layout for KetSuite modules.
