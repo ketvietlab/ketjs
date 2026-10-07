@@ -13,9 +13,8 @@ KetJS releases five public packages with one version:
 4. `@ketvietlab/ketjs`
 5. `@ketvietlab/ketjs-postgres`
 
-From 0.1.41 the KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client` and
-`website-client`) are released from the KetSuite source, not from this repository. Their last release
-from here is 0.1.40.
+The KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client` and `website-client`) are
+released from the KetSuite source, not from this repository.
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
 the package that names it.
@@ -35,8 +34,7 @@ account supports that transition.
 Update the root and all workspace package versions together. Also update every internal dependency and the
 version used by `ket new`. The release checker rejects drift between any of these locations.
 
-The first coordinated scoped release was `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
-initial bootstrap attempt and is not part of the supported package set. Preview releases follow semantic
+Only the scoped `@ketvietlab` packages are part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
 
 ## Verification gates
@@ -77,7 +75,7 @@ No publish command is part of either local script.
    `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.1.41` at that exact `master` commit.
+4. Create and publish GitHub release `v0.2.0` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
 7. Update each downstream repository to the released npm version, then run that repository's release
@@ -86,7 +84,7 @@ No publish command is part of either local script.
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.1.41 new public_smoke
+npx -y @ketvietlab/ketjs@0.2.0 new public_smoke
 cd public_smoke
 npm install
 npm test

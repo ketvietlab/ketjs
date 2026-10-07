@@ -9,21 +9,21 @@ benchmarkReports:
     date: "2026-10-07T04:08:14.899Z"
     processes: 4
     measurements:
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 169577.36721044034, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 164903.57263590128, "maxPerSecond": 176349.48178470388}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 56770.960366397834, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 53386.28493527304, "maxPerSecond": 59478.32512684445}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 16239.764840819584, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "insert", "title": "Single committed insert", "minPerSecond": 15022.778362806483, "maxPerSecond": 16674.876820183697}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 5637.3923167880885, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "batch", "title": "Transaction: 25 inserts", "minPerSecond": 5322.687957418506, "maxPerSecond": 6276.839766843003}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 21061.489245486613, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "transfer", "title": "Transaction: two balance updates", "minPerSecond": 4593.97932915112, "maxPerSecond": 21972.870667881027}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 169577.36721044034, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 164903.57263590128, "maxPerSecond": 176349.48178470388}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 56770.960366397834, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 53386.28493527304, "maxPerSecond": 59478.32512684445}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 16239.764840819584, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "insert", "title": "Single committed insert", "minPerSecond": 15022.778362806483, "maxPerSecond": 16674.876820183697}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 5637.3923167880885, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "batch", "title": "Transaction: 25 inserts", "minPerSecond": 5322.687957418506, "maxPerSecond": 6276.839766843003}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 21061.489245486613, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "transfer", "title": "Transaction: two balance updates", "minPerSecond": 4593.97932915112, "maxPerSecond": 21972.870667881027}
       - {"framework": "Raw driver baseline", "version": "v24.14.1", "medianPerSecond": 174264.48927780823, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 145193.72472721722, "maxPerSecond": 190668.67504337712}
       - {"framework": "Raw driver baseline", "version": "v24.14.1", "medianPerSecond": 57155.948614646586, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 52810.35496990593, "maxPerSecond": 58640.42182010091}
       - {"framework": "Raw driver baseline", "version": "v24.14.1", "medianPerSecond": 16956.33611973333, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "insert", "title": "Single committed insert", "minPerSecond": 16371.557875863708, "maxPerSecond": 17134.31436535605}
       - {"framework": "Raw driver baseline", "version": "v24.14.1", "medianPerSecond": 5889.975721789828, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "batch", "title": "Transaction: 25 inserts", "minPerSecond": 4253.011663884481, "maxPerSecond": 6906.633980791127}
       - {"framework": "Raw driver baseline", "version": "v24.14.1", "medianPerSecond": 22713.143443360215, "engine": "SQLite", "databaseVersion": "3.51.2", "operation": "transfer", "title": "Transaction: two balance updates", "minPerSecond": 21431.61379923317, "maxPerSecond": 23909.81237898495}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 948.9643097110734, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 821.3405857172634, "maxPerSecond": 953.6069427065095}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 927.5312984560967, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 883.8020300032916, "maxPerSecond": 1082.8959886123985}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 309.9748237374366, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "insert", "title": "Single committed insert", "minPerSecond": 228.15939658622332, "maxPerSecond": 427.3059466274766}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 34.13669594562573, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "batch", "title": "Transaction: 25 inserts", "minPerSecond": 28.74241514610309, "maxPerSecond": 37.6297001737777}
-      - {"framework": "KetJS adapter", "version": "0.1.41", "medianPerSecond": 278.2401747023888, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "transfer", "title": "Transaction: two balance updates", "minPerSecond": 214.75328586201786, "maxPerSecond": 286.14895955548707}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 948.9643097110734, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 821.3405857172634, "maxPerSecond": 953.6069427065095}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 927.5312984560967, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 883.8020300032916, "maxPerSecond": 1082.8959886123985}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 309.9748237374366, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "insert", "title": "Single committed insert", "minPerSecond": 228.15939658622332, "maxPerSecond": 427.3059466274766}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 34.13669594562573, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "batch", "title": "Transaction: 25 inserts", "minPerSecond": 28.74241514610309, "maxPerSecond": 37.6297001737777}
+      - {"framework": "KetJS adapter", "version": "0.2.0", "medianPerSecond": 278.2401747023888, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "transfer", "title": "Transaction: two balance updates", "minPerSecond": 214.75328586201786, "maxPerSecond": 286.14895955548707}
       - {"framework": "Raw driver baseline", "version": "3.4.9", "medianPerSecond": 999.0729997127307, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "point", "title": "Primary-key lookup", "minPerSecond": 897.3776560383524, "maxPerSecond": 1096.436356239477}
       - {"framework": "Raw driver baseline", "version": "3.4.9", "medianPerSecond": 962.8526762568525, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "range", "title": "Indexed tenant read: 20 rows", "minPerSecond": 922.9342823056834, "maxPerSecond": 1123.6192476505971}
       - {"framework": "Raw driver baseline", "version": "3.4.9", "medianPerSecond": 317.8161261204675, "engine": "PostgreSQL", "databaseVersion": "17.10", "operation": "insert", "title": "Single committed insert", "minPerSecond": 214.76978042682063, "maxPerSecond": 418.7726276225254}
@@ -33,9 +33,9 @@ benchmarkReports:
     date: "2026-10-07T04:09:34.024Z"
     processes: 4
     measurements:
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 20758.83104526715, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/json", "minPerSecond": 16631.534110065477, "maxPerSecond": 21542.861502209053}
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 17125.05143689714, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/point", "minPerSecond": 15882.410602501723, "maxPerSecond": 18503.981970182558}
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 12298.83041937429, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/range", "minPerSecond": 11879.567234196413, "maxPerSecond": 12421.43606660073}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 20758.83104526715, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/json", "minPerSecond": 16631.534110065477, "maxPerSecond": 21542.861502209053}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 17125.05143689714, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/point", "minPerSecond": 15882.410602501723, "maxPerSecond": 18503.981970182558}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 12298.83041937429, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/range", "minPerSecond": 11879.567234196413, "maxPerSecond": 12421.43606660073}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 23814.927801223588, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/json", "minPerSecond": 12564.437799008592, "maxPerSecond": 25955.74950268374}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 18822.656827664257, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/point", "minPerSecond": 14166.223706559143, "maxPerSecond": 21194.883549812326}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 14101.349833690558, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/range", "minPerSecond": 11971.492822858103, "maxPerSecond": 15186.791508294144}
@@ -45,9 +45,9 @@ benchmarkReports:
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 19270.140422649485, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/json", "minPerSecond": 17918.9642838644, "maxPerSecond": 22962.359669485526}
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 17497.158223892686, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/point", "minPerSecond": 15728.828392406971, "maxPerSecond": 18031.352081048473}
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 13579.371125982052, "engine": "SQLite", "databaseVersion": "3.51.2", "path": "/db/range", "minPerSecond": 11859.835278006572, "maxPerSecond": 14155.403558567588}
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 20159.3333652484, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/json", "minPerSecond": 15917.784642322376, "maxPerSecond": 22100.274137325574}
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 950.0791505791065, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/point", "minPerSecond": 823.2902818962287, "maxPerSecond": 1187.9024751401028}
-      - {"framework": "KetJS", "version": "0.1.41", "medianPerSecond": 918.0157579137319, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/range", "minPerSecond": 842.506155966058, "maxPerSecond": 1187.6051135832695}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 20159.3333652484, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/json", "minPerSecond": 15917.784642322376, "maxPerSecond": 22100.274137325574}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 950.0791505791065, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/point", "minPerSecond": 823.2902818962287, "maxPerSecond": 1187.9024751401028}
+      - {"framework": "KetJS", "version": "0.2.0", "medianPerSecond": 918.0157579137319, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/range", "minPerSecond": 842.506155966058, "maxPerSecond": 1187.6051135832695}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 23474.837378597455, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/json", "minPerSecond": 18760.93784661934, "maxPerSecond": 27878.0453301539}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 1110.5284810044932, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/point", "minPerSecond": 904.3656197950877, "maxPerSecond": 1170.1300176146913}
       - {"framework": "Node HTTP baseline", "version": "v24.14.1", "medianPerSecond": 931.013526954483, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/range", "minPerSecond": 789.1764450560561, "maxPerSecond": 1010.5671373830496}
@@ -61,13 +61,11 @@ benchmarkReports:
     date: "2026-10-07T04:48:23.041Z"
     processes: 4
     measurements:
-      - {"framework": "ketjs-view (unreleased)", "version": "source after 0.1.41", "medianPerSecond": 27643.7666172053, "rows": 50}
-      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 11686.071517389664, "rows": 50}
+      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 27643.7666172053, "rows": 50}
       - {"framework": "React", "version": "19.3.0", "medianPerSecond": 27086.61720309974, "rows": 50}
       - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 35569.16509836515, "rows": 50}
       - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 21294.122312380325, "rows": 50}
-      - {"framework": "ketjs-view (unreleased)", "version": "source after 0.1.41", "medianPerSecond": 1341.046823337843, "rows": 1000}
-      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 618.4705284389471, "rows": 1000}
+      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 1341.046823337843, "rows": 1000}
       - {"framework": "React", "version": "19.3.0", "medianPerSecond": 1314.0577128105037, "rows": 1000}
       - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 1685.468854171546, "rows": 1000}
       - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 1195.8892641510906, "rows": 1000}
@@ -93,31 +91,23 @@ Each run uses **16 keep-alive HTTP/1.1 clients**, 160 warm-up requests and 1,600
 
 ### SSR renderer workloads
 
-`bench/ssr-comparison/run.mjs` compares **ketjs-view** built from this repository's source, the released **ketjs-view 0.1.41** installed from npm, **React 19.3.0**, **Svelte 5.57.1**, **Vue 3.5.43** and **Astro 7.3.5**. Each renders the same 50-row or 1,000-row product list with text escaping. ketjs-view, React and Vue create elements through their runtime element functions inside the timer. Svelte and Astro compile `components/ProductList.svelte` and `components/ProductList.astro` once before timing, as their builds would, so their template work is partly done ahead of time. The timed loop calls Svelte's `render()` from `svelte/server` and Astro's public Container API, `renderToString()`, which also runs Astro's component-rendering pipeline. The awaited public render API and encoding every result to bytes are included; imports are warm. Encoding keeps a renderer from returning an unflattened string whose cost would land after the timer. Output equivalence ignores hydration comments and the equivalent `>`/`&gt;` text encoding. There is no HTTP, hydration or browser work in this comparison. Six processes each start the sequence at a different framework, on the same machine with Node.js **26.7.0**; both ketjs-view versions run in every process.
+`bench/ssr-comparison/run.mjs` compares **ketjs-view** **0.2.0**, **React 19.3.0**, **Svelte 5.57.1**, **Vue 3.5.43** and **Astro 7.3.5**. Each renders the same 50-row or 1,000-row product list with text escaping. ketjs-view, React and Vue create elements through their runtime element functions inside the timer. Svelte and Astro compile `components/ProductList.svelte` and `components/ProductList.astro` once before timing, as their builds would, so their template work is partly done ahead of time. The timed loop calls Svelte's `render()` from `svelte/server` and Astro's public Container API, `renderToString()`, which also runs Astro's component-rendering pipeline. The awaited public render API and encoding every result to bytes are included; imports are warm. Encoding keeps a renderer from returning an unflattened string whose cost would land after the timer. Output equivalence ignores hydration comments and the equivalent `>`/`&gt;` text encoding. There is no HTTP, hydration or browser work in this comparison. Five processes each start the sequence at a different framework, on the same machine with Node.js **26.7.0**.
 
-**The SSR chart and the figures in this paragraph predate the Svelte and Astro harness.** They were measured with its previous revision, which compared **Preact 11.0.0** (renderer 6.8.0) instead, across four processes on a development machine; a measurement of the current harness on an isolated server will replace them. The charts report versions and medians. **ketjs-view 0.1.41 is the slowest renderer in this workload.** The source after it renders about 2.4× as many 50-row lists and 2.2× as many 1,000-row lists, level with React and still behind Preact. Profiling 0.1.41 found three costs: its JSX runtime rebuilt and revalidated every element's shape on every call, its server writer reinterpreted each template's parsed tree on every render, and escaping called a function per escaped character. The harness calls the runtime `jsx()` for every element, so it measures neither `html` templates nor the opt-in [JSX compiler](/ketjs/view-static-sites/#compile-jsx). Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
+**The SSR chart and the figures in this paragraph predate the Svelte and Astro harness.** They were measured with its previous revision, which compared **Preact 11.0.0** (renderer 6.8.0) instead, across four processes on a development machine; a measurement of the current harness on an isolated server will replace them. The charts report versions and medians. ketjs-view 0.2.0 is level with React and behind Preact in that measurement. Its JSX runtime caches each element shape, its server writer compiles each template once into static markup between holes, and escaping copies clean runs in one pass. The harness calls the runtime `jsx()` for every element, so it measures neither `html` templates nor the opt-in [JSX compiler](/ketjs/view-static-sites/#compile-jsx). Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
 
 ## Measurement environment
 
 Raw run files and generated reports are not checked into the repository or served by this site. Chart summaries remain in this page's Markdown frontmatter. Re-run the harnesses below to inspect current raw results locally under `.artifacts/benchmarks/`.
 
-Measured **2026-10-07**, using the local **KetJS 0.1.41** source checkout: Node.js **24.14.1**, macOS Darwin **25.2.0**, Apple **M1 Pro**, arm64, **10 logical CPUs** and **32 GiB RAM**. Generated environment/digest records are local artifacts rather than published downloads.
+Measured **2026-10-07**, using the **KetJS 0.2.0** source: Node.js **24.14.1**, macOS Darwin **25.2.0**, Apple **M1 Pro**, arm64, **10 logical CPUs** and **32 GiB RAM**. Generated environment/digest records are local artifacts rather than published downloads.
 
-Node workloads ran **three independent processes, sequentially**. Tables report the median of those runs. Every workload validates its result before reporting it. The generated local reports record the source revision and digest; View Tools content-collection changes in this checkout are not part of the published 0.1.41 release.
+Node workloads ran **three independent processes, sequentially**. Tables report the median of those runs. Every workload validates its result before reporting it. The generated local reports record the source revision and digest. The database and HTTP code paths measured here are the same in 0.2.0.
 
 These are local microbenchmarks and regression baselines. The new comparisons below cover specific local workloads; they do not establish production HTTP capacity or universal framework speed ratios. Earlier competitor and KetSuite-domain tables have been removed because their old harnesses are no longer in this framework repository and were not rerun.
 
 ## Published npm footprint
 
-Fresh isolated consumers installed the exact published `0.1.41` versions, with installation scripts disabled. Package counts include the selected platform's installed optional packages; sizes are logical file bytes under `node_modules`, excluding the consumer's lockfile and npm cache. Installation latency is omitted because network and cache conditions are not controlled.
-
-| Package installed | Installed packages | Logical size |
-| --- | ---: | ---: |
-| `@ketvietlab/ketjs-view` | 1 | 0.202 MB |
-| `@ketvietlab/ketjs-view-tools` | 4 | 11.001 MB |
-| `@ketvietlab/ketjs` | 2 | 3.375 MB |
-
-Standalone View installs one package. Static tooling adds esbuild and its platform binary; the core framework is a separate two-package dependency chain. PostgreSQL is not included in any of these three consumers.
+Fresh isolated consumers install the exact published versions with installation scripts disabled, using `node tools/benchmark-footprint.mjs`. The 0.2.0 footprint is measured after that version is published; View Tools 0.2.0 adds `acorn` and `acorn-jsx` to its dependencies, and standalone View still has none.
 
 ## KTL rendering and query compilation
 

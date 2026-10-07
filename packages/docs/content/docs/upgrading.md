@@ -11,13 +11,12 @@ moving the application lock.
 
 ## Current package line
 
-The current coordinated release is `0.1.41`. Use the same exact version for the KetJS packages your
-application needs. KetSuite and its design system have their own release process starting at this version.
+The current coordinated release is `0.2.0`. Use the same exact version for the KetJS packages your
+application needs. KetSuite and its design system have their own release process.
 
-For applications created by the historical `0.1.1` scaffold, update the framework dependency to
-`@ketvietlab/ketjs@0.1.41` and replace the unscoped `node_modules/ketjs/dist/cli.js` path in
-`tools/dev.mjs` with `node_modules/@ketvietlab/ketjs/dist/cli.js`. Current scaffolds already use the
-scoped path. Read the remaining compatibility checks before upgrading an existing datastore.
+Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
+them, so deploy the server and client bundles of a view upgrade together. Read the remaining
+compatibility checks before upgrading an existing datastore.
 
 ## Preflight
 

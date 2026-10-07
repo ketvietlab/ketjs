@@ -14,14 +14,6 @@ declare module 'react-dom/server' {
   export function renderToStaticMarkup(element: unknown): string
 }
 
-declare module 'ketjs-view-0.1.41' {
-  export function renderToStaticString(result: unknown): string
-}
-
-declare module 'ketjs-view-0.1.41/jsx-runtime' {
-  export function jsx(type: string, props: Record<string, unknown>): unknown
-}
-
 declare module 'svelte/compiler' {
   export function compile(
     source: string,

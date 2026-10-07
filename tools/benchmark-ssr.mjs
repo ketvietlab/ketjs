@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { arch, cpus, platform, release, totalmem } from 'node:os'
 
 const destination = '.artifacts/benchmarks'
-const processes = 6
+const processes = 5
 mkdirSync(destination, { recursive: true })
 /**
  * One JSON line printed by bench/ssr-comparison/run.mjs, tagged with its run.
