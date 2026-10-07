@@ -1,0 +1,29 @@
+{
+  "name": "learn_api",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch --clear-screen=false tools/dev.mjs serve --workspace ket.workspace.ts",
+    "start": "npm run build && ket serve --workspace dist/ket.workspace.js",
+    "test": "npm run build && ket test dist/test",
+    "test:watch": "ket test dist/test --watch",
+    "check": "tsc -p tsconfig.json --noEmit && biome check . && npm run build && ket check --workspace dist/ket.workspace.js",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "learn": "node tools/learn.mjs"
+  },
+  "dependencies": {
+    "@ketvietlab/ketjs": "0.2.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@types/node": "^26.2.0",
+    "tsx": "4.23.12",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

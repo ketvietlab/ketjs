@@ -10,4 +10,5 @@ export default definePages([
   ...content.map((page) => createPage(page.route, content)),
   createPage('/search/', content),
   createPage('/404/', content),
+  createPage('/playground/', content),
 ])

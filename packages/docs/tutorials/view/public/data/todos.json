@@ -1,0 +1,5 @@
+[
+  { "id": "learn-signals", "title": "Learn signals", "done": true },
+  { "id": "own-effects", "title": "Own effect cleanup", "done": false },
+  { "id": "fetch-data", "title": "Fetch data safely", "done": false }
+]
