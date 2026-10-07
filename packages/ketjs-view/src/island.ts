@@ -6,7 +6,7 @@
 // decides where interactivity goes and the module decides what it does, and neither
 // can reach into the other.
 
-import { renderToString } from './ssr.ts'
+import { HydrationMismatch, renderToString } from './ssr.ts'
 import { escapeHtml } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
@@ -206,6 +206,19 @@ export type IslandManager = {
   dispose(root: IslandElement): void
 }
 
+export type IslandManagerOptions = {
+  /** Skip island hosts whose name has no factory instead of throwing `E_UNKNOWN_ISLAND`. */
+  strict?: boolean
+  /**
+   * What an island does when its server markup does not match its view. `render`, the default,
+   * discards that island's server DOM and renders it on the client; other islands still hydrate.
+   * `throw` fails the hydration call, which development tooling uses to surface the mismatch.
+   */
+  hydrationMismatch?: 'render' | 'throw'
+  /** Receives each mismatch that `render` recovered from. Without it, the mismatch is logged. */
+  onHydrationMismatch?: (error: HydrationMismatch, island: HydratedIsland) => void
+}
+
 type ManagedIsland = {
   live: HydratedIsland
   controller: IslandController
@@ -272,7 +285,7 @@ const uniqueByIdentity = (
 export function createIslandManager(
   host: Host,
   registry: IslandRegistry,
-  options: { strict?: boolean } = {},
+  options: IslandManagerOptions = {},
 ): IslandManager {
   const instances = new WeakMap<IslandElement, ManagedIsland>()
 
@@ -285,7 +298,9 @@ export function createIslandManager(
 
   const start = (root: IslandElement, adopt: boolean): HydratedIsland[] => {
     const out: HydratedIsland[] = []
+    const discarded = new Set<IslandElement>()
     for (const element of elementsOf(root)) {
+      if (discarded.has(element)) continue
       const existing = instances.get(element)
       if (existing) {
         out.push(existing.live)
@@ -306,10 +321,21 @@ export function createIslandManager(
       const controller = controllerOf(factory(parsed.props))
       const lifetime = new AbortController()
       let mounted: ReturnType<typeof mountHydrated> | null = null
+      let mismatch: HydrationMismatch | null = null
       try {
-        mounted = adopt
-          ? mountHydrated(host, element, controller.view)
-          : mountFresh(host, element, controller.view)
+        if (!adopt) mounted = mountFresh(host, element, controller.view)
+        else
+          try {
+            mounted = mountHydrated(host, element, controller.view)
+          } catch (error) {
+            if (!(error instanceof HydrationMismatch) || options.hydrationMismatch === 'throw') throw error
+            // The server DOM inside this host cannot be trusted, including the hosts of any islands
+            // nested in it: render the island from scratch and hydrate the hosts that render places.
+            mismatch = error
+            for (const nested of elementsOf(element)) if (nested !== element) discarded.add(nested)
+            for (const child of childrenOf(element)) host.remove(child)
+            mounted = mountFresh(host, element, controller.view)
+          }
         controller.mount?.({ root: element, lifetime: lifetime.signal })
       } catch (error) {
         lifetime.abort()
@@ -333,6 +359,14 @@ export function createIslandManager(
       }
       instances.set(element, { live, controller, rawProps: parsed.raw })
       out.push(live)
+      if (!mismatch) continue
+      if (options.onHydrationMismatch) options.onHydrationMismatch(mismatch, live)
+      else
+        console.error(
+          `island "${identity.name}" did not match its server markup and was rendered on the client`,
+          mismatch,
+        )
+      for (const nested of start(element, true)) if (nested !== live) out.push(nested)
     }
     return out
   }
@@ -404,7 +438,7 @@ export function hydrateIslands(
   host: Host,
   root: IslandElement,
   registry: IslandRegistry,
-  options: { strict?: boolean } = {},
+  options: IslandManagerOptions = {},
 ): HydratedIsland[] {
   return createIslandManager(host, registry, options).hydrate(root)
 }

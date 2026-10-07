@@ -1,0 +1,15 @@
+node_modules/
+.generated/
+dist/
+*.tsbuildinfo
+public/_vendor/
+public/search-index.json
+public/sitemap.xml
+public/robots.txt
+
+public/content/
+
+public/measurements/
+
+evidence/
+measurements/

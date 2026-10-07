@@ -59,8 +59,6 @@ export function taskKey(
           '--exclude-standard',
           '--',
           'packages',
-          'apps',
-          'examples',
           'test',
           'tools',
           'bench',

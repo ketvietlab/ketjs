@@ -1,4 +1,3 @@
-import { html } from '@ketvietlab/ketjs-view'
 import { definePage } from '@ketvietlab/ketjs-view-tools'
 
 export default definePage({
@@ -7,7 +6,8 @@ export default definePage({
     description: 'A fully static page with no hydration markers or client JavaScript of its own.',
     lang: 'en',
   },
-  view: () => html`
+  view: () => (
+    <>
     <header class="site-header">
       <a class="brand" href="../">__NAME__</a>
       <nav aria-label="Main navigation"><a aria-current="page" href="./">About</a></nav>
@@ -20,5 +20,6 @@ export default definePage({
         <p><a href="../">Back home</a></p>
       </article>
     </main>
-  `,
+    </>
+  ),
 })

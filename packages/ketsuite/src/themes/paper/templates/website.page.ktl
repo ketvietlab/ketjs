@@ -1,2 +1,0 @@
-{# The page is its layout: whatever sections the data says, in that order. #}
-<article data-ket-section="page" data-path="{{ page.path }}">{% sections %}</article>
