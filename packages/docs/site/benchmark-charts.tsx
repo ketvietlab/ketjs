@@ -15,7 +15,6 @@ type Measurement = {
 }
 export type BenchmarkReport = {
   kind: 'database' | 'server' | 'ssr'
-  source: string
   date: string
   processes: number
   measurements: Measurement[]
@@ -101,7 +100,7 @@ export function BenchmarkCharts({ reports }: { reports: BenchmarkReport[] }) {
             )}
             <p class="metadata">
               Measured {report.date.slice(0, 10)} · Median of {report.processes} processes ·{' '}
-              <a href={`/measurements/${report.source}`}>Versions, environment and raw measurements</a>
+              <a href="#reproduce">Workload details and reproduction</a>
             </p>
           </section>
         )

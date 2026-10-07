@@ -63,5 +63,5 @@ for (const name of ['ketjs-view', 'ketjs-view-tools', 'ketjs']) {
     rmSync(root, { recursive: true, force: true })
   }
 }
-mkdirSync('packages/docs/measurements', { recursive: true })
-writeFileSync('packages/docs/measurements/footprint.json', JSON.stringify(results, null, 2) + '\n')
+mkdirSync('.artifacts/benchmarks', { recursive: true })
+writeFileSync('.artifacts/benchmarks/footprint.json', JSON.stringify(results, null, 2) + '\n')

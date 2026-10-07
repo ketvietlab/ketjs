@@ -1,2 +1,0 @@
-{"name":"KTL: 50 products with cached money filter","iterations":20000,"ms":605.330292,"perSecond":33039.813576684515}
-{"name":"Query: two predicates, order, limit and SQLite SQL","iterations":200000,"ms":394.96845799999994,"perSecond":506369.54913498444}

@@ -1,4 +1,0 @@
-module-path candidates=250 selected=40
-cold resolve : 31.72 ms
-warm median : 13.21 ms
-warm p95    : 15.11 ms

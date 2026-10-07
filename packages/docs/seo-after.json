@@ -67,7 +67,7 @@
     {
       "route": "/docs/benchmarks/",
       "title": "Benchmarks | KetJS",
-      "description": "Compare KetJS database execution, HTTP server and SSR performance with reproducible workloads, exact versions, HTML charts and raw measurement results.",
+      "description": "Compare KetJS database execution, HTTP server and SSR performance with repeatable workloads, exact versions and HTML charts.",
       "canonical": "https://ketjs.dev/docs/benchmarks/",
       "noindex": false,
       "schemaTypes": ["TechArticle", "BreadcrumbList"],

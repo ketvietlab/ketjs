@@ -20,15 +20,13 @@ export function readContent(root = process.cwd()): ContentPage[] {
     }
   }
   for (const page of pages.filter((page) => page.kind === 'docs')) {
-    if (Array.isArray(page.metadata.benchmarkSources)) {
-      page.metadata.benchmarkReports = page.metadata.benchmarkSources.map((source) => {
-        if (typeof source !== 'string' || !/^(database|server|ssr)-comparison\.json$/.test(source))
-          throw new Error(`${page.slug}: invalid benchmark source`)
-        const report = JSON.parse(readFileSync(join(root, 'measurements', source), 'utf8'))
-        return { ...report, kind: source.split('-')[0], source } as BenchmarkReport
-      })
+    if (Array.isArray(page.metadata.benchmarkReports)) {
+      const reports = page.metadata.benchmarkReports as BenchmarkReport[]
+      for (const report of reports)
+        if (!['database', 'server', 'ssr'].includes(report.kind) || !Array.isArray(report.measurements))
+          throw new Error(`${page.slug}: invalid benchmark summary`)
       page.toc.unshift(
-        ...(page.metadata.benchmarkReports as BenchmarkReport[]).map((report) => ({
+        ...reports.map((report) => ({
           id: `${report.kind}-comparison`,
           title:
             report.kind === 'database'

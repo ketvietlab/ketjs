@@ -80,9 +80,12 @@ available without JavaScript or after a rendering failure. The engine contract f
 state diagrams used here, but excludes mindmap, architecture diagrams, KaTeX and ELK.
 
 Documentation organization follows the responsibility groups in [Laravel's documentation](https://laravel.com/framework/docs),
-adapted to KetJS composition and ownership. Benchmarks link fresh raw samples under `measurements/`;
-see their guide for workload scope, limits and reproduction commands. The benchmark guide reads
-its comparative reports from frontmatter `benchmarkSources`, embeds native DS `BarChart` HTML in
+adapted to KetJS composition and ownership. Benchmarks retain measured summaries in Markdown;
+generated raw runs and reports are neither committed nor published. The Node harnesses write to
+the ignored repository-root `.artifacts/benchmarks/` directory; browser samples can be saved there
+manually. After a new run, review the measured values before updating the Markdown summaries.
+See the guide for workload scope, limits and reproduction commands. Its chart data comes directly
+from frontmatter `benchmarkReports`, which embeds native DS `BarChart` HTML in
 the shared TSX doc view, and puts database charts before HTTP/SSR charts. Values are real text and
 remain available without JavaScript. No browser charting library is loaded.
 The pinned DS 0.1.40 BarChart has no mark-thickness option. A scoped compatibility adapter

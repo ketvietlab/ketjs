@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { cpus, arch, platform, release, totalmem } from 'node:os'
 import { join } from 'node:path'
 
-const output = 'packages/docs/measurements'
+const output = '.artifacts/benchmarks'
 mkdirSync(output, { recursive: true })
 const hash = createHash('sha256')
 const digest = (path) => {
