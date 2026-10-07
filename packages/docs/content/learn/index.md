@@ -1,23 +1,15 @@
 ---
-title: Learn KetJS
-description: A practical path from your first deployment to a modular fullstack application.
+title: Learn KetJS, step by step
+description: Build a website and a task application while learning ketjs-view, modules, databases, APIs, security, jobs and deployment. Follow one practical path from your first signal to a reviewed application.
+order: 0
 ---
-## Start with a working application
 
-[Scaffold your first app](/docs/quick-start/). You will create a notes module, a model, a server function, and a route backed by SQLite.
+## How this course works
 
-## Understand what ships
+Follow the numbered lessons in order. Each introduces a small set of ideas, gives you something to build or inspect, and ends with a checkpoint and an exercise. The course targets **KetJS 0.2.0 preview**; APIs may change before 1.0.
 
-Read [workspaces and deployments](/docs/workspaces/) to select exactly the modules your application needs. Then explore [modules and extension points](/docs/modules/).
+Frontend experiments run in the [browser playground](/playground/). Backend work runs in your own terminal with Node 24+, a real KetJS deployment and SQLite. The completed [View project](/learn/downloads/learn-view.zip) and [backend project with learning CLI](/learn/downloads/learn-api.zip) are downloadable reference labs.
 
-## Make the rules explicit
+The first stages build working examples. Later stages guide explicit extensions such as sessions, themes, providers and PostgreSQL; they identify their prerequisites rather than pretending every integration is included in the starter. Automated lab checkpoints cover API behavior, company isolation and durable jobs. Other checkpoints are reviewed manually.
 
-Use [models](/docs/models/), [data and changesets](/docs/data/), and [function effects](/docs/functions/) to keep validation, permissions, and mutations in one place.
-
-## Add a web experience
-
-Learn [server rendering and islands](/docs/rendering/). Reuse [form validation](/docs/form-validation/) across the server and browser, and give the application a [theme](/docs/themes/).
-
-## Verify the whole interaction
-
-Use [headless end-to-end tests](/docs/testing/) to exercise HTTP, sessions, isolated data, and workers. Then learn how to [build and deploy](/docs/deployment/) your application.
+Mark a lesson complete after you can explain and demonstrate its checkpoint. Progress stays in this browser; it is not a certification or a server-side assessment.

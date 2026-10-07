@@ -4,6 +4,8 @@ import { definePage, island } from '@ketvietlab/ketjs-view-tools'
 import { ActionGroup, Badge, Button, ContentCard, Icon, LinkButton, Text } from '@ketvietlab/design-system'
 import controls from './controls.tsx'
 import documentation from './documentation.tsx'
+import learn from './learn.tsx'
+import playground from './playground.tsx'
 import { BrandMark } from './logo.tsx'
 import type { ContentPage, HomeData } from './model.ts'
 
@@ -28,7 +30,7 @@ const Footer = () => (
       <strong>Resources</strong>
       <a href="/docs/">Documentation</a>
       <a href="/learn/">Learn KetJS</a>
-      <a href="/examples/">Examples</a>
+      <a href="/playground/">Playground</a>
     </nav>
     <nav aria-label="Project">
       <strong>Project</strong>
@@ -378,7 +380,25 @@ function Search({ content }: { content: ContentPage[] }) {
 }
 
 export function createPage(route: string, content: ContentPage[]) {
-  const page = content.find((item) => item.route === route)
+  const page =
+    content.find((item) => item.route === route) ??
+    (route === '/playground/'
+      ? {
+          kind: 'playground',
+          slug: 'index',
+          route,
+          title: 'ketjs-view playground',
+          description:
+            'Edit and run KetJS TSX examples in your browser. Practice signals, keyed lists, shared form validation and pure views with the real ketjs-view runtime.',
+          group: '',
+          order: 0,
+          date: null,
+          html: '',
+          text: '',
+          metadata: {},
+          toc: [],
+        }
+      : undefined)
   return definePage({
     path: route,
     head: pageHead(route, page),
@@ -393,7 +413,9 @@ export function createPage(route: string, content: ContentPage[]) {
             <a href="/search/">Browse the documentation index</a>
           </div>
         </noscript>
-        {route === '/search/' ? (
+        {route === '/playground/' ? (
+          island('playground', playground, {}, { key: [] })
+        ) : route === '/search/' ? (
           <Search content={content} />
         ) : !page ? (
           <main id="main-content" class="editorial-main">
@@ -413,6 +435,26 @@ export function createPage(route: string, content: ContentPage[]) {
               content: content
                 .filter((p) => p.kind === 'docs')
                 .map(({ kind, slug, route, title, group }) => ({ kind, slug, route, title, group })),
+            },
+            { key: [] },
+          )
+        ) : page.kind === 'learn' ? (
+          island(
+            'learn',
+            learn,
+            {
+              page,
+              lessons: content
+                .filter((p) => p.kind === 'learn' && p.slug !== 'index')
+                .map(({ slug, route, title, description, order, metadata }) => ({
+                  slug,
+                  route,
+                  title,
+                  description,
+                  order,
+                  metadata,
+                })),
+              index: content.find((p) => p.kind === 'learn' && p.slug === 'index')!,
             },
             { key: [] },
           )

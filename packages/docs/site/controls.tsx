@@ -1,7 +1,7 @@
 import { attachDiagrams } from './diagrams.ts'
-import { Badge, Button, Field, Icon, IconButton, Text } from '@ketvietlab/design-system'
+import { Button, Field, Icon, IconButton, Text } from '@ketvietlab/design-system'
 import type { IslandFactory } from '@ketvietlab/ketjs-view'
-import { BrandMark } from './logo.tsx'
+import { BrandMark, BrandPreview, BrandWordmark } from './logo.tsx'
 import { DiagramViewer } from './diagram-viewer.tsx'
 import { MenuIcon, ThemeIcon } from './header-icons.tsx'
 
@@ -10,7 +10,7 @@ type Props = { active: string }
 const links = [
   { label: 'Docs', href: '/docs/' },
   { label: 'Learn', href: '/learn/' },
-  { label: 'Examples', href: '/examples/' },
+  { label: 'Playground', href: '/playground/' },
   { label: 'Blog', href: '/blog/' },
 ]
 
@@ -20,10 +20,8 @@ const controls: IslandFactory<Props> = (props) => ({
       <header class="site-header">
         <a class="brand" href="/" aria-label="KetJS preview homepage">
           <BrandMark />
-          <Text variant="headingLg">
-            KetJS<span class="brand-dot">.</span>
-          </Text>
-          <Badge label="Preview" tone="neutral" />
+          <BrandWordmark />
+          <BrandPreview />
         </a>
         <nav class="desktop-navigation" aria-label="Main navigation">
           {links.map((link) => (
@@ -34,7 +32,7 @@ const controls: IslandFactory<Props> = (props) => ({
         </nav>
         <div class="header-actions">
           <span class="desktop-search">
-            <Button id="open-search" label="Search docs" icon="search" />
+            <Button id="open-search" label="Search docs" icon="search" fullWidth />
           </span>
           <span class="mobile-search">
             <IconButton id="open-search-mobile" label="Search docs" icon={<Icon name="search" />} />
@@ -43,7 +41,7 @@ const controls: IslandFactory<Props> = (props) => ({
             ⌘ K
           </span>
           <span class="desktop-theme">
-            <Button id="theme-toggle" label="Theme" variant="tertiary" size="compact" />
+            <Button id="theme-toggle" label="Theme" variant="tertiary" size="compact" fullWidth />
           </span>
           <span class="mobile-theme">
             <IconButton id="theme-toggle-mobile" label="Switch theme" icon={<ThemeIcon />} />
