@@ -3,10 +3,10 @@
 // same function, so what an editor sees is what a visitor gets. It never fetches, never reads the
 // DOM and never executes content. Unknown sections are kept and shown as a placeholder: dropping
 // them would lose data on the next save.
-import { each } from '@ketvietlab/ketjs-view'
+import { each, trustedMarkup } from '@ketvietlab/ketjs-view'
+import { documentHtml } from '@ketvietlab/ketsuite/livedoc/render'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { FormField, Placement, ResponsiveSettings, SectionSettings, View, Viewport } from './types.ts'
-import { skinnedPreset } from './theme/presets.ts'
 
 /** What `website_form.publicForm` answered for one form placement, with the visitor's last try. */
 export type PublicFormData = {
@@ -25,10 +25,12 @@ export type PublicFormData = {
 }
 export type RenderOptions = {
   mode?: 'public' | 'builder'
+  /** Staff interaction previews keep native forms visible without permitting a submission. */
+  readonlyForms?: boolean
   selected?: string | null
   unknownLabel?: (type: string) => string
   /** Server answers per placement id; today only form sections read one. */
-  sectionData?: Record<string, PublicFormData | null | undefined>
+  sectionData?: Record<string, PublicFormData | PublicCatalogCard | null | undefined>
   formText?: { send?: string; missing?: string }
   headingLevel?: number
   viewport?: Viewport
@@ -41,7 +43,17 @@ export type RenderOptions = {
   controls?: (placement: Placement) => View
 }
 /** A section renderer also learns which placement it draws and that placement's server data. */
-export type SectionOptions = RenderOptions & { placementId?: string; data?: PublicFormData | null }
+type PublicCatalogCard = {
+  id: string
+  name: string
+  description: string
+  path: string
+  gallery: { src: string; alt?: string }[]
+}
+export type SectionOptions = RenderOptions & {
+  placementId?: string
+  data?: PublicFormData | PublicCatalogCard | null
+}
 export type SectionRenderer = (settings: SectionSettings, options?: SectionOptions) => TemplateResult
 
 const imageStyle = (s: SectionSettings) => {
@@ -54,16 +66,55 @@ const imageStyle = (s: SectionSettings) => {
 }
 
 /** Section types this renderer draws. Real sections plus explicit Real Δ proposals in server/section-additions.ts. */
+const richBody = (settings: SectionSettings) => {
+  if (!settings.bodyDoc) return null
+  try {
+    const blocks = JSON.parse(String(settings.bodyDoc))
+    return Array.isArray(blocks) && blocks.length ? (
+      <div class="wt-document">{trustedMarkup(documentHtml(blocks, 'vi'))}</div>
+    ) : null
+  } catch {
+    return null
+  }
+}
+export type GalleryImage = { src: string; alt?: string; mobileSrc?: string }
+export function galleryImages(s: SectionSettings): GalleryImage[] {
+  try {
+    const value = typeof s.images === 'string' ? JSON.parse(s.images) : s.images
+    if (Array.isArray(value))
+      return value.slice(0, 200).filter((item) => item && typeof item.src === 'string')
+  } catch {
+    /* Legacy two-image galleries remain readable. */
+  }
+  return [s.image, s.image2].filter(Boolean).map((src) => ({ src: String(src), alt: String(s.alt || '') }))
+}
 export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
   'website.gallery': (s) => (
-    <section class="wt-text">
+    <section class="wt-text wt-gallery-section" data-gallery-layout={s.galleryLayout || 'grid'}>
       <h2>{s.heading ?? ''}</h2>
-      <div class="wt-gallery">
+      <div
+        class="wt-gallery"
+        data-gallery-layout={s.galleryLayout || 'grid'}
+        data-gallery-rows={s.rows || '1'}
+        data-gallery-interval={s.interval || '5'}
+      >
         {each(
-          [s.image, s.image2].filter(Boolean),
+          galleryImages(s),
           (_, index) => index,
-          (source) => (
-            <img src={safeImage(source)} alt={s.alt ?? s.caption ?? ''} style={imageStyle(s)} />
+          (item) => (
+            <picture>
+              {item.mobileSrc ? (
+                <source media="(max-width: 767px)" srcset={safeImage(item.mobileSrc)} />
+              ) : null}
+              <img
+                src={safeImage(item.src)}
+                alt={item.alt || s.alt || s.caption || ''}
+                style={imageStyle(s)}
+                loading={
+                  ['slideshow', 'activity', 'clients'].includes(String(s.galleryLayout)) ? 'eager' : 'lazy'
+                }
+              />
+            </picture>
           ),
         )}
       </div>
@@ -85,6 +136,36 @@ export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
       </a>
     </section>
   ),
+  'website_catalog.product_card': (s, options = {}) => {
+    const product = options.data as PublicCatalogCard | null
+    if (!product)
+      return options.mode === 'builder' ? (
+        <div class="wt-unknown" role="note">
+          Sản phẩm chưa được hiển thị trên website
+        </div>
+      ) : (
+        <></>
+      )
+    return (
+      <>
+        {product.gallery[0]?.src
+          ? SECTION_RENDERERS['website.image']!(
+              { image: product.gallery[0].src, alt: product.name, imageFit: s.imageFit ?? 'contain' },
+              options,
+            )
+          : null}
+        {SECTION_RENDERERS['website.callout']!(
+          {
+            heading: product.name,
+            body: product.description,
+            ctaLabel: s.ctaLabel ?? 'Xem chi tiết',
+            ctaHref: product.path,
+          },
+          options,
+        )}
+      </>
+    )
+  },
   'website.quote': (s) => (
     <blockquote class="wt-text">
       <p>{s.body ?? ''}</p>
@@ -131,9 +212,9 @@ export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
   // A form section draws what `website_form.publicForm` answered for this placement
   // (`options.data`). Public pages post it to `/forms/{id}`; the builder shows it inert.
   'website_form.form': (_s, options = {}) => {
-    const form = options.data
+    const form = options.data as PublicFormData | null | undefined
     const text = options.formText ?? {}
-    const builder = options.mode === 'builder'
+    const builder = options.mode === 'builder' || options.readonlyForms === true
     if (!form?.id)
       return builder ? (
         <div class="wt-unknown" role="note">
@@ -300,15 +381,14 @@ export const SECTION_RENDERERS: Record<string, SectionRenderer> = {
   'website.rich_text': (s) => (
     <section class="wt-text" data-align={s.align === 'center' ? 'center' : 'start'}>
       {s.heading ? <h2 class="wt-text__title">{s.heading}</h2> : null}
-      {each(
-        String(s.body ?? '')
-          .split(/\n{2,}/)
-          .filter(Boolean),
-        (_, index) => index,
-        (paragraph) => (
-          <p>{paragraph}</p>
-        ),
-      )}
+      {richBody(s) ??
+        each(
+          String(s.body ?? '')
+            .split(/\n{2,}/)
+            .filter(Boolean),
+          (_, index) => index,
+          (paragraph) => <p>{paragraph}</p>,
+        )}
     </section>
   ),
 }
@@ -402,7 +482,7 @@ export function renderLayout(layout: readonly Placement[], options: RenderOption
       class="wt-page"
       data-builder-drop-slot={builder ? '' : null}
       data-website-theme="default"
-      data-theme-preset={skinnedPreset(options.preset) ? options.preset : null}
+      data-theme-preset={options.preset === 'cosmetics' ? 'cosmetics' : null}
     >
       {builder && !layout.length ? options.emptySlot?.('') : null}
       {list(layout)}

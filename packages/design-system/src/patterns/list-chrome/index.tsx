@@ -47,10 +47,19 @@ export type BulkAction = {
   disabled?: boolean
 }
 
+/** The name of the command button that asks the selecting table to clear its selection. */
+export const BULK_CLEAR_COMMAND = 'clear-selection'
+
 export type BulkActionsProps = {
   form?: string | null
+  /**
+   * The selected-row figure known when rendering. Omit it when a client runtime
+   * owns the selection: the actions then stay enabled and the runtime keeps
+   * `bulk-count` and `data-has-selection` current.
+   */
   selectedCount?: number
   summary?: JSXChild
+  /** Clears the selection by navigation. Without it, `clearLabel` asks the table bound to `form` to clear. */
   clearHref?: string | null
   clearLabel?: string
   actions: readonly BulkAction[]
@@ -72,13 +81,24 @@ export type PagerBarProps = {
   label?: string
 }
 
+export type ListFiltersToggle = {
+  label: string
+  count?: number
+}
+
 export type ListChromeProps = {
   filtersLabel?: string
   /**
-   * Filters that pick from a list rather than toggle — a compact `Menu` each.
-   * They lead the facet row, at the facets' height.
+   * Filters that pick from a list rather than toggle — a `Menu` each, whose
+   * default size is the facets' height. They lead the facet row.
    */
   filterMenus?: JSXChild
+  /**
+   * Folds the filter menus, facets, views and sort into one disclosure on a
+   * phone, where they would take several lines; wider screens show them in the
+   * row. `count` is the number of filters in force, shown on the toggle.
+   */
+  filtersToggle?: ListFiltersToggle
   viewsLabel?: string
   search?: ListSearch
   facets?: readonly ListFacet[]
@@ -97,6 +117,9 @@ export const HOOKS = [
   'list-search-label',
   'list-search-input',
   'list-search-submit',
+  'list-filters',
+  'list-filters-toggle',
+  'list-filters-count',
   'list-filter-menus',
   'list-facets',
   'list-facet',
@@ -204,7 +227,7 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
   <div
     data-ui="bulk-actions"
     data-form={props.form ?? null}
-    data-has-selection={props.selectedCount && props.selectedCount > 0 ? 'true' : null}
+    data-has-selection={props.selectedCount === undefined || props.selectedCount > 0 ? 'true' : null}
   >
     <div data-ui="bulk-summary">
       {/* `bulk-count` is the live figure the runtime updates as rows are checked. */}
@@ -213,13 +236,27 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
           <span data-ui="bulk-count">{String(props.selectedCount ?? 0)}</span> selected
         </>
       )}
-      {props.clearHref && (
+      {props.clearHref ? (
         <LinkButton
           href={props.clearHref}
           label={props.clearLabel ?? 'Clear'}
           variant="tertiary"
           size="compact"
         />
+      ) : (
+        props.clearLabel &&
+        props.form && (
+          // The table that owns the selection clears it (KetTable listens for this
+          // command); a native reset would race the table's own render.
+          <Button
+            type="button"
+            form={props.form}
+            name={BULK_CLEAR_COMMAND}
+            label={props.clearLabel}
+            variant="tertiary"
+            size="compact"
+          />
+        )
       )}
     </div>
     <div data-ui="bulk-action-list">
@@ -235,7 +272,9 @@ export const BulkActions = (props: BulkActionsProps): TemplateResult => (
             label={action.label}
             variant={action.variant ?? 'secondary'}
             size="compact"
-            disabled={action.disabled === true || !(props.selectedCount && props.selectedCount > 0)}
+            disabled={
+              action.disabled === true || (props.selectedCount !== undefined && props.selectedCount <= 0)
+            }
           />
         ),
       )}
@@ -293,7 +332,7 @@ export const PagerBar = (props: PagerBarProps): TemplateResult => (
 )
 
 export const ListChrome = (props: ListChromeProps): TemplateResult => {
-  const filters =
+  const filterRow =
     props.filterMenus !== undefined ||
     (props.facets?.length ?? 0) > 0 ||
     (props.views?.length ?? 0) > 0 ||
@@ -319,6 +358,19 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
         {props.sort && <SortControl {...props.sort} />}
       </div>
     ) : null
+  const toggle = filterRow ? props.filtersToggle : undefined
+  const filters = toggle ? (
+    <details data-ui="list-filters" data-active={(toggle.count ?? 0) > 0 ? 'true' : null}>
+      {/* As the menu trigger: a button by role, with the open state from `details` itself. */}
+      <summary data-ui="list-filters-toggle" role="button">
+        {toggle.label}
+        {(toggle.count ?? 0) > 0 && <span data-ui="list-filters-count">{String(toggle.count)}</span>}
+      </summary>
+      {filterRow}
+    </details>
+  ) : (
+    filterRow
+  )
   const meta =
     props.status !== undefined || props.actions !== undefined || props.pager ? (
       <div data-ui="list-chrome-row" data-row="meta">
@@ -335,7 +387,7 @@ export const ListChrome = (props: ListChromeProps): TemplateResult => {
       </div>
     ) : null
   return (
-    <div data-ui="list-chrome" data-pattern="list-chrome">
+    <div data-ui="list-chrome" data-pattern="list-chrome" data-filters={toggle ? 'collapsible' : null}>
       <div data-ui="list-chrome-row" data-row="query">
         {props.search && <SearchControl {...props.search} />}
         {tail}

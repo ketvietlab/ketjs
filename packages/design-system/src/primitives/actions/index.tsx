@@ -32,6 +32,11 @@ type ActionBase = {
   disabled?: boolean
   loading?: boolean
   describedBy?: string | null
+  /**
+   * Shows the action at one width only. A page header folds a secondary action
+   * into its overflow menu on a phone: the button is `wide`, the menu item `phone`.
+   */
+  viewport?: 'phone' | 'wide'
 }
 
 export type ButtonProps = ActionBase & {
@@ -45,7 +50,11 @@ export type ButtonProps = ActionBase & {
   controls?: string | null
 }
 
-export type LinkButtonProps = Omit<ActionBase, 'pressed'> & { href: string }
+export type LinkButtonProps = Omit<ActionBase, 'pressed'> & {
+  href: string
+  /** Keep native link navigation with the named, square icon-action contract. */
+  iconOnly?: boolean
+}
 export type IconButtonProps = Omit<ButtonProps, 'leading' | 'icon'> & {
   icon: JSXChild
   pressed?: boolean
@@ -76,6 +85,7 @@ const actionAttributes = (props: ActionBase) => ({
   'data-tone': props.tone ?? (props.variant === 'destructive' ? 'danger' : 'default'),
   'data-loading': props.loading ? 'true' : null,
   'data-full-width': props.fullWidth ? 'true' : null,
+  'data-viewport': props.viewport ?? null,
 })
 
 export const Button = (props: ButtonProps): TemplateResult => (
@@ -130,11 +140,13 @@ export const LinkButton = (props: LinkButtonProps): TemplateResult =>
     <button
       {...actionAttributes(props)}
       data-ui="action"
+      data-icon-only={props.iconOnly ? 'true' : null}
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       type="button"
       disabled
-      aria-label={props.loading ? props.label : null}
+      aria-label={props.loading || props.iconOnly ? props.label : null}
+      title={props.iconOnly ? props.label : undefined}
       aria-busy={props.loading === true ? 'true' : null}
       aria-describedby={props.describedBy ?? null}
     >
@@ -144,9 +156,12 @@ export const LinkButton = (props: LinkButtonProps): TemplateResult =>
     <a
       {...actionAttributes(props)}
       data-ui="action"
+      data-icon-only={props.iconOnly ? 'true' : null}
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       href={props.href}
+      aria-label={props.iconOnly ? props.label : null}
+      title={props.iconOnly ? props.label : undefined}
       aria-describedby={props.describedBy ?? null}
     >
       <ActionContent {...props} />

@@ -147,12 +147,3 @@
     }
   }
 }
-
-@layer ket.app {
-  /* Match operational list headers in the compact Suite shell. */
-  :where([data-kv-design-system][data-density="compact"])
-    [data-ui="board-page"][data-variant="operational"]
-    [data-ui="board-page-header"] {
-    padding-block: var(--kv-space-2);
-  }
-}

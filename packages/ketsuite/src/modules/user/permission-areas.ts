@@ -88,6 +88,7 @@ export const permissionAreas: Record<string, Area> = {
   website_menu: { group: 'system', vi: 'Website · Menu', en: 'Website · Menus' },
   website_search: { group: 'system', vi: 'Website · Tìm kiếm', en: 'Website · Search' },
   website_seo: { group: 'system', vi: 'Website · SEO', en: 'Website · SEO' },
+  website_theme: { group: 'system', vi: 'Website · Giao diện', en: 'Website · Themes' },
 }
 
 /** What a capability hands out, read at a glance: running the system, or seeing what should stay private. */

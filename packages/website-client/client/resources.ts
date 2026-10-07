@@ -242,6 +242,7 @@ export const resourceSchemas: Record<string, ResourceSchema> = {
     fields: [
       { name: 'companyId', label: 'website.site.companyField', kind: 'text' },
       { name: 'code', label: 'website.site.code', kind: 'text' },
+      { name: 'googleTagManagerId', label: 'website.settings.googleTagManagerId', kind: 'text' },
       { name: 'timezone', label: 'website.site.timezone', kind: 'text', defaultValue: 'Asia/Ho_Chi_Minh' },
       {
         name: 'state',

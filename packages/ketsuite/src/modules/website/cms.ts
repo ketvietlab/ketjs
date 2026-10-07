@@ -1,5 +1,4 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { Resolver } from 'node:dns/promises'
 import {
   asc,
   defineFn,
@@ -21,6 +20,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
 import { studioAppearance } from './studio-style.ts'
+
 import {
   canAccessSite,
   canAdministerSite,
@@ -30,12 +30,23 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { claimImages, imageClaimEffects } from './image-assets.ts'
-import { isSafeUrl, studioFields, termDescription } from './studio-content.ts'
+import { isSafeUrl, liveDocument, studioFields, termDescription } from './studio-content.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
 
+/** Content publication stays frozen; site-wide appearance is read at delivery. */
+const liveSiteAppearance = (published: unknown, site: Row): Row | null => {
+  const hasPublished = !!published && typeof published === 'object' && !Array.isArray(published)
+  const hasStyle =
+    !!site.studioStyle && typeof site.studioStyle === 'object' && !Array.isArray(site.studioStyle)
+  if (!hasPublished && !hasStyle) return null
+  const appearance = hasPublished ? (published as Row) : {}
+  const style = hasStyle ? (site.studioStyle as Row) : {}
+  const { theme: _old, ...rest } = appearance
+  return { ...rest, ...style }
+}
 /**
  * What a person typed in the title box, as a literal.
  *
@@ -95,35 +106,6 @@ const cleanPath = (value: unknown): string | null => {
 }
 const digest = (token: string) => createHash('sha256').update(token).digest('hex')
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
-/** The record a host's owner adds to prove it: `TXT _ketviet.<host>` holding this value. */
-export const domainProofName = (host: string) => `_ketviet.${host}`
-export const domainProofValue = (token: string) => `ketviet-verify=${token}`
-const unverifiedDomain = () => ({
-  verifyToken: randomBytes(16).toString('hex'),
-  verifiedAt: null,
-  checkedAt: null,
-  checkResult: null,
-  servingAt: null,
-})
-/**
- * Asks DNS for the proof. `WEBSITE_DNS_SERVERS` points the lookup at chosen resolvers; without it
- * the system's own answer. Nothing a person types is taken as proof.
- */
-const lookupDomainProof = async (host: string, token: string) => {
-  const resolver = new Resolver({ timeout: 3000, tries: 2 })
-  const servers = String(process.env.WEBSITE_DNS_SERVERS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  if (servers.length) resolver.setServers(servers)
-  try {
-    const records = await resolver.resolveTxt(domainProofName(host))
-    return records.some((chunks) => chunks.join('') === domainProofValue(token)) ? 'matched' : 'mismatch'
-  } catch (error) {
-    const code = (error as { code?: string }).code
-    return code === 'ENODATA' || code === 'ENOTFOUND' ? 'missing' : 'unreachable'
-  }
-}
 // Keep offsets exact: clamping a large offset repeats an earlier page and can
 // make a caller collecting pages report duplicated rows as a complete total.
 const page = (limit: unknown, offset: unknown, defaultLimit = 50) => ({
@@ -541,8 +523,7 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
   if (pageNo > pageCount) return null
   const base = `/${kind}/${term.slug}`
   const shown = posts.slice((pageNo - 1) * ARCHIVE_PAGE_SIZE, pageNo * ARCHIVE_PAGE_SIZE)
-  // The archive wears the style its newest post went out with, so it never shows a style
-  // an editor has saved but not yet published.
+  // Page content is frozen, but saved site appearance takes effect on the whole site.
   const home = shown.length
     ? null
     : await ctx.db.one(from(Entry).where(eq(Entry.siteId, site.id), eq(Entry.path, '/')))
@@ -555,8 +536,10 @@ const termArchive = async (ctx: Ctx, site: Row, path: string): Promise<Row | nul
     title: term.name,
     excerpt: term.description ?? null,
     layout: [],
-    appearance:
+    appearance: liveSiteAppearance(
       (shown[0]?.appearance as Row | null) ?? home?.publishedAppearance ?? studioAppearance(ctx, site),
+      site,
+    ),
     fields: {
       seo: {
         title: seo.title || term.name,
@@ -643,7 +626,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
   resolveSite: defineFn({
     anonymous: true,
     input: { host: 'text' },
-    output: { id: 'id', title: 'text', locale: 'text', theme: 'text', tokens: 'json?' },
+    output: {
+      id: 'id',
+      title: 'text',
+      locale: 'text',
+      theme: 'text',
+      tokens: 'json?',
+      googleTagManagerId: 'text?',
+    },
     effects: ['read:website.Site', 'read:website.SiteDomain'],
     handler: async (ctx: Ctx, args) => {
       const host = cleanHost(args.host)
@@ -673,6 +663,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             locale: site.defaultLocale,
             theme: site.theme,
             tokens: site.tokens ?? null,
+            googleTagManagerId: site.googleTagManagerId ?? null,
           }
         : null
     },
@@ -734,6 +725,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       defaultLocale: 'text',
       theme: 'text',
       tokens: 'json?',
+      googleTagManagerId: 'text?',
       siteGroup: 'text?',
       active: 'bool?',
     },
@@ -755,6 +747,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (selected?.kind !== 'theme') return invalid('theme', 'website.error.invalidTheme')
       const existing = await siteById(ctx, args.id)
       if (existing && !(await canAdministerSite(ctx, args.id))) return forbidden()
+      const googleTagManagerId =
+        args.googleTagManagerId === undefined
+          ? (existing?.googleTagManagerId ?? null)
+          : String(args.googleTagManagerId ?? '').trim() || null
+      if (googleTagManagerId && !/^GTM-[A-Z0-9]{4,20}$/.test(String(googleTagManagerId)))
+        return invalid('googleTagManagerId', 'website.error.invalidGoogleTagManagerId')
       const name = String(args.name ?? '').trim()
       const title = String(args.title ?? '').trim()
       const locale = String(args.defaultLocale ?? '').trim()
@@ -775,8 +773,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
       )
       if (duplicate) return invalid('name', 'website.error.duplicateName')
       const cs = ctx
-        .change('website.Site', { ...args, name, title, defaultLocale: locale }, existing)
-        .cast(['id', 'name', 'title', 'defaultLocale', 'theme', 'tokens', 'siteGroup', 'active'])
+        .change('website.Site', { ...args, name, title, defaultLocale: locale, googleTagManagerId }, existing)
+        .cast([
+          'id',
+          'name',
+          'title',
+          'defaultLocale',
+          'theme',
+          'tokens',
+          'siteGroup',
+          'active',
+          'googleTagManagerId',
+        ])
         .required(['name', 'title', 'defaultLocale', 'theme'])
         .put('active', args.active ?? existing?.active ?? true)
       if (!cs.valid) return { ok: false, errors: cs.errors }
@@ -814,6 +822,9 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const existing = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
+      // Another name is another domain. Whatever a module keeps about a host, a proof of control
+      // or a certificate, was for the name it was added with.
+      if (existing && existing.host !== host) return invalid('host', 'website.error.immutableHost')
       const Domain = ctx.table('website.SiteDomain')
       const duplicate = await ctx.db.one(from(Domain).where(eq(Domain.host, host)))
       if (duplicate && duplicate.id !== args.id) return invalid('host', 'website.error.duplicateHost')
@@ -824,8 +835,6 @@ export const cmsFunctions: Record<string, FnSpec> = {
         primary: args.primary === true,
         primaryKey: args.primary === true ? String(args.siteId) : null,
         redirectToPrimary: args.redirectToPrimary !== false,
-        // A new host, or a host renamed, proves its DNS afresh; the old proof was for another name.
-        ...(existing?.host === host ? {} : unverifiedDomain()),
       }
       await ctx.tx(async (tx) => {
         if (row.primary) {
@@ -871,59 +880,6 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
-  /**
-   * Looks up the host's TXT record and compares it with the value it was given. A proof stays
-   * once made: a later failed lookup is reported, but does not take the domain away.
-   */
-  verifyDomain: defineFn({
-    input: { id: 'id' },
-    output: { ok: 'bool', id: 'id?', result: 'text?', errors: 'json?' },
-    effects: [
-      'read:website.Site',
-      'read:website.SiteMember',
-      'read:website.SiteDomain',
-      'write:website.SiteDomain',
-    ],
-    handler: async (ctx: Ctx, args) => {
-      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
-      if (!domain) return invalid('id', 'website.error.domainNotFound')
-      if (!(await canAdministerSite(ctx, domain.siteId))) return forbidden()
-      if (!domain.verifyToken) return { ok: true, id: args.id, result: 'matched' }
-      const result = await lookupDomainProof(String(domain.host), String(domain.verifyToken))
-      const now = new Date().toISOString()
-      await ctx.db.update(
-        'website.SiteDomain',
-        { id: args.id },
-        {
-          checkedAt: now,
-          checkResult: result,
-          ...(result === 'matched' && !domain.verifiedAt ? { verifiedAt: now } : {}),
-        },
-      )
-      return { ok: true, id: args.id, result }
-    },
-  }),
-
-  /** Két Việt marks a verified host as answering over HTTPS once its certificate is in place. */
-  markDomainServing: defineFn({
-    exposure: 'internal',
-    input: { id: 'id', serving: 'bool' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.SiteDomain', 'write:website.SiteDomain'],
-    handler: async (ctx: Ctx, args) => {
-      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
-      if (!domain) return invalid('id', 'website.error.domainNotFound')
-      if (args.serving && domain.verifyToken && !domain.verifiedAt)
-        return invalid('id', 'website.error.domainUnverified')
-      await ctx.db.update(
-        'website.SiteDomain',
-        { id: args.id },
-        { servingAt: args.serving ? new Date().toISOString() : null },
-      )
-      return { ok: true, id: args.id }
-    },
-  }),
-
   listDomains: defineFn({
     input: { siteId: 'id', limit: 'int?', offset: 'int?' },
     output: {
@@ -932,11 +888,6 @@ export const cmsFunctions: Record<string, FnSpec> = {
       host: 'text',
       primary: 'bool',
       redirectToPrimary: 'bool',
-      verifyToken: 'text?',
-      verifiedAt: 'datetime?',
-      checkedAt: 'datetime?',
-      checkResult: 'text?',
-      servingAt: 'datetime?',
     },
     effects: ['read:website.Site', 'read:website.SiteMember', 'read:website.SiteDomain'],
     agent: true,
@@ -1137,7 +1088,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
-            appearance: entry.publishedAppearance ?? null,
+            appearance: liveSiteAppearance(entry.publishedAppearance, site),
             // The head metadata travels with the page it describes. Without it
             // the storefront handed the theme an empty meta, so the fields
             // website_seo declares were stored and never rendered.
@@ -1252,7 +1203,74 @@ export const cmsFunctions: Record<string, FnSpec> = {
       // Ids are assigned here rather than trusted from the client, so content
       // written before identity existed gains it on its first save and keeps it
       // on every save after. A client that already carries ids keeps its own.
-      const layout = withPlacementIds(args.layout as Placement[], sha256)
+      const documents = (nodes: Placement[]): Placement[] =>
+        nodes.map((node) => {
+          const settings = node.settings ?? {}
+          if (node.type === 'website.gallery' && settings.images) {
+            const album = JSON.parse(String(settings.images))
+            const imageSource = (value: unknown) =>
+              typeof value === 'string' &&
+              value.length <= 3000 &&
+              (!value || /^(\/(?!\/)|https?:\/\/)/i.test(value))
+            if (
+              !Array.isArray(album) ||
+              album.length > 200 ||
+              album.some(
+                (item) =>
+                  !item ||
+                  !imageSource(item.src) ||
+                  (item.mobileSrc != null && !imageSource(item.mobileSrc)) ||
+                  (item.alt != null && (typeof item.alt !== 'string' || item.alt.length > 500)),
+              )
+            )
+              throw new Error('Invalid gallery album')
+            if (
+              settings.galleryLayout &&
+              !['grid', 'slideshow', 'activity', 'clients'].includes(String(settings.galleryLayout))
+            )
+              throw new Error('Invalid gallery mode')
+            for (const [key, max] of [
+              ['rows', 3],
+              ['interval', 60],
+            ] as const)
+              if (
+                settings[key] != null &&
+                (!Number.isInteger(Number(settings[key])) ||
+                  Number(settings[key]) < 1 ||
+                  Number(settings[key]) > max)
+              )
+                throw new Error('Invalid gallery motion')
+            settings.images = JSON.stringify(
+              album.map((item) => ({
+                src: item.src,
+                ...(item.mobileSrc ? { mobileSrc: item.mobileSrc } : {}),
+                alt: item.alt || '',
+              })),
+            )
+          }
+          const doc =
+            node.type === 'website.rich_text' && settings.bodyDoc
+              ? liveDocument(settings.bodyDoc, { images: false })
+              : null
+          return {
+            ...node,
+            ...(doc ? { settings: { ...settings, bodyDoc: doc.doc, body: doc.text } } : {}),
+            ...(node.slots
+              ? {
+                  slots: Object.fromEntries(
+                    Object.entries(node.slots).map(([slot, children]) => [slot, documents(children)]),
+                  ),
+                }
+              : {}),
+          }
+        })
+      let normalized: Placement[]
+      try {
+        normalized = documents(args.layout as Placement[])
+      } catch {
+        return invalid('layout', 'website.error.invalidFields')
+      }
+      const layout = withPlacementIds(normalized, sha256)
       args.fields = studioFields(String(args.type), args.fields)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }

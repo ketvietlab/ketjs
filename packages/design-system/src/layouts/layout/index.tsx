@@ -17,6 +17,8 @@ export const HOOKS = [
   'disclosure',
   'disclosure-summary',
   'disclosure-body',
+  'disclosure-label',
+  'disclosure-meta',
   'section',
   'section-head',
   'section-eyebrow',
@@ -185,9 +187,27 @@ export const Surface = (props: {
 )
 
 /** Native, keyboard-accessible progressive disclosure for dense secondary detail. */
-export const Disclosure = (props: { summary: string; body: JSXChild; open?: boolean }): TemplateResult => (
+/**
+ * Detail behind one line. `meta` is what the line says about it at a glance (a
+ * status, a level), kept beside the label so a closed list still reads.
+ */
+export const Disclosure = (props: {
+  summary: string
+  meta?: JSXChild
+  body: JSXChild
+  open?: boolean
+}): TemplateResult => (
   <details data-ui="disclosure" open={props.open === true ? true : undefined}>
-    <summary data-ui="disclosure-summary">{props.summary}</summary>
+    <summary data-ui="disclosure-summary">
+      {props.meta === undefined ? (
+        props.summary
+      ) : (
+        <>
+          <span data-ui="disclosure-label">{props.summary}</span>
+          <span data-ui="disclosure-meta">{props.meta}</span>
+        </>
+      )}
+    </summary>
     <div data-ui="disclosure-body">{props.body}</div>
   </details>
 )

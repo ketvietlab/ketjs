@@ -1504,6 +1504,58 @@ const sources = {
     },
     exemptions: {},
   },
+  website_catalog: {
+    posture: 'permission-bearing',
+    bundles: ['view', 'configure'],
+    functions: {
+      listBindings: ['read', 'view'],
+      getBinding: ['read', 'view'],
+      getTemplate: ['read', 'view'],
+      getBuilder: ['read', 'view'],
+      listCategories: ['read', 'view'],
+      getCategory: ['read', 'view'],
+      productCandidates: ['read', 'view'],
+      previewCategory: ['read', 'view'],
+      addProduct: ['configure', 'configure', 'website_catalog.configuration-audit'],
+      saveBinding: ['configure', 'configure', 'website_catalog.configuration-audit'],
+      removeBinding: ['configure', 'configure', 'website_catalog.configuration-audit'],
+      saveBuilder: ['configure', 'configure', 'website_catalog.configuration-audit'],
+      saveCategory: ['configure', 'configure', 'website_catalog.configuration-audit'],
+      archiveCategory: ['configure', 'configure', 'website_catalog.configuration-audit'],
+    },
+    exemptions: {
+      saveMenu: ['internal-route', 'Studio validates the menu owner grant before calling this bridge.'],
+      sitemapEntries: ['internal-route', 'The sitemap resolves the active site from its host.'],
+      resolveRedirect: ['anonymous', 'Only visible live stable targets may redirect.'],
+      searchIndexed: ['anonymous', 'Live exposed Product projection and native CMS search.'],
+      tagMedia: [
+        'internal-route',
+        'Trusted Product media migration; validates owner and bumps source revision.',
+      ],
+      importTemplate: ['internal-route', 'Trusted migration with scoped ownership and CAS.'],
+      importProductContent: [
+        'internal-route',
+        'Trusted migration of website editorial content with ownership and CAS.',
+      ],
+      importCategoryPresentation: [
+        'internal-route',
+        'Trusted migration of website listing presentation with CAS.',
+      ],
+      createProduct: [
+        'internal-route',
+        'Trusted Studio bridge requires both product and website write grants.',
+      ],
+      getSource: ['internal-route', 'Studio checks product owner grants before calling this projection.'],
+      stageImage: ['internal-route', 'Trusted image upload route; ownership and website grant checked.'],
+      completeImage: ['internal-route', 'Trusted image upload completion after byte validation.'],
+      imageForReader: ['internal-route', 'Trusted file delivery route; public or actor-owned lease only.'],
+      getEntryByPath: ['anonymous', 'Published catalog projection with CMS fallback.'],
+      publicProduct: ['anonymous', 'Active exposed site-bound products only.'],
+      cardData: ['anonymous', 'Active exposed site-bound product card projection only.'],
+      publicList: ['anonymous', 'Active exposed site-bound products only.'],
+      categoryProducts: ['anonymous', 'Visible ancestry and exposed site-bound products only.'],
+    },
+  },
   website_backend: {
     posture: 'projection/bridge',
     bundles: ['view'],
@@ -1599,6 +1651,23 @@ const sources = {
       sitemapEntries: ['internal-route', 'website_seo.public-sitemap-route'],
     },
   },
+  website_theme: {
+    posture: 'permission-bearing',
+    bundles: ['configure'],
+    functions: {
+      getThemeVersion: ['read', 'configure'],
+      listThemes: ['read', 'configure'],
+      selectTheme: ['configure', 'configure', 'website.configuration-audit'],
+    },
+    exemptions: {
+      // Két Việt, or whoever runs a self-hosted server, installs and withdraws versions; no tenant role does.
+      stageThemeVersion: ['internal-route', 'website_theme.operator-install'],
+      completeThemeVersion: ['internal-route', 'website_theme.operator-install'],
+      setThemeVersionStatus: ['internal-route', 'website_theme.operator-install'],
+      // Only the /_theme file route; it serves available versions, which are public site assets.
+      themeFileForReader: ['internal-route', 'website_theme.theme-file-route'],
+    },
+  },
   website: {
     posture: 'permission-bearing',
     bundles: ['author', 'publish', 'configure', 'operate', 'security', 'sensitive', 'view'],
@@ -1647,7 +1716,6 @@ const sources = {
       // Whoever can share a draft can take the link back.
       revokePreviewTokens: ['sensitive', ['sensitive', 'author'], 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
-      verifyDomain: ['configure', 'configure', 'website.configuration-audit'],
       saveEntry: ['configure', ['configure', 'author'], 'website.configuration-audit'],
       saveMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       savePage: ['configure', ['configure', 'author'], 'website.configuration-audit'],
@@ -1665,8 +1733,6 @@ const sources = {
     exemptions: {
       // Only the Studio upload route, after it has checked `website.saveEntry` and the entry's site.
       stageImage: ['internal-route', 'website_backend.image-upload'],
-      // Két Việt sets it once a host answers over HTTPS; no tenant role reaches it.
-      markDomainServing: ['internal-route', 'website.domain-serving-operator'],
       completeImage: ['internal-route', 'website_backend.image-upload'],
       // Only the image file route; the handler serves published images and otherwise needs site access.
       imageForReader: ['internal-route', 'website_backend.image-download'],

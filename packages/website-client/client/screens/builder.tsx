@@ -5,14 +5,18 @@ import { createBuilderDrag } from '../builder-drag.ts'
 import { locatePlacement, movePlacementAt, planPlacementMove, placementSlots } from '../builder-placement.ts'
 import { createBuilderWorkspace } from './builder-workspace.tsx'
 import { createBuilderTools, builderPanel, builderQuery } from './builder-tools.tsx'
+import { catalogBuilderId } from './catalog-builder.ts'
 import { checkBuilderAccessibility } from '../builder-checks.ts'
 // Page builder: structure · canvas · inspector over the stored layout (`Placement[]`). The draft
 // lives in this island until saved; saving sends the revision it was based on, so a concurrent
 // edit is a conflict, never a silent overwrite. The canvas uses the public theme renderer.
-import { signal } from '@ketvietlab/ketjs-view'
+import { signal, each } from '@ketvietlab/ketjs-view'
+import { LiveDescription } from '../live-description.tsx'
+import { GalleryEditor, galleryUploadPending } from '../gallery-editor.tsx'
 import {
   ActionGroup,
   IconButton,
+  Inline,
   EmptyState,
   LinkButton,
   Notice,
@@ -29,7 +33,7 @@ import {
   WorkspacePage,
 } from '@ketvietlab/design-system'
 import { CommandButton, icon } from '../ui.tsx'
-import { renderLayout, walkLayout, safeImage } from '../renderer.tsx'
+import { renderLayout, walkLayout, safeImage, galleryImages } from '../renderer.tsx'
 import { newId } from './format.ts'
 import type { TreeNode } from '@ketvietlab/design-system'
 import type {
@@ -69,6 +73,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   }
   let guarding = false
   let templates: PageTemplate[] = []
+  let interactive: { entryId: string; url: string } | null = null
   let previewWidth: Viewport = 'desktop'
   let zoom = 100
   let dialogOpener: HTMLElement | null = null
@@ -84,6 +89,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     if (dialogOpener?.isConnected) dialogOpener.focus()
   }
   let focusedField: string | null = null
+  let sourceResetVersion = 0
   let catalogue: SectionCatalogue = {}
   // The site's forms for the form block: the list feeds its picker, the open ones its canvas preview.
   let forms: FormChoice[] = []
@@ -147,6 +153,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     return data
   }
   const change = (id: string, mutate: (layout: Placement[]) => unknown, coalesce: string | null = null) => {
+    interactive = null
     const draft = draftOf(id)
     if (!draft) return
     drag.cancel(false)
@@ -189,7 +196,10 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         ? {
             key: current().id,
             layout: draftOf(current().id)?.layout ?? [],
-            editable: ctx.can('website.content.write') && !ctx.busy(),
+            editable:
+              ctx.can('website.content.write') &&
+              !ctx.busy() &&
+              draftOf(current().id)?.entry.catalog?.mode !== 'product',
           }
         : null,
     commit: (id: string, target: PlacementTarget) => {
@@ -269,7 +279,10 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     const target = event.target as Element
     if (event.defaultPrevented || target.closest?.('[data-builder-drag-id]')) return
     const node = target.closest?.<HTMLElement>('[data-node]')
-    if (!node) return
+    if (!node) {
+      if (!interactive && target.closest?.('a[href]')) event.preventDefault()
+      return
+    }
     event.preventDefault()
     ctx.navigate(
       'builder',
@@ -284,7 +297,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
       id: placement.id,
       label: (
         <span class="website-builder-tree-label" data-builder-drop-node={placement.id}>
-          {ctx.can('website.content.write') ? (
+          {ctx.can('website.content.write') && draftOf(current().id)?.entry.catalog?.mode !== 'product' ? (
             <span class="website-builder-tree-grip" data-builder-drag-id={placement.id} aria-hidden="true">
               {icon('grip-vertical')}
             </span>
@@ -320,6 +333,43 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   const field = (name: string, kind: string, value: string | undefined, disabled: boolean) => {
     const label = tr(`website.builder.setting.${name}`)
     const common = { id: `builder-${name}`, name, label, value: value ?? '', disabled }
+    if (name === 'images') {
+      const selected = locate(draftOf(current().id)!.layout, current().node ?? '')?.placement
+      return selected
+        ? GalleryEditor(ctx, {
+            entryId: current().id,
+            images: galleryImages(selected.settings ?? {}),
+            disabled,
+            update: (images) =>
+              change(
+                current().id,
+                () => {
+                  selected.settings!.images = JSON.stringify(images)
+                },
+                `gallery:${selected.id}`,
+              ),
+          })
+        : null
+    }
+    if (name === 'galleryLayout')
+      return (
+        <Select
+          {...common}
+          value={value || 'grid'}
+          options={['grid', 'slideshow', 'activity', 'clients'].map((value) => ({
+            value,
+            label: tr(`website.gallery.${value}`),
+          }))}
+        />
+      )
+    if (name === 'rows')
+      return (
+        <Select
+          {...common}
+          value={value || '1'}
+          options={['1', '2', '3'].map((value) => ({ value, label: value }))}
+        />
+      )
     if (name === 'visibility')
       return (
         <Select
@@ -363,7 +413,25 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
           )}
         />
       )
-    if (name === 'body') return <TextArea {...common} />
+    if (name === 'body') {
+      const draft = draftOf(current().id)
+      const selected = draft && locate(draft.layout, current().node ?? '')?.placement
+      if (selected?.type === 'website.rich_text')
+        return (
+          <LiveDescription
+            id={`builder-${selected.id}`}
+            value={String(selected.settings?.bodyDoc ?? '')}
+            text={value ?? ''}
+            label={label}
+            readOnly={disabled}
+            field
+            documentField="bodyDoc"
+            textField="body"
+            notify
+          />
+        )
+      return <TextArea {...common} />
+    }
     return <TextField {...common} required={!kind.endsWith('?')} />
   }
 
@@ -380,9 +448,27 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         />
       )
     const settings = sections[placement.type]?.settings ?? {}
+    const catalog = draftOf(current().id)?.entry.catalog
+    const boundField = catalog?.fields[placement.id]
+    const source = catalog ? locate(catalog.sourceLayout, placement.id)?.placement : null
+    const overridden =
+      !!boundField &&
+      JSON.stringify(placement.settings?.[boundField]) !== JSON.stringify(source?.settings?.[boundField])
+    if (catalog?.mode === 'product' && !boundField)
+      return (
+        <Notice
+          tone="info"
+          title={tr('website.catalog.sharedStructure')}
+          message={tr('website.catalog.sharedStructureHelp')}
+        />
+      )
     const args = { id: placement.id }
     const tab = ctx.route().query.inspector ?? 'content'
     const visibleFields = Object.entries(settings)
+      .filter(
+        ([name]) =>
+          catalog?.mode !== 'product' || name === boundField || (boundField === 'bodyDoc' && name === 'body'),
+      )
       .filter(
         ([name]) =>
           ![
@@ -394,6 +480,8 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
             'focalY',
             'imageFit',
             'imageRatio',
+            'bodyDoc',
+            ...(placement.type === 'website.gallery' ? ['image', 'image2'] : []),
           ].includes(name),
       )
       .filter(([name]) =>
@@ -407,8 +495,37 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
       <Stack
         divided
         items={[
+          catalog ? (
+            <Notice
+              tone="info"
+              title={tr(
+                catalog.mode === 'template'
+                  ? 'website.catalog.sourceReadonlyTitle'
+                  : overridden
+                    ? 'website.catalog.overridden'
+                    : 'website.catalog.inherited',
+              )}
+              message={tr(
+                catalog.mode === 'template'
+                  ? 'website.catalog.sourceReadonlyHelp'
+                  : 'website.catalog.overrideHelp',
+              )}
+            />
+          ) : null,
+          catalog?.mode === 'product' && boundField ? (
+            <Inline
+              items={[
+                <CommandButton
+                  label={tr('website.catalog.resetSource')}
+                  command="builder.resetSource"
+                  args={{ id: placement.id }}
+                  disabled={!canWrite || !overridden}
+                />,
+              ]}
+            />
+          ) : null,
           <nav class="website-inspector-tabs" aria-label={tr('website.workspace.inspectorTabs')}>
-            {['content', 'design', 'advanced']
+            {(catalog?.mode === 'product' ? ['content'] : ['content', 'design', 'advanced'])
               .map((key) => (
                 <LinkButton
                   label={tr(`website.workspace.${key}`)}
@@ -447,85 +564,105 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
               />
             </figure>
           ) : null,
-          <form id="builder-destination">
-            <Select
-              id="builder-destination-select"
-              name="destination"
-              label={tr('website.builder.destination')}
-              options={[
-                { value: '', label: tr('website.builder.root') },
-                ...slotOptions(draftOf(current().id)!.layout, placement.id).map((value) => ({
-                  value,
-                  label: tr('website.builder.slotDestination', {
-                    section:
-                      sections[
-                        locate(draftOf(current().id)!.layout, value.slice(0, value.lastIndexOf(':')))
-                          ?.placement.type as string
-                      ]?.title ?? tr('website.builder.structure'),
-                    slot: value.endsWith(':left') ? tr('website.builder.left') : tr('website.builder.right'),
-                  }),
-                })),
-              ]}
-              disabled={!canWrite}
-            />
-            <CommandButton
-              label={tr('website.builder.moveTo')}
-              command="builder.moveTo"
-              args={{ id: placement.id }}
-              type="submit"
-              form="builder-destination"
-              disabled={!canWrite}
-            />
-          </form>,
+          catalog?.mode === 'product' ? null : (
+            <form id="builder-destination">
+              <Select
+                id="builder-destination-select"
+                name="destination"
+                label={tr('website.builder.destination')}
+                options={[
+                  { value: '', label: tr('website.builder.root') },
+                  ...slotOptions(draftOf(current().id)!.layout, placement.id).map((value) => ({
+                    value,
+                    label: tr('website.builder.slotDestination', {
+                      section:
+                        sections[
+                          locate(draftOf(current().id)!.layout, value.slice(0, value.lastIndexOf(':')))
+                            ?.placement.type as string
+                        ]?.title ?? tr('website.builder.structure'),
+                      slot: value.endsWith(':left')
+                        ? tr('website.builder.left')
+                        : tr('website.builder.right'),
+                    }),
+                  })),
+                ]}
+                disabled={!canWrite}
+              />
+              <CommandButton
+                label={tr('website.builder.moveTo')}
+                command="builder.moveTo"
+                args={{ id: placement.id }}
+                type="submit"
+                form="builder-destination"
+                disabled={!canWrite}
+              />
+            </form>
+          ),
           <form data-live="builder.edit" novalidate>
             <input type="hidden" name="__node" value={placement.id} />
             <Stack
-              items={visibleFields.map(([name, kind]) =>
-                field(name, kind, placement.settings?.[name] as string | undefined, !canWrite),
-              )}
+              items={[
+                each(
+                  visibleFields,
+                  ([name]) => `${name}:${sourceResetVersion}`,
+                  ([name, kind]) =>
+                    field(
+                      name,
+                      kind,
+                      placement.settings?.[name] as string | undefined,
+                      !canWrite ||
+                        (catalog?.mode === 'template' &&
+                          (name === boundField || (boundField === 'bodyDoc' && name === 'body'))),
+                    )!,
+                ),
+              ]}
             />
           </form>,
-          tab === 'design'
+          tab === 'design' && catalog?.mode !== 'product'
             ? workspace.view(Object.keys(placement.slots ?? {}).length ? 'layout' : 'responsive', sections, {
                 embedded: true,
               })
             : null,
-          tab === 'advanced' ? workspace.view('visibility', sections, { embedded: true }) : null,
-          <Section
-            title={tr('website.builder.arrange')}
-            body={
-              <ActionGroup
-                label={tr('website.builder.arrange')}
-                actions={[
-                  <CommandButton
-                    label={tr('website.builder.moveUp')}
-                    command="builder.move"
-                    args={{ ...args, by: '-1' }}
-                    disabled={!canWrite}
-                  />,
-                  <CommandButton
-                    label={tr('website.builder.moveDown')}
-                    command="builder.move"
-                    args={{ ...args, by: '1' }}
-                    disabled={!canWrite}
-                  />,
-                  <CommandButton
-                    label={tr('website.builder.duplicate')}
-                    command="builder.duplicate"
-                    args={args}
-                    disabled={!canWrite}
-                  />,
-                  <CommandButton
-                    label={tr('website.builder.remove')}
-                    command="builder.remove"
-                    args={args}
-                    variant="destructive"
-                    disabled={!canWrite}
-                  />,
-                ]}
-              />
-            }
-          />,
+          tab === 'advanced' && catalog?.mode !== 'product'
+            ? workspace.view('visibility', sections, { embedded: true })
+            : null,
+          catalog?.mode === 'product' ? null : (
+            <Section
+              title={tr('website.builder.arrange')}
+              body={
+                <ActionGroup
+                  label={tr('website.builder.arrange')}
+                  actions={[
+                    <CommandButton
+                      label={tr('website.builder.moveUp')}
+                      command="builder.move"
+                      args={{ ...args, by: '-1' }}
+                      disabled={!canWrite}
+                    />,
+                    <CommandButton
+                      label={tr('website.builder.moveDown')}
+                      command="builder.move"
+                      args={{ ...args, by: '1' }}
+                      disabled={!canWrite}
+                    />,
+                    <CommandButton
+                      label={tr('website.builder.duplicate')}
+                      command="builder.duplicate"
+                      args={args}
+                      disabled={!canWrite}
+                    />,
+                    <CommandButton
+                      label={tr('website.builder.remove')}
+                      command="builder.remove"
+                      args={args}
+                      variant="destructive"
+                      disabled={!canWrite}
+                    />,
+                  ]}
+                />
+              }
+            />
+          ),
         ]}
       />
     )
@@ -587,7 +724,12 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
       const { node } = current()
       const selected = node ? locate(draft.layout, node)?.placement : null
       const canWrite = ctx.can('website.content.write')
-      const panel = builderPanel(ctx.route().query.panel)
+      const requestedPanel = builderPanel(ctx.route().query.panel)
+      const panel = entry.catalog
+        ? entry.catalog.mode === 'product' || !['structure', 'library', 'styles'].includes(requestedPanel)
+          ? 'structure'
+          : requestedPanel
+        : requestedPanel
       const templatePreview =
         panel === 'library' && ctx.route().query.section === 'templates' ? workspace.previewTemplate() : null
       const busy = ctx.busy()
@@ -620,6 +762,22 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                 variant="tertiary"
                 href={ctx.href(entry.type === 'post' ? 'posts' : 'pages')}
               />
+              {entry.catalog ? (
+                <LinkButton
+                  label={tr(
+                    entry.catalog.mode === 'template'
+                      ? 'website.catalog.overrideContent'
+                      : 'website.catalog.editTemplate',
+                  )}
+                  href={ctx.href('builder', {
+                    id: catalogBuilderId(
+                      entry.catalog.mode === 'template' ? 'product' : 'template',
+                      entry.catalog.mode === 'template' ? entry.catalog.bindingId : entry.catalog.templateId,
+                      entry.catalog.productId,
+                    ),
+                  })}
+                />
+              ) : null}
               <Menu
                 id="builder-pages"
                 label={tr('website.builder.switchPage')}
@@ -650,7 +808,9 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                 label={tr(draft.dirty ? 'website.builder.unsaved' : 'website.builder.draftSaved')}
                 tone={draft.dirty ? 'warning' : 'neutral'}
               />
-              {workspace.live() ? (
+              {entry.catalog ? (
+                <Status label={tr('website.catalog.liveTitle')} tone="positive" />
+              ) : workspace.live() ? (
                 <Status
                   label={tr(
                     draft.dirty || workspace.live() !== draft.base
@@ -679,9 +839,25 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
             zoom,
             busy,
             canWrite,
+            interactive: interactive?.entryId === entry.id,
           })}
           body={
             <>
+              {entry.catalog ? (
+                <Notice
+                  title={tr(
+                    entry.catalog.mode === 'product'
+                      ? 'website.catalog.overrideContent'
+                      : 'website.catalog.sharedTitle',
+                  )}
+                  message={tr(
+                    entry.catalog.mode === 'product'
+                      ? 'website.catalog.overrideHelp'
+                      : 'website.catalog.sharedBuilderHelp',
+                  )}
+                  tone="info"
+                />
+              ) : null}
               <div class="website-builder-workspace" data-builder-drag-root="">
                 {tools.navigation()}
                 {canWrite ? (
@@ -698,6 +874,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                 />
                 <div
                   class="website-builder"
+                  data-theme-interactive={interactive?.entryId === entry.id ? 'true' : null}
                   data-panel={panel}
                   data-template-preview={templatePreview ? 'true' : null}
                 >
@@ -787,11 +964,15 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                                   />
                                 }
                               />,
-                              <LinkButton
-                                label={tr('website.workspace.addSection')}
-                                href={ctx.href('builder', { id: entry.id }, { panel: 'library', node })}
-                              />,
-                              <small>{tr('website.workspace.moveHint')}</small>,
+                              entry.catalog?.mode === 'product' ? null : (
+                                <LinkButton
+                                  label={tr('website.workspace.addSection')}
+                                  href={ctx.href('builder', { id: entry.id }, { panel: 'library', node })}
+                                />
+                              ),
+                              entry.catalog?.mode === 'product' ? null : (
+                                <small>{tr('website.workspace.moveHint')}</small>
+                              ),
                             ]}
                           />
                         }
@@ -817,28 +998,50 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
                           style={`zoom:${zoom / 100}`}
                           onClick={templatePreview ? undefined : selectOnCanvas}
                         >
-                          {workspace.frame(
-                            renderLayout(
-                              templatePreview?.layout ?? draft.layout,
-                              templatePreview
-                                ? { headingLevel: 2, viewport: previewWidth, locale: entry.locale }
-                                : {
-                                    mode: 'builder',
-                                    controls: dragHandle,
-                                    emptySlot: ctx.can('website.content.write') ? emptyDropSlot : null,
-                                    headingLevel: 2,
-                                    viewport: previewWidth,
-                                    locale: entry.locale,
-                                    selected: node,
-                                    unknownLabel: (type: string) =>
-                                      tr('website.builder.unknownSection', { type }),
-                                    sectionData: formSectionData(draft.layout),
-                                    formText: {
-                                      send: tr('website.formJourney.send'),
-                                      missing: tr('website.builder.form.missing'),
+                          {interactive?.entryId === entry.id ? (
+                            <>
+                              <LinkButton
+                                label={tr('website.builder.openInteractive')}
+                                href={interactive.url}
+                              />
+                              <iframe
+                                title={tr('website.builder.interactiveCanvas')}
+                                src={interactive.url}
+                                sandbox="allow-scripts"
+                                referrerpolicy="no-referrer"
+                                style="width:100%;height:75vh;min-height:480px;border:0;background:white"
+                              />
+                            </>
+                          ) : (
+                            workspace.frame(
+                              renderLayout(
+                                templatePreview?.layout ?? draft.layout,
+                                templatePreview
+                                  ? { headingLevel: 2, viewport: previewWidth, locale: entry.locale }
+                                  : {
+                                      mode: 'builder',
+                                      controls: entry.catalog?.mode === 'product' ? undefined : dragHandle,
+                                      emptySlot:
+                                        ctx.can('website.content.write') && entry.catalog?.mode !== 'product'
+                                          ? emptyDropSlot
+                                          : null,
+                                      headingLevel: 2,
+                                      viewport: previewWidth,
+                                      locale: entry.locale,
+                                      selected: node,
+                                      unknownLabel: (type: string) =>
+                                        tr('website.builder.unknownSection', { type }),
+                                      sectionData: {
+                                        ...entry.sectionData,
+                                        ...formSectionData(draft.layout),
+                                      } as import('../renderer.tsx').RenderOptions['sectionData'],
+                                      formText: {
+                                        send: tr('website.formJourney.send'),
+                                        missing: tr('website.builder.form.missing'),
+                                      },
                                     },
-                                  },
-                            ),
+                              ),
+                            )
                           )}
                         </div>
                       </>
@@ -880,8 +1083,21 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
     },
     commands: {
       ...workspace.commands,
+      'builder.resetSource': ({ id: nodeId }) => {
+        const d = draftOf(current().id)!,
+          catalog = d.entry.catalog,
+          key = catalog?.fields[nodeId]
+        if (!catalog || !key) return
+        sourceResetVersion++
+        change(current().id, (layout) => {
+          locate(layout, nodeId)!.placement.settings![key] = clone(
+            locate(catalog.sourceLayout, nodeId)!.placement.settings![key],
+          )
+        })
+      },
       'builder.template': ({ id }) => workspace.template(id),
       'builder.duplicate': ({ id: nodeId }) => {
+        if (draftOf(current().id)?.entry.catalog?.mode === 'product') return
         change(current().id, (layout) => {
           const found = locate(layout, nodeId)
           if (!found) return
@@ -905,6 +1121,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         touch()
       },
       'builder.moveTo': ({ id: nodeId }, form) => {
+        if (draftOf(current().id)?.entry.catalog?.mode === 'product') return
         change(current().id, (layout) =>
           movePlacement(layout, nodeId, String(form!.get('destination') ?? '')),
         )
@@ -921,6 +1138,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         change(id, () => Object.assign((found.placement.settings ??= {}), next), `edit:${target}`)
       },
       'builder.add': ({ type }) => {
+        if (draftOf(current().id)?.entry.catalog?.mode === 'product') return
         const { id, node } = current()
         const placement: Placement = { id: newId('node'), type, settings: {} }
         if (type === 'website.columns') placement.slots = { left: [], right: [] }
@@ -934,6 +1152,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         ctx.navigate('builder', { id }, { node: placement.id }, { replace: true })
       },
       'builder.move': ({ id: nodeId, by }) => {
+        if (draftOf(current().id)?.entry.catalog?.mode === 'product') return
         const { id } = current()
         change(id, (layout) => {
           const at = locate(layout, nodeId)
@@ -944,6 +1163,7 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         })
       },
       'builder.remove': ({ id: nodeId }) => {
+        if (draftOf(current().id)?.entry.catalog?.mode === 'product') return
         const { id } = current()
         change(id, (layout) => {
           const at = locate(layout, nodeId)
@@ -970,6 +1190,31 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
         touch()
       },
       'builder.save': () => save(),
+      'builder.interact': async () => {
+        if (interactive?.entryId === current().id) {
+          interactive = null
+          touch()
+          return
+        }
+        if (draftOf(current().id)?.dirty) await save()
+        const link = await ctx.call<{ token: string }>('website_studio.createPreview', {
+          siteId: ctx.site().id,
+          id: current().id,
+          revisionId: draftOf(current().id)!.base,
+          audience: 'link',
+          minutes: 5,
+        })
+        const data = await ctx.call<{ preview: { url: string | null } }>('website_studio.preview', {
+          siteId: ctx.site().id,
+          id: current().id,
+          token: link.token,
+        })
+        if (!data.preview?.url) throw new Error(tr('website.builder.interactiveUnavailable'))
+        const url = new URL(data.preview.url, globalThis.location?.href ?? 'http://atlas.invalid')
+        url.searchParams.set('themeInteractive', '1')
+        interactive = { entryId: current().id, url: url.href }
+        touch()
+      },
       'builder.preview': async () => {
         if (draftOf(current().id)?.dirty) await save()
         await ctx.navigate('preview', { id: current().id })
@@ -1025,6 +1270,14 @@ export function createBuilder(ctx: StudioContext): BuilderScreen {
   return screen
 
   async function save() {
+    if (galleryUploadPending(current().id)) throw new Error(tr('website.taxonomy.imageUploading'))
+    if (
+      typeof document !== 'undefined' &&
+      [...document.querySelectorAll<HTMLElement>('[data-live="builder.edit"][data-uploading]')].some(
+        (form) => Number(form.dataset.uploading) > 0,
+      )
+    )
+      throw new Error(tr('website.taxonomy.imageUploading'))
     const { id } = current()
     const draft = draftOf(id)
     if (!draft) return

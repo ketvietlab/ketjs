@@ -20,6 +20,7 @@ import {
   Button,
   CardGrid,
   ConfirmDialog,
+  Dialog,
   Combobox,
   ContentCard,
   DatePicker,
@@ -87,6 +88,7 @@ import {
   TreeGrid,
   ViewSettings,
   MediaGallery,
+  WorkspacePage,
   withQueryState,
 } from '@ketvietlab/design-system'
 import {
@@ -863,6 +865,68 @@ test('design system: canonical page headers share compact responsive padding', (
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
+test('design system: compact operational pages share one header band at every width', () => {
+  const shell = readFileSync('packages/design-system/src/patterns/page-shell/styles.css', 'utf8')
+  const compact = shell.match(
+    /:where\(\[data-kv-design-system\]\[data-density="compact"\]\)\s+\[data-variant="operational"\]\s+> :is\(\[data-kv-page-identity="header"\], \[data-ui="record-page-header"\]\) \{\s+padding-block: var\(--kv-space-2\);\s+\}/u,
+  )
+  assert.ok(compact, 'page-shell owns the compact operational header padding')
+  // Declared after the mobile reflow, so the compact band holds below 42rem too.
+  assert.ok(compact.index! > shell.indexOf('@media (max-width: 42rem)'))
+  // One owner: no pattern re-declares the band per kind, and the list no longer
+  // overrides it with a more specific operational padding.
+  assert.doesNotMatch(patternCss, /\[data-density="compact"\]\)[^{]*-page-header"\]\s*\{/u)
+  assert.doesNotMatch(
+    patternCss,
+    /\[data-ui="list-page"\]\[data-variant="operational"\]\s+\[data-ui="list-page-header"\]\s*\{[^}]*padding/u,
+  )
+
+  // The shared rule selects a direct child, so every operational page must render its header there.
+  const pages = {
+    'list-page': <ListPage variant="operational" context="Front office" title="Stays" body="Rows" />,
+    'record-page': <RecordPage variant="operational" context="Front office" title="Check-out" body="Folio" />,
+    'dashboard-page': (
+      <WorkspacePage
+        variant="operational"
+        layout="flow"
+        context="Front office"
+        title="Front desk"
+        body="Queues"
+      />
+    ),
+    'board-page': (
+      <WorkspacePage
+        variant="operational"
+        layout="canvas"
+        context="Front office"
+        title="Tape chart"
+        body="Rooms"
+      />
+    ),
+  }
+  for (const [kind, page] of Object.entries(pages)) {
+    assert.match(
+      renderToString(page).replace(/<!--[\s\S]*?-->/gu, ''),
+      new RegExp(
+        `data-ui="${kind}"[^>]*data-variant="operational"[^>]*><div data-ui="${kind}-context"[^>]*>Front office</div><header data-ui="${kind}-header"`,
+        'u',
+      ),
+      kind,
+    )
+  }
+})
+
+test('design system: a flow workspace toolbar sits on the page gutter', () => {
+  const toolbar = patternCss.match(
+    /\[data-ui="dashboard-page"\]\[data-variant="operational"\]\s+\[data-ui="dashboard-page-toolbar"\] \{\s+padding: var\(--kv-space-3\) var\(--kv-page-padding-x\) 0;/u,
+  )
+  assert.ok(toolbar, 'operational flow toolbar is inset like the list toolbar')
+  assert.match(
+    patternCss,
+    /\[data-density="compact"\]\)\s+\[data-ui="dashboard-page"\]\[data-variant="operational"\]\s+\[data-ui="dashboard-page-toolbar"\] \{\s+padding-top: var\(--kv-space-2\);/u,
+  )
+})
+
 test('design system: light page surfaces use component roles without changing the palette', () => {
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
   const patterns = patternCss
@@ -948,9 +1012,131 @@ test('design system: stacked table rules outrank the table rules they replace', 
 test('design system: a list toolbar wraps on a phone instead of pushing facets off screen', () => {
   const chrome = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
   const phone = chrome.slice(chrome.indexOf('@media (max-width: 47.9375rem)'))
-  assert.match(phone, /:is\(\[data-row="query"\], \[data-row="tail"\]\) \{\s*flex-wrap: wrap;/)
+  assert.match(chrome, /\[data-row="query"\] \{\s*flex-wrap: wrap;/)
   assert.match(phone, /\[data-ui="list-search"\] \{\s*flex-basis: 100%;/)
   assert.match(phone, /\[data-row="filters"\] \{\s*flex: 1 1 100%;/)
+  // The last line starts with the actions and ends with the pager, and wraps rather than overflowing.
+  assert.match(phone, /\[data-row="meta"\] \{\s*flex: 1 1 100%;\s*flex-wrap: wrap;/)
+  assert.match(phone, /\[data-row="meta"\]\s*> \[data-ui="pager-bar"\] \{\s*margin-left: auto;/)
+  // A pager button is as tall as the controls beside it, which grow on a phone.
+  assert.match(
+    chrome,
+    /\[data-ui="pager-link"\],[^{]*\[data-ui="pager-page"\] \{[^}]*height: var\(--kv-control-height\);/,
+  )
+  // No other stylesheet lays out the toolbar rows: a second phone layout once moved the pager above the facets.
+  for (const path of globSync('packages/design-system/src/**/*.css')) {
+    if (path.endsWith('list-chrome/styles.css')) continue
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /\[data-ui="list-chrome-row"\]/, path)
+  }
+})
+
+test('design system: a list toolbar folds its filters into one disclosure on a phone', () => {
+  const facets = [{ id: 'all', label: 'All', href: '/orders', active: true }]
+  // Hydration markers sit between every element; the order of the elements is what matters here.
+  const folded = renderToString(
+    <ListChrome
+      search={{ action: '/orders', name: 'q' }}
+      filterMenus={<span>menus</span>}
+      facets={facets}
+      filtersToggle={{ label: 'Filters', count: 2 }}
+      pager={{ summary: '1-25 of 148' }}
+    />,
+  ).replace(/<!--k\[?-->/g, '')
+  assert.match(folded, /data-ui="list-chrome"[^>]*data-filters="collapsible"/)
+  assert.match(
+    folded,
+    /<details data-ui="list-filters" data-active="true"><summary data-ui="list-filters-toggle" role="button">Filters<span data-ui="list-filters-count">2<\/span><\/summary><div data-ui="list-chrome-row" data-row="filters">[\s\S]*data-ui="list-facets"[\s\S]*<\/details>[\s\S]*data-ui="pager-bar"/,
+  )
+  const idle = renderToString(<ListChrome facets={facets} filtersToggle={{ label: 'Filters' }} />)
+  assert.doesNotMatch(idle, /"list-filters" data-active|list-filters-count/)
+  // Without filters there is nothing to fold, and without the option nothing changes.
+  assert.doesNotMatch(
+    renderToString(<ListChrome filtersToggle={{ label: 'Filters' }} />),
+    /list-filters|data-filters/,
+  )
+  assert.doesNotMatch(renderToString(<ListChrome facets={facets} />), /list-filters|data-filters/)
+
+  const chrome = readFileSync('packages/design-system/src/patterns/list-chrome/styles.css', 'utf8')
+  const wide = chrome.slice(
+    chrome.indexOf('@media (min-width: 48rem)'),
+    chrome.indexOf('@media (max-width: 47.9375rem)'),
+  )
+  // Wide screens keep the filters in the row; a browser without ::details-content keeps the toggle.
+  assert.match(
+    wide,
+    /@supports selector\(::details-content\) \{[\s\S]*\[data-ui="list-filters-toggle"\] \{\s*display: none;/,
+  )
+  assert.match(wide, /\[data-ui="list-filters"\]::details-content \{\s*content-visibility: visible;/)
+  const phone = chrome.slice(chrome.indexOf('@media (max-width: 47.9375rem)'))
+  assert.match(
+    phone,
+    /\[data-filters="collapsible"\]\s*\[data-ui="list-chrome-row"\]\[data-row="tail"\] \{\s*display: contents;/,
+  )
+  assert.match(phone, /\[data-filters="collapsible"\]\s*\[data-ui="list-search"\] \{\s*flex: 1 1 8rem;/)
+  assert.match(
+    phone,
+    /\[data-ui="list-filters"\]\s*> \[data-row="filters"\] \{\s*position: absolute;\s*z-index: var\(--kv-layer-menu\);/,
+  )
+})
+
+test('design system: a header folds a secondary action into its overflow menu on a phone', () => {
+  const html = renderToString(
+    <>
+      <ActionMenu
+        id="more"
+        label="More"
+        items={[
+          { id: 'create', label: 'Create', href: '/new', viewport: 'phone' },
+          { id: 'rule', kind: 'separator' },
+          { id: 'archive', label: 'Archive', href: '/archive' },
+        ]}
+      />
+      <Button label="Create" viewport="wide" />
+    </>,
+  ).replace(/<!--k\[?-->/g, '')
+  assert.match(html, /<a data-ui="menu-item" data-viewport="phone"[^>]*href="\/new"/)
+  assert.doesNotMatch(html.match(/<a data-ui="menu-item"[^>]*href="\/archive"/)?.[0] ?? '', /data-viewport/)
+  assert.match(
+    html,
+    /<button[^>]*data-ui="action"[^>]*data-viewport="wide"|<button[^>]*data-viewport="wide"[^>]*data-ui="action"/,
+  )
+  const css = (path: string) => readFileSync(`packages/design-system/src/${path}`, 'utf8')
+  for (const [path, hook] of [
+    ['primitives/actions/styles.css', 'action'],
+    ['interactions/menu/styles.css', 'menu-item'],
+  ]) {
+    assert.match(
+      css(path),
+      new RegExp(
+        `@media \\(max-width: 47\\.9375rem\\) \\{\\s*:where\\(\\[data-kv-design-system\\]\\) \\[data-ui="${hook}"\\]\\[data-viewport="wide"\\][,\\s][^{]*\\{\\s*display: none;`,
+      ),
+      path,
+    )
+    assert.match(
+      css(path),
+      new RegExp(
+        `@media \\(min-width: 48rem\\) \\{\\s*:where\\(\\[data-kv-design-system\\]\\) \\[data-ui="${hook}"\\]\\[data-viewport="phone"\\][,\\s][^{]*\\{\\s*display: none;`,
+      ),
+      path,
+    )
+  }
+  // The folded item leads the panel; on a wide screen its separator goes with it instead of opening the panel.
+  assert.match(html, /href="\/new"[^>]*>(?:(?!<a ).)*<\/a><hr data-ui="menu-separator"/)
+  const wide = css('interactions/menu/styles.css').slice(
+    css('interactions/menu/styles.css').indexOf('@media (min-width: 48rem) {'),
+  )
+  assert.match(
+    wide,
+    /^[^}]*\[data-viewport="phone"\]:first-child\s+\+ \[data-ui="menu-separator"\],[^}]*\[data-ui="menu-separator"\]:has\(\+ \[data-ui="menu-item"\]\[data-viewport="phone"\]:last-child\) \{\s*display: none;/,
+  )
+  // Every operational page, not only a list, gives the primary action the room left beside the menu.
+  const phone = css('patterns/page-shell/styles.css').slice(
+    css('patterns/page-shell/styles.css').indexOf('@media (max-width: 42rem)'),
+  )
+  assert.match(
+    phone,
+    /\[data-variant="operational"\]\s*\[data-kv-page-identity="actions"\]\s*\[data-ui="action"\]\[data-variant="primary"\] \{\s*flex: 1 1 auto;/,
+  )
 })
 
 test('design system: short table values do not break across lines', () => {
@@ -1092,11 +1278,12 @@ test('design system: ListChrome assembles URL-driven collection controls', () =>
   )
   assert.doesNotMatch(renderToString(<ListChrome />), /data-row="query"[\s\S]*data-ui="list-search"/)
   const patterns = patternCss
-  assert.match(patterns, /\[data-row="query"\] \{\s*flex-wrap: nowrap;\s*align-items: center/)
+  // Search, filters and pager share a line while they fit; otherwise a whole group wraps.
+  assert.match(patterns, /\[data-row="query"\] \{\s*flex-wrap: wrap;\s*align-items: center/)
   assert.match(patterns, /\[data-ui="list-search"\] \{\s*display: flex;\s*flex: 1 1 16rem/)
   assert.match(patterns, /max-width: 32rem/)
   assert.match(patterns, /\[data-row="filters"\] \{\s*flex: 0 1 auto;\s*min-width: 0/)
-  assert.match(patterns, /\[data-row="tail"\] \{\s*flex: 0 1 auto/)
+  assert.match(patterns, /\[data-row="tail"\] \{[^}]*flex: 1 1 auto;\s*flex-wrap: wrap;/)
   assert.match(patterns, /\[data-row="meta"\] \{\s*flex: 0 0 auto/)
   assert.match(patterns, /\[data-ui="pager-bar"\] \{\s*display: flex;\s*flex-wrap: nowrap/)
   assert.match(patterns, /\[data-ui="bulk-actions"\]:not\(\[data-has-selection="true"\]\) \{\s*display: none/)
@@ -1194,6 +1381,18 @@ test('design system: controls preserve their native semantics and accessible sta
     disclosure,
     /<summary data-ui="disclosure-summary">[\s\S]*?Permission provenance[\s\S]*?<\/summary>/,
   )
+  assert.doesNotMatch(disclosure, /disclosure-(?:label|meta)/, 'a plain summary keeps its markup')
+  // Meta says what the closed line is about, beside its label and before the toggle.
+  const withMeta = renderToString(
+    <Disclosure summary="Sales" meta={<Badge label="View only" />} body="Orders" />,
+  )
+  assert.match(
+    withMeta,
+    /<summary data-ui="disclosure-summary">[\s\S]*?<span data-ui="disclosure-label">[\s\S]*?Sales[\s\S]*?<span data-ui="disclosure-meta">[\s\S]*?View only[\s\S]*?<\/summary>/,
+  )
+  const css = readFileSync('packages/design-system/src/layouts/layout/styles.css', 'utf8')
+  assert.match(css, /\[data-ui="disclosure-label"\] \{[^}]*flex: 1 1 auto;[^}]*min-width: 0;/)
+  assert.match(css, /\[data-ui="disclosure-meta"\] \{[^}]*display: inline-flex;/)
 })
 
 test('design system: fields cover operational form controls and nested groups', () => {
@@ -1319,6 +1518,14 @@ test('design system: modal sheets expose route metadata and become fullscreen on
     css,
     /@media \(max-width: 47\.9375rem\)[\s\S]*?\[data-ui="modal-sheet"\]\[data-size\][\s\S]*?border-radius: 0/,
   )
+
+  const phoneConfirm =
+    css.match(
+      /@media \(max-width: 47\.9375rem\)[\s\S]*?\[data-kind="confirm"\][\s\S]*?\[data-ui="modal-sheet"\]\[data-size\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(phoneConfirm, /height: auto/, 'a confirmation stays a card on a phone, not a full-screen page')
+  assert.match(phoneConfirm, /border-radius: var\(--kv-radius-lg\)/)
+  assert.match(css, /\[data-ui="confirm-dialog-message"\] \+ \* \{\s*margin-top: var\(--kv-space-4\)/)
 
   const largeDialog =
     css.match(
@@ -1722,6 +1929,74 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.doesNotMatch(plainAction, /aria-expanded|aria-controls/)
 })
 
+test('design system: a grouped menu names each set of commands and separates the sets itself', () => {
+  const grouped = renderToString(
+    <ActionMenu
+      id="stay"
+      label="More actions"
+      open
+      items={[
+        {
+          id: 'guest',
+          kind: 'group',
+          label: 'Guest',
+          items: [{ id: 'move', label: 'Move room', value: 'move' }],
+        },
+        {
+          id: 'cashier',
+          kind: 'group',
+          label: 'Cashier',
+          items: [
+            { id: 'pay', label: 'Take payment', value: 'pay' },
+            { id: 'folio', label: 'Open folio', href: '/folios/1' },
+          ],
+        },
+        { id: 'break', kind: 'separator' },
+        {
+          id: 'room',
+          kind: 'group',
+          label: 'Room',
+          items: [{ id: 'oos', label: 'Out of service', disabled: true }],
+        },
+      ]}
+    />,
+  ).replace(/<!--[\s\S]*?-->/gu, '')
+  const groups = [...grouped.matchAll(/<div data-ui="menu-group" role="group" aria-labelledby="([^"]+)">/gu)]
+  assert.deepEqual(
+    groups.map((match) => match[1]),
+    ['stay-guest-label', 'stay-cashier-label', 'stay-room-label'],
+  )
+  for (const [id, label] of [
+    ['stay-guest-label', 'Guest'],
+    ['stay-cashier-label', 'Cashier'],
+    ['stay-room-label', 'Room'],
+  ])
+    assert.match(
+      grouped,
+      new RegExp(`<span data-ui="menu-label" id="${id}" role="presentation">${label}</span>`),
+    )
+  // Items keep their roles inside the group, so the runtime and the panel style still reach them.
+  assert.match(
+    grouped,
+    /aria-labelledby="stay-cashier-label">[\s\S]*?role="menuitem" type="submit" name="intent" value="pay"[\s\S]*?role="menuitem" href="\/folios\/1"[\s\S]*?<\/div>/,
+  )
+  assert.match(grouped, /aria-labelledby="stay-room-label">[\s\S]*?role="menuitem" aria-disabled="true"/)
+  // One separator before every later group: none before the first, none doubled after an explicit one.
+  const panel = grouped.slice(grouped.indexOf('data-ui="menu-panel"'))
+  assert.equal(panel.match(/<hr data-ui="menu-separator"/gu)?.length, 2)
+  assert.doesNotMatch(panel, /role="menu"[^>]*><hr/, 'the first group opens the panel')
+  assert.match(
+    panel,
+    /<\/div><hr data-ui="menu-separator"\/?><div data-ui="menu-group"[^>]*stay-cashier-label/,
+  )
+  assert.match(panel, /<\/div><hr data-ui="menu-separator"\/?><div data-ui="menu-group"[^>]*stay-room-label/)
+  assert.match(
+    css,
+    /\[data-ui="menu-group"\]\s*\{\s*display: grid;\s*min-width: 0;\s*\}/,
+    'a group stacks like the panel and adds no inset',
+  )
+})
+
 test('design system: interaction essentials preserve native and accessible fallbacks', () => {
   const menu = renderToString(
     <Menu
@@ -1837,9 +2112,31 @@ test('design system: interaction essentials preserve native and accessible fallb
       closeLabel="Cancel"
       confirmLabel="Archive"
       confirmForm="archive-form"
+      confirmDisabled
+      details={<span>I understand</span>}
     />,
   )
   assert.match(confirm, /role="dialog"[^>]*aria-modal="true"/)
+  assert.match(confirm, /^<div data-ui="dialog" data-kind="confirm">/)
+  assert.match(confirm, /data-presentation="dialog"/)
+  assert.match(confirm, /data-ui="modal-sheet"[^>]*data-size="small"/, 'a confirmation is small by default')
+  assert.match(
+    confirm,
+    /data-ui="confirm-dialog-message"[^>]*>(?:<!--[^>]*-->)*This remains[\s\S]*I understand/,
+  )
+  assert.match(confirm, /<button[^>]*value="confirm"[^>]*disabled/)
+  const plain = renderToString(
+    <Dialog
+      id="assign"
+      title="Assign"
+      body={<p>Queue</p>}
+      closeHref="/record"
+      closeLabel="Close"
+      size="small"
+    />,
+  )
+  assert.match(plain, /^<div data-ui="dialog">/)
+  assert.match(plain, /data-ui="modal-sheet"[^>]*data-size="small"/)
   assert.match(confirm, /type="submit"[^>]*value="confirm"[^>]*form="archive-form"/)
 
   const feedback = renderToString(
@@ -2220,7 +2517,7 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 312)
+  assert.equal(designSystemInventory.summary.publicExports, 314)
   assert.equal(designSystemInventory.summary.runtimeExports, 147)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 43)
@@ -2599,4 +2896,45 @@ test('design system: navigation groups can expand all branches independently', (
     <AppNavigation id="single" label="Menu" groups={[{ id: 'work', items }]} />,
   )
   assert.match(defaultNavigation, /name="single-drawer-branches"/)
+})
+
+test('design system: modal bands stay toolbar-dense and a checkbox hangs from its first label line', () => {
+  const modal = readFileSync('packages/design-system/src/patterns/modal-sheet/styles.css', 'utf8')
+  const rule = (source: string, selector: string) => {
+    const start = source.indexOf(`${selector} {`)
+    assert.notEqual(start, -1, selector)
+    return source.slice(start, source.indexOf('}', start))
+  }
+  const head = rule(modal, ':where([data-kv-design-system]) [data-ui="modal-head"]')
+  assert.match(
+    head,
+    /padding: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-surface-inset\)/,
+  )
+  assert.match(
+    rule(modal, ':where([data-kv-design-system]) [data-ui="modal-actions"]'),
+    /padding: var\(--kv-space-3\) var\(--kv-surface-inset\)/,
+  )
+  const close = rule(modal, ':where([data-kv-design-system]) [data-ui="modal-close"]')
+  assert.match(close, /height: var\(--kv-control-height-sm\)/)
+  assert.match(
+    close,
+    /margin-block: calc\(\(var\(--kv-line-xl\) - var\(--kv-control-height-sm\)\) \/ 2\)/,
+    'the close target must not grow the head',
+  )
+
+  const field = readFileSync('packages/design-system/src/primitives/field/styles.css', 'utf8')
+  const checkbox = rule(field, ':where([data-kv-design-system]) [data-ui="field"][data-kind="checkbox"]')
+  assert.match(checkbox, /align-items: start/)
+  assert.match(checkbox, /align-content: center/, 'a one-line checkbox stays level with the inputs beside it')
+  const box = 'margin: calc((var(--kv-line-sm) - 1rem) / 2) 0 0'
+  assert.ok(
+    rule(field, ':where([data-kv-design-system]) input[type="checkbox"][data-ui="field-control"]').includes(
+      box,
+    ),
+  )
+  assert.match(
+    rule(field, ':where([data-kv-design-system]) [data-ui="field-option"]'),
+    /align-items: flex-start/,
+  )
+  assert.ok(rule(field, ':where([data-kv-design-system]) [data-ui="field-option-input"]').includes(box))
 })

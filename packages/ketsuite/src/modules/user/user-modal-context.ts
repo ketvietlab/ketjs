@@ -8,15 +8,16 @@ import { userModalMessages } from './modal-messages.ts'
 // view never fetches anything else, so a reader sees one loading state and the
 // server stays the only place that decides what is allowed.
 
-import { and, defineFn, desc, eq, from, isNotNull } from '@ketvietlab/ketjs'
+import { and, defineFn, desc, eq, from, inArray, isNotNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   AUTHORIZATION_EFFECTS,
   authorizationRevisionOf,
   effectiveFunctionKeys,
+  managedRoleHealthIssues,
   resolveEffectivePermissions,
 } from './authorization.ts'
-import { functionLabel, surfaceRows, templateTier } from './access-surfaces.ts'
+import { accessAreas, areaKey, functionLabel, surfaceRows, templateTier } from './access-surfaces.ts'
 
 type Lang = 'vi' | 'en'
 type Can = (fn: string) => boolean
@@ -64,13 +65,17 @@ const assignableRoles = async (ctx: Ctx): Promise<Row[]> =>
     .sort(byName)
 
 /**
- * What this person can open and work on, one row per screen.
+ * What this person can open and work on: area by area, and screen by screen.
  *
  * Measured where the person lands — their default company and branch — because
  * that is where they will first meet a refusal. Each row names the held roles
- * that open it.
+ * that give it.
  */
-const surfacesOf = async (ctx: Ctx, lang: Lang, record: Row): Promise<Row[]> => {
+const accessOf = async (
+  ctx: Ctx,
+  lang: Lang,
+  record: Row,
+): Promise<{ surfaces: Row[]; areas: Row[]; areasWithout: string[]; standing: Row }> => {
   const effective = await resolveEffectivePermissions(ctx, String(record.id), {
     companyId: record.defaultCompanyId ? String(record.defaultCompanyId) : null,
     branchId: record.defaultBranchId ? String(record.defaultBranchId) : null,
@@ -84,12 +89,45 @@ const surfacesOf = async (ctx: Ctx, lang: Lang, record: Row): Promise<Row[]> => 
       [...new Set(fn.paths.map((path) => roleNames.get(path.roleId) ?? path.roleId))],
     ]),
   )
-  return surfaceRows(
-    ctx,
-    lang,
-    (fn) => effective.superuser || held.has(fn),
-    (fn) => (effective.superuser ? [] : (held.get(fn) ?? [])),
-  )
+  const holds = (fn: string): boolean => effective.superuser || held.has(fn)
+  const via = (fn: string): string[] => (effective.superuser ? [] : (held.get(fn) ?? []))
+  const surfaces = surfaceRows(ctx, lang, holds, via).map((row) => ({
+    ...row,
+    areaKey: areaKey(String(row.module ?? '')),
+  }))
+  const { areas, without } = accessAreas(ctx, lang, holds, via)
+  return { surfaces, areas, areasWithout: without, standing: standingOf(effective, roleNames) }
+}
+
+/**
+ * Why the access above is what it is, before any role is read.
+ *
+ * The resolver gives nothing to an archived account, everything to a superuser
+ * whose grant has not ended, and nothing anywhere the person is not a member of.
+ * A held role whose template has moved on gives nothing either: the page has to
+ * say so, or an empty area list reads as a role that does not cover it.
+ */
+const standingOf = (
+  effective: Awaited<ReturnType<typeof resolveEffectivePermissions>>,
+  roleNames: Map<string, string>,
+): Row => {
+  const codes = new Set(effective.issues.map((issue) => issue.code))
+  return {
+    state: effective.superuser
+      ? 'superuser'
+      : codes.has('inactive-user')
+        ? 'inactive'
+        : codes.has('invalid-company-context') || codes.has('invalid-branch-context')
+          ? 'outside'
+          : 'measured',
+    staleRoles: [
+      ...new Set(
+        effective.issues
+          .filter((issue) => issue.code.startsWith('stale-managed') && issue.roleId)
+          .map((issue) => roleNames.get(String(issue.roleId)) ?? String(issue.roleId)),
+      ),
+    ],
+  }
 }
 
 /**
@@ -144,9 +182,8 @@ export const workplaces = async (ctx: Ctx): Promise<{ companies: Row[]; branches
  * hide authority the person still carries.
  */
 const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
-  const roles = new Map(
-    (await ctx.db.select('user.Role')).map((role) => [String(role.id), String(role.name ?? role.id)]),
-  )
+  const roleRows = await ctx.db.select('user.Role')
+  const roles = new Map(roleRows.map((role) => [String(role.id), String(role.name ?? role.id)]))
   const companies = await companyNames(ctx)
   const branches = new Map(
     (await ctx.db.select('company.Branch')).map((row) => [String(row.id), String(row.name ?? row.id)]),
@@ -158,6 +195,19 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
     ...(await ctx.db.select('user.Assignment', { userId })),
     ...(await ctx.db.select('user.PolicyAssignment', { userId })),
   ]
+  // A managed role whose template has moved on gives nothing until it is applied
+  // again, which the resolver decides with this same check.
+  const heldIds = [...new Set(assignments.map((row) => String(row.roleId)))]
+  const G = ctx.table('user.Grant')
+  const S = ctx.table('user.GrantSource')
+  const grants = heldIds.length ? await ctx.db.all(from(G).where(inArray(G.roleId, heldIds))) : []
+  const sources = heldIds.length ? await ctx.db.all(from(S).where(inArray(S.roleId, heldIds))) : []
+  const stale = new Set(
+    roleRows
+      .filter((role) => heldIds.includes(String(role.id)))
+      .filter((role) => managedRoleHealthIssues(ctx.manifest, role, grants, sources).length > 0)
+      .map((role) => String(role.id)),
+  )
   return assignments.map((assignment): Row => {
     const companyId = assignment.companyId ? String(assignment.companyId) : ''
     const branchId = assignment.branchId ? String(assignment.branchId) : ''
@@ -172,6 +222,7 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
           }
         : { kind: 'manual' },
       roleName: roles.get(String(assignment.roleId)) ?? String(assignment.roleId),
+      roleState: stale.has(String(assignment.roleId)) ? 'stale' : 'current',
       scopeKind: String(assignment.scopeKind ?? 'tenant'),
       companyId: companyId || null,
       branchId: branchId || null,
@@ -192,6 +243,26 @@ const assignmentsOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
  * the history of who gave them what.
  */
 const authorizationAuditOf = async (ctx: Ctx, userId: string): Promise<Row[]> => {
+  const people = new Map(
+    (await ctx.db.select('user.User')).map((row) => [
+      String(row.id),
+      String(row.name || row.login || row.id),
+    ]),
+  )
+  const policies = new Map(
+    (await ctx.db.select('user.AccessPolicy')).map((row) => [String(row.id), String(row.name)]),
+  )
+  const roleNames = new Map(
+    (await ctx.db.select('user.Role')).map((role) => [String(role.id), String(role.name ?? role.id)]),
+  )
+  /** Who did it, by name: a person, a rule that matched, or the system itself. */
+  const actorName = (key: string | null): Row => {
+    if (!key) return { kind: 'system', name: null }
+    if (people.has(key)) return { kind: 'user', name: people.get(key) }
+    const policy = key.startsWith('policy:') ? key.slice('policy:'.length) : null
+    if (policy !== null) return { kind: 'policy', name: policies.get(policy) ?? policy }
+    return { kind: 'system', name: null }
+  }
   const A = ctx.table('user.SecurityAudit')
   const rows = await ctx.db.all(
     from(A)
@@ -216,11 +287,13 @@ const authorizationAuditOf = async (ctx: Ctx, userId: string): Promise<Row[]> =>
       id: String(row.id),
       event: String(row.event ?? ''),
       occurredAt: row.occurredAt ? String(row.occurredAt) : null,
-      actor: row.actorKey ? String(row.actorKey) : null,
+      actor: actorName(row.actorKey ? String(row.actorKey) : null),
       reason: row.reason ? String(row.reason) : null,
       scopeKey: row.scopeKey ? String(row.scopeKey) : 'tenant',
       outcome: String(row.outcome ?? 'success'),
       roleIds,
+      // A role removed from the catalogue since keeps the id it was recorded under.
+      roles: roleIds.map((id) => roleNames.get(id) ?? id),
     }
   })
 }
@@ -292,8 +365,9 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
       // The profile form edits where this person works.
       'read:user.Membership',
       'read:user.BranchMembership',
-      // What each held role covers.
+      // What each held role covers, and whether its template still matches.
       'read:user.Grant',
+      'read:user.GrantSource',
     ],
     handler: async (ctx, args) => {
       const can = await permissionCheck(ctx)
@@ -360,7 +434,7 @@ export const userModalContextFunctions: Record<string, FnSpec> = {
           // The guards are about the reader: nobody changes their own authority, and
           // only a superuser gives a security-tier role.
           actor: { self: !creating && ctx.actor === String(args.id), superuser: actorSuperuser },
-          surfaces: creating ? undefined : await surfacesOf(ctx, lang, record),
+          ...(creating ? {} : await accessOf(ctx, lang, record)),
           lastDenial: denial
             ? {
                 fn: String(denial.fnKey),

@@ -32,6 +32,12 @@ export type TableSelection = {
   field?: string
   hidden?: Record<string, string>
   actions: Array<{ id: string; label: string; tone?: 'default' | 'danger' }>
+  /**
+   * `menu` (default) folds the actions behind one "more" trigger. `bar` shows the
+   * selected count, a clear command and each action by name, the way a screen
+   * whose bulk work is routine should read.
+   */
+  presentation?: 'menu' | 'bar'
 }
 
 export type DataTable<R> = {

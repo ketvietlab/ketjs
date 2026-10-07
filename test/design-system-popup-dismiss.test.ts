@@ -17,8 +17,8 @@ test('design system: popups built on details close on an outside click and on Es
   // The period filter and view settings are <details> popups, like the action menu.
   assert.match(timeframe, /<details data-ui="timeframe-menu">/u)
   assert.match(listControls, /<details data-ui="view-settings">/u)
-  const declared = runtime.match(/const DISMISSIBLE_POPUPS = \[(.*?)\]\n/u)?.[1] ?? ''
-  for (const hook of ['timeframe-menu', 'view-settings'])
+  const declared = runtime.match(/const DISMISSIBLE_POPUPS = \[([\s\S]*?)\]\n/u)?.[1] ?? ''
+  for (const hook of ['timeframe-menu', 'view-settings', 'list-filters'])
     assert.match(declared, new RegExp(`\\[data-ui="${hook}"\\]`, 'u'), `${hook} is dismissible`)
 
   const click = runtime.slice(
@@ -35,6 +35,11 @@ test('design system: popups built on details close on an outside click and on Es
     /event\.key === 'Escape' && openPopup instanceof HTMLDetailsElement\) \{\s*openPopup\.open = false/u,
     'Escape closes the open popup and returns focus to its summary',
   )
+})
+
+test("design system: folded list filters report their own open state, not a nested menu's", () => {
+  assert.match(runtime, /querySelectorAll\('\[data-ui="menu"\], \[data-ui="list-filters"\]'\)/u)
+  assert.match(runtime, /const trigger = menu\.querySelector\(':scope > summary'\)/u)
 })
 
 test('search filter: autocomplete suggestions close on an outside click without clearing the query', () => {

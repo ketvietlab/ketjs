@@ -52,6 +52,7 @@ contract; never shrink text to fit. Zero default outer text margins.
 | Title block to content | 8px | Surface/Section |
 | Surface/card inset | 16px desktop, 12px mobile | Surface/object card |
 | Modal inset | 16px | Overlay |
+| Modal head/footer band | 12px block, 16px inline; the close target never makes the head taller than the title line | ModalSheet |
 | Form columns | 24px | Form layout |
 | Form rows | 16px | Form layout |
 | Field groups | 16px | Form layout |
@@ -151,11 +152,21 @@ they keep their own boundaries even inside a surface. This exception does not ap
 to groups of form fields. A table on canvas can own one boundary; inside a modal it
 uses the modal's boundary. TabbedView/TabPanel add no second card or horizontal inset.
 
-Separate groups with space, then heading, then a hairline between peers when useful.
+Peer groups of one surface — the sections of one record or form, in a modal or a
+working Surface — are composed with `Stack({ divided: true })`:
+the parent stack draws one hairline (`--kv-panel-border`) between each, with the
+stack gap above and below it. This is the rule, not an option: do not separate peer
+groups with space alone, with a frame per group, or with module CSS. A single group
+needs no divider; a group's own inner parts (fields, notices, an item heading) are
+not peers of the groups and stay undivided inside it.
 Do not draw both a parent's closing border and a child's opening border for one edge.
 A modal flattens its groups, so its group headings take the working-surface size
-(14/20/600), one step above the 13/20/400 body; a heading nested inside a group is an
-item heading at 13/20/600. Do not draw the tier with weight alone at the same size.
+(14/20/600), one step above the 13/20/400 body. A heading nested inside a group is an
+item heading at 13/20/600. A RecordPage body is canvas, not one surface: each block
+of the record is its own titled Surface (14/20/600), separated by the page's
+`--kv-layout-gap`, never wrapped in one card that then needs dividers. Inside a titled working Surface the Surface title is the
+14/20/600 tier, so its divided groups use the 13/20/600 section title. Do not draw
+the tier with weight alone at the same size.
 Keep title and body on the same inset. Use the relevant semantic tokens for each:
 
 - **Boundary:** region against canvas, owned by Surface/Overlay.
@@ -191,6 +202,15 @@ A drop must resolve the target lane, never require a target card.
 ModalSheet dialog sizes: `small` (34rem) for short single-column forms,
 `default` (56rem) for two-column forms or modest tables, and `large` (75rem)
 for dense workspaces. Choose by content structure, not field count.
+Modal head and footer are bands around the work, as dense as a toolbar: about
+49px and 57px on desktop with a 20/24 title and 32px buttons. Do not pad them
+back to the 16px modal inset.
+ConfirmDialog is always a small centred dialog; below 768px it stays a card
+instead of becoming fullscreen.
+
+A checkbox or choice box aligns with the first line of its label, so a wrapped
+label hangs below the text, not around the box. A one-line checkbox still sits
+in the middle of the control height, level with the inputs beside it.
 
 ## Credential completion
 

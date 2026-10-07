@@ -17,7 +17,13 @@ export function createBuilderTools(ctx: StudioContext, editor: Omit<BuilderEdito
     navigation: () => (
       <nav class="website-builder-panels" aria-label={ctx.tr('website.tools.panels')}>
         {fragments(
-          BUILDER_PANELS.map((key) => (
+          BUILDER_PANELS.filter(
+            (key) =>
+              !editor.draft().entry.catalog ||
+              (editor.draft().entry.catalog?.mode === 'product'
+                ? key === 'structure'
+                : ['structure', 'library', 'styles'].includes(key)),
+          ).map((key) => (
             <a
               href={ctx.href(
                 'builder',
@@ -33,7 +39,7 @@ export function createBuilderTools(ctx: StudioContext, editor: Omit<BuilderEdito
                   (
                     {
                       structure: 'list',
-                      library: 'plus',
+                      library: 'layout-grid',
                       'page-settings': 'settings',
                       styles: 'sliders-horizontal',
                       history: 'calendar',

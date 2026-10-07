@@ -1,7 +1,14 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
-export const HOOKS = ['tree', 'tree-item', 'tree-link', 'tree-grid', 'tree-grid-row'] as const
+export const HOOKS = [
+  'tree',
+  'tree-item',
+  'tree-link',
+  'tree-grid',
+  'tree-grid-row',
+  'tree-grid-link',
+] as const
 
 export type TreeNode = {
   id: string
@@ -77,13 +84,17 @@ export const TreeGrid = <Row,>(props: {
   rows: readonly TreeGridRow<Row>[]
   id: (row: Row) => string
   primary: (row: Row) => JSXChild
+  /** Localized heading for the hierarchy column. */
+  primaryLabel?: string
   columns: readonly TreeGridColumn<Row>[]
+  /** Opens the row's record: the whole row becomes one link, like `DataTable.rowHref`. */
+  rowHref?: (row: Row) => string
 }): TemplateResult => (
   // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA treegrid intentionally augments the native table model with expandable hierarchical rows.
   <table data-ui="tree-grid" role="treegrid" aria-label={props.label}>
     <thead>
       <tr>
-        <th scope="col">Name</th>
+        <th scope="col">{props.primaryLabel ?? 'Name'}</th>
         {each(
           props.columns,
           (column) => column.key,
@@ -106,8 +117,18 @@ export const TreeGrid = <Row,>(props: {
             aria-level={String(item.level)}
             aria-expanded={item.hasChildren ? String(item.expanded !== false) : null}
           >
-            <th scope="row" style={`--kv-tree-level: ${item.level}`}>
-              {props.primary(item.row)}
+            <th
+              scope="row"
+              style={`--kv-tree-level: ${item.level}`}
+              data-linked={props.rowHref ? 'true' : null}
+            >
+              {props.rowHref ? (
+                <a data-ui="tree-grid-link" href={props.rowHref(item.row)}>
+                  {props.primary(item.row)}
+                </a>
+              ) : (
+                props.primary(item.row)
+              )}
             </th>
             {each(
               props.columns,
