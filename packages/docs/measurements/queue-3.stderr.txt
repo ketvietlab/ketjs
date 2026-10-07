@@ -1,4 +1,0 @@
-(node:77811) ExperimentalWarning: SQLite is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-{"at":"2026-10-07T03:04:57.663Z","level":"info","event":"boot","deployment":"queue_benchmark","process":"worker","tenant":null,"trace":null,"fields":{"driver":"console","level":"info","modules":1,"functions":0,"jobs":1,"traceKeyed":false}}
-{"at":"2026-10-07T03:04:59.804Z","level":"info","event":"shutdown","deployment":"queue_benchmark","process":"worker","tenant":null,"trace":null,"fields":{"workerId":"queue_benchmark-77811-dc528cf7"}}

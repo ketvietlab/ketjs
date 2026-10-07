@@ -1,10 +1,11 @@
 // Four processes balance each framework's position in the sequential measurement order.
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { arch, cpus, platform, release, totalmem } from 'node:os'
 
-const destination = 'packages/docs/measurements'
+const destination = '.artifacts/benchmarks'
+mkdirSync(destination, { recursive: true })
 const raw = []
 for (let run = 0; run < 4; run++) {
   const result = spawnSync(process.execPath, ['bench/ssr-comparison/run.mjs', String(run)], {

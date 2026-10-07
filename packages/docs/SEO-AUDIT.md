@@ -23,7 +23,7 @@ not 678 independent causes. The final artifact check covers titles/descriptions,
 main H1 and heading levels, social tags and raster availability, JSON-LD parsing/page identity,
 image alt text, robots directives and sitemap consistency. Existing build verification also checks
 internal links/anchors, one main landmark, singleton island keys and current-version content.
-Final local result: 45 generated pages, 43 indexable routes, zero audit findings and 4,631
+Final local result: 45 generated pages, 43 indexable routes, zero audit findings and 4,600
 verified local links/anchors.
 
 ## Evidence and limits

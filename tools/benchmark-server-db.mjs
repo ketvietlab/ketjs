@@ -1,12 +1,13 @@
 // Own one disposable PostgreSQL container and only its uniquely named scratch databases.
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { arch, cpus, platform, release, totalmem } from 'node:os'
 import postgres from '../node_modules/postgres/src/index.js'
 
 const name = `ketjs-benchmark-${process.pid}-${Date.now()}`
-const destination = 'packages/docs/measurements'
+const destination = '.artifacts/benchmarks'
+mkdirSync(destination, { recursive: true })
 let created = false
 try {
   execFileSync(

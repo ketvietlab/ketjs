@@ -6,11 +6,6 @@ export function prepareAssets(pages) {
     if (!existsSync(path) || readFileSync(path, 'utf8') !== value) writeFileSync(path, value)
   }
   mkdirSync('public/content/docs', { recursive: true })
-  if (existsSync('measurements')) {
-    mkdirSync('public/measurements', { recursive: true })
-    for (const name of readdirSync('measurements'))
-      writeChanged(`public/measurements/${name}`, readFileSync(`measurements/${name}`, 'utf8'))
-  }
   const docs = pages.filter((page) => page.kind === 'docs')
   const names = new Set(docs.map((page) => `${page.slug}.json`))
   for (const name of readdirSync('public/content/docs'))
