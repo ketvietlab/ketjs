@@ -23,17 +23,7 @@
       "@ketvietlab/ketjs/theme": ["./packages/ketjs/src/theme/index.ts"],
       "@ketvietlab/ketjs/pdf": ["./packages/ketjs/src/pdf/index.ts"],
       "@ketvietlab/ketjs/testing": ["./packages/ketjs/src/testing.ts"],
-      "@ketvietlab/ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"],
-      "@ketvietlab/design-system": ["./packages/design-system/src/index.ts"],
-      "@ketvietlab/design-system/contract": ["./packages/design-system/src/contract/index.ts"],
-      "@ketvietlab/design-system/catalogue": ["./packages/design-system/src/catalogue/index.tsx"],
-      "@ketvietlab/ketsuite": ["./packages/ketsuite/src/index.ts"],
-      "@ketvietlab/ketsuite/deployment": ["./packages/ketsuite/src/deployment.ts"],
-      "@ketvietlab/ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
-      "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"],
-      "@ketvietlab/ketsuite/livedoc": ["./packages/ketsuite/src/ui/client/live-doc-view.tsx"],
-      "@ketvietlab/ketsuite/livedoc/render": ["./packages/ketsuite/src/ui/client/live-doc-shell.tsx"],
-      "@ketvietlab/ketsuite/ui/icons": ["./packages/ketsuite/src/ui/icons.ts"]
+      "@ketvietlab/ketjs-postgres": ["./packages/ketjs-postgres/src/index.ts"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "@ketvietlab/ketjs-view"

@@ -108,7 +108,7 @@ an experienced contributor can enter at the stage that owns the change.
 
 :::tip[Changing KetSuite instead?]
 KetSuite applies these contracts but adds its own module ownership and security rules. Start with the
-[KetSuite developer guide](/ketsuite/) instead of reading the complete framework guide first.
+KetSuite developer guide instead of reading the complete framework guide first.
 :::
 
 ## Current runtime requirements
