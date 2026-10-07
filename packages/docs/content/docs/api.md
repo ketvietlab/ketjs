@@ -219,8 +219,8 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
 
 The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
-`IslandController`, `IslandMountContext`, `IslandManager`, `IslandHostTag`, `RenderIslandOptions`, and
-their related prop/instance types.
+`IslandController`, `IslandMountContext`, `IslandManager`, `IslandManagerOptions`, `IslandHostTag`,
+`RenderIslandOptions`, and their related prop/instance types.
 
 `@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
 may import any of these names from either one.
