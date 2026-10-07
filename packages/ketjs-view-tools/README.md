@@ -2,7 +2,7 @@
 
 Static-site tooling for `@ketvietlab/ketjs-view`. It renders marker-free page HTML, bundles CSS and
 JavaScript, and preserves hydration markers only inside explicit islands. Its dependencies are
-ketjs-view and esbuild; it does not install the server framework, database adapters or service SDKs.
+ketjs-view, esbuild, and acorn with acorn-jsx for the optional JSX compiler; it does not install the server framework, database adapters or service SDKs.
 
 Use `npm create @ketvietlab/view@latest my-site` to start a project, then run `npm run dev`.
 
@@ -67,6 +67,13 @@ Styles listed in the config are bundled, including referenced font and image ass
 file loaders cover WOFF/WOFF2, TTF/OTF, SVG, PNG, JPEG and WebP. `public/` files are copied unchanged.
 Escaped code samples that mention an island host do not require an island registry entry; live
 hosts do.
+
+## Compile JSX
+
+`defineConfig({ compileJsx: true })` compiles each static subtree of intrinsic JSX elements into one
+`html` template for both the page render and the island bundle, which must agree for hydration. The
+markup is unchanged; anything a template cannot express exactly stays runtime JSX. Other builds can
+use `ketJsxPlugin()` with esbuild or `transformKetJsx(source)` per module.
 
 ## Build this package independently
 

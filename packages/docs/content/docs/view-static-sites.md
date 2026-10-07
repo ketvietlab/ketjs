@@ -124,8 +124,8 @@ island name fails `check` and `build` instead of producing inert controls.
 
 ## Configure delivery
 
-`defineConfig()` accepts `pages`, `publicDir`, `outDir`, `styles`, `islands`, `base`, `host`, and
-`port`. Paths are relative to the project root. Files in `public` are copied unchanged; imported CSS
+`defineConfig()` accepts `pages`, `publicDir`, `outDir`, `styles`, `islands`, `base`, `host`,
+`port`, and `compileJsx`. Paths are relative to the project root. Files in `public` are copied unchanged; imported CSS
 and its referenced assets are bundled and fingerprinted.
 
 Use the relative base for portable directories. For a site that is always deployed at a fixed URL
@@ -143,6 +143,28 @@ export default defineConfig({
 
 The output contract is intentionally conventional: upload the contents of `dist` to any static file
 server. No Ket runtime server is required.
+
+## Compile JSX
+
+TSX pages and islands normally call the JSX runtime once per element on every render. Set
+`compileJsx: true` to compile each static subtree of intrinsic elements into one `html` template at
+build time:
+
+```ts
+// File: ket-view.config.ts
+import { defineConfig } from '@ketvietlab/ketjs-view-tools'
+
+export default defineConfig({
+  styles: ['src/styles/main.css'],
+  compileJsx: true,
+})
+```
+
+The rendered markup is the same. Components, spread props, `style` objects and anything else a
+template cannot express exactly stay JSX, so the runtime still validates them. Compiled and runtime
+JSX place hydration markers differently, so the option applies to the page render and the island
+bundle together. Another build that renders and hydrates the same views must compile both sides with
+`ketJsxPlugin()` for esbuild or `transformKetJsx()` for a single module.
 
 ## Build a content collection
 

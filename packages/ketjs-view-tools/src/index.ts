@@ -3,6 +3,8 @@ import type { IslandProps, Markup } from '@ketvietlab/ketjs-view'
 import type { PageDefinition, StaticIslandFactory, StaticIslandOptions, ViewConfig } from './types.ts'
 
 export { buildProject, checkProject, loadConfig } from './project.ts'
+export { ketJsxPlugin, transformKetJsx } from './jsx-compiler.ts'
+export type { KetJsxOptions, KetJsxResult } from './jsx-compiler.ts'
 
 export type {
   BuildResult,

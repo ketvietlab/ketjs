@@ -206,6 +206,14 @@ export const Counter = () => (
 JSX compiles to the same `TemplateResult` runtime. There is no VDOM. The runtime rejects mutable refs
 and `dangerouslySetInnerHTML`; pass only trusted compiler output through `trustedMarkup()`.
 
+TypeScript only rewrites the syntax: every element still calls the runtime when it renders. The runtime
+caches each element's shape by tag and prop names and validates a shape only the first time it sees it.
+Children written out in source share their parent's template, while a list built at run time fills one
+hole. A JSX element is still one template, so a hot path that renders many rows renders fastest as one
+`html` template per row, or with the build-time JSX compiler described in
+[Compile JSX](/ketjs/view-static-sites/#compile-jsx). Hydration markers follow these shapes, so server
+markup must be hydrated by the same `ketjs-view` version and the same JSX build that rendered it.
+
 ## Interactive islands
 
 An island is the boundary between server-rendered pages and browser behavior. A module registers the
