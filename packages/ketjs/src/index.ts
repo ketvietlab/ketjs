@@ -401,6 +401,7 @@ export type {
   HydratedIsland,
   IslandElement,
   IslandManager,
+  IslandManagerOptions,
   IslandHostTag,
   RenderIslandOptions,
   FormValues,

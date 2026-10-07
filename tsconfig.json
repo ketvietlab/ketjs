@@ -5,15 +5,5 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": false
   },
-  "include": [
-    "packages/*/src/**/*",
-    "packages/website-client/client/**/*",
-    "packages/website-client/server/**/*",
-    "apps/**/*",
-    "ket.workspace.ts",
-    "examples/**/*",
-    "test/**/*",
-    "tools/**/*",
-    "bench/**/*"
-  ]
+  "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*", "bench/**/*"]
 }

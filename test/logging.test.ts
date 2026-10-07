@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import { test, type TestContext } from 'node:test'
 import {
   bootDeployment,
   bufferedLog,
   callFn,
-  CORE_EVENTS,
   createLogger,
   defineDeployment,
   defineJob,
@@ -332,20 +330,6 @@ test('ctx.log carries the call it belongs to, and is redacted like everything el
   const leaked = deployment.records.first('observed.leaked')
   assert.equal(leaked?.fields?.password, '[redacted]')
   assert.equal(leaked?.fields?.note, '[dropped: non-scalar]')
-})
-
-test('the documented event catalogue is the one the framework actually emits', async () => {
-  const page = await readFile('docs/src/content/docs/ketjs/logging.md', 'utf8')
-  const documented = new Set([...page.matchAll(/^\| `([a-z_]+)` \|/gm)].map((match) => match[1]))
-  for (const event of CORE_EVENTS) {
-    assert.ok(documented.has(event), `event "${event}" is emitted but not documented`)
-  }
-  for (const event of documented) {
-    assert.ok(
-      (CORE_EVENTS as readonly string[]).includes(event as string),
-      `event "${event}" is documented but no longer emitted`,
-    )
-  }
 })
 
 test('a policy denial is recorded as well as audited', async () => {

@@ -14,7 +14,7 @@ export function buildCacheKey(
     .filter(Boolean)
     .filter(
       (file) =>
-        /^(packages|apps|examples|test|tools|bench)\//.test(file) ||
+        /^(packages|test|tools|bench)\//.test(file) ||
         /^(package(?:-lock)?\.json|tsconfig[^/]*\.json|ket\.workspace\.ts|\.npmrc)$/.test(file) ||
         file === '.github/actions/build/action.yml',
     )

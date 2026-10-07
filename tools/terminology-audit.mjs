@@ -1,5 +1,5 @@
 // Keep KetJS and KetSuite contracts product-native. Historical implementation
-// names must not leak back into code, tests, docs, filenames, or public copy.
+// names must not leak back into code, tests, documentation, filenames, or public copy.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'

@@ -1,9 +1,8 @@
 // KTL — Ket Template Language.
 //
-// Themes are third-party code installed into somebody else's app, so a theme must
-// not be able to run arbitrary JavaScript: no fetch, no env, no database. That is
-// why this is a separate language rather than a tagged template literal, and why
-// it compiles to a tree of closures instead of through `new Function`.
+// KTL server expressions read declared data rather than executing JavaScript.
+// Browser JavaScript shipped with theme assets has a separate execution boundary.
+// This grammar compiles to a tree of closures instead of through `new Function`.
 
 export type Token =
   | { type: 'text'; value: string; line: number }
