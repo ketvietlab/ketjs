@@ -71,6 +71,7 @@ export type {
   HydratedIsland,
   IslandElement,
   IslandManager,
+  IslandManagerOptions,
   IslandHostTag,
   RenderIslandOptions,
 } from './island.ts'

@@ -9,7 +9,7 @@
 // the walk knows exactly how many nodes each construct occupies.
 
 import { templateFor } from './template.ts'
-import type { TplEl, TplNode } from './template.ts'
+import type { TplAttr, TplEl, TplNode, TplRoot } from './template.ts'
 import { EVENT_PREFIX, isResult, isEach } from './render.ts'
 import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
@@ -35,9 +35,7 @@ const VOID = new Set([
 ])
 
 export function renderToString(result: TemplateResult): string {
-  const out: string[] = []
-  writeResult(result, out, true)
-  return out.join('')
+  return writeResult(result, true)
 }
 
 /**
@@ -45,9 +43,7 @@ export function renderToString(result: TemplateResult): string {
  * remain hydratable, so their descendants keep the marker protocol they need.
  */
 export function renderToStaticString(result: TemplateResult): string {
-  const out: string[] = []
-  writeResult(result, out, false)
-  return out.join('')
+  return writeResult(result, false)
 }
 
 /**
@@ -72,22 +68,19 @@ const MARKUP_TAG = Symbol.for('ket.markup')
 /** Only for markup a trusted producer constructed or validated. Never for user data. */
 export const trustedMarkup = (html: string): Markup => ({ html, [MARKUP_TAG]: true }) as unknown as Markup
 
-function writeValue(value: unknown, out: string[], hydratable: boolean): void {
-  if (isMarkup(value)) {
-    out.push(value.html)
-    return
-  }
-  if (isResult(value)) {
-    writeResult(value, out, hydratable)
-    return
-  }
+function writeValue(value: unknown, hydratable: boolean): string {
+  // Text is by far the most common value and cannot be any of the kinds below.
+  if (typeof value === 'string') return escapeHtml(value)
+  if (isMarkup(value)) return value.html
+  if (isResult(value)) return writeResult(value, hydratable)
   if (isEach(value)) {
     const list = value as EachResult
-    for (let i = 0; i < list.items.length; i++) writeResult(list.render(list.items[i], i), out, hydratable)
-    return
+    let out = ''
+    for (let i = 0; i < list.items.length; i++) out += writeResult(list.render(list.items[i], i), hydratable)
+    return out
   }
-  if (value == null || value === false) return
-  out.push(escapeHtml(value))
+  if (value == null || value === false) return ''
+  return escapeHtml(value)
 }
 
 /**
@@ -101,11 +94,40 @@ function writeValue(value: unknown, out: string[], hydratable: boolean): void {
  */
 const RCDATA = new Set(['title', 'textarea'])
 
-function writeResult(result: TemplateResult, out: string[], hydratable: boolean): void {
-  const tpl = templateFor(result.strings)
-  const write = (node: TplNode, raw = false, hydrate = hydratable): void => {
+// --- compiled templates ------------------------------------------------------
+// Everything about a template's markup except its values is fixed per call site,
+// so each template is compiled once into the static markup between its holes:
+// tags, static attributes (already escaped) and hydration markers merged into as
+// few strings as possible. A render then only concatenates those strings with its
+// values. Walking the parsed tree on every render used to cost more than the
+// values themselves.
+
+/** A child hole. Its markers, when it has them, are in the neighbouring static strings. */
+type ChildOp = { hole: number; hydrate: boolean }
+/** An attribute hole, written with its leading ` name="` only when the value is present. */
+type AttrOp = { attr: string; hole: number }
+/**
+ * An element whose island-host attribute is a hole. Whether its children carry
+ * hydration markers depends on that value, so both outcomes are compiled, lazily.
+ */
+type HostOp = { element: TplEl; raw: boolean; hydrate: boolean; hosted: Op[] | null; plain: Op[] | null }
+type Op = string | ChildOp | AttrOp | HostOp
+
+const compiled = { hydratable: new WeakMap<TplRoot, Op[]>(), static: new WeakMap<TplRoot, Op[]>() }
+
+const isHostAttribute = (attribute: TplAttr): boolean => attribute.name === ISLAND_HOST_ATTRIBUTE
+
+/** `host` decides the island-host question for the top-level nodes; null reads it from the template. */
+function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host: boolean | null): Op[] {
+  const ops: Op[] = []
+  let chunk = ''
+  const flush = (): void => {
+    if (chunk) ops.push(chunk)
+    chunk = ''
+  }
+  const emit = (node: TplNode, raw: boolean, hydrate: boolean, host: boolean | null): void => {
     if (node.type === 'text') {
-      out.push(node.value)
+      chunk += node.value
       return
     }
     if (node.type === 'hole') {
@@ -113,42 +135,82 @@ function writeResult(result: TemplateResult, out: string[], hydratable: boolean)
       // builds too; the opening one exists because an HTML parser merges adjacent
       // text, so "giá trị " and "5" would arrive as a single node and the walk would
       // be one node short. A comment cannot merge, so it keeps them apart.
-      if (raw || !hydrate) {
-        writeValue(result.values[node.index], out, hydrate)
-        return
-      }
-      out.push(`<!--${HOLE_OPEN}-->`)
-      writeValue(result.values[node.index], out, hydrate)
-      out.push(`<!--${HOLE_MARKER}-->`)
+      const fenced = !raw && hydrate
+      if (fenced) chunk += `<!--${HOLE_OPEN}-->`
+      flush()
+      ops.push({ hole: node.index, hydrate })
+      if (fenced) chunk += `<!--${HOLE_MARKER}-->`
       return
     }
     const el = node as TplEl
-    out.push(`<${el.tag}`)
+    const staticHost = el.tag === 'div' && el.attrs.some((a) => isHostAttribute(a) && a.hole == null)
+    if (host === null && !hydrate && !staticHost && el.tag === 'div' && el.attrs.some(isHostAttribute)) {
+      flush()
+      ops.push({ element: el, raw, hydrate, hosted: null, plain: null })
+      return
+    }
+    chunk += `<${el.tag}`
     for (const a of el.attrs) {
       // on:* is behaviour, not markup. It is attached during hydration and must
       // never appear in the HTML, where it would be a dead string at best. The
       // prefix is the renderer's constant, not a second copy of it: the two walks
       // have to agree on what counts as an event or SSR emits what hydration binds.
       if (a.name.startsWith(EVENT_PREFIX)) continue
-      const v = a.hole != null ? result.values[a.hole] : a.value
-      if (v == null || v === false) continue
-      out.push(` ${a.name}="${escapeHtml(v)}"`)
+      if (a.hole != null) {
+        flush()
+        ops.push({ attr: ` ${a.name}="`, hole: a.hole })
+        continue
+      }
+      if (a.value == null) continue
+      chunk += ` ${a.name}="${escapeHtml(a.value)}"`
     }
-    out.push('>')
+    chunk += '>'
     if (VOID.has(el.tag)) return
     const rcdata = raw || RCDATA.has(el.tag)
-    const standardHost =
-      el.tag === 'div' &&
-      el.attrs.some((attribute) => {
-        if (attribute.name !== ISLAND_HOST_ATTRIBUTE) return false
-        const value = attribute.hole == null ? attribute.value : result.values[attribute.hole]
+    const hydrateChildren = hydrate || el.tag === ISLAND_TAG || (host ?? staticHost)
+    for (const c of el.children) emit(c, rcdata, hydrateChildren, null)
+    chunk += `</${el.tag}>`
+  }
+  for (const node of nodes) emit(node, raw, hydrate, host)
+  flush()
+  return ops
+}
+
+function run(ops: readonly Op[], values: readonly unknown[]): string {
+  let out = ''
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i] as Op
+    if (typeof op === 'string') {
+      out += op
+    } else if ('attr' in op) {
+      const value = values[op.hole]
+      if (value != null && value !== false) out += `${op.attr}${escapeHtml(value)}"`
+    } else if ('hole' in op) {
+      out += writeValue(values[op.hole], op.hydrate)
+    } else {
+      const hosted = op.element.attrs.some((attribute) => {
+        if (!isHostAttribute(attribute)) return false
+        const value = attribute.hole == null ? attribute.value : values[attribute.hole]
         return value != null && value !== false
       })
-    const hydrateChildren = hydrate || el.tag === ISLAND_TAG || standardHost
-    for (const c of el.children) write(c, rcdata, hydrateChildren)
-    out.push(`</${el.tag}>`)
+      const program = hosted
+        ? (op.hosted ??= compile([op.element], op.raw, op.hydrate, true))
+        : (op.plain ??= compile([op.element], op.raw, op.hydrate, false))
+      out += run(program, values)
+    }
   }
-  for (const n of tpl.children) write(n)
+  return out
+}
+
+function writeResult(result: TemplateResult, hydratable: boolean): string {
+  const tpl = templateFor(result.strings)
+  const cache = hydratable ? compiled.hydratable : compiled.static
+  let ops = cache.get(tpl)
+  if (!ops) {
+    ops = compile(tpl.children, false, hydratable, null)
+    cache.set(tpl, ops)
+  }
+  return run(ops, result.values)
 }
 
 // --- hydration ------------------------------------------------------------

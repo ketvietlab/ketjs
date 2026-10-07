@@ -1,7 +1,7 @@
 {
   "name": "@ketvietlab/ketjs-view-tools",
-  "version": "0.1.41",
-  "description": "Static-site development and build tools for Ket view.",
+  "version": "0.2.0",
+  "description": "Static-site development and build tools for ketjs-view.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -29,7 +29,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "prepack": "npm run build --prefix ../.."
+    "prepack": "npm run build --prefix ../..",
+    "build": "tsc -p tsconfig.build.json"
   },
   "exports": {
     ".": {
@@ -38,7 +39,9 @@
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.41",
+    "@ketvietlab/ketjs-view": "0.2.0",
+    "acorn": "8.19.0",
+    "acorn-jsx": "5.3.2",
     "esbuild": "0.28.2"
   },
   "publishConfig": {

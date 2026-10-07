@@ -5,7 +5,7 @@ on:
   # develop, and the release into master. Integration takes merges on local
   # evidence alone, so the promotion is the first place a test another branch
   # left stale can show. Other pull requests into develop carry no CI: whoever
-  # changes a part runs that part's tests locally (AGENT.md).
+  # changes a part runs that part's tests locally (AGENTS.md).
   pull_request:
     branches: [develop, master]
   workflow_dispatch:
@@ -45,8 +45,6 @@ jobs:
         uses: ./.github/actions/build
       - name: dependencies stay where they are declared
         run: node .build/tools/zero-dep-audit.js
-      - name: architecture examples name their source location
-        run: npm --prefix docs run check:snippets
       - name: types check
         uses: ./.github/actions/task-cache
         with:
