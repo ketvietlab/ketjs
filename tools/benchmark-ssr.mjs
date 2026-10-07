@@ -1,10 +1,11 @@
-// Four processes balance each framework's position in the sequential measurement order.
+// One process per framework: run.mjs rotates the order, so each framework runs once in every position.
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { arch, cpus, platform, release, totalmem } from 'node:os'
 
 const destination = '.artifacts/benchmarks'
+const processes = 6
 mkdirSync(destination, { recursive: true })
 /**
  * One JSON line printed by bench/ssr-comparison/run.mjs, tagged with its run.
@@ -21,7 +22,7 @@ mkdirSync(destination, { recursive: true })
  */
 /** @type {Sample[]} */
 const raw = []
-for (let run = 0; run < 4; run++) {
+for (let run = 0; run < processes; run++) {
   const result = spawnSync(process.execPath, ['bench/ssr-comparison/run.mjs', String(run)], {
     encoding: 'utf8',
     env: { ...process.env, NODE_ENV: 'production' },
@@ -41,7 +42,8 @@ for (let run = 0; run < 4; run++) {
 }
 const median = (/** @type {number[]} */ numbers) => {
   const sorted = [...numbers].sort((a, b) => a - b)
-  return (sorted[1] + sorted[2]) / 2
+  const middle = sorted.length >> 1
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
 }
 /** @type {Map<string, Sample[]>} */
 const groups = new Map()
@@ -65,6 +67,9 @@ const measurements = [...groups.values()].map((samples) => ({
 const hash = createHash('sha256')
 for (const path of [
   'bench/ssr-comparison/run.mjs',
+  'bench/ssr-comparison/components/ProductList.svelte',
+  'bench/ssr-comparison/components/ProductList.astro',
+  'bench/ssr-comparison/package.json',
   'bench/ssr-comparison/package-lock.json',
   'packages/ketjs-view/dist/jsx-runtime.js',
   'packages/ketjs-view/dist/index.js',
@@ -81,7 +86,7 @@ const report = {
   memoryBytes: totalmem(),
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   fixtureSha256: hash.digest('hex'),
-  processes: 4,
+  processes,
   mode: 'production',
   metric:
     'SSR element creation, escaping and full HTML serialization; awaited public render API; warm imports; no HTTP or browser work',
