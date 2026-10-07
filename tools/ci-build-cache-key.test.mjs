@@ -29,7 +29,7 @@ test('identical content reuses the key independently of file timestamps and git 
   const first = buildCacheKey(root)
   put('packages/sample/src/index.ts', 'export const value = 1')
   assert.equal(buildCacheKey(root), first)
-  put('docs/notes.md', 'Documentation without build inputs')
+  put('README.md', 'Documentation without build inputs')
   assert.equal(buildCacheKey(root), first)
 })
 
