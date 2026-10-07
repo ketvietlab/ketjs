@@ -40,66 +40,6 @@ const RULES: Record<string, Rule> = {
   'ketjs-view-tools': { allow: ['@ketvietlab/ketjs-view', 'esbuild'] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
-  'design-system': { allow: ['@ketvietlab/ketjs-view'] },
-  // yjs, chart.js and ioredis are the accepted breaches of ketsuite's own
-  // allowance, mirroring how ketjs-postgres is the framework's one accepted
-  // breach of rule 1: named, narrow exceptions rather than an open door. yjs
-  // backs the Flow collaborative editor's CRDT merge, in the browser bundle
-  // and on the server that flattens the document; chart.js draws the
-  // analytical screens, in the browser bundle only; ioredis backs
-  // `cache.ts`'s shared cache when `REDIS_URL` is set, on the server only —
-  // unset, it is installed but never connected to, and ketsuite behaves
-  // exactly as it did before this entry existed. None of the three is ever
-  // reached by ketjs/ketjs-view — so the framework core stays untouched, and
-  // a deployment that installs the framework alone still installs nothing
-  // else.
-  //
-  // sharp is the fourth: storage's rendition job resizes uploaded images to WebP
-  // through it, on the worker only — Node ships no image codec, and a hand-written
-  // JPEG decoder is not a fence worth keeping. Since 0.33 it installs prebuilt
-  // libvips from npm (@img/*) with no install script or source build; the lockfile
-  // records every platform's package, so a Linux image installs from a macOS lock.
-  //
-  // One entry point, like everything else here: nothing imports a path inside
-  // them. For chart.js that also decides the bundle — `chart.js/auto` would
-  // register every controller ever written, while the root entry makes each
-  // screen register the two or three it actually draws.
-  ketsuite: {
-    allow: [
-      '@ketvietlab/design-system',
-      '@ketvietlab/ketjs',
-      '@ketvietlab/ketjs-view',
-      'chart.js',
-      'sharp',
-      'yjs',
-      'ioredis',
-    ],
-    publicOnly: true,
-  },
-  // Flow's component kit sits on top of the suite rather than inside it: the
-  // view runtime, the translator, the design tokens it styles with, and one
-  // suite export, the live document binding at `@ketvietlab/ketsuite/livedoc`.
-  // Written as .mjs with JSDoc types, so its .mjs sources are scanned.
-  'flow-client': {
-    allow: [
-      '@ketvietlab/design-system',
-      '@ketvietlab/flow-ui',
-      '@ketvietlab/ketjs',
-      '@ketvietlab/ketjs-view',
-      '@ketvietlab/ketsuite',
-    ],
-    javascript: true,
-    sourceDirectory: 'client',
-  },
-  'flow-ui': {
-    allow: [
-      '@ketvietlab/design-system',
-      '@ketvietlab/ketjs',
-      '@ketvietlab/ketjs-view',
-      '@ketvietlab/ketsuite',
-    ],
-    javascript: true,
-  },
 }
 const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres', 'esbuild'])
 
@@ -202,9 +142,5 @@ if (problems.length) {
 console.log('')
 console.log(
   '  the only package that may touch a driver is ketjs-postgres, and it does so as an optional peer',
-)
-console.log('  design-system reaches only the browser-safe public ketjs-view entry')
-console.log(
-  '  ketsuite reaches the framework only through its public entry, exactly as a third-party module would',
 )
 console.log('  eval / new Function: absent')

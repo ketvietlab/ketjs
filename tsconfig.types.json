@@ -9,10 +9,6 @@
     "emitDeclarationOnly": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": [
-    "packages/*/src/**/*",
-    "packages/website-client/client/**/*",
-    "packages/website-client/server/**/*"
-  ],
+  "include": ["packages/*/src/**/*"],
   "exclude": ["packages/*/dist", "node_modules"]
 }

@@ -1,18 +1,14 @@
 ---
 title: Ket Developer Docs
-description: Choose a focused developer path through the KetJS framework, KetSuite application, and operating guides.
+description: Choose a focused developer path through the KetJS framework and its operating guides.
 template: splash
 hero:
-  tagline: Build with KetJS, extend KetSuite, and operate both through explicit contracts and focused reading paths.
+  tagline: Build with KetJS and operate it through explicit contracts and focused reading paths.
   actions:
     - text: Build with KetJS
       link: /ketjs/quick-start/
       icon: right-arrow
       variant: primary
-    - text: Develop KetSuite
-      link: /ketsuite/quick-start/
-      icon: right-arrow
-      variant: secondary
     - text: View source on GitHub
       link: https://github.com/ketvietlab/ketjs
       icon: external
@@ -21,22 +17,17 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
-<div class="docs-kicker">FRAMEWORK · BUSINESS APPLICATION · ENGINEERING REFERENCE</div>
+<div class="docs-kicker">FRAMEWORK · ENGINEERING REFERENCE</div>
 
 ## Choose the system you are changing
 
-KetJS and KetSuite share one repository but have different responsibilities. Start with the guide
-that owns the code you intend to change; follow framework links only when KetSuite delegates a
-contract to KetJS.
+This repository holds the KetJS framework only. KetSuite, the design system and the business
+modules built on KetJS live in their own repository and consume KetJS from npm.
 
 <CardGrid>
   <Card title="KetJS framework" icon="seti:config">
     Use the [framework guide](/ketjs/) for composition, data, functions, HTTP, jobs, rendering,
     themes, testing, and deployment contracts.
-  </Card>
-  <Card title="KetSuite application" icon="puzzle">
-    Use the [application guide](/ketsuite/) for module ownership, backend UI, security boundaries,
-    Channel APIs, and business-domain behavior.
   </Card>
   <Card title="Engineering reference" icon="rocket">
     Use the [operations map](/operations/) and [design records](/architecture/) when deploying,
@@ -54,16 +45,6 @@ contract to KetJS.
    [functions and effects](/ketjs/functions/).
 4. Verify behavior through [headless testing](/ketjs/testing/), then use the
    [deployment guide](/ketjs/deployment/).
-
-### Change or extend KetSuite
-
-1. Set up [local KetSuite development](/ketsuite/quick-start/).
-2. Read the [application architecture](/ketsuite/architecture/) and place code with the
-   [module development guide](/ketsuite/module-development/).
-3. Choose [backend UI](/ketsuite/backend-development/) or the
-   [Channel API](/ketsuite/channel-api/) for the delivery surface.
-4. Review [security and data scope](/ketsuite/security-scope/) before testing with the
-   [KetSuite test matrix](/ketsuite/testing/).
 
 ### Operate or evolve the platform
 

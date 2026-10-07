@@ -1,6 +1,6 @@
 // Build is the only path from authored TypeScript/TSX to executable code.
 //
-// TypeScript emits the complete workspace to .build so tests and local apps run
+// TypeScript emits the complete workspace to .build so tests and benchmarks run
 // JavaScript. Package artifacts are then copied to each package's dist directory,
 // which is the only target exposed by package.json at runtime.
 
@@ -19,12 +19,6 @@ import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildArtifactsExist } from './build-artifacts.mjs'
-import { buildBackendClients } from './build-backend-client.mjs'
-import { buildDesignSystemStyles } from './build-design-system-styles.mjs'
-import { buildDesignSystemAtlasRuntime } from './build-design-system-atlas-runtime.mjs'
-import { buildChartClient } from './build-chart-client.mjs'
-import { buildFlowClient } from './build-flow-client.mjs'
-import { buildWebsiteClient } from './build-website-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -37,7 +31,7 @@ const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
     (entry) =>
       entry.isDirectory() &&
       existsSync(join(PACKAGES, entry.name, 'package.json')) &&
-      (existsSync(join(PACKAGES, entry.name, 'src')) || existsSync(join(PACKAGES, entry.name, 'client'))),
+      existsSync(join(PACKAGES, entry.name, 'src')),
   )
   .map((entry) => entry.name)
 
@@ -100,9 +94,8 @@ const acquireLock = async () => {
 
 const sourceFingerprint = () => {
   const hash = createHash('sha256')
-  const roots = ['packages', 'apps', 'examples', 'test', 'tools', 'bench']
+  const roots = ['packages', 'test', 'tools', 'bench']
   const files = [
-    'ket.workspace.ts',
     'package.json',
     'package-lock.json',
     'tsconfig.base.json',
@@ -158,14 +151,6 @@ function copyAssets(source, destinations) {
 
 await acquireLock()
 try {
-  // Regenerated before the fingerprint hash runs, so the bundle it produces is
-  // itself part of what the fingerprint covers — a fresh checkout and a
-  // no-op rebuild both land on a self-consistent state.
-  await buildBackendClients()
-  await buildChartClient()
-  await buildFlowClient()
-  await buildWebsiteClient()
-  await buildDesignSystemAtlasRuntime()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
   if (current === fingerprint && buildArtifactsExist(ROOT, packageNames)) {
@@ -193,29 +178,6 @@ try {
       for (const name of packageNames) {
         const emitted = join(stageBuild, 'packages', name, 'src')
         const dist = join(stageDist, name)
-        const legacyClient = join(PACKAGES, name, 'client')
-        if (name === 'website-client') {
-          // Website Studio is typed source, unlike the legacy Flow client.
-          const compiled = join(stageBuild, 'packages', name)
-          const declarations = join(stageTypes, name)
-          cpSync(compiled, dist, { recursive: true })
-          cpSync(declarations, dist, { recursive: true })
-          copyAssets(legacyClient, [join(compiled, 'client'), join(dist, 'client')])
-          continue
-        }
-        if (existsSync(legacyClient)) {
-          // Imported Flow application: syntax checked JS, with no source compilation.
-          const check = spawnSync(process.execPath, [join(ROOT, 'tools/check-flow-client.mjs')], {
-            cwd: ROOT,
-            stdio: 'inherit',
-          })
-          if (check.error) throw check.error
-          if (check.status !== 0) throw new Error('Flow client syntax check failed')
-          mkdirSync(emitted, { recursive: true })
-          mkdirSync(dist, { recursive: true })
-          copyAssets(legacyClient, [emitted, dist])
-          continue
-        }
         if (!existsSync(emitted)) throw new Error(`TypeScript emitted no package artifact for ${name}`)
         cpSync(emitted, dist, { recursive: true })
         const declarations = join(stageTypes, name, 'src')
@@ -223,7 +185,6 @@ try {
         cpSync(declarations, dist, { recursive: true })
         copyAssets(join(PACKAGES, name, 'src'), [emitted, dist])
       }
-      await buildDesignSystemStyles(join(stageDist, 'design-system', 'styles.css'))
       writeFileSync(join(stageBuild, FINGERPRINT), fingerprint)
 
       // Only a complete staged build may replace the current good artifacts.
@@ -238,12 +199,8 @@ try {
         cpSync(join(stageDist, name), dist, { recursive: true })
       }
 
-      for (const name of ['create-view', 'ketjs', 'ketjs-view-tools', 'ketsuite']) {
+      for (const name of ['create-view', 'ketjs', 'ketjs-view-tools']) {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
-        if (existsSync(cli)) chmodSync(cli, 0o755)
-      }
-      for (const name of ['atlas-cli.js', 'layout-audit-cli.js']) {
-        const cli = join(PACKAGES, 'design-system', 'dist', name)
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
