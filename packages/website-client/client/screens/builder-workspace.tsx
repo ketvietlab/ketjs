@@ -1,3 +1,4 @@
+import { builderThemeFrame } from './builder-theme-frame.tsx'
 import { AttachmentImage } from '../image-upload.tsx'
 import { BuilderRecords } from './builder-records.tsx'
 import { blockPicker } from './builder-library.tsx'
@@ -202,44 +203,13 @@ export function createBuilderWorkspace(ctx: StudioContext, editor: BuilderEditor
             })
           ).rows[0] ?? null
     },
-    frame: (body: JSXChild) => (
-      <div
-        class="wt-site"
-        data-website-theme="default"
-        data-theme-preset={(themePreview ?? theme)?.preset ?? 'default'}
-        data-accent={(themePreview ?? theme)?.accent ?? 'green'}
-        data-font={(themePreview ?? theme)?.font ?? 'sans'}
-        data-spacing={(themePreview ?? theme)?.spacing ?? 'comfortable'}
-        data-buttons={(themePreview ?? theme)?.buttons ?? 'rounded'}
-      >
-        <header class="wt-theme-header">
-          {(themePreview ?? theme)?.logo ? (
-            <img
-              class="wt-public-logo"
-              src={safeImage((themePreview ?? theme)!.logo!)}
-              alt={ctx.site().name}
-            />
-          ) : (
-            <strong>{ctx.site().name}</strong>
-          )}
-          <nav>
-            {(sharedMenus.find((m) => m.position === 'header')?.items ?? [])
-              .map((item) => <span>{item.label}</span>)
-              .reduce(
-                (a, b) => (
-                  <>
-                    {a}
-                    {b}
-                  </>
-                ),
-                <></>,
-              )}
-          </nav>
-        </header>
-        {body}
-        <footer class="wt-theme-footer">{theme?.footer ?? ctx.site().name}</footer>
-      </div>
-    ),
+    frame: (body: JSXChild) =>
+      builderThemeFrame(
+        themePreview ?? theme,
+        ctx.site().name,
+        sharedMenus.find((m) => m.position === 'header')?.items ?? [],
+        body,
+      ),
     live: () => history?.liveRevisionId,
     template: (id: string) => {
       selectedTemplate = editor.templates().find((r) => r.id === id)

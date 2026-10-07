@@ -116,5 +116,31 @@
     :where([data-kv-design-system]) [data-kv-page-identity="actions"] {
       justify-content: flex-start;
     }
+
+    /* As on an operational list: the header's actions share the line and the
+       primary one takes the room left, so every page's header reads the same. */
+    :where([data-kv-design-system])
+      [data-variant="operational"]
+      [data-kv-page-identity="actions"]
+      > [data-ui="action-group"] {
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-variant="operational"]
+      [data-kv-page-identity="actions"]
+      [data-ui="action"][data-variant="primary"] {
+      flex: 1 1 auto;
+    }
+  }
+
+  /* The compact Suite shell tightens the band of every operational full page by
+     the same amount at every width, so moving between a list, a record and a
+     workspace never shifts the title. RecordPage renders its own header element
+     for its slot API, so it is named beside the shared band. */
+  :where([data-kv-design-system][data-density="compact"])
+    [data-variant="operational"]
+    > :is([data-kv-page-identity="header"], [data-ui="record-page-header"]) {
+    padding-block: var(--kv-space-2);
   }
 }

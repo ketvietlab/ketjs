@@ -8,7 +8,15 @@ import type {
   WebsitePublicListing,
   WebsitePublicNavItem,
 } from '../../../ui/website-public.ts'
+import { renderThemeFrames } from '../../website_theme/frame.ts'
 import { renderLayout, safeHref, safeImage, SECTION_RENDERERS } from '../client/public-renderer.mjs'
+import {
+  scriptJson,
+  selectedThemeOf,
+  themeBootScript,
+  themeContentSecurityPolicy,
+  themeStylesheet,
+} from '../../website_theme/snapshot.ts'
 
 const object = (value: unknown): Row =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Row) : {}
@@ -194,12 +202,28 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
   const image = meta.ogImage && safeHref(meta.ogImage) !== '#' ? safeHref(meta.ogImage) : ''
   const options = {
     mode: 'public' as const,
+    readonlyForms: scope.readonlyForms === true,
     locale,
     preset: appearance.preset,
     sectionData: object(scope.sectionData),
     formText: { send: vi ? 'Gửi' : 'Send' },
   }
   const layout = placements(scope.sections)
+  // A theme's code runs only where nothing but the site lives: not in a preview, not beside a staff
+  // session, and only on a host the site answers as its own. A scope that does not say fails closed.
+  const siteTheme = selectedThemeOf(appearance.theme)
+  const request = object(scope.request)
+  const publicVisitor =
+    request.preview === false &&
+    request.staff === false &&
+    typeof site.id === 'string' &&
+    site.id !== '__legacy__'
+  const interactivePreview = request.preview === true && request.themeInteractive === true
+  const scripted = !!siteTheme?.entry && (publicVisitor || interactivePreview)
+  const googleTagManagerId =
+    publicVisitor && /^GTM-[A-Z0-9]{4,20}$/.test(String(site.googleTagManagerId ?? ''))
+      ? String(site.googleTagManagerId)
+      : null
   const navigation = (parent: unknown, ancestors = new Set<string>()): WebsitePublicNavItem[] =>
     menu
       .filter((item) => (item.parentId ?? null) === parent && !ancestors.has(String(item.id)))
@@ -217,6 +241,7 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
       ...(typeof scope.status === 'number' ? { status: scope.status } : {}),
       body: websitePublicDocument({
         locale,
+        googleTagManagerId,
         head: {
           title: String(meta.title || record.title || ''),
           description: meta.metaDescription,
@@ -242,9 +267,45 @@ export function renderStudioPublic(scope: Record<string, unknown>) {
         article: blocks ? { title: record.title, bodyHtml: documentHtml(blocks, locale) } : null,
         sections: renderLayout(blocks ? remainingLayout(layout) : layout, options),
         footer: appearance.footer ?? site.title,
+        frame: siteTheme
+          ? renderThemeFrames(siteTheme, {
+              site: { title: site.title, name: site.name },
+              brand: { title: site.title, logo: appearance.logo ? safeImage(appearance.logo) : null },
+              navigation: navigation(null),
+              locale,
+              account,
+            })
+          : null,
+        siteTheme: siteTheme
+          ? {
+              key: siteTheme.key,
+              accent: typeof siteTheme.settings.accent === 'string' ? siteTheme.settings.accent : null,
+              stylesheet: themeStylesheet(siteTheme),
+              script: scripted ? themeBootScript(siteTheme) : null,
+              data: scriptJson({
+                settings: siteTheme.settings,
+                locale,
+                ...(interactivePreview ? { interactivePreview: true } : {}),
+                page: { type: record.type ?? null, path: record.path ?? null },
+              }),
+            }
+          : null,
       }),
     }),
-    { 'cache-control': 'no-cache' },
+    {
+      'cache-control': 'no-cache',
+      vary: 'Cookie',
+      ...(publicVisitor ? { 'access-control-allow-origin': '*' } : {}),
+      ...(siteTheme || googleTagManagerId || interactivePreview
+        ? {
+            'content-security-policy': interactivePreview
+              ? themeContentSecurityPolicy(siteTheme ?? { connect: [], frame: [] })
+                  .replace("frame-ancestors 'self'", 'frame-ancestors *')
+                  .replace("form-action 'self'", "form-action 'none'") + '; sandbox allow-scripts'
+              : themeContentSecurityPolicy(siteTheme ?? { connect: [], frame: [] }, !!googleTagManagerId),
+          }
+        : {}),
+    },
   )
 }
 

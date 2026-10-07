@@ -22,6 +22,7 @@ export {
 } from './roles-list.tsx'
 export type { PermissionRow, RoleRow } from './types.ts'
 export { profileScreen, type ProfileScreenOptions } from './profile-form.tsx'
+export { userPageScreen } from './user-page.tsx'
 export {
   accessPolicyGridColumns,
   accessPolicyGridRow,

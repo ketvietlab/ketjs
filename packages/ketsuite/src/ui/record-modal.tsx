@@ -10,8 +10,16 @@
 // own query state working the same way everywhere:
 //
 //   /admin/<collection>?<list state>&record=<kind>:<id>&tab=<tab>
+//
+// A record kind may instead own a full page (`defineRecordPageIsland`): the same
+// definition renders client-side inside a RecordPage at its own path,
+//
+//   /admin/<collection>/<id>?tab=<tab>      (and /admin/<collection>/new)
+//
+// and the server renders only the page's loading state.
 
-import type { IslandDefinition, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { IslandDefinition, JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { Breadcrumbs, LoadingState, RecordPage } from '@ketvietlab/design-system'
 
 export const HOOKS = ['record-modal-host'] as const
 
@@ -121,5 +129,136 @@ export const defineRecordModalIsland = (options: {
     client: options.client,
     export: options.export,
     view: () => ({ view: () => recordModalHost(options.kind) }),
+  }
+}
+
+// ── Record pages ──────────────────────────────────────────────────────────────
+//
+// An administrative profile (a person, a role, an assignment rule) is read as a
+// page of its own rather than over its collection: one bounded column, no tabs,
+// the questions an administrator asks answered top to bottom. The same runtime
+// drives it, so its dialogs and commands are the modal's.
+
+/** One step of the way back from a record page to its collection. */
+export type RecordPageTrailItem = { label: string; href?: string | null }
+
+/** What the route hands a record page island. */
+export type RecordPageIslandProps = {
+  id: string
+  /** The record's name, shown while the browser takes over. */
+  title: string
+  /** Translated text of the loading state. */
+  loadingLabel?: string
+  /** Client-read page loading label and navigation context. */
+  loading?: string
+  back?: string
+  tab?: string
+  width?: string
+  /** From the collection to the record itself. */
+  trail?: readonly RecordPageTrailItem[] | null
+  /** Accessible name of the trail. */
+  trailLabel?: string | null
+  /**
+   * The record context as the route read it, so the browser renders it without a
+   * second request. Null reads it in the browser.
+   */
+  envelope?: unknown
+}
+
+/** The location strip above a record page, the same markup as other pages'. */
+export const recordPageTrail = (
+  trail: readonly RecordPageTrailItem[] | null | undefined,
+  label: string,
+): TemplateResult | undefined =>
+  trail?.length ? (
+    <div data-ui="page-context">
+      <div data-ui="page-context-trail">
+        {Breadcrumbs({
+          label,
+          items: trail.map((item, index) => ({
+            id: `${index}:${item.label}`,
+            label: item.label,
+            ...(item.href ? { href: item.href } : {}),
+          })),
+        })}
+      </div>
+    </div>
+  ) : undefined
+
+/** A record page's frame around any body; the runtime marks it as its record layer. */
+export const recordPageFrame = (o: {
+  title: string
+  trail?: readonly RecordPageTrailItem[] | null
+  trailLabel?: string | null
+  meta?: JSXChild
+  status?: JSXChild
+  actions?: JSXChild
+  body: JSXChild
+}): TemplateResult => (
+  <div data-record-layer="page">
+    {RecordPage({
+      title: o.title,
+      variant: 'operational',
+      width: 'default',
+      context: recordPageTrail(o.trail, o.trailLabel ?? o.title),
+      meta: o.meta,
+      status: o.status,
+      actions: o.actions,
+      body: o.body,
+    })}
+  </div>
+)
+
+/**
+ * What the server writes and the browser adopts before it renders the record:
+ * the page frame, titled, with the loading state for a body. Both sides render
+ * exactly this, so hydration never depends on clocks, zones or locale data.
+ */
+export const recordPageShell = (props: RecordPageIslandProps): TemplateResult =>
+  recordPageFrame({
+    title: props.title,
+    trail: props.trail,
+    trailLabel: props.trailLabel,
+    body: LoadingState({ label: props.loadingLabel ?? props.loading ?? props.title }),
+  })
+
+/** Loading frame for a page whose context is read entirely in the client. */
+export const recordPageLoading = (props: RecordPageIslandProps): TemplateResult =>
+  RecordPage({
+    variant: 'operational',
+    width: props.width === 'wide' ? 'wide' : 'default',
+    title: props.title,
+    body: LoadingState({ label: props.loading ?? props.loadingLabel ?? props.title }),
+  })
+
+/**
+ * The island declaration of a record page. The route places it through a joint
+ * whose props match `RecordPageIslandProps`, after reading the record with the same
+ * permission-checked context the browser would use.
+ */
+export const defineRecordPageIsland = (options: {
+  kind: string
+  /** Browser module, relative to the declaring module's assets directory. */
+  client: string
+  export: string
+}): IslandDefinition<RecordPageIslandProps> => {
+  if (!isRecordKind(options.kind)) throw new TypeError(`invalid record kind "${options.kind}"`)
+  return {
+    props: {
+      id: 'id',
+      title: 'text',
+      loadingLabel: 'text?',
+      loading: 'text?',
+      back: 'text?',
+      tab: 'text?',
+      width: 'text?',
+      trail: 'json?',
+      trailLabel: 'text?',
+      envelope: 'json?',
+    },
+    key: ['id'],
+    client: options.client,
+    export: options.export,
+    view: (props) => ({ view: () => (props.back ? recordPageLoading(props) : recordPageShell(props)) }),
   }
 }

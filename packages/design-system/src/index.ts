@@ -55,7 +55,14 @@ export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'
 
 export { ActionMenu, Menu } from './interactions/menu/index.tsx'
-export type { MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './interactions/menu/index.tsx'
+export type {
+  MenuEntry,
+  MenuGroup,
+  MenuItem,
+  MenuLabel,
+  MenuProps,
+  MenuSeparator,
+} from './interactions/menu/index.tsx'
 export { Popover } from './interactions/popover/index.tsx'
 export type { PopoverProps } from './interactions/popover/index.tsx'
 export { Tooltip } from './interactions/tooltip/index.tsx'
@@ -290,6 +297,7 @@ export type {
   BulkActionsProps,
   ListChromeProps,
   ListFacet,
+  ListFiltersToggle,
   ListSearch,
   ListSort,
   ListSortChoice,

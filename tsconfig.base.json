@@ -32,6 +32,7 @@
       "@ketvietlab/ketsuite/ui": ["./packages/ketsuite/src/ui/index.ts"],
       "@ketvietlab/ketsuite/backend": ["./packages/ketsuite/src/modules/backend/index.ts"],
       "@ketvietlab/ketsuite/livedoc": ["./packages/ketsuite/src/ui/client/live-doc-view.tsx"],
+      "@ketvietlab/ketsuite/livedoc/render": ["./packages/ketsuite/src/ui/client/live-doc-shell.tsx"],
       "@ketvietlab/ketsuite/ui/icons": ["./packages/ketsuite/src/ui/icons.ts"]
     },
     "jsx": "react-jsx",

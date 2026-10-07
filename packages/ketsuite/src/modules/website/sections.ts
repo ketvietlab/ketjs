@@ -46,11 +46,15 @@ export const sections: Record<string, SectionDef> = {
   },
   'website.rich_text': {
     title: 'Đoạn văn bản',
-    settings: { ...presentation, heading: 'text?', body: 'text', align: 'text?' },
+    settings: { ...presentation, heading: 'text?', body: 'text', bodyDoc: 'text?', align: 'text?' },
   },
   'website.gallery': {
     title: 'Bộ sưu tập ảnh',
     settings: {
+      images: 'text?',
+      galleryLayout: 'text?',
+      rows: 'text?',
+      interval: 'text?',
       ...presentation,
       ...image,
       heading: 'text?',

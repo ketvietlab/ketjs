@@ -110,9 +110,27 @@ type Context = {
       missing: Array<{ key: string; tier: string }>
       via: string[]
       fixes: string[]
+      areaKey?: string
     }>
-    assignments: Array<{ id: string; roleId: string; scopeKey: string; company: string | null }>
-    audit: Array<{ event: string; reason: string | null; roleIds: string[]; outcome: string }>
+    areas?: Array<{ key: string; label: string; level: string; partial: boolean; via: string[] }>
+    areasWithout?: string[]
+    assignments: Array<{
+      id: string
+      roleId: string
+      roleName?: string
+      roleState?: string
+      scopeKey: string
+      company: string | null
+    }>
+    audit: Array<{
+      event: string
+      reason: string | null
+      roleIds: string[]
+      roles?: string[]
+      actor?: { kind: string; name: string | null }
+      outcome: string
+    }>
+    standing?: { state: string; staleRoles: string[] }
     roleCoverage: Record<string, Array<{ key: string; covered: number; total: number }>>
     revision: number
     permissions: Record<string, boolean>
@@ -166,7 +184,7 @@ const boot = async (t: { after: (fn: () => unknown) => void }) => {
   }
   // A custom role is a local edit of one deployment's policy; the create form must not offer it.
   await run('user.saveRole', { id: 'legacy', name: 'Legacy' })
-  return run
+  return Object.assign(run, { adapter })
 }
 
 test('the create context offers the workplaces and managed roles the viewer may use', async (t) => {
@@ -446,6 +464,15 @@ test('the context says who reads, which roles guard authority, and what each scr
   assert.deepEqual(screen.missing, [])
   assert.equal(screen.via.length, 1)
   assert.deepEqual(screen.fixes, [])
+  // The screen is read under its area, and the area on the four-level scale: a
+  // role of reads only is "view", whole, given by the one role held.
+  assert.equal(screen.areaKey, 'permission_probe')
+  const area = context.areas?.find((row) => row.key === 'permission_probe')
+  assert.ok(area, 'an area the person holds anything of is listed')
+  assert.equal(area.level, 'view')
+  assert.equal(area.partial, false)
+  assert.equal(area.via.length, 1)
+  assert.ok(!context.areasWithout?.includes(area.label), 'a held area is not also listed as missing')
 
   // Reading your own record is marked, so the access controls can refuse it up front.
   assert.equal((await run<Context>('user.userModalContext', { id: 'root' }))?.data.actor.self, true)
@@ -455,6 +482,48 @@ test('the context says who reads, which roles guard authority, and what each scr
     staff.surfaces?.some((row) => row.key === 'permission_probe.screen'),
     false,
   )
+})
+
+test('the context says why access is what it is, and who changed it, as the resolver decides', async (t) => {
+  const run = await boot(t)
+  const revision = (await run<{ revision: number }>('user.authorizationState', {})).revision
+  await run('user.provisionUser', {
+    id: 'trang',
+    name: 'Minh Trang',
+    login: 'minhtrang',
+    roleIds: ['reader'],
+    scopeKind: 'company',
+    companyId: 'company-a',
+    reason: 'Nhân viên mới',
+    expectedAuthorizationRevision: revision,
+    idempotencyKey: 'hire-standing',
+  })
+  const read = async (id: string) => (await run<Context>('user.userModalContext', { id }))!.data
+
+  const hired = await read('trang')
+  assert.deepEqual(hired.standing, { state: 'measured', staleRoles: [] })
+  assert.equal(hired.assignments[0]?.roleState, 'current')
+  // Who gave it is a name, and so is what was given.
+  assert.deepEqual(hired.audit[0]?.actor, { kind: 'user', name: 'Root' })
+  assert.deepEqual(hired.audit[0]?.roles, [hired.assignments[0]?.roleName])
+  assert.ok(hired.areas?.some((row) => row.key === 'permission_probe'))
+
+  // A managed role whose template moved on gives nothing, and the page is told which.
+  await run.adapter.run('UPDATE user_role SET "templateVersion" = ? WHERE id = ?', [999, 'reader'])
+  const stale = await read('trang')
+  assert.equal(stale.assignments[0]?.roleState, 'stale')
+  assert.deepEqual(stale.standing?.staleRoles, [stale.assignments[0]?.roleName])
+  assert.equal(
+    stale.areas?.some((row) => row.key === 'permission_probe'),
+    false,
+  )
+
+  // An archived account gives nothing whatever it holds.
+  await run.adapter.run('UPDATE user_user SET active = ? WHERE id = ?', [0, 'trang'])
+  assert.equal((await read('trang')).standing?.state, 'inactive')
+  // A superuser is not measured; someone admitted nowhere cannot be.
+  assert.equal((await read('root')).standing?.state, 'superuser')
+  assert.equal((await read('staff')).standing?.state, 'outside')
 })
 
 test('denial telemetry is server-owned, bounded and hidden without audit permission', async (t) => {

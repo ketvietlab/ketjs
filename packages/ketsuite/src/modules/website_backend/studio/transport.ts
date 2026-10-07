@@ -1,16 +1,66 @@
 import { styleKeys, studioStyleDefaults } from '../../website/studio-style.ts'
 import type { StudioPreset } from '../../website/studio-style.ts'
 import { pageTemplates } from '../../website/studio-content.ts'
-import { domainProofName, domainProofValue } from '../../website/cms.ts'
 import { csvCell, safeFilename } from '../csv.ts'
 import { entryProjection } from './context.ts'
 import { CUSTOMER_SIGNIN_PATH } from './public.ts'
+import { selectedThemeOf, themeStylesheet } from '../../website_theme/snapshot.ts'
+import { renderThemeFrames } from '../../website_theme/frame.ts'
 import type { Route, ServeContext, Row } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
 /** What a deployment decides about its Studio. */
 export type StudioOptions = {
   /** The look a site made in the Studio starts with. Sites that already exist keep theirs. */
   defaultPreset?: StudioPreset
+  /** Who serves the sites, when that is not whoever runs the deployment. */
+  domains?: StudioDomainPolicy
+}
+/** Calls a server function as the person using the Studio; a refusal fails the Studio request. */
+export type StudioCall = (name: string, input?: Row) => Promise<unknown>
+/** A host as whoever serves it sees it, in the terms the domain screens show. */
+export type StudioDomainStatus = {
+  state: 'pending' | 'verified' | 'failed'
+  tls: 'pending' | 'ready'
+  checkedAt: string | null
+  reason: string | null
+  /** The record the host's owner still has to add, if any. */
+  challenge: { type: string; name: string; value: string } | null
+  /**
+   * The record that sends the host's visitors to whoever serves it, shown until the host answers.
+   * `apex` marks a name at the top of its zone, where many DNS providers take no CNAME; `check` is
+   * what the last look found: routed, elsewhere, missing or unreachable.
+   */
+  route?: { type: string; name: string; value: string; apex: boolean; check: string | null } | null
+  /** What a decision about the host rests on, so a stale screen cannot act on it. */
+  revision: string
+}
+/**
+ * How a host a site owner adds comes to be served, for an operator serving many owners' sites
+ * from one place: proving the name is theirs, then a certificate. Without one, the deployment's
+ * own operator points a name at the server, and the host answers as soon as it is added.
+ */
+export type StudioDomainPolicy = {
+  status: (domain: Row) => StudioDomainStatus
+  /**
+   * Runs once the Studio has made a site, before any host typed with it. An operator gives the
+   * site an address of its own here; whatever host it adds first is the site's address.
+   */
+  siteCreated?: (call: StudioCall, site: Row) => Promise<void>
+  /** Runs once the Studio has added a host, before the host is shown. */
+  added?: (call: StudioCall, domain: Row) => Promise<void>
+  /** Checks the host again. The Studio reads it afresh afterwards. */
+  verify: (call: StudioCall, domain: Row) => Promise<void>
+}
+const servedByOwner: StudioDomainPolicy = {
+  status: () => ({
+    state: 'verified',
+    tls: 'ready',
+    checkedAt: null,
+    reason: null,
+    challenge: null,
+    revision: '',
+  }),
+  verify: async () => {},
 }
 export type Snapshot = {
   sites: Row[]
@@ -26,7 +76,7 @@ const row = (value: unknown): Row =>
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code })
 }
-const themeResource = (site: Row) => ({
+const themeResourceData = (site: Row): Row => ({
   id: String(site.id),
   kind: 'themes',
   title: site.title,
@@ -51,6 +101,13 @@ const menuResource = (site: Row, state: Row) => ({
 const postKeys = ['author', 'excerpt', 'category', 'tags', 'cover', 'coverAlt', 'publishedAt']
 const capabilities: Record<string, string[]> = {
   'website.content.write': ['website.saveEntry'],
+  'website.catalog': ['website_catalog.listBindings'],
+  'website.catalog.configure': [
+    'website_catalog.saveBuilder',
+    'website_catalog.saveBinding',
+    'website_catalog.saveCategory',
+  ],
+  'product.configure': ['product.saveTemplate', 'product.archiveTemplate'],
   'website.publish': ['website.publishEntry', 'website.cancelScheduledEntry'],
   'website.site.manage': ['website.saveSite', 'website.saveStudioStyle'],
   'website.form.manage': ['website_form.saveForm', 'website_form.archiveForm'],
@@ -75,6 +132,8 @@ const capabilities: Record<string, string[]> = {
     'website_customer_mail.passwordResetTemplate',
     'website_customer_mail.savePasswordResetTemplate',
   ],
+  // Absent where the deployment does not compose website_theme: there are no company themes to pick.
+  'website.theme.select': ['website_theme.listThemes', 'website_theme.selectTheme'],
 }
 /** Optional modules a site can be bound to, by the prefix of their functions. */
 const bindingModules: [string, string][] = [
@@ -221,42 +280,33 @@ const termResource = (term: Row, entries: Row[]) => {
     archived: !!term.archivedAt,
   }
 }
-/**
- * A host as the domain screens read it. One without a proof value was connected by Két Việt
- * before verification existed, so it is taken as verified and serving.
- */
-const domainResource = (d: Row) => {
-  const connected = !d.verifyToken
-  const result = d.checkResult == null ? null : String(d.checkResult)
+/** A host as the domain screens read it. */
+const domainResource = (d: Row, policy: StudioDomainPolicy) => {
+  const status = policy.status(d)
   return {
     id: d.id,
     siteId: d.siteId,
     title: d.host,
     host: d.host,
     role: d.primary ? 'primary' : 'redirect',
-    state: connected || d.verifiedAt ? 'verified' : result && result !== 'matched' ? 'failed' : 'pending',
-    tls: connected || d.servingAt ? 'ready' : 'pending',
-    checkedAt: d.checkedAt ?? null,
-    reason: result,
-    challenge: connected
-      ? null
-      : {
-          type: 'TXT',
-          name: domainProofName(String(d.host)),
-          value: domainProofValue(String(d.verifyToken)),
-        },
-    attempts: d.checkedAt
+    state: status.state,
+    tls: status.tls,
+    checkedAt: status.checkedAt,
+    reason: status.reason,
+    challenge: status.challenge,
+    route: status.route ?? null,
+    attempts: status.checkedAt
       ? [
           {
-            id: `${d.id}:${d.checkedAt}`,
-            at: d.checkedAt,
-            result: result === 'matched' ? 'verified' : 'failed',
-            reason: result,
+            id: `${d.id}:${status.checkedAt}`,
+            at: status.checkedAt,
+            result: status.state === 'verified' ? 'verified' : 'failed',
+            reason: status.reason,
           },
         ]
       : [],
     // Domains keep no revision of their own; what a decision rests on stands in for one.
-    revisionId: [d.id, d.primary, d.verifiedAt, d.checkedAt, d.servingAt].join(':'),
+    revisionId: [d.id, d.primary, status.revision].join(':'),
   }
 }
 /** Pages and posts are what search engines index; their SEO lives in the entry's own fields. */
@@ -280,6 +330,8 @@ const seoResource = (entry: Row) => {
   }
 }
 export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: StudioOptions = {}) {
+  const domains = options.domains ?? servedByOwner
+  const domainOf = (d: Row) => domainResource(d, domains)
   const call = async (name: string, input: Row = {}) => {
     const result = await ctx.call(name, input, url, req, {
       idempotencyKey:
@@ -301,10 +353,43 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     }
     return result
   }
+  const themeResource = async (site: Row) => {
+    const style = themeResourceData(site)
+    const theme = selectedThemeOf(style.theme)
+    if (!theme) return style
+    const items = (await call('website_menu.publicMenu', { siteId: site.id })) as Row[]
+    const children = (parent: unknown, seen = new Set<string>()): Row[] =>
+      items
+        .filter((item) => (item.parentId ?? null) === parent && !seen.has(String(item.id)))
+        .map((item) => ({ ...item, children: children(item.id, new Set([...seen, String(item.id)])) }))
+    return {
+      ...style,
+      stylesheet: themeStylesheet(theme),
+      frame: renderThemeFrames(theme, {
+        site: { title: site.title, name: site.name },
+        brand: { title: site.title, logo: String(style.logo ?? '') },
+        navigation: children(null),
+        locale: String(site.defaultLocale),
+        account: null,
+      }),
+    }
+  }
   const snapshot = async (siteId?: unknown): Promise<Snapshot> => {
     const data = (await call('website_backend.studioContext', { siteId: siteId ?? null })) as Snapshot
     if (siteId && !data.site) fail('notFound', 'Không tìm thấy website.')
     return data
+  }
+  /**
+   * The company's own themes a site may switch to, when this deployment composes them and the viewer
+   * may pick one. Bundled presets stay with the style form's preset field.
+   */
+  const companyThemesOf = async (site: Row) => {
+    if (!(await ctx.live(req)).functions['website_theme.listThemes']) return {}
+    if (!(await ctx.allows('website_theme.selectTheme', url, req))) return {}
+    const listed = row(await call('website_theme.listThemes', { siteId: site.id, limit: 100 }))
+    return {
+      companyThemes: ((listed.themes as Row[] | undefined) ?? []).filter((t) => t.tier !== 'bundled'),
+    }
   }
   const menuOf = async (site: Row) =>
     menuResource(site, row(await call('website_menu.menuState', { siteId: site.id })))
@@ -377,6 +462,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     title: site.title,
     code: site.name,
     defaultLocale: site.defaultLocale,
+    googleTagManagerId: site.googleTagManagerId ?? '',
     revisionId: String(site.updatedAt ?? site.id),
   })
   const signInUrl = (host: unknown) => (host ? `https://${String(host)}${CUSTOMER_SIGNIN_PATH}` : null)
@@ -391,7 +477,10 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       const data = await snapshot(input.site)
       const identity = await ctx.requestIdentityOf(url, req)
       const allowed: string[] = []
+      const composed = (await ctx.live(req)).functions
       for (const [key, functions] of Object.entries(capabilities)) {
+        // An unrestricted actor is allowed every name, including those of modules not composed here.
+        if (!functions.every((fn) => composed[fn])) continue
         if ((await Promise.all(functions.map((fn) => ctx.allows(fn, url, req)))).every(Boolean))
           allowed.push(key)
       }
@@ -427,7 +516,13 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     },
     'website.getEntry': async (input) => {
       const { dataSet, entry } = await forEntry(input.id)
-      return { entry, sections: dataSet.sections }
+      return {
+        entry: {
+          ...entry,
+          sectionData: await ctx.resolveSectionData(entry.layout, String(entry.siteId), url, req),
+        },
+        sections: dataSet.sections,
+      }
     },
     'website_studio.overview': async (input) => {
       const data = await snapshot(input.siteId)
@@ -666,7 +761,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         : []
       return {
         entry,
-        resources: [themeResource(dataSet.site!), ...menus],
+        resources: [await themeResource(dataSet.site!), ...menus],
         liveRevisionId: entry.publishedRevisionId,
         revisions: dataSet.revisions
           .filter((r) => r.entryId === entry.id)
@@ -705,7 +800,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       }
       if (input.kind === 'domains') {
         const domain = data.domains.find((d) => d.id === input.id)
-        return domain ? domainResource(domain) : fail('notFound', 'Không tìm thấy tên miền.')
+        return domain ? domainOf(domain) : fail('notFound', 'Không tìm thấy tên miền.')
       }
       if (input.kind === 'seo') {
         const entry = seoEntries(data.entries).find((e) => e.id === input.id)
@@ -714,10 +809,23 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       if (input.kind !== 'themes' || input.id !== data.site!.id)
         return fail('notFound', 'Không tìm thấy giao diện.')
       return {
-        ...themeResource(data.site!),
+        ...(await themeResource(data.site!)),
+        ...(await companyThemesOf(data.site!)),
         affected: data.entries.map((e) => ({ id: e.id, title: e.title })),
         usage: data.entries.length,
       }
+    },
+    'website_studio.selectCompanyTheme': async (input) => {
+      const site = (await snapshot(input.siteId)).site!
+      if (input.id !== site.id) return fail('notFound', 'Không tìm thấy giao diện.')
+      await call('website_theme.selectTheme', {
+        siteId: site.id,
+        expectedRevisionId: input.expectedRevisionId,
+        versionId: input.versionId ?? null,
+        settings: input.versionId ? (input.settings ?? null) : null,
+      })
+      const saved = (await snapshot(site.id)).site!
+      return { ...(await themeResource(saved)), ...(await companyThemesOf(saved)) }
     },
     'website_studio.saveResource': async (input) => {
       if (input.kind === 'form-editor') {
@@ -793,7 +901,12 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           (values.locale ?? data.site!.defaultLocale) !== data.site!.defaultLocale
         )
           return fail('validation', 'Website hiện chỉ có menu đầu trang theo ngôn ngữ mặc định.')
-        await call('website_menu.saveMenu', {
+        const catalogMenu = !!(await ctx.live(req)).functions['website_catalog.saveMenu']
+        if (catalogMenu && !(await ctx.allows('website_menu.saveMenu', url, req)))
+          fail('forbidden', 'Không có quyền sửa menu.')
+        await (catalogMenu
+          ? (input: Row) => ctx.callUnchecked('website_catalog.saveMenu', input, url, req)
+          : (input: Row) => call('website_menu.saveMenu', input))({
           siteId: data.site!.id,
           expectedRevisionId: input.expectedRevisionId,
           title: values.title ?? null,
@@ -818,6 +931,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
             name: String(values.code || title).trim(),
             title,
             defaultLocale: String(values.defaultLocale || 'vi'),
+            googleTagManagerId: String(values.googleTagManagerId ?? ''),
             theme,
           })
           if (options.defaultPreset)
@@ -826,16 +940,20 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
               expectedRevisionId: 'initial',
               values: { preset: options.defaultPreset },
             })
+          await domains.siteCreated?.(call, (await snapshot(input.id)).site!)
           const host = String(values.host ?? '')
             .trim()
             .toLowerCase()
-          if (host)
+          if (host) {
             await call('website.saveDomain', {
               id: `${input.id}-domain`,
               siteId: input.id,
               host,
-              primary: true,
+              primary: !(await snapshot(input.id)).domains.some((d) => d.primary),
             })
+            const added = (await snapshot(input.id)).domains.find((d) => d.id === `${input.id}-domain`)
+            if (added) await domains.added?.(call, added)
+          }
           return siteRecord((await snapshot(input.id)).site!)
         }
         // A retried create answers with what it made.
@@ -847,6 +965,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           name: String(values.code ?? site.name).trim(),
           title: String(values.title ?? site.title).trim(),
           defaultLocale: String(values.defaultLocale || site.defaultLocale),
+          googleTagManagerId: String(values.googleTagManagerId ?? site.googleTagManagerId ?? ''),
           theme: site.theme,
           tokens: site.tokens ?? null,
           siteGroup: site.siteGroup ?? null,
@@ -861,7 +980,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           .toLowerCase()
         const existing = data.domains.find((d) => d.id === input.id)
         // A retried add answers with what it made; another name is another domain to prove.
-        if (existing && existing.host === host) return domainResource(existing)
+        if (existing && existing.host === host) return domainOf(existing)
         if (existing) fail('validation', 'Muốn đổi tên miền thì thêm tên miền mới.')
         await call('website.saveDomain', {
           id: input.id,
@@ -870,8 +989,8 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           // The first host is the site's address; later ones redirect to it until switched.
           primary: !data.domains.some((d) => d.primary),
         })
-        const saved = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!
-        return domainResource(saved)
+        await domains.added?.(call, (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!)
+        return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === input.id)!)
       }
       if (input.kind === 'seo') {
         const entry = seoEntries((await snapshot(input.siteId)).entries).find((e) => e.id === input.id)
@@ -915,9 +1034,9 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     'website_studio.listResources': async (input) => {
       const data = await snapshot(input.siteId)
       if (input.kind === 'templates') return { rows: pageTemplates }
-      if (input.kind === 'themes') return { rows: [themeResource(data.site!)] }
+      if (input.kind === 'themes') return { rows: [await themeResource(data.site!)] }
       if (input.kind === 'menus') return { rows: [await menuOf(data.site!)], creatable: false }
-      if (input.kind === 'domains') return { rows: data.domains.map(domainResource) }
+      if (input.kind === 'domains') return { rows: data.domains.map(domainOf) }
       if (input.kind === 'sites') return { rows: data.sites.map((s) => publicSite(s, data.domains)) }
       if (input.kind === 'seo') {
         const entries = seoEntries(data.entries)
@@ -968,7 +1087,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         const link = row(await call('website.previewLink', { token: input.token }))
         if (link.entryId !== entry.id || link.active !== true)
           fail('expired', 'Liên kết xem trước đã hết hạn hoặc bị thu hồi.')
-        const host = publicSite(dataSet.site!, dataSet.domains).host
+        const host = String(publicSite(dataSet.site!, dataSet.domains).host ?? '')
         revisionId = link.revisionId
         preview = {
           token: input.token,
@@ -977,7 +1096,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           // Staff open it here; anyone else needs the site's own address, where no ERP login is asked.
           url:
             link.audience === 'link' && host
-              ? `${url.hostname === host ? url.origin : `${url.protocol}//${host}`}/_ket/preview?token=${encodeURIComponent(String(input.token))}`
+              ? `${url.hostname === host ? url.origin : `${url.protocol}//${host}${url.port && (host === 'localhost' || host.endsWith('.localhost')) ? `:${url.port}` : ''}`}/_ket/preview?token=${encodeURIComponent(String(input.token))}`
               : null,
         }
       }
@@ -990,7 +1109,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
           title: revision.title,
           revisionId: revision.id,
         },
-        theme: themeResource(dataSet.site!),
+        theme: await themeResource(dataSet.site!),
         site: publicSite(dataSet.site!, dataSet.domains),
       }
     },
@@ -1064,17 +1183,21 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
     'website_studio.verifyDomain': async (input) => {
       const domain = (await snapshot(input.siteId)).domains.find((d) => d.id === input.id)
       if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
-      if (input.expectedRevisionId !== domainResource(domain).revisionId)
+      if (input.expectedRevisionId !== domainOf(domain).revisionId)
         fail('conflict', 'Dữ liệu đã thay đổi. Tải lại trước khi kiểm tra.')
-      // The lookup is the server's own; nothing the browser sends counts as proof.
-      await call('website.verifyDomain', { id: domain.id })
-      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+      // Checking a host is managing it. The policy's own functions answer for themselves too, but
+      // the Studio does not hand it a request it would refuse to make itself.
+      if (!(await ctx.allows('website.saveDomain', url, req)))
+        fail('forbidden', 'Bạn không có quyền quản lý tên miền.')
+      // Whoever serves the host checks it on the server; nothing the browser sends counts as proof.
+      await domains.verify(call, domain)
+      return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
     },
     'website_studio.setPrimaryDomain': async (input) => {
       const data = await snapshot(input.siteId)
       const domain = data.domains.find((d) => d.id === input.id)
       if (!domain) return fail('notFound', 'Không tìm thấy tên miền.')
-      const current = domainResource(domain)
+      const current = domainOf(domain)
       const primary = data.domains.find((d) => d.primary)
       if (
         input.expectedRevisionId !== current.revisionId ||
@@ -1092,7 +1215,7 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
         primary: true,
         redirectToPrimary: domain.redirectToPrimary,
       })
-      return domainResource((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
+      return domainOf((await snapshot(input.siteId)).domains.find((d) => d.id === domain.id)!)
     },
     'website_studio.savePageSettings': async (input) => {
       const { entry } = await forEntry(input.id)
@@ -1294,6 +1417,52 @@ export function studioTransport(ctx: ServeContext, url: URL, req: Req, options: 
       })
     },
   }
+  for (const name of [
+    'listBindings',
+    'getBinding',
+    'addProduct',
+    'saveBinding',
+    'removeBinding',
+    'getTemplate',
+    'getBuilder',
+    'saveBuilder',
+    'listCategories',
+    'getCategory',
+    'saveCategory',
+    'archiveCategory',
+    'productCandidates',
+    'previewCategory',
+  ])
+    queries[`website_catalog.${name}`] = async (input) => {
+      const result = row(await call(`website_catalog.${name}`, input))
+      if (name === 'getBuilder' || name === 'getTemplate') {
+        const data = await snapshot(input.siteId)
+        return {
+          ...result,
+          ...(name === 'getBuilder' ? { sections: data.sections } : {}),
+          theme: await themeResource(data.site!),
+        }
+      }
+      return result
+    }
+  queries['product.getTemplate'] = async (input) => {
+    await call('product.getTemplate', { id: input.id })
+    return ctx.callUnchecked('website_catalog.getSource', input, url, req)
+  }
+  queries['product.listCategories'] = () => call('product.listCategories')
+  queries['product.saveTemplate'] = async (input) => {
+    if (input.expectedRevisionId == null && input.siteId) {
+      if (
+        !(await ctx.allows('product.saveTemplate', url, req)) ||
+        !(await ctx.allows('website_catalog.addProduct', url, req))
+      )
+        fail('forbidden', 'Không có quyền tạo sản phẩm và liên kết website.')
+      const result = row(await ctx.callUnchecked('website_catalog.createProduct', input, url, req))
+      return { id: result.productId, binding: result }
+    }
+    return call('product.saveTemplate', input)
+  }
+  queries['product.archiveTemplate'] = (input) => call('product.archiveTemplate', input)
   for (const name of [
     'website.publishEntry',
     'website.cancelScheduledEntry',

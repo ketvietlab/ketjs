@@ -33,6 +33,20 @@ theme `fetch`, `process.env` and the ORM.
 arbitrary logic. That restriction is the product, not a limitation.
 **Reversible:** no, same argument as D1.
 
+### D3a — A website theme may run JavaScript in the browser (2026-10-05)
+**Chosen:** D3 stands for the server: a theme never runs in the KetJS process. A Website Studio theme
+may additionally ship a stylesheet and one browser module, kept in the `website_theme` registry and
+served by `/_theme/{versionId}/{file}` from the tenant's own storage.
+**Why:** real sites need carousels, lightboxes and menus that a template cannot express, and D3's
+threat — `fetch`, `process.env` and the ORM — is a server threat. In the browser the module reaches
+only what the page already shows.
+**The fence:** only `private` themes, reviewed before an operator installs them; install rejects a
+stylesheet that reaches outside the site root; the page carries a CSP with `script-src 'self'`; the
+module is left out of previews, out of any page served with a staff session, and off hosts that are not
+a site's own domain. Uploaded third-party themes would need an isolated origin and are not allowed.
+**Reversible:** yes. Removing the registry leaves every page complete, because a theme enhances markup
+the server already rendered.
+
 ## D4 — SQLite first, Postgres second, adapter shape fixed on day one
 **Why:** `node:sqlite` ships with Node and proves the whole stack end to end, so the
 riskiest work does not sit on the critical path.

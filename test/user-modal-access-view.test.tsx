@@ -6,7 +6,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
-import { userModalDefinition } from '../packages/ketsuite/src/modules/user_backend/modal/user-modal-view.tsx'
+import {
+  userModalDefinition,
+  userPageDefinition,
+} from '../packages/ketsuite/src/modules/user_backend/modal/user-modal-view.tsx'
 import type { UserModalData } from '../packages/ketsuite/src/modules/user_backend/modal/user-modal-view.tsx'
 import type { RecordModalContext } from '../packages/ketsuite/src/ui/client/record-modal.tsx'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
@@ -195,8 +198,12 @@ test('a role dialog says where the role applies and takes it back behind a previ
   const open = { name: 'role', params: { id: 'a1' } }
   const html = render(dialogView('role')(contextOf(dataOf(), { dialog: open })))
 
-  assert.match(html, /Chăm sóc khách hàng/)
-  assert.match(html, /An Việt Miền Bắc · Cầu Giấy/)
+  // Titled with the role, so the body says where it applies, who gave it and whether it gives
+  // anything, in the words the page uses.
+  assert.doesNotMatch(html, /field\.assignment/)
+  assert.match(html, /page\.scopeColumn[\s\S]*An Việt Miền Bắc · Cầu Giấy/)
+  assert.match(html, /access\.sourceColumn/)
+  assert.match(html, /page\.stateColumn[\s\S]*page\.roleState\.current/)
   // What the role is for: the areas it touches and how much of each it holds.
   assert.match(html, /Chăm sóc/)
   assert.match(html, /coverage\.full/)
@@ -213,6 +220,28 @@ test('a role dialog says where the role applies and takes it back behind a previ
     ),
   )
   assert.match(answered, /name="__command" value="unassign"/)
+
+  // A company-wide role reads as the page reads it, and one whose template moved on says so.
+  const companyWide = render(
+    dialogView('role')(
+      contextOf(
+        dataOf({
+          assignments: [
+            assignment({
+              scopeKind: 'company',
+              scopeKey: 'company:company-a',
+              branchId: null,
+              branch: null,
+              roleState: 'stale',
+            }),
+          ],
+        }),
+        { dialog: open },
+      ),
+    ),
+  )
+  assert.match(companyWide, /An Việt Miền Bắc · user_backend\.page\.allBranches/)
+  assert.match(companyWide, /page\.roleState\.stale/)
 })
 
 test('a viewer who may not remove sees the role without a way to take it back', () => {
@@ -224,7 +253,7 @@ test('a viewer who may not remove sees the role without a way to take it back', 
     ),
   )
 
-  assert.match(html, /Chăm sóc khách hàng/)
+  assert.match(html, /An Việt Miền Bắc · Cầu Giấy/)
   assert.doesNotMatch(html, /name="__command"/)
 })
 
@@ -425,4 +454,251 @@ test('an account Két Việt is still preparing tells the administrator to wait,
   assert.match(html, /login\.externalState\.handling/u)
   assert.doesNotMatch(html, /provisionCredential|retryCredential|refreshAccount|oauth\/identities/u)
   assert.doesNotMatch(html, /data-record-command="resetPassword"/u)
+})
+
+// ── The person as a page ──────────────────────────────────────────────────────
+
+const pageData = (over: Partial<UserModalData> = {}): UserModalData =>
+  dataOf({
+    areas: [
+      { key: 'crm', label: 'CRM', level: 'edit', partial: true, via: ['Chăm sóc khách hàng'] },
+      { key: 'sale', label: 'Bán hàng', level: 'view', partial: false, via: ['Chăm sóc khách hàng'] },
+    ],
+    areasWithout: ['Kho', 'Kế toán'],
+    surfaces: [
+      {
+        key: 'crm.cases',
+        label: 'Hồ sơ CRM',
+        area: 'CRM',
+        areaKey: 'crm',
+        status: 'partial',
+        missing: [{ key: 'partner.read', label: 'Khách hàng', tier: 'read' }],
+        via: ['Chăm sóc khách hàng'],
+        fixes: [],
+      },
+      {
+        key: 'sale.orders',
+        label: 'Đơn bán',
+        area: 'Bán hàng',
+        areaKey: 'sale',
+        status: 'full',
+        missing: [],
+        via: ['Chăm sóc khách hàng'],
+        fixes: [],
+      },
+    ],
+    ...over,
+  })
+
+const pageBody = (data: UserModalData): string => {
+  assert.ok(userPageDefinition.body, 'the page has one body')
+  return render(userPageDefinition.body(contextOf(data)))
+}
+
+test("a person's page is one card per question, in order, without tabs", () => {
+  assert.equal(userPageDefinition.tabs, undefined, 'a page has no tabs')
+  assert.equal(userPageDefinition.extensionTabs, undefined)
+  const html = pageBody(pageData())
+  assert.doesNotMatch(html, /data-ui="tabbed-view"/u)
+  const order = [
+    'user_backend.page.accountTitle',
+    'user_backend.users.workplaceTitle',
+    'user_backend.page.accessTitle',
+    'user_backend.page.rolesTitle',
+    'user_backend.page.auditTitle',
+  ].map((key) => html.indexOf(key))
+  assert.ok(
+    order.every((at) => at >= 0),
+    'every card is on the page',
+  )
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+    'who, where, what, why, then history',
+  )
+  // Each answer is its own titled card, side by side on the page: none wraps the others.
+  assert.match(html, /^(?:<!--k\[-->)*<div data-ui="surface"[^>]*data-has-heading="true"/u)
+  assert.equal(html.match(/data-ui="surface"/gu)?.length, 5, 'one card per answer, and no card around them')
+  assert.equal(html.match(/data-has-heading="true"/gu)?.length, 5)
+  assert.doesNotMatch(html, /data-divided="true"/u, 'cards are separated by the page, not by hairlines')
+  // Every table in a card stacks its rows on a phone instead of scrolling sideways.
+  const tables = html.match(/data-pattern="data-table"[^>]*/gu) ?? []
+  assert.ok(tables.length >= 3)
+  assert.ok(
+    tables.every((tag) => /data-responsive="stack"/u.test(tag)),
+    'no card scrolls sideways on a phone',
+  )
+  // Each fact is said once.
+  assert.equal(html.match(/user_backend\.field\.login</gu)?.length, 1)
+  assert.equal(html.match(/user_backend\.login\.lastSignIn</gu)?.length, 1)
+  // Where they are admitted is a table of its own, edited in its own dialog.
+  const workplaces = html.slice(
+    html.indexOf('user_backend.users.workplaceTitle'),
+    html.indexOf('user_backend.page.accessTitle'),
+  )
+  assert.match(workplaces, /data-record-dialog="workplaces"/u)
+  assert.match(workplaces, /An Việt Miền Bắc[\s\S]*?Cầu Giấy/u)
+})
+
+test('where nobody is admitted, the page says no role can apply', () => {
+  const html = pageBody(pageData({ memberships: { companies: [], branches: [] } }))
+  assert.match(html, /user_backend\.page\.workplacesEmptyTitle/u)
+})
+
+test('each area reads as one of four levels, with the roles that give it', () => {
+  const html = pageBody(pageData())
+  const access = html.slice(
+    html.indexOf('user_backend.page.accessTitle'),
+    html.indexOf('user_backend.page.rolesTitle'),
+  )
+  // A partly held level says so in the same badge.
+  assert.match(access, />CRM<[\s\S]*?user_backend\.level\.partialOf[\s\S]*?Chăm sóc khách hàng/u)
+  assert.match(access, />Bán hàng<[\s\S]*?user_backend\.level\.view/u)
+  // A gap leads; each screen is one step away, not on the page.
+  assert.match(access, /user_backend\.area\.gapTitle/u)
+  assert.match(access, /data-record-dialog="diagnostics"/u)
+  assert.doesNotMatch(access, /Hồ sơ CRM/u)
+  // What they cannot do is one closed line, not a list of everything.
+  assert.match(access, /user_backend\.area\.without[\s\S]*?Kho, Kế toán/u)
+})
+
+test('access says why it is empty before any area is read', () => {
+  const base = pageData()
+  const superuser = pageBody(
+    pageData({
+      record: { ...base.record, superuser: true },
+      standing: { state: 'superuser', staleRoles: [] },
+    }),
+  )
+  assert.match(superuser, /user_backend\.area\.superuserHint/u)
+  assert.doesNotMatch(superuser, /user_backend\.level\.|data-record-dialog="diagnostics"/u)
+
+  const archived = pageBody(pageData({ areas: [], standing: { state: 'inactive', staleRoles: [] } }))
+  assert.match(archived, /user_backend\.standing\.inactiveTitle/u)
+  assert.doesNotMatch(archived, /user_backend\.area\.emptyTitle/u, 'not "no role": the account is archived')
+
+  const outside = pageBody(pageData({ areas: [], standing: { state: 'outside', staleRoles: [] } }))
+  assert.match(outside, /user_backend\.standing\.outsideTitle/u)
+
+  const stale = pageBody(
+    pageData({
+      assignments: [assignment({ roleState: 'stale' })],
+      standing: { state: 'measured', staleRoles: ['Chăm sóc khách hàng'] },
+    }),
+  )
+  assert.match(stale, /user_backend\.standing\.staleTitle/u)
+  assert.match(stale, /user_backend\.page\.roleState\.stale/u)
+})
+
+test('a held role is something to open, placed by scope and source, and says whether it gives anything', () => {
+  const html = pageBody(
+    pageData({
+      assignments: [
+        assignment(),
+        assignment({
+          id: 'a2',
+          roleId: 'viewer',
+          roleName: 'Xem báo cáo',
+          scopeKind: 'tenant',
+          scopeKey: 'tenant',
+          company: null,
+          branch: null,
+          source: { kind: 'policy', policyId: 'p1', policyName: 'Phòng CSKH' },
+        }),
+        assignment({ id: 'a3', scopeKind: 'company', scopeKey: 'company:company-a', branch: null }),
+      ],
+    }),
+  )
+  const roles = html.slice(
+    html.indexOf('user_backend.page.rolesTitle'),
+    html.indexOf('user_backend.page.auditTitle'),
+  )
+  // The role reads as the row's name; its own "view" opens it, described by that name.
+  assert.match(
+    roles,
+    /<span data-ui="text" id="user-role-a1"[^>]*>(?:<!--k\[?-->)*Chăm sóc khách hàng(?:<!--k\]?-->)*<\/span>/u,
+  )
+  assert.match(
+    roles,
+    /data-record-dialog="role" data-record-param-id="a1">(?:<!--k\[-->)*<button[^>]*aria-describedby="user-role-a1"/u,
+  )
+  // Widest first: the whole organisation, a whole company, then one branch.
+  assert.match(
+    roles,
+    /user_backend\.scope\.choice\.tenant[\s\S]*?An Việt Miền Bắc · user_backend\.page\.allBranches[\s\S]*?An Việt Miền Bắc · Cầu Giấy/u,
+  )
+  assert.match(roles, /user_backend\.access\.source\.manual/u)
+  assert.match(roles, /user_backend\.access\.source\.policy/u)
+  assert.match(roles, /user_backend\.page\.roleState\.current/u)
+})
+
+test('the history names who changed it, never the key they were recorded under', () => {
+  const entry = (id: string, actor: unknown) => ({
+    id,
+    event: 'authorization.assignment.created',
+    occurredAt: '2026-09-16T09:10:00+07:00',
+    actor,
+    scopeKey: 'tenant',
+    outcome: 'success',
+    roleIds: ['r-gone'],
+    roles: ['Kế toán cũ'],
+  })
+  const html = pageBody(
+    pageData({
+      audit: [
+        entry('e1', { kind: 'user', name: 'Lan Anh' }),
+        entry('e2', { kind: 'policy', name: 'Phòng CSKH' }),
+        entry('e3', { kind: 'system', name: null }),
+      ],
+    }),
+  )
+  const history = html.slice(html.indexOf('user_backend.page.auditTitle'))
+  assert.match(history, /Lan Anh/u)
+  assert.match(history, /user_backend\.page\.actor\.policy/u)
+  assert.match(history, /user_backend\.page\.actor\.system/u)
+  assert.match(history, /Kế toán cũ/u)
+  assert.doesNotMatch(history, /r-gone|\[object Object\]/u)
+})
+
+test('on the page, editing a person and moving their workplaces are two dialogs', () => {
+  const edit = userPageDefinition.dialogs?.edit
+  const workplaces = userPageDefinition.dialogs?.workplaces
+  assert.ok(edit && workplaces)
+  const profile = render(edit.view(contextOf(pageData())))
+  assert.match(profile, /name="__command" value="save"|command="save"/u)
+  assert.doesNotMatch(profile, /user_backend\.users\.workplaceTitle|company_company-a/u)
+  assert.match(render(workplaces.view(contextOf(pageData()))), /company_company-a/u)
+})
+
+test('a moment reads the same way everywhere on the page', () => {
+  const html = pageBody(
+    pageData({ record: { ...pageData().record, lastLoginAt: '2026-09-28T08:42:00+07:00' } }),
+  )
+  assert.doesNotMatch(html, /2026-09-28T/u)
+  assert.match(html, /\d{2}\/\d{2}\/2026/u)
+})
+
+test('the page header offers editing and assigning only to whoever may do them', () => {
+  assert.ok(userPageDefinition.pageActions)
+  const all = render(userPageDefinition.pageActions(contextOf(pageData())))
+  assert.match(all, /data-record-dialog="edit"[\s\S]*?data-record-dialog="assign"/u)
+  const self = render(
+    userPageDefinition.pageActions(
+      contextOf(
+        pageData({ actor: { self: true, superuser: false }, permissions: { save: true, assign: true } }),
+      ),
+    ),
+  )
+  assert.doesNotMatch(self, /data-record-dialog="assign"/u, 'nobody assigns themselves a role')
+  assert.equal(
+    userPageDefinition.pageActions(contextOf(pageData({ permissions: {} }))),
+    undefined,
+    'a reader who may change nothing is offered nothing',
+  )
+})
+
+test('creating someone lands on their page', () => {
+  const create = userModalDefinition.commands?.create
+  assert.ok(create?.navigate)
+  assert.equal(create.navigate({ id: 'p 1' }, contextOf(pageData())), '/admin/users/p%201')
 })

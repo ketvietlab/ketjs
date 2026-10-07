@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { scaffoldKetsuite } from './scaffold/index.ts'
 import { watchKetsuite } from './cli-watch.ts'
@@ -13,16 +14,20 @@ const HELP = `KetSuite ${VERSION}
 Usage:
   ketsuite new NAME [--dir DIR] [--deployment NAME]
   ketsuite serve [--deployment NAME] [--dev-admin] [--demo-data] [--watch]
+  ketsuite theme install DIR --company ID [--deployment NAME] [--available]
 
 Commands:
   new       scaffold a standalone KetSuite application
   serve     migrate and serve KetSuite on 127.0.0.1:3000
+  theme     install a website theme package into the deployment's database and storage
 
 Options:
   --deployment  commerce | hospitality | office | dev (default: commerce)
   --dev-admin  create admin/admin only when the database is empty (development only)
   --demo-data  also seed a demo dataset (partners, catalog, CRM, orders); implies --dev-admin
   --watch      rebuild source/assets and restart after successful builds (repository checkout only)
+  --company    the company that owns an installed theme
+  --available  offer the installed theme version to the company's sites at once
   --help       show this help
   --version    show the CLI version`
 
@@ -83,6 +88,22 @@ try {
         console.warn(`WARNING: role template ${roleId} was not applied: ${JSON.stringify(errors)}`)
       await serveDeployment(deployment)
     }
+  } else if (command === 'theme') {
+    const dir = args[2]
+    const company = option('company')
+    if (args[1] !== 'install' || !dir || dir.startsWith('--') || !company)
+      throw new Error('usage: ketsuite theme install DIR --company ID [--deployment NAME] [--available]')
+    // Where the local SQLite file and storage directory live, as `ket` creates it before any command.
+    mkdirSync('.ket', { recursive: true })
+    const { installWebsiteTheme } = await import('./modules/website_theme/install.ts')
+    const { ketsuiteDeployments } = await import('./deployment.ts')
+    const result = await installWebsiteTheme(ketsuiteDeployments[chosenDeployment()]!, {
+      dir: resolve(dir),
+      company,
+      available: flag('available'),
+    })
+    console.log(JSON.stringify(result, null, 2))
+    if (!result.ok) process.exitCode = 1
   } else {
     throw new Error(`unknown command "${command}"\n\n${HELP}`)
   }
