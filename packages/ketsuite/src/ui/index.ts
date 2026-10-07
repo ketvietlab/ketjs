@@ -149,6 +149,7 @@ export {
   recordModalCreateHref,
   recordModalHost,
   recordModalHref,
+  recordPageLoading,
   recordPageFrame,
   recordPageShell,
 } from './record-modal.tsx'
@@ -176,6 +177,7 @@ export type {
   RecordModalDefinition,
   RecordModalDialog,
   RecordModalTab,
+  RecordPageOptions,
   RecordRuntimeOptions,
 } from './client/record-modal.tsx'
 export type {

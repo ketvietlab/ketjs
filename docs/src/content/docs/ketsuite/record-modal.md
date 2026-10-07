@@ -8,8 +8,10 @@ The design system settles *what* happens when a reader opens a row: the record o
 (see "Collections open records in a modal" in `@ketvietlab/design-system`). This page is *how* every
 KetSuite module does it, so a care task, a sales case and a partner behave identically.
 
+A record that is a workspace of its own opens on its page instead (see [Record pages](#record-pages)):
+the same definition, rendered by the same client runtime in its page presentation.
 Administration profiles — a user, a role, an access policy — are the exception: they open on their own
-page on the same runtime. See [Record pages](#record-pages-for-administration-profiles) below.
+page on the same runtime with route-provided context. See [Administration profiles](#record-pages-for-administration-profiles) below.
 
 ## URL
 
@@ -197,6 +199,37 @@ wrong draft. For an inline Cancel action, pass `resetFields: [name]` to discard 
 editor's draft while preserving other fields and tabs. State triggers do not save a record.
 
 Desktop `fixedHeight` is carried by `--kv-modal-fixed-height`; it never overrides the mobile full-screen height. Avoid inline `height: … !important` on a ModalSheet.
+
+## Record pages
+
+Product templates open on their own page: `/admin/product/templates/{id}`, and
+`/admin/product/templates/new` for the create action. The record is still rendered client side. General and Attributes & variants are peer Surface cards,
+shown together without page tabs; each form keeps its own save action.
+
+```
+# File: URL shape of a record page
+/admin/<collection>/<id>?tab=<tab>
+/admin/<collection>/new
+```
+
+- The module declares the island with `defineRecordPageIsland({ kind, client, export })` and its client
+  exports `createRecordPage(definition, { path: (id) => '/admin/<collection>/' + id })`. The definition
+  is the one a modal would use: context read, tabs, commands, dialogs and drafts are unchanged.
+- The page route renders the shell without a top bar or title and places the island through a joint
+  with `{ id, tab, title, loading, back, width }`. The island's server view is `recordPageLoading(props)`:
+  a `RecordPage` holding a `LoadingState`. The first client render is the same markup, so hydration
+  adopts it, then the runtime reads the context and renders the record. The route answers 404 for an
+  unknown id before rendering anything.
+- `context.presentation` is `'page'`. Views use it to place controls: a page's actions sit in its header,
+  so a menu opens downward, and its close trigger reads as the way back to the collection.
+- Closing (the close trigger, or a command with `after: 'close'`) navigates to `back` through the shell's
+  own link handling. Switching tabs replaces the address in place; back and forward belong to the shell.
+- A command with `after: 'open'` on the create page replaces `new` in the address with the created id.
+- Nothing outside the page turns inert, and Escape and Tab are trapped only while a nested dialog is
+  open.
+- A successful command announces `ket:records-changed` with `page: true`. The page reads its own
+  context again, so the shell does not re-fetch the route behind it.
+- Links from the modal era (`?record=<kind>:<id>`) on the collection redirect to the page.
 
 ## Record pages for administration profiles
 

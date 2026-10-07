@@ -285,10 +285,10 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
     '90',
   )
 
-  // General and Variants now live in the product.template record-modal (see
-  // product_backend/modal/product-modal-view.tsx), so creation, editing and
+  // General and Variants are rendered client side by the product.template record
+  // (see product_backend/modal/product-modal-view.tsx), so creation, editing and
   // stock config go through the domain functions directly instead of a
-  // page form — the modal's commands call the very same functions.
+  // page form — the record's commands call the very same functions.
   const invalidStockConfig = await call<Row>('stock.configureProduct', {
     templateId: 'tpl',
     isStorable: false,
@@ -349,26 +349,42 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.match(favoriteHtml, /name="default"[^>]*type="checkbox"|type="checkbox"[^>]*name="default"/)
   assert.doesNotMatch(favoriteHtml, /data-island="mail\.chatter"/)
 
-  // The old full-page detail route now only redirects General and Variants
-  // into the record-modal URL; it still renders Media itself (checked below).
-  const generalRedirect = await e2e.client.get('/admin/product/templates/tpl?lang=vi', {
+  // A template is its own page: the server renders the RecordPage in its loading
+  // state around the client-rendered `product.template-page` island (Media is
+  // still a server-rendered page, checked below).
+  const templatePage = await e2e.client.get('/admin/product/templates/tpl?lang=vi', {
     headers: { accept: 'text/html' },
     redirect: 'manual',
   })
-  assert.equal(generalRedirect.status, 303)
-  const generalLocation = new URL(generalRedirect.headers.get('location') ?? '', 'http://ket.local')
-  assert.equal(generalLocation.pathname, '/admin/product/templates')
-  assert.equal(generalLocation.searchParams.get('record'), 'product.template:tpl')
-  assert.equal(generalLocation.searchParams.get('tab'), 'general')
-  assert.equal(generalLocation.searchParams.get('lang'), 'vi')
+  assert.equal(templatePage.status, 200)
+  const templateHtml = await templatePage.text()
+  assert.match(templateHtml, /data-island="product\.template-page"/)
+  assert.match(templateHtml, /data-ui="record-page"/)
+  assert.match(templateHtml, /<title>Áo thun<\/title>/)
+  assert.doesNotMatch(templateHtml, /data-island="product\.template-modal"/)
 
-  const variantsRedirect = await e2e.client.get('/admin/product/templates/tpl?tab=variants&lang=vi', {
+  const createPage = await e2e.client.get('/admin/product/templates/new?lang=vi', {
     headers: { accept: 'text/html' },
     redirect: 'manual',
   })
-  assert.equal(variantsRedirect.status, 303)
-  const variantsLocation = new URL(variantsRedirect.headers.get('location') ?? '', 'http://ket.local')
-  assert.equal(variantsLocation.searchParams.get('tab'), 'variants')
+  assert.equal(createPage.status, 200)
+  assert.match(await createPage.text(), /data-island="product\.template-page"/)
+  const missingPage = await e2e.client.get('/admin/product/templates/missing?lang=vi', {
+    headers: { accept: 'text/html' },
+    redirect: 'manual',
+  })
+  assert.equal(missingPage.status, 404)
+
+  // Links from the record-modal era land on the page, tab and language kept.
+  const legacyRedirect = await e2e.client.get(
+    '/admin/product/templates?record=product.template%3Atpl&tab=variants&lang=vi',
+    { headers: { accept: 'text/html' }, redirect: 'manual' },
+  )
+  assert.equal(legacyRedirect.status, 303)
+  const legacyLocation = new URL(legacyRedirect.headers.get('location') ?? '', 'http://ket.local')
+  assert.equal(legacyLocation.pathname, '/admin/product/templates/tpl')
+  assert.equal(legacyLocation.searchParams.get('tab'), 'variants')
+  assert.equal(legacyLocation.searchParams.get('lang'), 'vi')
 
   const invalidSave = await call<Row>('product.saveTemplate', {
     id: 'tpl',
