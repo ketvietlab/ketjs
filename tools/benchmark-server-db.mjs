@@ -3,7 +3,23 @@ import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { arch, cpus, platform, release, totalmem } from 'node:os'
-import postgres from '../node_modules/postgres/src/index.js'
+import postgres from 'postgres'
+
+/**
+ * One JSON line printed by a bench/ssr-comparison fixture, tagged with its run. The database fixture
+ * prints millisecondsPerOperation and the server fixture the latencies; each is read only for its fixture.
+ * @typedef {{
+ *   framework: string,
+ *   engine: string,
+ *   operation?: string,
+ *   path?: string,
+ *   perSecond: number,
+ *   millisecondsPerOperation: number,
+ *   medianLatencyMs: number,
+ *   p95LatencyMs: number,
+ *   run: number,
+ * }} Sample
+ */
 
 const name = `ketjs-benchmark-${process.pid}-${Date.now()}`
 const destination = '.artifacts/benchmarks'
@@ -47,10 +63,11 @@ try {
     }
   }
   if (!ready) throw new Error('Owned PostgreSQL benchmark container did not become ready')
-  for (const [fixture, runs] of [
+  for (const [fixture, runs] of /** @type {[string, number][]} */ ([
     ['database', 4],
     ['server', 4],
-  ]) {
+  ])) {
+    /** @type {Sample[]} */
     const raw = []
     for (let run = 0; run < runs; run++) {
       const result = spawnSync(process.execPath, [`bench/ssr-comparison/${fixture}.mjs`, String(run)], {
@@ -70,15 +87,17 @@ try {
       )
       console.log(`${fixture} run ${run + 1}: passed`)
     }
-    const median = (values) => {
+    const median = (/** @type {number[]} */ values) => {
       const sorted = [...values].sort((a, b) => a - b)
       return (sorted[1] + sorted[2]) / 2
     }
+    /** @type {Map<string, Sample[]>} */
     const groups = new Map()
     for (const sample of raw) {
       const key = `${sample.framework}:${sample.engine}:${sample.operation ?? sample.path}`
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(sample)
+      const group = groups.get(key)
+      if (group) group.push(sample)
+      else groups.set(key, [sample])
     }
     const measurements = [...groups.values()].map((samples) => ({
       ...samples[0],

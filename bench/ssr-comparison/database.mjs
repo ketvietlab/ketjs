@@ -4,38 +4,73 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import postgres from '../../node_modules/postgres/src/index.js'
-import { sqliteAdapter } from '../../packages/ketjs/dist/index.js'
-import { postgresAdapter } from '../../packages/ketjs-postgres/dist/index.js'
+import postgres from 'postgres'
+import { sqliteAdapter } from '@ketvietlab/ketjs'
+import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
+
+/**
+ * The calls a fixture makes. A KetJS adapter provides them; the raw baselines implement only these.
+ * @typedef {{
+ *   exec(sql: string): Promise<void>,
+ *   all(sql: string, params?: unknown[]): Promise<Row[]>,
+ *   run(sql: string, params?: unknown[]): Promise<{ changes: number }>,
+ *   tx<T>(fn: (tx: BenchAdapter) => Promise<T>): Promise<T>,
+ *   close(): Promise<void>,
+ * }} BenchAdapter
+ * @typedef {import('@ketvietlab/ketjs').Row} Row
+ * @typedef {{
+ *   id: string,
+ *   title: string,
+ *   iterations: number,
+ *   warmup: number,
+ *   run(i: number): Promise<unknown>,
+ *   validate(result: unknown, i: number): void,
+ * }} Operation
+ */
 
 export const frameworkVersion = JSON.parse(
-  readFileSync(new URL('../../packages/ketjs/package.json', import.meta.url)),
+  readFileSync(new URL('../../packages/ketjs/package.json', import.meta.url), 'utf8'),
 ).version
 export const ROWS = 50000
-export const sqlFor = (engine) => ({
+export const sqlFor = (/** @type {string} */ engine) => ({
   point: `SELECT id, name, qty FROM products WHERE id = ${engine === 'SQLite' ? '?' : '$1'}`,
   range: `SELECT id, name, qty FROM products WHERE tenant = ${engine === 'SQLite' ? '?' : '$1'} AND value >= ${engine === 'SQLite' ? '?' : '$2'} ORDER BY value, id LIMIT 20`,
   insert: `INSERT INTO products (id, tenant, value, name, qty) VALUES (${engine === 'SQLite' ? '?, ?, ?, ?, ?' : '$1, $2, $3, $4, $5'})`,
 })
+/**
+ * @param {string} engine
+ * @param {boolean} framework
+ */
 export async function openDatabase(engine, framework) {
   const dir = mkdtempSync(join(tmpdir(), 'ketjs-db-bench-'))
-  let adapter, admin, name
+  /** @type {BenchAdapter | undefined} */
+  let adapter
+  /** @type {import('postgres').Sql | undefined} */
+  let admin
+  /** @type {string | undefined} */
+  let name
   try {
     if (engine === 'SQLite') {
       if (framework) {
-        adapter = sqliteAdapter(join(dir, 'bench.db'))
-        await adapter.open()
+        const ket = sqliteAdapter(join(dir, 'bench.db'))
+        await ket.open()
+        adapter = ket
       } else {
         const db = new DatabaseSync(join(dir, 'bench.db'))
         db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
-        adapter = {
+        /** @param {unknown[]} params */
+        const values = (params) => /** @type {import('node:sqlite').SQLInputValue[]} */ (params)
+        /** @type {BenchAdapter} */
+        const raw = {
           exec: async (text) => db.exec(text),
-          all: async (text, params = []) => db.prepare(text).all(...params),
-          run: async (text, params = []) => ({ changes: Number(db.prepare(text).run(...params).changes) }),
+          all: async (text, params = []) => db.prepare(text).all(...values(params)),
+          run: async (text, params = []) => ({
+            changes: Number(db.prepare(text).run(...values(params)).changes),
+          }),
           tx: async (fn) => {
             db.exec('BEGIN')
             try {
-              const result = await fn(adapter)
+              const result = await fn(raw)
               db.exec('COMMIT')
               return result
             } catch (error) {
@@ -45,8 +80,10 @@ export async function openDatabase(engine, framework) {
           },
           close: async () => db.close(),
         }
+        adapter = raw
       }
     } else {
+      assert.ok(process.env.KET_BENCH_PG, 'KET_BENCH_PG must point at a local PostgreSQL server')
       const base = new URL(process.env.KET_BENCH_PG)
       assert.equal(base.hostname, '127.0.0.1', 'Benchmark PostgreSQL must be local')
       name = `ketjs_bench_${process.pid}_${Date.now()}_${framework ? 'ket' : 'raw'}`
@@ -55,17 +92,27 @@ export async function openDatabase(engine, framework) {
       await admin.unsafe(`CREATE DATABASE "${name}"`)
       base.pathname = `/${name}`
       if (framework) {
-        adapter = postgresAdapter(base.href, { max: 1 })
-        await adapter.open()
+        const ket = postgresAdapter(base.href, { max: 1 })
+        await ket.open()
+        adapter = ket
       } else {
         const client = postgres(base.href, { max: 1, onnotice: () => {} })
+        /** @param {unknown[]} params */
+        const values = (params) => /** @type {import('postgres').ParameterOrJSON<never>[]} */ (params)
+        /**
+         * @param {import('postgres').Sql | import('postgres').TransactionSql} sql
+         * @returns {BenchAdapter}
+         */
         const wrap = (sql) => ({
           exec: async (text) => {
             await sql.unsafe(text)
           },
-          all: async (text, params = []) => await sql.unsafe(text, params),
-          run: async (text, params = []) => ({ changes: Number((await sql.unsafe(text, params)).count) }),
-          tx: (fn) => client.begin((tx) => fn(wrap(tx))),
+          all: async (text, params = []) => await sql.unsafe(text, values(params)),
+          run: async (text, params = []) => ({
+            changes: Number((await sql.unsafe(text, values(params))).count),
+          }),
+          // postgres types begin() as unwrapping arrays in the result; the fixtures return scalars.
+          tx: (fn) => /** @type {Promise<any>} */ (client.begin((tx) => fn(wrap(tx)))),
           close: () => client.end({ timeout: 5 }),
         })
         adapter = wrap(client)
@@ -105,9 +152,10 @@ export async function openDatabase(engine, framework) {
             synchronousCommit: (await adapter.all('SHOW synchronous_commit'))[0].synchronous_commit,
             poolMax: 1,
           }
+    const opened = adapter
     const close = async () => {
       try {
-        await adapter.close()
+        await opened.close()
       } finally {
         try {
           if (admin && name) await admin.unsafe(`DROP DATABASE "${name}"`)
@@ -129,7 +177,7 @@ export async function openDatabase(engine, framework) {
   }
 }
 export const driverVersion = JSON.parse(
-  readFileSync(new URL('../../node_modules/postgres/package.json', import.meta.url)),
+  readFileSync(new URL('../../node_modules/postgres/package.json', import.meta.url), 'utf8'),
 ).version
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
@@ -141,6 +189,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
       try {
         const sql = sqlFor(engine)
         let next = ROWS
+        /** @type {Operation[]} */
         const operations = [
           {
             id: 'point',
@@ -148,7 +197,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
             iterations: 5000,
             warmup: 500,
             run: (i) => adapter.all(sql.point, [i % ROWS]),
-            validate: (result, i) =>
+            validate: (/** @type {Row[]} */ result, /** @type {number} */ i) =>
               assert.deepEqual(
                 { ...result[0] },
                 { id: i % ROWS, name: `Product ${i % ROWS}`, qty: (i % ROWS) % 20 },
@@ -160,7 +209,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
             iterations: 3000,
             warmup: 300,
             run: () => adapter.all(sql.range, [3, 100]),
-            validate: (result) => {
+            validate: (/** @type {Row[]} */ result) => {
               assert.equal(result.length, 20)
               assert.deepEqual(
                 result.map((row) => ({ ...row })),
@@ -178,7 +227,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
             iterations: 1000,
             warmup: 100,
             run: () => adapter.run(sql.insert, [next++, 0, -1, 'Inserted', 1]),
-            validate: (result) => assert.equal(result.changes, 1),
+            validate: (/** @type {{ changes: number }} */ result) => assert.equal(result.changes, 1),
           },
           {
             id: 'batch',
@@ -210,6 +259,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
           operation.validate(await operation.run(0), 0)
           for (let i = 0; i < operation.warmup; i++) await operation.run(i)
           const start = performance.now()
+          /** @type {unknown} */
           let result
           for (let i = 0; i < operation.iterations; i++) result = await operation.run(i)
           const milliseconds = performance.now() - start
