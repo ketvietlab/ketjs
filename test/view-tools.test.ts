@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -22,9 +30,26 @@ test('create-view scaffolds a complete static project without overwriting files'
     const output = scaffoldView('example-site', dir)
     assert.ok(output.some((line) => line.includes('npm run dev')))
     assert.equal(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name, 'example-site')
-    assert.ok(existsSync(join(dir, 'src/pages/index.ts')))
+    assert.ok(existsSync(join(dir, 'src/pages/index.tsx')))
     assert.throws(() => scaffoldView('example-site', dir), /refusing to overwrite/)
     assert.throws(() => scaffoldView('Not Valid', join(dir, 'invalid')), /invalid project name/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('view tools fail on a hydration mismatch in development and recover in a built site', async () => {
+  const dir = project()
+  try {
+    const client = async (reload: boolean) => {
+      await buildProject(dir, { reload })
+      const assets = readdirSync(join(dir, 'dist/assets')).filter((file) => file.endsWith('.js'))
+      return assets.map((file) => readFileSync(join(dir, 'dist/assets', file), 'utf8')).join('\n')
+    }
+    // The runtime itself reads the option, so look for the object the entry passes to hydrateIslands.
+    const option = /\{\s*hydrationMismatch:\s*"throw"\s*\}/
+    assert.doesNotMatch(await client(false), option)
+    assert.match(await client(true), option)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -46,7 +71,10 @@ test('view tools emit static pages and preserve markers only inside islands', as
 
     const home = readFileSync(join(dir, 'dist/index.html'), 'utf8')
     assert.match(home, /<div data-ket-island="" data-island="counter"/)
-    assert.equal(home.match(/<!--k(?:\[)?-->/g)?.length, 2)
+    const counter = /<div data-ket-island="" data-island="counter"[^>]*>([\s\S]*?)<\/div>/.exec(home)
+    assert.ok(counter)
+    assert.ok(counter[1].includes('<!--k'))
+    assert.ok(!home.replace(counter[0], '').includes('<!--k'))
     assert.match(home, /<script type="module" src="\.\/assets\/app-[A-Z0-9]+\.js"><\/script>/)
 
     const about = readFileSync(join(dir, 'dist/about/index.html'), 'utf8')
@@ -79,8 +107,8 @@ test('a site without islands emits CSS and no JavaScript', async () => {
   const dir = project()
   try {
     writeFileSync(
-      join(dir, 'src/pages/index.ts'),
-      `import { html } from '@ketvietlab/ketjs-view'\nimport { definePage } from '@ketvietlab/ketjs-view-tools'\nexport default definePage({ head: { title: 'Static' }, view: () => html\`<h1>Static</h1>\` })\n`,
+      join(dir, 'src/pages/index.tsx'),
+      `import { definePage } from '@ketvietlab/ketjs-view-tools'\nexport default definePage({ head: { title: 'Static' }, view: () => <h1>Static</h1> })\n`,
     )
     writeFileSync(
       join(dir, 'ket-view.config.ts'),

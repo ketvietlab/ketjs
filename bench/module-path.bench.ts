@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { resolveWorkspace } from '@ketvietlab/ketjs'
@@ -16,15 +17,12 @@ const root = mkdtempSync(join(tmpdir(), 'ket-module-bench-'))
 const addons = join(root, 'addons')
 mkdirSync(addons)
 
+const frameworkEntry = pathToFileURL(createRequire(import.meta.url).resolve('@ketvietlab/ketjs')).href
 const body = (name: string, dependency: string | null) => `
-export default Object.freeze({
-  kind: 'module', name: ${JSON.stringify(name)}, version: '1.0.0',
-  depends: Object.freeze(${JSON.stringify(dependency ? [dependency] : [])}),
-  models: {}, extend: {}, joints: {}, fills: {}, functions: {}, jobs: {}, views: {},
-  requires: Object.freeze([]), tokens: {}, templates: {}, provides: Object.freeze([]),
-  assets: null, styles: Object.freeze([]), routes: {}, menus: {}, omits: Object.freeze([]),
-  islands: {}, sections: {}, relations: {}, title: ${JSON.stringify(name)},
-  summary: '', category: 'Benchmark', messages: {},
+import { defineModule } from ${JSON.stringify(frameworkEntry)}
+export default defineModule({
+  name: ${JSON.stringify(name)},
+  depends: ${JSON.stringify(dependency ? [dependency] : [])},
 })
 `
 

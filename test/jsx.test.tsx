@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { countingHost, domHost, mount, renderToString, signal } from '@ketvietlab/ketjs-view'
+import {
+  countingHost,
+  domHost,
+  mount,
+  renderToStaticString,
+  renderToString,
+  signal,
+} from '@ketvietlab/ketjs-view'
 import type { HostNode, TemplateResult } from '@ketvietlab/ketjs-view'
 import { jsx } from '@ketvietlab/ketjs-view/jsx-runtime'
 import { document, parseFragment } from './helpers/dom.ts'
@@ -87,4 +94,65 @@ test('jsx: unsafe HTML and children on void elements fail loudly', () => {
     /no dangerouslySetInnerHTML/,
   )
   assert.throws(() => renderToString(jsx('input', { children: 'wrong' })), /void element/)
+})
+
+test('jsx: siblings written out in source share their parent template and still hydrate', async () => {
+  const { mountHydrated } = await import('@ketvietlab/ketjs-view')
+  const name = signal('A')
+  const view = () => (
+    <li>
+      <span>{name()}</span>
+      <b>{'B'}</b>
+    </li>
+  )
+  const out = renderToString(view())
+  // One pair of markers per child: no fragment template wrapped around the siblings.
+  assert.equal(
+    out,
+    '<li><!--k[--><span><!--k[-->A<!--k--></span><!--k--><!--k[--><b><!--k[-->B<!--k--></b><!--k--></li>',
+  )
+
+  const container = parseFragment(out)
+  const span = container.querySelectorAll('span')[0]!
+  mountHydrated(domHost(document), container as unknown as HostNode, view)
+  name.set('C')
+  assert.equal(container.querySelectorAll('span')[0], span)
+  assert.match(span.innerHTML.replace(/<!--k\[?-->/g, ''), /^C$/)
+})
+
+test('jsx: a list built at run time stays one hole and renders in order', () => {
+  const items = ['x', 'y']
+  assert.equal(
+    renderToStaticString(
+      <ul>
+        {items.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>,
+    ),
+    '<ul><li>x</li><li>y</li></ul>',
+  )
+})
+
+test('jsx: cached shapes never stand in for a different list of attribute names', () => {
+  assert.equal(renderToStaticString(jsx('div', { a: '1', b: '2' })), '<div a="1" b="2"></div>')
+  assert.equal(renderToStaticString(jsx('div', { a: '1' })), '<div a="1"></div>')
+  assert.equal(renderToStaticString(jsx('div', { b: '2', a: '1' })), '<div b="2" a="1"></div>')
+  for (let i = 0; i < 2; i++) {
+    assert.throws(() => jsx('div', { 'a b': '1' }), /invalid JSX attribute name/)
+    assert.throws(() => jsx('div', { class: 'x', className: 'y' }), /provided more than once/)
+  }
+})
+
+test('jsx: style objects are flattened on every render of a cached shape', () => {
+  const box = (width: number) => <div id="box" style={{ width: `${width}px`, marginTop: 0 }} />
+  assert.equal(renderToStaticString(box(1)), '<div id="box" style="width:1px;margin-top:0"></div>')
+  assert.equal(renderToStaticString(box(2)), '<div id="box" style="width:2px;margin-top:0"></div>')
+})
+
+test('jsx: the development runtime keeps written-out siblings in one template', async () => {
+  const { jsxDEV } = await import('@ketvietlab/ketjs-view/jsx-dev-runtime')
+  const node = jsxDEV('p', { children: ['a', 'b'] }, undefined, true)
+  assert.equal(renderToString(node), '<p><!--k[-->a<!--k--><!--k[-->b<!--k--></p>')
+  assert.equal(renderToStaticString(jsxDEV('p', { children: ['a', 'b'] }, undefined, false)), '<p>ab</p>')
 })

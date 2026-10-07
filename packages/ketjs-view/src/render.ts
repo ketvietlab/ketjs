@@ -25,6 +25,16 @@ export type Renderable = TemplateResult | EachResult | Markup | string | number 
 export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult {
   return { [RESULT]: true, strings, values }
 }
+/**
+ * The same result for a caller that already holds its values in an array. Internal:
+ * the JSX runtime builds one per element, and spreading into html() would copy the
+ * array it just built.
+ */
+export const templateResult = (strings: readonly string[], values: unknown[]): TemplateResult => ({
+  [RESULT]: true,
+  strings,
+  values,
+})
 export const isResult = (v: unknown): v is TemplateResult => !!(v as TemplateResult)?.[RESULT]
 
 export function each<T>(

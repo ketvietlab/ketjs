@@ -37,7 +37,7 @@ type Rule = {
 const RULES: Record<string, Rule> = {
   'create-view': { allow: [] },
   'ketjs-view': { allow: [] },
-  'ketjs-view-tools': { allow: ['@ketvietlab/ketjs-view', 'esbuild'] },
+  'ketjs-view-tools': { allow: ['@ketvietlab/ketjs-view', 'esbuild', 'acorn', 'acorn-jsx'] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
 }

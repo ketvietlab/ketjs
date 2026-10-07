@@ -82,6 +82,27 @@ test('static rendering: keeps markers only inside legacy and standard island hos
   )
 })
 
+test('static rendering: one compiled template follows its boundary hole on every render', () => {
+  // The same call site renders both ways, so the compiled template cannot fix the
+  // answer from whichever value it happened to see first.
+  const view = (boundary: string | null) =>
+    html`<section><div data-ket-island=${boundary}><b>${'x'}</b></div></section>`
+  for (let i = 0; i < 2; i++) {
+    assert.equal(
+      renderToStaticString(view('')),
+      '<section><div data-ket-island=""><b><!--k[-->x<!--k--></b></div></section>',
+    )
+    assert.equal(renderToStaticString(view(null)), '<section><div><b>x</b></div></section>')
+  }
+})
+
+test('ssr: static attribute values and every escaped character survive compilation', () => {
+  assert.equal(
+    renderToString(html`<a title="a & b" href=${`?q=<'&">`}>${`&<>"'`}</a>`),
+    `<a title="a &amp; b" href="?q=&lt;&#39;&amp;&quot;&gt;"><!--k[-->&amp;&lt;&gt;&quot;&#39;<!--k--></a>`,
+  )
+})
+
 test('static rendering: escapes values without relying on marker removal', () => {
   assert.equal(
     renderToStaticString(html`<p title=${'"><script>'}>${'<script>alert(1)</script>'}</p>`),

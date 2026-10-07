@@ -3,8 +3,8 @@
 import { buildProject, checkProject } from './project.ts'
 import { serveProject } from './server.ts'
 
-const VERSION = '0.1.33'
-const HELP = `Ket view tools ${VERSION}
+const VERSION = '0.2.0'
+const HELP = `ketjs-view-tools ${VERSION}
 
 Usage:
   ket-view dev [--host HOST] [--port PORT]
