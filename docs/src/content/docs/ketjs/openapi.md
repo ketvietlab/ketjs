@@ -108,5 +108,5 @@ published, and which renderer consumes it. KetJS only guarantees the checked man
 and `allowFor` can classify credentials and prevent a non-staff audience from reaching it. A public facade should
 expose selected domain operations through owned routes and attach HTTP contracts there.
 
-For a concrete implementation, see KetSuite's [Channel API architecture](/ketsuite/channel-api/) and generated
-[Customer API reference](/ketsuite/channel-api-reference/).
+For a concrete implementation, see KetSuite's Channel API architecture and generated
+Customer API reference.

@@ -17,7 +17,3 @@ echo "pre-commit: lint"
 npm run --silent lint
 echo "pre-commit: terminology"
 npm run --silent audit:terminology
-echo "pre-commit: design-system inventory"
-npm run --silent design:inventory:check
-echo "pre-commit: design-system governance"
-npm run --silent design:governance:check

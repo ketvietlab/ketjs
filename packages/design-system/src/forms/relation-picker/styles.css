@@ -1,5 +1,0 @@
-@layer ket.app {
-  :where([data-kv-design-system]) [data-ui="relation-picker"] {
-    display: contents;
-  }
-}

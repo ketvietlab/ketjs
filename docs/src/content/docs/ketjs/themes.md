@@ -9,7 +9,7 @@ named rendering contracts but cannot call JavaScript.
 
 That restriction is about the server. A Website Studio site may also use one of its company's own
 themes, which adds a stylesheet and a browser module served from the tenant's storage; neither runs in
-the server process. See [Company themes](/ketsuite/website/#company-themes) and decision D3a.
+the server process. See Company themes and decision D3a.
 
 ## Define a theme
 

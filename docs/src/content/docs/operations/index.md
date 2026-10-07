@@ -29,7 +29,7 @@ as a reading map instead of searching an isolated runbook collection.
 
 The [performance benchmark suite](/operations/benchmarks/) records commands, datasets, environments,
 and known gaps for framework and selected KetSuite workloads. Module-specific evidence remains next
-to the module, such as the [Loyalty benchmark](/ketsuite/benchmarks/loyalty/). A performance statement
+to the module, such as the Loyalty benchmark. A performance statement
 without a reproducible workload is not an operational contract.
 
 For the reasoning behind a cross-cutting runtime choice, use the
