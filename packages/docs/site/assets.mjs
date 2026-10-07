@@ -1,7 +1,11 @@
 // Prepare content data and licensed assets; native ket-view owns HTML generation.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { prepareLearningDownloads } from './learning-assets.mjs'
+import { preparePlayground } from './playground-assets.mjs'
 
 export function prepareAssets(pages) {
+  preparePlayground()
+  prepareLearningDownloads(pages)
   const writeChanged = (path, value) => {
     if (!existsSync(path) || readFileSync(path, 'utf8') !== value) writeFileSync(path, value)
   }
@@ -11,6 +15,12 @@ export function prepareAssets(pages) {
   for (const name of readdirSync('public/content/docs'))
     if (!names.has(name)) rmSync(`public/content/docs/${name}`)
   for (const page of docs) writeChanged(`public/content/docs/${page.slug}.json`, JSON.stringify(page))
+  mkdirSync('public/content/learn', { recursive: true })
+  const lessons = pages.filter((page) => page.kind === 'learn')
+  const lessonNames = new Set(lessons.map((page) => `${page.slug}.json`))
+  for (const name of readdirSync('public/content/learn'))
+    if (!lessonNames.has(name)) rmSync(`public/content/learn/${name}`)
+  for (const page of lessons) writeChanged(`public/content/learn/${page.slug}.json`, JSON.stringify(page))
   mkdirSync('public/_vendor/mermaid', { recursive: true })
   writeChanged(
     'public/_vendor/mermaid/mermaid.tiny.js',
@@ -23,6 +33,10 @@ export function prepareAssets(pages) {
   writeChanged(
     'public/_vendor/Inter-LICENSE.txt',
     readFileSync('node_modules/@fontsource-variable/inter/LICENSE', 'utf8'),
+  )
+  writeChanged(
+    'public/_vendor/JetBrains-Mono-LICENSE.txt',
+    readFileSync('node_modules/@fontsource-variable/jetbrains-mono/LICENSE', 'utf8'),
   )
   writeChanged(
     'public/search-index.json',
@@ -39,7 +53,7 @@ export function prepareAssets(pages) {
   )
   writeChanged(
     'public/sitemap.xml',
-    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${pages.map((page) => `<url><loc>https://ketjs.dev${page.route}</loc></url>`).join('')}</urlset>`,
+    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${[...pages.map((page) => page.route), '/playground/'].map((route) => `<url><loc>https://ketjs.dev${route}</loc></url>`).join('')}</urlset>`,
   )
   writeChanged('public/robots.txt', 'User-agent: *\nAllow: /\nSitemap: https://ketjs.dev/sitemap.xml\n')
 }
