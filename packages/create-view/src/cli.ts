@@ -3,7 +3,7 @@
 import { resolve } from 'node:path'
 import { scaffoldView } from './index.ts'
 
-const VERSION = '0.1.41'
+const VERSION = '0.2.0'
 const HELP = `Create ketjs-view ${VERSION}
 
 Usage:
