@@ -6,6 +6,20 @@ import { arch, cpus, platform, release, totalmem } from 'node:os'
 
 const destination = '.artifacts/benchmarks'
 mkdirSync(destination, { recursive: true })
+/**
+ * One JSON line printed by bench/ssr-comparison/run.mjs, tagged with its run.
+ * @typedef {{
+ *   framework: string,
+ *   version: string,
+ *   rows: number,
+ *   iterations: number,
+ *   perSecond: number,
+ *   millisecondsPerRender: number,
+ *   outputBytes: number,
+ *   run: number,
+ * }} Sample
+ */
+/** @type {Sample[]} */
 const raw = []
 for (let run = 0; run < 4; run++) {
   const result = spawnSync(process.execPath, ['bench/ssr-comparison/run.mjs', String(run)], {
@@ -25,15 +39,17 @@ for (let run = 0; run < 4; run++) {
   )
   console.log(`SSR comparison ${run + 1}: output equivalence and timing passed`)
 }
-const median = (numbers) => {
+const median = (/** @type {number[]} */ numbers) => {
   const sorted = [...numbers].sort((a, b) => a - b)
   return (sorted[1] + sorted[2]) / 2
 }
+/** @type {Map<string, Sample[]>} */
 const groups = new Map()
 for (const sample of raw) {
   const key = `${sample.framework}:${sample.rows}`
-  if (!groups.has(key)) groups.set(key, [])
-  groups.get(key).push(sample)
+  const group = groups.get(key)
+  if (group) group.push(sample)
+  else groups.set(key, [sample])
 }
 const measurements = [...groups.values()].map((samples) => ({
   framework: samples[0].framework,

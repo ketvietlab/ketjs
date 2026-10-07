@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const results = []
-const version = JSON.parse(readFileSync('packages/ketjs/package.json')).version
+const version = JSON.parse(readFileSync('packages/ketjs/package.json', 'utf8')).version
 for (const name of ['ketjs-view', 'ketjs-view-tools', 'ketjs']) {
   const root = mkdtempSync(join(tmpdir(), 'ketjs-footprint-'))
   try {
@@ -29,7 +29,7 @@ for (const name of ['ketjs-view', 'ketjs-view-tools', 'ketjs']) {
     if (run.status !== 0) throw new Error(run.stderr)
     let bytes = 0,
       packages = 0
-    const size = (path) => {
+    const size = (/** @type {string} */ path) => {
       for (const entry of readdirSync(path)) {
         const file = join(path, entry),
           stat = lstatSync(file)
@@ -37,7 +37,7 @@ for (const name of ['ketjs-view', 'ketjs-view-tools', 'ketjs']) {
         else if (stat.isFile()) bytes += stat.size
       }
     }
-    const count = (path) => {
+    const count = (/** @type {string} */ path) => {
       if (!existsSync(path)) return
       for (const entry of readdirSync(path).filter((entry) => !entry.startsWith('.'))) {
         const file = join(path, entry)

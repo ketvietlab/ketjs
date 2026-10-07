@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer, request, Agent } from 'node:http'
 import express from 'express'
 import Fastify from 'fastify'
-import { compose, createKetServer, defineModule, json } from '../../packages/ketjs/dist/index.js'
+import { compose, createKetServer, defineModule, json } from '@ketvietlab/ketjs'
 import { frameworkVersion, openDatabase, sqlFor } from './database.mjs'
 
 const manifest = compose([defineModule({ name: 'server_bench' })], { headless: true })
@@ -17,18 +17,23 @@ for (const engine of ['SQLite', 'PostgreSQL'])
     const framework = frameworks[(index + rotation) % frameworks.length]
     const database = await openDatabase(engine, true)
     const sql = sqlFor(engine)
+    /** @type {Record<string, () => Promise<unknown>>} */
     const handlers = {
       '/json': async () => ({ ok: true }),
       '/db/point': async () => (await database.adapter.all(sql.point, [1234]))[0],
       '/db/range': async () => Array.from(await database.adapter.all(sql.range, [3, 100])),
     }
-    let server, close
+    /** @type {import('node:http').Server | undefined} */
+    let server
+    /** @type {(() => Promise<unknown>) | undefined} */
+    let close
     const agent = new Agent({ keepAlive: true, maxSockets: concurrency })
     try {
       if (framework === 'KetJS') {
         const app = await createKetServer({
           manifest,
-          adapter: database.adapter,
+          // openDatabase(engine, true) opened a KetJS adapter.
+          adapter: /** @type {import('@ketvietlab/ketjs').Adapter} */ (database.adapter),
           queueNotify: false,
           routes: Object.fromEntries(
             Object.entries(handlers).map(([path, handler]) => [path, async () => json(await handler())]),
@@ -42,8 +47,9 @@ for (const engine of ['SQLite', 'PostgreSQL'])
         app.disable('x-powered-by')
         for (const [path, handler] of Object.entries(handlers))
           app.get(path, async (_req, res) => res.json(await handler()))
-        server = createServer(app)
-        close = () => new Promise((resolve) => server.close(resolve))
+        const http = createServer(app)
+        server = http
+        close = () => new Promise((resolve) => http.close(resolve))
       } else if (framework === 'Fastify') {
         const app = Fastify({ logger: false })
         for (const [path, handler] of Object.entries(handlers)) app.get(path, handler)
@@ -51,9 +57,9 @@ for (const engine of ['SQLite', 'PostgreSQL'])
         server = app.server
         close = () => app.close()
       } else {
-        server = createServer(async (req, res) => {
+        const http = createServer(async (req, res) => {
           try {
-            const handler = handlers[req.url]
+            const handler = handlers[req.url ?? '']
             if (!handler) {
               res.writeHead(404)
               res.end()
@@ -67,23 +73,32 @@ for (const engine of ['SQLite', 'PostgreSQL'])
             res.end()
           }
         })
-        close = () => new Promise((resolve) => server.close(resolve))
+        server = http
+        close = () => new Promise((resolve) => http.close(resolve))
       }
+      const listening = server
       await new Promise((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(0, '127.0.0.1', resolve)
+        listening.once('error', reject)
+        listening.listen(0, '127.0.0.1', () => resolve(undefined))
       })
-      const port = server.address().port
+      const address = listening.address()
+      assert.ok(address && typeof address === 'object', 'the server listens on a TCP port')
+      const port = address.port
+      /**
+       * @param {string} path
+       * @returns {Promise<any>} the parsed JSON body
+       */
       const get = (path) =>
         new Promise((resolve, reject) => {
           const req = request({ host: '127.0.0.1', port, path, agent }, (response) => {
+            /** @type {Buffer[]} */
             const chunks = []
             response.on('data', (chunk) => chunks.push(chunk))
             response.on('error', reject)
             response.on('end', () => {
               try {
                 assert.equal(response.statusCode, 200)
-                resolve(JSON.parse(Buffer.concat(chunks)))
+                resolve(JSON.parse(Buffer.concat(chunks).toString()))
               } catch (error) {
                 reject(error)
               }
@@ -92,7 +107,13 @@ for (const engine of ['SQLite', 'PostgreSQL'])
           req.on('error', reject)
           req.end()
         })
+      /**
+       * @param {string} path
+       * @param {number} total
+       * @param {boolean} measured
+       */
       const load = async (path, total, measured) => {
+        /** @type {number[]} */
         const latencies = []
         let completed = 0
         await Promise.all(

@@ -8,7 +8,7 @@ import { join } from 'node:path'
 const output = '.artifacts/benchmarks'
 mkdirSync(output, { recursive: true })
 const hash = createHash('sha256')
-const digest = (path) => {
+const digest = (/** @type {string} */ path) => {
   for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) =>
     a.name.localeCompare(b.name),
   )) {
@@ -27,7 +27,7 @@ writeFileSync(
   JSON.stringify(
     {
       date: new Date().toISOString(),
-      version: JSON.parse(readFileSync('packages/ketjs/package.json')).version,
+      version: JSON.parse(readFileSync('packages/ketjs/package.json', 'utf8')).version,
       commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       sourceSha256: hash.digest('hex'),
       node: process.version,
