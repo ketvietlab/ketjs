@@ -51,6 +51,11 @@ export type ViewConfig = {
   islands?: Readonly<Record<string, string | ClientIslandDefinition>>
   host?: string
   port?: number
+  /**
+   * Compile static JSX into `html` templates for pages and islands alike. Faster to
+   * render and to update; markup must be hydrated by a client built the same way.
+   */
+  compileJsx?: boolean
 }
 
 export type ResolvedViewConfig = {
@@ -64,6 +69,7 @@ export type ResolvedViewConfig = {
   islands: Readonly<Record<string, ClientIslandDefinition>>
   host: string
   port: number
+  compileJsx: boolean
 }
 
 export type BuildResult = {

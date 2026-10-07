@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
+import type { Plugin } from 'esbuild'
+import { ketJsxPlugin } from './jsx-compiler.ts'
 import { escapeHtml, renderToStaticString } from '@ketvietlab/ketjs-view'
 import type {
   BuildResult,
@@ -43,7 +45,11 @@ const contains = (parent: string, child: string): boolean => {
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path))
 }
 
-async function importSource(path: string, root: string): Promise<Record<string, unknown>> {
+async function importSource(
+  path: string,
+  root: string,
+  plugins: Plugin[] = [],
+): Promise<Record<string, unknown>> {
   const temporary = join(root, 'node_modules', '.ket-view')
   mkdirSync(temporary, { recursive: true })
   const outfile = join(
@@ -61,6 +67,7 @@ async function importSource(path: string, root: string): Promise<Record<string, 
       target: 'node24',
       sourcemap: 'inline',
       logLevel: 'silent',
+      plugins,
     })
     return (await import(`${pathToFileURL(outfile).href}?v=${Date.now()}`)) as Record<string, unknown>
   } finally {
@@ -122,6 +129,7 @@ export async function loadConfig(root = process.cwd()): Promise<ResolvedViewConf
     islands,
     host: config.host ?? '127.0.0.1',
     port: config.port ?? 5173,
+    compileJsx: config.compileJsx ?? false,
   }
 }
 
@@ -164,7 +172,7 @@ async function loadPages(
   const loaded = []
   const routes = new Map<string, string>()
   for (const file of discoverPages(config)) {
-    const imported = await importSource(file, config.root)
+    const imported = await importSource(file, config.root, jsxPlugins(config))
     const collection = Array.isArray(imported.default)
     const definitions = Array.isArray(imported.default) ? imported.default : [imported.default]
     if (definitions.length === 0)
@@ -227,6 +235,10 @@ const listFiles = (directory: string): string[] => {
   return files.sort()
 }
 
+// Pages render on the server and islands hydrate in the browser, so both builds take
+// the same JSX transform or neither does: markup only hydrates with the one that rendered it.
+const jsxPlugins = (config: ResolvedViewConfig): Plugin[] => (config.compileJsx ? [ketJsxPlugin()] : [])
+
 async function bundleAssets(config: ResolvedViewConfig, write: boolean): Promise<string[]> {
   const hasIslands = Object.keys(config.islands).length > 0
   if (!hasIslands && config.styles.length === 0) return []
@@ -269,6 +281,7 @@ async function bundleAssets(config: ResolvedViewConfig, write: boolean): Promise
       sourcemap: write,
       logLevel: 'silent',
       write,
+      plugins: jsxPlugins(config),
     })
     return write ? listFiles(config.outDir).filter((file) => file.startsWith('assets/')) : []
   } finally {
