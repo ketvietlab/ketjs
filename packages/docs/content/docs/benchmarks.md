@@ -58,17 +58,19 @@ benchmarkReports:
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 1189.0510966511463, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/point", "minPerSecond": 957.5131470459933, "maxPerSecond": 1234.3628093774446}
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 952.6672705809858, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/range", "minPerSecond": 812.5648771794663, "maxPerSecond": 1006.775283037568}
   - kind: ssr
-    date: "2026-10-07T04:03:13.508Z"
+    date: "2026-10-07T04:48:23.041Z"
     processes: 4
     measurements:
-      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 11084.597234280613, "rows": 50}
-      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 31073.148571742066, "rows": 50}
-      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 39393.149789492774, "rows": 50}
-      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 20449.574925516557, "rows": 50}
-      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 586.4914207276668, "rows": 1000}
-      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 1529.8217977073032, "rows": 1000}
-      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 2018.1415121603677, "rows": 1000}
-      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 1201.695894734802, "rows": 1000}
+      - {"framework": "ketjs-view (unreleased)", "version": "source after 0.1.41", "medianPerSecond": 27643.7666172053, "rows": 50}
+      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 11686.071517389664, "rows": 50}
+      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 27086.61720309974, "rows": 50}
+      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 35569.16509836515, "rows": 50}
+      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 21294.122312380325, "rows": 50}
+      - {"framework": "ketjs-view (unreleased)", "version": "source after 0.1.41", "medianPerSecond": 1341.046823337843, "rows": 1000}
+      - {"framework": "ketjs-view", "version": "0.1.41", "medianPerSecond": 618.4705284389471, "rows": 1000}
+      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 1314.0577128105037, "rows": 1000}
+      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 1685.468854171546, "rows": 1000}
+      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 1195.8892641510906, "rows": 1000}
 ---
 
 ## How to read the comparisons
@@ -91,9 +93,9 @@ Each run uses **16 keep-alive HTTP/1.1 clients**, 160 warm-up requests and 1,600
 
 ### SSR renderer workloads
 
-`bench/ssr-comparison/run.mjs` compares **ketjs-view 0.1.41**, **React 19.3.0**, **Preact 11.0.0** with renderer **6.8.0**, and **Vue 3.5.43**. Each renders the same 50-row or 1,000-row product list with text escaping. Element creation and the awaited public static render API are included; imports are warm. Output equivalence ignores hydration comments and the equivalent `>`/`&gt;` text encoding. There is no HTTP, hydration or browser work in this comparison.
+`bench/ssr-comparison/run.mjs` compares **ketjs-view** built from this repository's source, the released **ketjs-view 0.1.41**, **React 19.3.0**, **Preact 11.0.0** with renderer **6.8.0**, and **Vue 3.5.43**. Each renders the same 50-row or 1,000-row product list with text escaping. Element creation, the awaited public static render API and encoding every result to bytes are included; imports are warm. Encoding keeps a renderer from returning an unflattened string whose cost would land after the timer. Output equivalence ignores hydration comments and the equivalent `>`/`&gt;` text encoding. There is no HTTP, hydration or browser work in this comparison. Both ketjs-view rows ran with the same harness on the same machine, with Node.js **26.7.0**.
 
-The charts report versions, medians and observed throughput ranges. **ketjs-view is slower in this SSR workload** than the three compared renderers; the charts preserve that result. Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
+The charts report versions and medians. **ketjs-view 0.1.41 is the slowest renderer in this workload.** The source after it renders about 2.4× as many 50-row lists and 2.2× as many 1,000-row lists, level with React and still behind Preact. Profiling 0.1.41 found three costs: its JSX runtime rebuilt and revalidated every element's shape on every call, its server writer reinterpreted each template's parsed tree on every render, and escaping called a function per escaped character. The harness calls the runtime `jsx()` for every element, so it measures neither `html` templates nor the opt-in [JSX compiler](/ketjs/view-static-sites/#compile-jsx). Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
 
 ## Measurement environment
 

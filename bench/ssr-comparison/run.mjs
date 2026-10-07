@@ -65,11 +65,21 @@ for (const count of [50, 1000]) {
       `${candidate.name} must render equivalent HTML`,
     )
     for (let i = 0; i < warmup; i++) await renderList(candidate, products)
+    // Encode every result, as a server must: V8 can return an unflattened string from concatenation and
+    // defer the work past the timer, which only a consumer would pay for.
     const start = performance.now()
     let result
-    for (let i = 0; i < iterations; i++) result = await renderList(candidate, products)
+    let bytes = 0
+    for (let i = 0; i < iterations; i++) {
+      result = await renderList(candidate, products)
+      bytes += Buffer.byteLength(result)
+    }
     const milliseconds = performance.now() - start
     assert.ok(normalize(result) === normalize(expected), `${candidate.name} final output must match`)
+    assert.ok(
+      bytes === iterations * Buffer.byteLength(result),
+      `${candidate.name} must render the same bytes`,
+    )
     console.log(
       JSON.stringify({
         framework: candidate.name,
