@@ -21,7 +21,7 @@ export default defineConfig({
     }),
     starlight({
       title: 'Ket Developer Docs',
-      description: 'Developer guides for the KetJS framework and the KetSuite application.',
+      description: 'Developer guides for the KetJS framework.',
       favicon: '/favicon.svg',
       logo: {
         light: './src/assets/ketsuite-logo-light.png',
@@ -94,7 +94,6 @@ export default defineConfig({
                 { label: 'Form validation', slug: 'ketjs/form-validation' },
                 { label: 'Rendering and islands', slug: 'ketjs/rendering' },
                 { label: 'Static sites', slug: 'ketjs/view-static-sites' },
-                { label: 'Flow UI components', slug: 'ketjs/flow-ui' },
                 { label: 'Themes and KTL', slug: 'ketjs/themes' },
                 { label: 'Menus and localization', slug: 'ketjs/menus-i18n' },
                 { label: 'Reports and PDF', slug: 'ketjs/reports' },
@@ -115,47 +114,6 @@ export default defineConfig({
           ],
         },
         {
-          label: 'KetSuite application',
-          items: [
-            { label: 'Developer guide', slug: 'ketsuite' },
-            { label: 'Local development', slug: 'ketsuite/quick-start' },
-            {
-              label: 'Develop KetSuite',
-              collapsed: false,
-              items: [
-                { label: 'Application architecture', slug: 'ketsuite/architecture' },
-                { label: 'Module development', slug: 'ketsuite/module-development' },
-                { label: 'Security and data scope', slug: 'ketsuite/security-scope' },
-                { label: 'Testing KetSuite', slug: 'ketsuite/testing' },
-              ],
-            },
-            {
-              label: 'Build interfaces',
-              collapsed: true,
-              items: [
-                { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
-                { label: 'Design system', slug: 'ketsuite/design-system' },
-                { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
-                { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
-              ],
-            },
-            {
-              label: 'Business domains',
-              collapsed: true,
-              items: [
-                { label: 'Product', slug: 'ketsuite/product' },
-                { label: 'Website', slug: 'ketsuite/website' },
-                { label: 'Hospitality', slug: 'ketsuite/hospitality' },
-                { label: 'Manufacturing', slug: 'ketsuite/manufacturing' },
-                { label: 'CRM', slug: 'ketsuite/crm' },
-                { label: 'Loyalty', slug: 'ketsuite/loyalty' },
-                { label: 'Point of Sale', slug: 'ketsuite/pos' },
-                { label: 'Accounting ledger', slug: 'ketsuite/accounting' },
-              ],
-            },
-          ],
-        },
-        {
           label: 'Engineering reference',
           collapsed: true,
           items: [
@@ -165,8 +123,6 @@ export default defineConfig({
               items: [
                 { label: 'Operations reading map', slug: 'operations' },
                 { label: 'Performance benchmarks', slug: 'operations/benchmarks' },
-                { label: 'Loyalty benchmark evidence', slug: 'ketsuite/benchmarks/loyalty' },
-                { label: 'SSR fragment navigation', slug: 'ketsuite/benchmarks/ssr-navigation' },
               ],
             },
             {
@@ -190,15 +146,6 @@ export default defineConfig({
           items: [
             { label: 'Develop the docs', slug: 'getting-started' },
             { label: 'Docs application boundary', slug: 'foundation/app-boundary' },
-            {
-              label: 'Team handoffs',
-              collapsed: true,
-              items: [
-                { label: 'Hospitality to Website', slug: 'handoffs/hospitality-website' },
-                { label: 'Mobile Channel API baseline', slug: 'handoffs/mobile-channel-baseline' },
-                { label: 'View system to KetSuite', slug: 'handoffs/view-system-ketsuite' },
-              ],
-            },
           ],
         },
       ],

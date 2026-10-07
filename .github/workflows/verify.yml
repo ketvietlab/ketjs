@@ -4,10 +4,8 @@ on:
   # Two pull requests carry the full suite: the promotion of integration into
   # develop, and the release into master. Integration takes merges on local
   # evidence alone, so the promotion is the first place a test another branch
-  # left stale can show; waiting for the release let #596 sit red on develop.
-  # Other pull requests into develop carry no CI: whoever changes a part runs
-  # that part's tests locally (AGENT.md), and `permission coverage` answers
-  # from permission-coverage.yml.
+  # left stale can show. Other pull requests into develop carry no CI: whoever
+  # changes a part runs that part's tests locally (AGENT.md).
   pull_request:
     branches: [develop, master]
   workflow_dispatch:
@@ -17,40 +15,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  plan:
-    name: plan test groups
-    # Every other job needs this one, so skipping it here skips the run.
-    if: github.event_name != 'pull_request' || github.base_ref == 'master' || github.head_ref == 'integration'
-    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
-    outputs:
-      groups: ${{ steps.groups.outputs.groups }}
-      has_groups: ${{ steps.groups.outputs.has_groups }}
-      permissions: ${{ steps.groups.outputs.permissions }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26"
-      - id: groups
-        name: select groups affected by this diff
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node tools/ci-test-groups.mjs plan "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
-
   quality:
     name: quality contracts
-    needs: [plan]
+    if: github.event_name != 'pull_request' || github.base_ref == 'master' || github.head_ref == 'integration'
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
     timeout-minutes: 15
-    env:
-      DESIGN_SYSTEM_AUDIT_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "26"
@@ -74,91 +45,18 @@ jobs:
         uses: ./.github/actions/build
       - name: dependencies stay where they are declared
         run: node .build/tools/zero-dep-audit.js
-      - name: no module writes its own markup
-        run: node .build/tools/ui-audit.js
-      - name: staff routes answer within their session's permissions
-        run: npm run audit:staff-channel
-      - name: the published Channel API documents match the server
-        run: npm run check:api
       - name: architecture examples name their source location
         run: npm --prefix docs run check:snippets
       - name: types check
         uses: ./.github/actions/task-cache
         with:
           task: types
-      - name: the type-level claims still hold
-        run: node .build/tools/type-proof.js
-
-  permission-coverage:
-    name: permission coverage
-    # The job asks whether every composed production function has an exact
-    # bundle, and only a declaration can move that answer. A branch that
-    # changed a stylesheet, a translation or a component was rebuilding the
-    # whole deployment to be told nothing. The planner fails safe: an
-    # unrecognised path, or a diff it could not compute, still runs it. Into
-    # develop, permission-coverage.yml already answers under this name.
-    needs: [plan]
-    if: needs.plan.outputs.permissions == 'true' && github.base_ref != 'develop'
-    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26"
-          cache: npm
-      - run: npm ci
-      - uses: ./.github/actions/build
-      - name: every production function has an exact bundle or exemption
-        run: npm run test:permission-coverage:built
 
   tests:
-    name: sqlite / ${{ matrix.group }}
-    needs: [plan, quality]
-    if: 1 == 2 #temporary disable
-    # if: needs.plan.outputs.has_groups == 'true'
+    name: tests
+    needs: [quality]
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        group: ${{ fromJSON(needs.plan.outputs.groups) }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "26"
-          cache: npm
-      - run: npm ci
-      - name: start a real S3-compatible server
-        if: matrix.group == 'framework'
-        run: |
-          docker run -d --name ketjs-minio -p 19000:9000 \
-            -e MINIO_ROOT_USER=ketjsminio \
-            -e MINIO_ROOT_PASSWORD=ketjsminiosecret \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
-          for _ in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:19000/minio/health/live && exit 0
-            sleep 1
-          done
-          docker logs ketjs-minio
-          exit 1
-      - uses: ./.github/actions/build
-      - name: run selected tests
-        run: npm run test:group:built -- ${{ matrix.group }}
-
-  postgres:
-    name: postgres / ${{ matrix.group }}
-    needs: [plan, quality]
-    if: needs.plan.outputs.has_groups == 'true'
-    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        group: ${{ fromJSON(needs.plan.outputs.groups) }}
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17
@@ -180,7 +78,7 @@ jobs:
           cache: npm
       - run: npm ci
       - uses: ./.github/actions/build
-      - name: run selected tests against a real Postgres
+      - name: run the framework suite against a real Postgres
         env:
           DATABASE_URL: postgres://dev:devpassword@127.0.0.1:5432/ketjs_ci
-        run: npm run test:group:built -- ${{ matrix.group }}
+        run: npm run test:built
