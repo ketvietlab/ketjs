@@ -7,7 +7,7 @@ order: 0
 
 ## Start here
 
-These guides target KetJS **0.1.41**, the current preview release. The project is in active review: use it for evaluation and feedback, expect API and data-format changes before 1.0, and avoid production workloads for now. New to the framework? Follow these in order:
+These guides target KetJS **0.2.0**, the current preview release. The project is in active review: use it for evaluation and feedback, expect API and data-format changes before 1.0, and avoid production workloads for now. New to the framework? Follow these in order:
 
 1. [Installation and quick start](/docs/quick-start/) — scaffold and run a working SQLite application.
 2. [Configuration](/docs/configuration/) — select the workspace, deployment and runtime services.
@@ -36,6 +36,6 @@ Use [Testing](/docs/testing/) to verify the actual deployment. [Deployment](/doc
 
 ## Framework or ecosystem?
 
-This site documents KetJS. KetSuite, its design system, Flow and product clients use the framework but have their own source, releases and documentation. See [Release notes](/docs/release-notes/) for the 0.1.41 package split.
+This site documents KetJS. KetSuite, its design system, Flow and product clients use the framework but have their own source, releases and documentation. See [Release notes](/docs/release-notes/) for the package boundaries.
 
 For a guided introduction, use [Learn KetJS](/learn/). Contributors should read [Contributing](/docs/contributing/) before working on the framework.

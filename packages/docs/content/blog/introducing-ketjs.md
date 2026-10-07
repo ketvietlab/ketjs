@@ -21,4 +21,4 @@ Changesets, validation, declared effects, and permissions define the boundary of
 
 ## A preview, built in the open
 
-KetJS 0.1.41 is preview software. APIs and deployment contracts can change before 1.0. Explore the [quick start](/docs/quick-start/), inspect the [source](https://github.com/ketvietlab/ketjs), and experiment with the contracts.
+KetJS 0.2.0 is preview software. APIs and deployment contracts can change before 1.0. Explore the [quick start](/docs/quick-start/), inspect the [source](https://github.com/ketvietlab/ketjs), and experiment with the contracts.

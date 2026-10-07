@@ -7,7 +7,7 @@ order: 3
 
 # Decisions
 
-These are historical decision records, including earlier consumer integrations and runtime shapes. Use the topic guides and current public source for the supported API. Historical performance claims without a maintained fixture have been removed; [Benchmarks](/docs/benchmarks/) records the fresh 0.1.41 measurements and their limits.
+These are historical decision records, including earlier consumer integrations and runtime shapes. Use the topic guides and current public source for the supported API. Historical performance claims without a maintained fixture have been removed; [Benchmarks](/docs/benchmarks/) records the current measurements and their limits.
 
 Each entry records what was chosen, why, and what it costs. Reversibility is stated
 because two of these cannot be undone later.

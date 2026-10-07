@@ -10,7 +10,6 @@
     "astro": "7.3.5",
     "express": "5.2.1",
     "fastify": "5.12.5",
-    "ketjs-view-0.1.41": "npm:@ketvietlab/ketjs-view@0.1.41",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "svelte": "5.57.1",

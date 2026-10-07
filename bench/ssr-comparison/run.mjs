@@ -5,8 +5,6 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { jsx as ket } from '@ketvietlab/ketjs-view/jsx-runtime'
 import { renderToStaticString } from '@ketvietlab/ketjs-view'
-import { jsx as ketReleased } from 'ketjs-view-0.1.41/jsx-runtime'
-import { renderToStaticString as renderReleased } from 'ketjs-view-0.1.41'
 import { createElement as react } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { h as vue } from 'vue'
@@ -77,8 +75,6 @@ const tree = (h, products) =>
 /** @type {Element} */
 const ketElement = (tag, props, children) =>
   ket(tag, { ...props, children: /** @type {import('@ketvietlab/ketjs-view').JSXChild} */ (children) })
-/** @type {Element} */
-const ketReleasedElement = (tag, props, children) => ketReleased(tag, { ...props, children })
 // React uses className; the other element functions accept class.
 /** @type {Element} */
 const reactElement = (tag, props, children) => {
@@ -86,21 +82,15 @@ const reactElement = (tag, props, children) => {
   return react(tag, className ? { ...rest, className } : rest, children)
 }
 
-const released = versionOf('ketjs-view-0.1.41')
 /** @type {Candidate[]} */
 const candidates = [
   {
-    name: 'ketjs-view (unreleased)',
-    version: `source after ${released}`,
+    name: 'ketjs-view',
+    version: JSON.parse(readFileSync(join(here, '../../packages/ketjs-view/package.json'), 'utf8')).version,
     render: (products) =>
       renderToStaticString(
         /** @type {import('@ketvietlab/ketjs-view').TemplateResult} */ (tree(ketElement, products)),
       ),
-  },
-  {
-    name: 'ketjs-view',
-    version: released,
-    render: (products) => renderReleased(tree(ketReleasedElement, products)),
   },
   {
     name: 'React',

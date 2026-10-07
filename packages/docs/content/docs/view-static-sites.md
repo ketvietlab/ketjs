@@ -168,10 +168,6 @@ bundle together. Another build that renders and hydrates the same views must com
 
 ## Build a content collection
 
-This collection API is available in the current source checkout and is not part of the published
-0.1.41 View Tools package yet. Published projects can use one `definePage()` module per route until
-the next tooling release.
-
 Use `definePages()` when one Markdown collection supplies many routes. Each page needs an explicit,
 unique path. Load and sanitize Markdown during the build, then return pure TSX views. The standard
 static builder handles the collection; no separate HTML generation script is needed.
@@ -210,9 +206,8 @@ PostgreSQL or job runtimes. CSS font and image imports are bundled as fingerprin
 
 ## Metadata and saved theme
 
-The current source checkout also supports Open Graph `property` metadata, `structuredData` JSON-LD
-objects and external `head.scripts`. These additions are pending the next tooling release, rather
-than published 0.1.41 features. Keep the same head model when navigating with a browser island so
+View Tools supports Open Graph `property` metadata, `structuredData` JSON-LD objects and external
+`head.scripts`. Keep the same head model when navigating with a browser island so
 titles, descriptions, canonical URLs and structured data follow the loaded page.
 
 For a saved theme preference, use a small external classic script before CSS/body paint. Applying
