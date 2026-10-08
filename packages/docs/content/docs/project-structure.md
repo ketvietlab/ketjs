@@ -15,6 +15,8 @@ order: 2
 | `modules/` | Module declarations: models, functions, routes and other owned contracts. |
 | `test/` | Deployment behavior exercised through the public testing API. |
 | `tools/dev.mjs` | Development process and rebuild lifecycle. |
+| `tools/openapi.ts` | Writes the OpenAPI document of the composed HTTP operations (`npm run openapi`). |
+| `openapi/` | The generated, committed OpenAPI document; Biome leaves it as generated. |
 | `package.json` | Released dependencies and application commands. |
 | `tsconfig.json` | TypeScript/TSX compilation to executable artifacts. |
 

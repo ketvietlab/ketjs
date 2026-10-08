@@ -134,8 +134,8 @@ npm install
 npm run dev
 ```
 
-The generated project includes a workspace, deployment, module, model, function, TypeScript build, and development
-watcher. Read [Quick start](/ketjs/quick-start/) for the file-by-file walkthrough.
+The generated project includes a workspace, deployment, module, model, function, one published HTTP operation,
+an OpenAPI generator (`npm run openapi`), TypeScript build, and development watcher. Read [Quick start](/ketjs/quick-start/) for the file-by-file walkthrough.
 
 ## Runtime environment
 

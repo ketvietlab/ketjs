@@ -56,7 +56,8 @@ notes/
 ├── test/
 │   └── deployment.test.ts
 ├── tools/
-│   └── dev.mjs
+│   ├── dev.mjs
+│   └── openapi.ts
 ├── package.json
 ├── tsconfig.json
 ├── biome.json
@@ -70,34 +71,43 @@ notes/
 `modules/notes.ts` declares its data and callable surface together:
 
 ```ts
-// File: src/modules/notes/index.ts
-import { defineModule, from } from '@ketvietlab/ketjs'
+// File: modules/notes.ts
+import { defineModule, from, httpRoutes } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'notes',
-  title: 'Notes',
+  title: 'notes',
   models: {
     Note: {
       scope: 'company',
-      fields: {
-        id: 'id',
-        title: 'text',
-        body: 'text?',
-      },
+      fields: { id: 'id', title: 'text', body: 'text?' },
     },
   },
   functions: {
     list: {
       agent: true,
+      anonymous: true,
+      output: { id: 'id', title: 'text', body: 'text?' },
+      returns: 'many',
       effects: ['read:notes.Note'],
       handler: (ctx) => ctx.db.all(from(ctx.table('notes.Note'))),
     },
   },
+  routes: httpRoutes(
+    { profile: 'notes', prefix: '/api/v1', auth: 'public' },
+    { 'GET /notes': { call: 'notes.list', summary: 'List notes.' } },
+  ),
 })
 ```
 
 Model and function keys become qualified in the manifest: `notes.Note` and `notes.list`. The
 function cannot read another model unless its effects declare that model.
+
+`httpRoutes` publishes the function as `GET /api/v1/notes`, an ordinary HTTP operation whose request and
+response are checked against a contract derived from the function. The operation is `public`, and the function
+`anonymous`, only because the scaffold has no sign-in yet; once the deployment configures sessions or
+`resolveIdentity`, remove both so the operation requires authentication. See
+[Function bindings](/ketjs/openapi/#function-bindings).
 
 ## The workspace
 
@@ -144,6 +154,27 @@ npx ket call notes.list \
 
 Until an application enables sessions, the development identity shim reads company context from
 request headers. It is a development convenience, not production authentication.
+
+Or the published operation, which answers `{ "data": [...] }`:
+
+```bash
+# Run from: /path/to/example-app
+curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/api/v1/notes
+```
+
+## Write the OpenAPI document
+
+```bash
+# Run from: /path/to/example-app
+npm run openapi
+```
+
+`tools/openapi.ts` composes the deployment and writes `openapi/notes.json` with
+`httpOpenApiDocument()`. The document lists only the operations that actually compose, and the same manifest
+always yields the same bytes, so commit it and review its diff. Biome skips the `openapi/` directory for that
+reason. Add `servers`, and `securitySchemes` with `security`, in `tools/openapi.ts` once an operation requires
+sign-in; the generator refuses a non-public operation without them. See
+[Generating OpenAPI](/ketjs/openapi/#generating-openapi).
 
 ## Inspect the composed application
 

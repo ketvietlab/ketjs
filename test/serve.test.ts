@@ -246,6 +246,17 @@ test('ket new: writes a deployment whose workspace composes', async () => {
     /ket serve --workspace dist\/ket\.workspace\.js/,
   )
   assert.match(readFileSync(join(dir, 'package.json'), 'utf8'), /ket test dist\/test/)
+  // The scaffold publishes one checked operation and writes its OpenAPI document.
+  assert.match(readFileSync(join(dir, 'modules/shop.ts'), 'utf8'), /'GET \/notes': \{ call: 'shop\.list'/)
+  assert.match(
+    readFileSync(join(dir, 'tools/openapi.ts'), 'utf8'),
+    /httpOpenApiDocument\(compose\(deployment\.modules/,
+  )
+  assert.match(
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    /"openapi": "npm run build && node dist\/tools\/openapi\.js"/,
+  )
+  assert.match(readFileSync(join(dir, 'tsconfig.json'), 'utf8'), /"tools\/\*\*\/\*\.ts"/)
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
