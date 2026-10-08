@@ -10,6 +10,7 @@
     "test": "npm run build && ket test dist/test",
     "test:watch": "ket test dist/test --watch",
     "openapi": "npm run build && node dist/tools/openapi.js",
+    "api:docs": "npm run openapi && ketspec build openapi/__NAME__.json --out .ket/api-docs",
     "check": "tsc -p tsconfig.json --noEmit && biome check . && npm run build && ket check --workspace dist/ket.workspace.js",
     "format": "biome format --write .",
     "lint": "biome lint ."
@@ -18,6 +19,7 @@
     "@ketvietlab/ketjs": "^__VERSION__"
   },
   "devDependencies": {
+    "@ketvietlab/ketspec": "__SPEC_VERSION__",
     "@biomejs/biome": "2.5.9",
     "@types/node": "^26.2.0",
     "tsx": "4.23.12",

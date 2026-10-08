@@ -471,6 +471,23 @@ Generate after composition, not from a handwritten route list. This ensures disa
 leave stale operations in the document and extension routes appear automatically. Where the document is
 published, and which renderer consumes it, remain application decisions.
 
+## Reading the document
+
+[Spec](https://github.com/ketvietlab/ketsuite/tree/develop/packages/ketspec) is a static API reference and try-it
+console from KetSuite. A new `ket new` project includes it as a pinned development tool:
+
+```sh
+# Run from: shop/
+npm run api:docs
+```
+
+This runs the project's OpenAPI generator, then builds the reference in `.ket/api-docs`. Serve that directory
+with your static host. Its try-it console uses the document's `servers`; without a server it uses the page's
+origin. Generate the public server address before hosting documentation on a different origin.
+
+The application owns the document and hosting. KetJS does not mount a documentation route or require Spec at
+runtime; another OpenAPI renderer can consume the same file.
+
 ## Generic function transport is separate
 
 `/_ket/fn` is the framework's function transport, not an automatic public REST API. `ServeSpec.resolveAudience`

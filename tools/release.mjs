@@ -233,6 +233,9 @@ const smoke = (tarballs, version, parent) => {
   run(node, ['tools/dev.mjs'], { cwd: generated })
   run(npm, ['run', 'check'], { cwd: generated })
   run(npm, ['test'], { cwd: generated })
+  run(npm, ['run', 'api:docs'], { cwd: generated })
+  if (!existsSync(join(generated, '.ket/api-docs/index.html')))
+    fail('ket new did not build its static API reference')
 
   const generatedView = join(parent, 'generated-view')
   run(node, [
