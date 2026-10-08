@@ -1,6 +1,7 @@
 import type { PageHead } from '@ketvietlab/ketjs-view-tools'
 import { frameworkVersion } from './release.ts'
 import type { ContentPage } from './model.ts'
+import { blogDetails } from './blog-data.mjs'
 
 export const origin = 'https://ketjs.dev'
 const image = `${origin}/social.png`
@@ -37,7 +38,19 @@ export function pageHead(route: string, page?: ContentPage): PageHead {
       inLanguage: 'en',
       isPartOf: website,
       ...(article ? { mainEntityOfPage: url } : {}),
-      ...(page.date && /^\d{4}-\d{2}-\d{2}$/.test(page.date) ? { datePublished: page.date } : {}),
+      ...(page.kind === 'blog'
+        ? {
+            ...(blogDetails(page).date ? { datePublished: blogDetails(page).date } : {}),
+            ...(article
+              ? {
+                  author: { '@type': 'Organization', name: blogDetails(page).author },
+                  articleSection: blogDetails(page).category,
+                }
+              : {}),
+          }
+        : page.date && /^\d{4}-\d{2}-\d{2}$/.test(page.date)
+          ? { datePublished: page.date }
+          : {}),
     })
     if (route === '/') {
       structuredData.push(
