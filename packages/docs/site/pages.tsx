@@ -6,6 +6,7 @@ import controls from './controls.tsx'
 import documentation from './documentation.tsx'
 import learn from './learn.tsx'
 import playground from './playground.tsx'
+import { BlogArticle, BlogIndex } from './blog.tsx'
 import { BrandMark } from './logo.tsx'
 import type { ContentPage, HomeData } from './model.ts'
 
@@ -457,6 +458,12 @@ export function createPage(route: string, content: ContentPage[]) {
               index: content.find((p) => p.kind === 'learn' && p.slug === 'index')!,
             },
             { key: [] },
+          )
+        ) : page.kind === 'blog' ? (
+          page.slug === 'index' ? (
+            <BlogIndex page={page} content={content} />
+          ) : (
+            <BlogArticle page={page} content={content} />
           )
         ) : page.slug === 'index' ? (
           <Collection page={page} content={content} />

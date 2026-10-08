@@ -1,6 +1,9 @@
 ---
 title: Why KetJS starts with an application contract
 description: How explicit modules, checked composition and deployment manifests help keep business applications understandable as their features grow.
+category: Architecture
+author: KetJS team
+featured: true
 date: "2026-08-12"
 order: 1
 ---
