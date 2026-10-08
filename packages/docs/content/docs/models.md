@@ -1,7 +1,7 @@
 ---
 title: Models and scopes
 description: Declare KetJS models, field types, indexes, relations, extensions, and row isolation.
-group: Database
+group: Data contracts
 order: 1
 ---
 

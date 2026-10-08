@@ -1,8 +1,8 @@
 ---
 title: Contributing
 description: Work on KetJS with explicit package ownership and focused verification.
-group: Prologue
-order: 3
+group: Project evolution
+order: 5
 ---
 
 ## Choose the repository
