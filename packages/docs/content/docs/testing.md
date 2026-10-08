@@ -1,7 +1,7 @@
 ---
 title: Testing
 description: Exercise KetJS applications through real HTTP, isolated datastores, sessions, tenants, and durable workers.
-group: Testing
+group: Verify and deploy
 order: 1
 ---
 

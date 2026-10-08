@@ -1,8 +1,8 @@
 ---
 title: Request lifecycle
 description: Follow a request through deployment composition, identity, domain behavior and rendering.
-group: Architecture concepts
-order: 4
+group: Request execution
+order: 1
 ---
 
 ## Before the first request

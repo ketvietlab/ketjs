@@ -1,7 +1,7 @@
 ---
 title: Migrations and adapters
 description: Derive schemas, plan safe migrations, use SQLite or PostgreSQL, and migrate tenant fleets.
-group: Database
+group: Data contracts
 order: 2
 ---
 

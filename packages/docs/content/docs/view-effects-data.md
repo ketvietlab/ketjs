@@ -1,7 +1,7 @@
 ---
 title: Effects and data fetching
 description: Understand reactive effect execution, async cleanup, SSR data boundaries and race-safe browser requests in ketjs-view.
-group: Views and frontend
+group: ketjs-view and KTL
 order: 2
 ---
 

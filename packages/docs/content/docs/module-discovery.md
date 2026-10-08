@@ -1,7 +1,7 @@
 ---
 title: Module discovery
 description: Resolve selected KetJS modules from filesystem roots without making file presence executable.
-group: Architecture concepts
+group: Application composition
 order: 3
 ---
 

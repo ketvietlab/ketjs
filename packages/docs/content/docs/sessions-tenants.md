@@ -1,8 +1,8 @@
 ---
 title: Sessions and tenants
 description: Configure signed sessions, company and branch scope, permissions, and one-database-per-tenant isolation.
-group: Security and tenancy
-order: 2
+group: Identity and access
+order: 1
 ---
 
 Sessions answer who a request represents; scope answers which company and branch its operations may
