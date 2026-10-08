@@ -1,7 +1,7 @@
 ---
 title: Quick start
 description: Scaffold, inspect, and run a minimal KetJS application.
-group: Getting started
+group: Set up KetJS
 order: 1
 ---
 

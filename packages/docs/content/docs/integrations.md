@@ -1,7 +1,7 @@
 ---
 title: Storage, transport, and streams
 description: Use tenant-namespaced blob storage, bounded uploads, outbound providers, and resumable streams.
-group: Digging deeper
+group: Runtime services
 order: 2
 ---
 

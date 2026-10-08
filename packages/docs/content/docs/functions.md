@@ -1,8 +1,8 @@
 ---
 title: Functions and effects
 description: Define KetJS operations with checked signatures, explicit effects, permissions, dry-run, and idempotency.
-group: The basics
-order: 1
+group: Request execution
+order: 2
 ---
 
 A server function is a named business operation. Its input, output, data reach, external effects,

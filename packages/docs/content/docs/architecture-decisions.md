@@ -1,7 +1,7 @@
 ---
 title: Architecture decisions
 description: Historical design rationale and trade-offs; current contracts live in the topic guides.
-group: Reference
+group: Project evolution
 order: 3
 ---
 

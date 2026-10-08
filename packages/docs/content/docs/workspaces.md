@@ -1,7 +1,7 @@
 ---
 title: Workspaces and deployments
 description: Define immutable KetJS deployments, shared datastores, themes, HTTP roles, and workers.
-group: Architecture concepts
+group: Application composition
 order: 2
 ---
 
