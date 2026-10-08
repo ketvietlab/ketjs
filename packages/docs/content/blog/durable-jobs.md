@@ -1,6 +1,8 @@
 ---
 title: Durable jobs without a second source of truth
 description: How transactional enqueueing, database leases and idempotent handlers keep background work aligned with business data in KetJS.
+category: Operations
+author: KetJS team
 date: "2026-09-25"
 order: 6
 ---

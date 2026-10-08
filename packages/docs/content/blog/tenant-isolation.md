@@ -1,6 +1,8 @@
 ---
 title: Tenant isolation is more than a query filter
 description: Separate tenant databases, company scope, request identity and operation permissions when designing a secure KetJS application.
+category: Security
+author: KetJS team
 date: "2026-08-31"
 order: 3
 ---
