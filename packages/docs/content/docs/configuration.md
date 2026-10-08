@@ -1,8 +1,8 @@
 ---
 title: Configuration
 description: Configure workspace selection, deployment boundaries and runtime settings.
-group: Getting started
-order: 2
+group: Set up KetJS
+order: 3
 ---
 
 ## Configuration has two owners

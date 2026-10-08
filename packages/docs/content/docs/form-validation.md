@@ -1,8 +1,8 @@
 ---
 title: Form validation
 description: Share form schemas between server and browser, manage field state, and return structured HTTP 422 errors.
-group: The basics
-order: 3
+group: Request execution
+order: 4
 ---
 
 KetJS form validation is a browser-safe contract rather than a component convention. A schema casts native

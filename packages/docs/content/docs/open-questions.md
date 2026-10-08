@@ -1,7 +1,7 @@
 ---
 title: Open questions
 description: Known gaps, unsettled design questions, and weak spots in the current implementation.
-group: Reference
+group: Project evolution
 order: 4
 ---
 

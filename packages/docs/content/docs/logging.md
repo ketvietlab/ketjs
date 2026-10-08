@@ -1,8 +1,8 @@
 ---
 title: Operational logging
 description: Drivers, the event catalogue, redaction, and how KetJS records what a deployment is doing.
-group: The basics
-order: 4
+group: Runtime services
+order: 3
 ---
 
 KetJS writes structured operational records: what a request did, how long a function took, which

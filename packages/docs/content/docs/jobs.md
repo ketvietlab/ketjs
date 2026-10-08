@@ -1,7 +1,7 @@
 ---
 title: Durable jobs and workers
 description: Declare, enqueue, execute, retry, inspect, and operate KetJS background jobs.
-group: Digging deeper
+group: Runtime services
 order: 1
 ---
 
