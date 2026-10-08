@@ -1,6 +1,6 @@
-import { defineModule, from } from '@ketvietlab/ketjs'
+import { defineModule, from, httpRoutes } from '@ketvietlab/ketjs'
 
-// A module is the unit of contribution: models, functions, sections and messages
+// A module is the unit of contribution: models, functions, routes and messages
 // declared together, composable with anyone else's.
 export default defineModule({
   name: '__NAME__',
@@ -14,10 +14,21 @@ export default defineModule({
   functions: {
     list: {
       agent: true,
+      // Public while the deployment has no sign-in; see `routes` below.
+      anonymous: true,
+      output: { id: 'id', title: 'text', body: 'text?' },
+      returns: 'many',
       effects: ['read:__NAME__.Note'],
       handler: (ctx) => ctx.db.all(from(ctx.table('__NAME__.Note'))),
     },
   },
+  // Publishes the function as GET /api/v1/notes with a checked contract, which
+  // `npm run openapi` writes to openapi/__NAME__.json. Once the deployment has
+  // sessions or resolveIdentity, drop `auth: 'public'` and `anonymous: true`.
+  routes: httpRoutes(
+    { profile: '__NAME__', prefix: '/api/v1', auth: 'public' },
+    { 'GET /notes': { call: '__NAME__.list', summary: 'List notes.' } },
+  ),
   messages: {
     en: { 'app.title': '__NAME__', 'page.notFound': 'Page not found' },
   },
