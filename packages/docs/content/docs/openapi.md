@@ -427,6 +427,35 @@ resulting `Manifest.routePrefixes` retains the owner of every namespace.
 
 ## Generating OpenAPI
 
+The CLI reads the compiled workspace, selects a composed deployment and writes its contract without booting
+the server or datastore:
+
+```sh
+# Run from: shop
+npm run build
+npx ket openapi --deployment shop --profile shop --options openapi-options.json --out openapi/shop.json
+```
+
+Omit `--out` to print only JSON to stdout. The profile defaults to the deployment name; `--profile` overrides
+the options file's profile. `info` defaults to the title `<deployment> API` and the current project's
+`package.json` version (or `0.0.0` when no version is declared). The options file is ordinary JSON using
+`HttpOpenApiOptions` keys: `info`, `servers`, `securitySchemes`, `security`, and optionally `profile`.
+
+For the protected Shop operations above, write this JSON file (without the location comment):
+
+```jsonc
+// File: shop/openapi-options.json
+{
+  "info": { "title": "Shop API", "version": "1.0.0" },
+  "servers": [{ "url": "https://shop.example.com" }],
+  "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+  "security": [{ "bearerAuth": [] }]
+}
+```
+
+Invalid options or missing security exit with a nonzero status before writing the document. Generating the
+contract does not mount an endpoint or select an authentication implementation.
+
 `httpOpenApiDocument()` builds an OpenAPI 3.1 document for one profile from a composed manifest, covering bindings
 and handwritten contracts alike:
 
