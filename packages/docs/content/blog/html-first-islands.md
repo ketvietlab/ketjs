@@ -1,6 +1,8 @@
 ---
 title: HTML first, islands where interaction belongs
 description: Choose static rendering, server rendering and interactive islands deliberately, and keep browser behavior separate from pure ketjs-view templates.
+category: Frontend
+author: KetJS team
 date: "2026-09-09"
 order: 4
 ---
