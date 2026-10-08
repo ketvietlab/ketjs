@@ -17,7 +17,7 @@ import type { Manifest, Row, FieldBase } from '../types.ts'
 export type FieldError = { field: string; message: string }
 export type Validator = (value: unknown, changes: Row) => true | string
 
-const PLAIN_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
+export const PLAIN_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
 
 /** Public resource budget for one exact decimal, including sign and decimal point. */
 export const DECIMAL_MAX_CHARS = 4096

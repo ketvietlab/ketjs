@@ -20,6 +20,7 @@
 //   handler rather than a hole in the boundary, and it is reported as one.
 
 import { KetError } from '../kernel/errors.ts'
+import type { FnReturns } from '../types.ts'
 
 type Rec = Record<string, unknown>
 
@@ -53,7 +54,29 @@ const pick = (fnKey: string, output: Record<string, string>, row: Rec): Rec => {
  * be rewritten at once, and a gap that is visible in `ket permissions` is a better
  * trade than a migration nobody finishes. The count there is the progress bar.
  */
-export function project(fnKey: string, output: Record<string, string>, value: unknown): unknown {
+export function project(
+  fnKey: string,
+  output: Record<string, string>,
+  value: unknown,
+  returns?: FnReturns,
+): unknown {
+  // `returns` is the other half of the declaration: how many rows, not which fields.
+  // Undeclared, nothing is checked, which is what every function written before it gets.
+  if (returns === 'none') return null
+  if (returns !== undefined) {
+    const shaped =
+      returns === 'many'
+        ? Array.isArray(value) && value.every(isPlain)
+        : (returns === 'optional' && value == null) || isPlain(value)
+    if (!shaped) {
+      throw new KetError({
+        code: 'E_OUTPUT_NOT_SHAPED',
+        message: `"${fnKey}" declares returns "${returns}" but returned ${describe(value)}`,
+        hint: RETURNS_HINT[returns],
+      })
+    }
+    if (value === undefined) return null
+  }
   const fields = Object.keys(output)
   if (!fields.length) return value
   if (value === null || value === undefined) return value
@@ -67,3 +90,12 @@ export function project(fnKey: string, output: Record<string, string>, value: un
   }
   return pick(fnKey, output, value)
 }
+
+const RETURNS_HINT: Record<Exclude<FnReturns, 'none'>, string> = {
+  one: 'return one object, or declare returns: "optional" when there may be none',
+  optional: 'return one object or null',
+  many: 'return a list of objects',
+}
+
+const describe = (value: unknown): string =>
+  value === null ? 'null' : Array.isArray(value) ? 'a list' : value instanceof Date ? 'a Date' : typeof value

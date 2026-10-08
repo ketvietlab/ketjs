@@ -1,0 +1,16 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { compose, httpOpenApiDocument } from '@ketvietlab/ketjs'
+import { deployment } from '../ket.workspace.ts'
+
+// The OpenAPI document of the routes this deployment actually composes, so a
+// disabled module never leaves a stale operation behind. The document is
+// deterministic: commit it and review its diff. Add `servers`, and
+// `securitySchemes` with `security`, once an operation requires sign-in.
+const document = httpOpenApiDocument(compose(deployment.modules, { headless: true }), {
+  profile: '__NAME__',
+  info: { title: '__NAME__ API', version: '0.0.0' },
+})
+
+mkdirSync('openapi', { recursive: true })
+writeFileSync('openapi/__NAME__.json', `${JSON.stringify(document, null, 2)}\n`)
+console.log('wrote openapi/__NAME__.json')
