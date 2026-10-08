@@ -461,6 +461,9 @@ The generator:
 It refuses with `E_OPENAPI_SECURITY` rather than omit security: when the profile has a non-public operation and no
 `security` was given, or when `security` or `credentials` names a scheme `securitySchemes` does not define.
 
+A project created by `ket new` already has this generator as `tools/openapi.ts`, run by `npm run openapi`
+([Quick start](/ketjs/quick-start/#write-the-openapi-document)).
+
 `httpContracts(manifest, { profile })` returns the same sorted `{ path, contract }` entries for a generator that
 needs another format.
 

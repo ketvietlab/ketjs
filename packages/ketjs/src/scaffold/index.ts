@@ -24,6 +24,7 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['tsconfig.json.tmpl', () => 'tsconfig.json'],
   ['biome.json.tmpl', () => 'biome.json'],
   ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
+  ['openapi.ts.tmpl', () => 'tools/openapi.ts'],
   ['deployment.test.ts.tmpl', () => 'test/deployment.test.ts'],
   ['gitignore.tmpl', () => '.gitignore'],
 ]
@@ -52,6 +53,10 @@ export function scaffold(name: string, dir: string): string[] {
     writeFileSync(full, body)
     out.push(`  wrote ${full}`)
   }
-  out.push('', `  cd ${dir} && npm install && npm run dev`)
+  out.push(
+    '',
+    `  cd ${dir} && npm install && npm run dev`,
+    `  npm run openapi  # writes openapi/${name}.json`,
+  )
   return out
 }
