@@ -13,7 +13,7 @@ KetJS releases five public packages with one version:
 4. `@ketvietlab/ketjs`
 5. `@ketvietlab/ketjs-postgres`
 
-The KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client` and `website-client`) are
+The KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client`, `website-client` and `ketspec`) are
 released from the KetSuite source, not from this repository.
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
@@ -51,7 +51,8 @@ Broad release verification belongs to promotion into `develop` and the release p
 - installs all tarballs into a clean consumer and imports every public entry point;
 - invokes the installed `ket new` and `create-view` binaries;
 - installs the local tarballs into that generated project, resolves its development CLI entry, then runs its
-  check and integration test.
+  check and integration test, builds the static Spec reference, and compares CLI OpenAPI output with the
+  project's generator. The scaffold's pinned Spec version must already be published by KetSuite.
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
 embedded by the deterministic PDF renderer. A release that crosses a ceiling must inspect the tarball
@@ -68,14 +69,14 @@ No publish command is part of either local script.
 
 ## Publish
 
-1. Create `release/<version>` from `master` and merge the `develop` head into it. Do not release an
+1. Create `fix/release-<version>` from `master` and merge the verified `develop` head into it. Do not release an
    arbitrary feature branch.
 2. Update the coordinated version, then open the release pull request into `master` and let the required
    checks pass. Feature pull requests are verified locally by their authors, so a failure here is fixed on
    `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.2.0` at that exact `master` commit.
+4. Create and publish GitHub release `v0.3.0` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
 7. Update each downstream repository to the released npm version, then run that repository's release
@@ -84,7 +85,7 @@ No publish command is part of either local script.
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.2.0 new public_smoke
+npx -y @ketvietlab/ketjs@0.3.0 new public_smoke
 cd public_smoke
 npm install
 npm test
