@@ -15,3 +15,14 @@ test('__NAME__: the function is reachable through real HTTP', async () => {
     await e2e.close()
   }
 })
+
+test('__NAME__: the published operation answers its OpenAPI contract', async () => {
+  const e2e = await createTestDeployment(deployment, { worker: false })
+  try {
+    const response = await fetch(new URL('/api/v1/notes', e2e.baseUrl))
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { data: [] })
+  } finally {
+    await e2e.close()
+  }
+})

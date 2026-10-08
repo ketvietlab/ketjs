@@ -5,6 +5,7 @@
 // mutation can be dry-run before it commits. Both fall out of the manifest, so
 // there is no second definition to keep in sync.
 
+import { mutates } from '../kernel/effects.ts'
 import type { Manifest } from '../types.ts'
 
 export type AgentTool = {
@@ -50,7 +51,6 @@ export function agentTools(manifest: Manifest): AgentTool[] {
       }
       if (!optional) required.push(name)
     }
-    const mutates = fn.effects.some((e) => e.startsWith('write:') || e.startsWith('enqueue:'))
     tools.push({
       name: key.replace('.', '__'),
       description:
@@ -60,7 +60,7 @@ export function agentTools(manifest: Manifest): AgentTool[] {
       effects: fn.effects,
       idempotent: fn.idempotent,
       dryRunnable: fn.dryRun,
-      mutates,
+      mutates: mutates(fn.effects),
       crossCompany: fn.crossCompany,
     })
   }
