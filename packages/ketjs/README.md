@@ -14,6 +14,7 @@ required application-server dependency.
 ## Create an application
 
 ```bash
+# Run from: /path/to/projects
 npx -y @ketvietlab/ketjs@latest new notes
 cd notes
 npm install
@@ -31,17 +32,21 @@ installed KetJS CLI. Use an exact tag such as `@0.1.3` for reproducible generati
 
 ## Install in an existing project
 
-`ket openapi --deployment NAME --out openapi/NAME.json` generates an OpenAPI 3.1 document from the compiled
-workspace without starting a server or database. Use `--profile` when the contract profile differs from the
-deployment name and `--options FILE` for JSON metadata and security definitions. See the
-[HTTP contracts and OpenAPI guide](https://ketjs.dev/ketjs/openapi/#generating-openapi) for protected operations.
-
 ```bash
+# Run from: notes
 npm install @ketvietlab/ketjs
 ```
 
 ```ts
+// File: notes/ket.workspace.ts
 import { defineDeployment, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
 ```
+
+## Generate API contracts
+
+`ket openapi --deployment NAME --out openapi/NAME.json` generates an OpenAPI 3.1 document from the compiled
+workspace without starting a server or database. Use `--profile` when the contract profile differs from the
+deployment name and `--options FILE` for JSON metadata and security definitions. See the
+[HTTP contracts and OpenAPI guide](https://ketjs.dev/ketjs/openapi/#generating-openapi) for protected operations.
 
 Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvietlab/ketjs)
