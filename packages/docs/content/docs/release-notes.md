@@ -1,17 +1,23 @@
 ---
 title: Release notes
-description: The coordinated KetJS 0.2.0 release and its package boundaries.
+description: The coordinated KetJS 0.3.0 release and its package boundaries.
 group: Project evolution
 order: 1
 ---
 
-## Current release: 0.2.0
+## Current release: 0.3.0
 
 KetJS releases five packages together: View, View Tools, Create View, the core framework and the optional PostgreSQL adapter. Keep the framework packages used by an application on the same version.
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What 0.2.0 adds
+## What 0.3.0 adds
+
+- **Checked HTTP operations.** `httpRoutes()` publishes server functions as ordinary HTTP endpoints with explicit `returns` cardinality, contract validation, permissions and output projection. Existing function exposure remains unchanged. See [HTTP contracts and OpenAPI](/ketjs/openapi/).
+- **Deployment OpenAPI.** `ket openapi` emits deterministic OpenAPI 3.1 from a composed deployment without booting its datastore. Applications supply metadata, servers and security definitions.
+- **Runnable API reference.** `ket new` includes a checked operation, its HTTP integration test and an OpenAPI generator. `npm run api:docs` uses the pinned KetSuite Spec 0.1.41 tool to build a static reference; the application chooses where to host it.
+
+## Previous release: 0.2.0
 
 - **Faster server rendering.** The JSX runtime caches element shapes, and the server writer compiles each template once. See [Benchmarks](/docs/benchmarks/).
 - **Opt-in JSX compiler.** `defineConfig({ compileJsx: true })` compiles static JSX subtrees into `html` templates for pages and islands together. See [Compile JSX](/ketjs/view-static-sites/#compile-jsx).
@@ -22,7 +28,7 @@ Server markup must be hydrated by the same ketjs-view version and the same JSX b
 
 ## Preview stability
 
-The `0.2` line is preview software. Read the [upgrade guide](/docs/upgrading/) before updating existing application code or datastores. A shared package version does not guarantee that an application upgrade needs no migration.
+The `0.3` line is preview software. Read the [upgrade guide](/docs/upgrading/) before updating existing application code or datastores. A shared package version does not guarantee that an application upgrade needs no migration.
 
 ## Track changes
 

@@ -91,6 +91,45 @@ test('project: it is one level deep, and that is a limit rather than an oversigh
   )
 })
 
+test('project: a declared returns is enforced before the fields are picked', () => {
+  const row = { id: '1', cost: 9 }
+  assert.deepEqual(project('f', { id: 'id' }, row, 'one'), { id: '1' })
+  assert.deepEqual(project('f', { id: 'id' }, [row], 'many'), [{ id: '1' }])
+  assert.equal(project('f', { id: 'id' }, null, 'optional'), null)
+  assert.equal(project('f', { id: 'id' }, undefined, 'optional'), null, 'absent is null on the wire')
+  assert.equal(project('f', {}, row, 'none'), null, 'none discards whatever the handler returned')
+  for (const [returns, value] of [
+    ['one', null],
+    ['one', [row]],
+    ['optional', [row]],
+    ['many', row],
+    ['many', [row, 42]],
+  ] as const) {
+    assert.throws(
+      () => project('f', { id: 'id' }, value, returns),
+      (e: unknown) => (e as { code: string }).code === 'E_OUTPUT_NOT_SHAPED',
+      `${returns} with ${JSON.stringify(value)}`,
+    )
+  }
+})
+
+test('project: a returns the function declared also holds at callFn', async () => {
+  const counted = defineModule({
+    name: 'counted',
+    functions: {
+      one: { input: {}, output: { id: 'id' }, returns: 'one', effects: [], handler: () => [{ id: '1' }] },
+    },
+  })
+  const manifest = compose([counted])
+  registerFunctions([counted])
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await assert.rejects(
+    () => callFn('counted.one', {}, { adapter, manifest }),
+    (e: unknown) => (e as { code: string }).code === 'E_OUTPUT_NOT_SHAPED',
+  )
+})
+
 // ── the scenario it was built for ────────────────────────────────────────────
 
 const shop = defineModule({

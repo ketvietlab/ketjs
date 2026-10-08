@@ -113,6 +113,8 @@ export type ServeContext = {
    */
   tenantKeyOf: (url: URL, req: IncomingMessage) => string
   config: RuntimeConfig
+  /** This deployment's operational log, for a route that has to record a failure it answered generically. */
+  logger: Logger
   /**
    * Identity already resolved for this request, whether asserted by a gateway or loaded from a session.
    * `origin` says which: `request` for `resolveIdentity`, `session` for a cookie session.
@@ -823,6 +825,7 @@ export async function bootDeployment(
     deploymentName: spec.name,
     clientCompatibility: serve.clientCompatibility ?? null,
     config,
+    logger,
     requestIdentityOf,
     signOutPath: serve.signOutPath ?? null,
     scopeOf,
@@ -980,6 +983,19 @@ export async function bootDeployment(
         throw error
       }
     },
+  }
+
+  // A binding that requires authentication on a deployment that has none would
+  // run every call unrestricted: without a login, the allow-list is "everything".
+  if (!authenticationEnabled) {
+    const required = Object.entries(manifest.routes).find(([, entry]) => entry.binding?.auth === 'required')
+    if (required)
+      throw new KetError({
+        code: 'E_HTTP_BINDING_AUTH_UNAVAILABLE',
+        module: required[1].by,
+        message: `route "${required[0]}" requires authentication, but this deployment has none`,
+        hint: 'configure serve.sessions or serve.resolveIdentity, or declare the binding auth: "public"',
+      })
   }
 
   /**

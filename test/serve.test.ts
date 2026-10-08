@@ -246,12 +246,36 @@ test('ket new: writes a deployment whose workspace composes', async () => {
     /ket serve --workspace dist\/ket\.workspace\.js/,
   )
   assert.match(readFileSync(join(dir, 'package.json'), 'utf8'), /ket test dist\/test/)
+  // The scaffold publishes one checked operation and writes its OpenAPI document.
+  assert.match(readFileSync(join(dir, 'modules/shop.ts'), 'utf8'), /'GET \/notes': \{ call: 'shop\.list'/)
+  assert.match(
+    readFileSync(join(dir, 'tools/openapi.ts'), 'utf8'),
+    /httpOpenApiDocument\(compose\(deployment\.modules/,
+  )
+  assert.match(
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    /"openapi": "npm run build && node dist\/tools\/openapi\.js"/,
+  )
+  assert.match(readFileSync(join(dir, 'tsconfig.json'), 'utf8'), /"tools\/\*\*\/\*\.ts"/)
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ket-new-'))
   scaffold('shop', dir)
   assert.throws(() => scaffold('shop', dir), /refusing to overwrite/)
+})
+
+test('ket new: includes a pinned Spec tool and prints the runnable API docs command', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ket-new-docs-'))
+  const output = scaffold('shop', dir)
+  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  assert.equal(pkg.devDependencies['@ketvietlab/ketspec'], '0.1.41')
+  assert.equal(
+    pkg.scripts['api:docs'],
+    'npm run openapi && ketspec build openapi/shop.json --out .ket/api-docs',
+  )
+  assert.ok(output.some((line) => line.includes('npm run api:docs') && line.includes('.ket/api-docs')))
+  assert.match(readFileSync(join(dir, '.gitignore'), 'utf8'), /^\.ket\/$/m)
 })
 
 test('ket new: rejects a name that is not a module name', () => {
