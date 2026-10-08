@@ -1,6 +1,8 @@
 ---
 title: Fetching data without losing control of effects
 description: Understand synchronous reactive tracking, browser lifecycle cleanup, initial SSR data and race-safe requests in ketjs-view islands.
+category: Frontend
+author: KetJS team
 date: "2026-09-18"
 order: 5
 ---
