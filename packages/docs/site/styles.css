@@ -283,13 +283,16 @@
 :root {
   --kv-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   color-scheme: light dark;
-  /* Website accent: a small lift within the public Két primary palette. */
+  /* Lift brightness and saturation while preserving the public primary hue. */
   --kv-accent: light-dark(
-    color-mix(in srgb, var(--kv-ref-primary-active) 25%, var(--kv-ref-primary)),
-    var(--kv-ref-primary-hover)
+    hsl(from var(--kv-ref-primary) h calc(s + 6) calc(l - 0.5)),
+    hsl(from var(--kv-ref-primary-hover) h calc(s + 4) calc(l + 2))
   );
   --kv-on-accent: light-dark(var(--kv-ref-white), var(--kv-ref-black));
-  --kv-accent-hover: light-dark(var(--kv-ref-primary-active), var(--kv-ref-primary-hover));
+  --kv-accent-hover: light-dark(
+    var(--kv-ref-primary),
+    hsl(from var(--kv-ref-primary-hover) h calc(s + 4) calc(l + 4))
+  );
   --kv-accent-active: light-dark(var(--kv-ref-primary-active), var(--kv-ref-primary-hover));
   --syntax-foreground: var(--kv-text-main);
   --syntax-background: var(--kv-panel-bg-subtle);
@@ -324,11 +327,12 @@ body {
   font-size: var(--kv-text-sm);
   line-height: var(--kv-line-sm);
 }
-.site a:not([data-ui]) {
+/* Keep the reset weaker than the link treatment owned by prose or navigation. */
+.site :where(a:not([data-ui])) {
   color: inherit;
   text-decoration: none;
 }
-.site a:not([data-ui]):hover {
+.site :where(a:not([data-ui]):hover) {
   color: var(--kv-accent);
 }
 .site a:not([data-ui]):focus-visible,
@@ -863,6 +867,9 @@ pre {
   margin-top: var(--kv-space-3);
   margin-bottom: var(--kv-space-8);
 }
+.doc-article .article-description {
+  line-height: var(--kv-line-lg);
+}
 .docs-start {
   margin-bottom: var(--kv-space-6);
 }
@@ -981,6 +988,67 @@ pre {
 }
 .prose li + li {
   margin-top: var(--kv-space-2);
+}
+.doc-article .prose {
+  /* Editorial reading uses the public type scale, independently of navigation density. */
+  font-size: var(--kv-text-md);
+  line-height: var(--kv-line-lg);
+}
+.doc-article .prose > :is(p, ul, ol, blockquote) {
+  max-inline-size: 72ch;
+}
+.doc-article .prose h2 {
+  margin-top: var(--kv-space-12);
+  font-size: var(--kv-text-2xl);
+  line-height: var(--kv-line-2xl);
+}
+.doc-article .prose h3 {
+  font-size: var(--kv-text-xl);
+  line-height: var(--kv-line-xl);
+}
+.prose a:hover {
+  text-decoration-thickness: 2px;
+}
+.prose .heading-anchor {
+  color: var(--kv-text-muted);
+  text-decoration: none;
+}
+.docs-topic-index {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--kv-space-6);
+  row-gap: var(--kv-space-8);
+  margin-block: var(--kv-space-6);
+}
+.docs-topic {
+  min-inline-size: 0;
+  border-top: 1px solid var(--kv-panel-border);
+  padding-block-start: var(--kv-space-4);
+}
+.doc-article .docs-topic h3 {
+  margin: 0;
+  font-size: var(--kv-text-lg);
+  line-height: var(--kv-line-lg);
+}
+.docs-topic > p {
+  margin-top: var(--kv-space-2);
+  color: var(--kv-text-secondary);
+  font-size: var(--kv-text-sm);
+  line-height: var(--kv-line-sm);
+}
+.docs-topic > ol {
+  margin-top: var(--kv-space-4);
+  font-size: var(--kv-text-sm);
+  line-height: var(--kv-line-sm);
+}
+.docs-topic li::marker {
+  color: var(--kv-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767px) {
+  .docs-topic-index {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .prose img {
   max-width: 100%;
