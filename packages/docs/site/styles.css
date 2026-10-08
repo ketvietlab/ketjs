@@ -377,7 +377,8 @@ pre {
   justify-items: start;
   align-items: center;
   gap: var(--kv-space-2);
-  flex: 0 0 var(--brand-width);
+  /* Width is reserved by inline-size; a column parent must not turn it into height. */
+  flex: none;
 }
 .brand-mark {
   width: 2rem;
@@ -446,6 +447,26 @@ pre {
 .mobile-search,
 .mobile-theme {
   display: none;
+}
+/* Switch only navigation at tablet widths, before the fixed header slots overflow. */
+@media (min-width: 768px) and (max-width: 900px) {
+  .desktop-navigation {
+    display: none;
+  }
+  .mobile-menu {
+    display: block;
+  }
+  .mobile-menu > nav:not([hidden]) {
+    position: absolute;
+    inset-inline: var(--kv-space-6);
+    top: 4rem;
+    display: grid;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-4);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-lg);
+    background: var(--kv-panel-bg);
+  }
 }
 .skip-link {
   position: fixed;

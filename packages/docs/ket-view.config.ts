@@ -3,7 +3,7 @@ import { defineConfig } from '@ketvietlab/ketjs-view-tools'
 
 export default defineConfig({
   pages: 'pages',
-  styles: ['site/styles.css'],
+  styles: ['site/styles.css', 'site/blog.css'],
   islands: {
     controls: 'site/controls.tsx',
     documentation: 'site/documentation.tsx',
