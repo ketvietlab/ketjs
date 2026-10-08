@@ -1,8 +1,8 @@
 ---
 title: Deployment
 description: Build, migrate, release, scale, and operate KetJS HTTP and worker processes safely.
-group: Getting started
-order: 4
+group: Verify and deploy
+order: 3
 ---
 
 A KetJS release is an emitted JavaScript workspace plus the packages, migrations, configuration, and

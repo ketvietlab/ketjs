@@ -1,7 +1,7 @@
 ---
 title: Modules and manifest
 description: Build composable KetJS modules and understand the immutable manifest derived from a deployment.
-group: Architecture concepts
+group: Application composition
 order: 1
 ---
 

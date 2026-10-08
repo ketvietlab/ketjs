@@ -1,7 +1,7 @@
 ---
 title: Release notes
 description: The coordinated KetJS 0.2.0 release and its package boundaries.
-group: Prologue
+group: Project evolution
 order: 1
 ---
 
