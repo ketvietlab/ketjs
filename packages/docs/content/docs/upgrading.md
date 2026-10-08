@@ -11,7 +11,7 @@ moving the application lock.
 
 ## Current package line
 
-The current coordinated release is `0.2.0`. Use the same exact version for the KetJS packages your
+The current coordinated release is `0.3.0`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered

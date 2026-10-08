@@ -22,6 +22,14 @@ export type {
   ComposedTaxonomy,
   RouteEntry,
   HttpRouteContract,
+  HttpMethod,
+  HttpBindingAuth,
+  HttpBindingError,
+  HttpBindingIdentityValue,
+  HttpBindingInput,
+  HttpBindingMeta,
+  HttpBindingSpec,
+  FnReturns,
   JsonSchema,
   Manifest,
   ModulePermissionsDef,
@@ -75,6 +83,10 @@ export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server
 export { enforcePolicy } from './server/policy.ts'
 export type { PolicyDecision, PolicyDenialEvidence } from './server/policy.ts'
 export { project } from './server/project.ts'
+export { httpRoutes } from './server/http-binding.ts'
+export type { HttpEndpoint, HttpRouteGroup } from './server/http-binding.ts'
+export { httpContracts, httpOpenApiDocument } from './kernel/openapi.ts'
+export type { HttpContractEntry, HttpOpenApiOptions } from './kernel/openapi.ts'
 export { createKetServer, statusForError, wantsHtml } from './server/http.ts'
 export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
