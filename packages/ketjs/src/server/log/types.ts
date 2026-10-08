@@ -132,6 +132,8 @@ export const CORE_EVENTS = [
   'shutdown',
   'http_request',
   'unhandled',
+  'http_binding_failed',
+  'http_binding_output',
   'fn_call',
   'fn_error',
   'fn_denied',

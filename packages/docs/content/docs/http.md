@@ -40,8 +40,10 @@ prefix must come from the owner or from a dependent extension using the owner's 
 the route method, request schema, response schemas, capability, and idempotency behavior in the manifest so
 OpenAPI can be generated from the deployed composition rather than maintained as a separate document.
 
-See [HTTP contracts and OpenAPI](/ketjs/openapi/) for the framework contract fields, extension rules, and generator
-boundary.
+To publish a server function at such a path, bind it with `httpRoutes()`: composition derives the contract from the
+function signature and the route checks requests and responses against it. See
+[HTTP contracts and OpenAPI](/ketjs/openapi/) for function bindings, handwritten contract fields, extension rules,
+and the OpenAPI generator.
 
 ## Anonymous routes
 
@@ -105,6 +107,7 @@ Route factories receive live runtime services:
 | `sessionsOf(url, request)` | Session manager for the request's tenant, or `null`. |
 | `storageOf(url, request)` | Tenant-namespaced blob storage. |
 | `translate(locale)` | Translator for the composed message catalogue. |
+| `logger` | The deployment's operational log, for a route that answers a failure generically and must still record it. Event names follow the [event catalogue](/ketjs/logging/#the-event-catalogue). |
 | `document(...)`, `styles(request)` | Safe document shell and composed module styles. |
 | `joint(...)`, `jointShows(...)` | Installed extension-point output. |
 | `menu(url, request)` | Navigation filtered by install state and function permissions. |

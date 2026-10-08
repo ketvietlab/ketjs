@@ -70,11 +70,14 @@ Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `Permiss
 | `multipart` | Parse bounded multipart input. |
 | `assertForm`, `invalidForm`, `FormValidationError` | Enforce form schemas and produce structured HTTP 422 failures. |
 | `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
+| `httpRoutes` | Publish server functions as HTTP operations with derived, checked contracts. |
+| `httpOpenApiDocument`, `httpContracts` | Generate an OpenAPI 3.1 document, or list route contracts, for one profile. |
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision`,
 `PolicyDenialEvidence`, `Job`, `JobContext`, `ServeSpec`,
 `ServeContext`, `BootedDeployment`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
-`RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
+`RouteResult`. `FnReturns`, `HttpRouteGroup`, `HttpEndpoint`, `HttpBindingSpec`, `HttpBindingMeta`,
+`HttpRouteContract`, `HttpContractEntry`, and `HttpOpenApiOptions` describe HTTP bindings and contracts. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 
 ### Sessions, streams, queues, and integration effects
 
