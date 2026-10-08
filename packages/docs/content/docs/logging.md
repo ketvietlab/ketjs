@@ -119,6 +119,8 @@ silently — the same care applies as to renaming a permission.
 | `shutdown` | info | A process finished closing |
 | `http_request` | info | One served request, with its route pattern and status |
 | `unhandled` | error | An exception escaped the request handler, with its stack |
+| `http_binding_failed` | error | An HTTP binding answered 500 for an error its contract does not declare |
+| `http_binding_output` | error | A function's result broke its HTTP binding contract; the pointer and rule, never the value |
 | `fn_call` | info | A server function returned |
 | `fn_error` | warn / error | A server function failed |
 | `fn_denied` | warn | A caller invoked a function it may not call |

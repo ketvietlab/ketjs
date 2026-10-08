@@ -81,6 +81,21 @@ Output projection keeps only declared fields. Declare output whenever callers, p
 or agents need to know field-level reach. A function without `output` may return a value, but the
 permission inventory marks its response shape as unprojected.
 
+`output` names the fields of a row; `returns` says how many rows the function hands back:
+
+| `returns` | The handler returns |
+| --- | --- |
+| `one` | One object. |
+| `optional` | One object, or `null`/`undefined` (callers receive `null`). |
+| `many` | An array of objects. |
+| `none` | Anything; the value is discarded and callers receive `null`. |
+
+Once declared, `returns` is enforced when the handler finishes: a mismatch fails with `E_OUTPUT_NOT_SHAPED` before
+any field is projected. `none` cannot be combined with `output` fields, and an unknown value fails composition
+with `E_FUNCTION_RETURNS`. Changing a declared `returns` is a breaking change (`RETURNS_CHANGED`) in the manifest
+diff. Undeclared, nothing is checked, so existing functions keep their behaviour.
+[HTTP function bindings](/ketjs/openapi/#function-bindings) require it.
+
 Signatures validate the transport contract. Use changesets for domain validation and mass-assignment
 control inside the handler.
 
@@ -147,6 +162,9 @@ functions: {
 
 Use an internal function when a dedicated route must own rate limiting, origin checks, cookie
 handling, or response shaping.
+
+To publish a function as a REST-style operation with its own method, path, and OpenAPI contract,
+bind it with [`httpRoutes()`](/ketjs/openapi/#function-bindings) instead of writing a route by hand.
 
 ## Provisioning functions
 

@@ -319,7 +319,7 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
 
   let result: CallResult
   try {
-    const value = project(fnKey, meta.output, await def.handler(ctx, args ?? {}))
+    const value = project(fnKey, meta.output, await def.handler(ctx, args ?? {}), meta.returns)
     result = { ok: true, value, writes: ctx.writes, dryRun }
   } catch (e) {
     // A claim whose call then failed must not wedge the key forever.

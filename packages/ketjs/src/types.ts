@@ -30,14 +30,82 @@ export type RouteEntry =
       through?: string
       /** Machine-readable HTTP contract used by facades such as channel_api. */
       contract?: HttpRouteContract
+      /**
+       * A server function published at this path. Only `httpRoutes()` produces it:
+       * composition derives the contract from the function signature, so a route
+       * that carries a binding cannot also carry a handwritten contract.
+       */
+      binding?: HttpBindingSpec
       handler: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
 
 export type JsonSchema = Record<string, unknown>
 
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+/**
+ * Who may reach a function binding. `required` means the deployment's own identity
+ * (a cookie session or `serve.resolveIdentity`); `public` admits strangers and
+ * therefore only reaches functions declared `anonymous`.
+ */
+export type HttpBindingAuth = 'required' | 'public'
+
+/** Request-identity values a binding may supply as function input. Never read from the client. */
+export type HttpBindingIdentityValue = 'actor' | 'company' | 'branch'
+
+/** A business error code mapped to an HTTP status; `messageKey` is local to the declaring module. */
+export type HttpBindingError = { status: number; messageKey?: string }
+
+/** One server function published at one HTTP operation, as `httpRoutes()` records it. */
+export type HttpBindingSpec = {
+  profile: string
+  method: HttpMethod
+  path: string
+  call: string
+  auth: HttpBindingAuth
+  envelope: 'data' | 'none'
+  status?: 200 | 201
+  /** Function input name -> path placeholder, when the two names differ. */
+  params?: Record<string, string>
+  bind?: Record<string, HttpBindingIdentityValue>
+  returns?: FnReturns
+  idempotency?: 'optional' | 'required'
+  operationId?: string
+  summary?: string
+  schemas?: { input?: Record<string, JsonSchema>; output?: Record<string, JsonSchema> }
+  errors?: Record<string, number | HttpBindingError>
+  maxBodyBytes?: number
+}
+
+/** Where one function input of a binding comes from, and the schema it is checked against. */
+export type HttpBindingInput =
+  | { from: 'path'; placeholder: string; type: string; schema: JsonSchema }
+  | { from: 'query' | 'body'; type: string; schema: JsonSchema }
+  | { from: 'identity'; value: HttpBindingIdentityValue; type: string }
+
+/** The composed, serializable form of a binding. The running route and generators read only this. */
+export type HttpBindingMeta = {
+  fn: string
+  operationId: string
+  method: HttpMethod
+  auth: HttpBindingAuth
+  envelope: 'data' | 'none'
+  status: 200 | 201 | 204
+  returns: FnReturns
+  inputs: Record<string, HttpBindingInput>
+  /** Output field types, used to normalize a value before it is checked against `result`. */
+  output: Record<string, string>
+  /** What the projected value must satisfy before the envelope wraps it; null when nothing is returned. */
+  result: JsonSchema | null
+  idempotency: 'none' | 'optional' | 'required'
+  /** Declared business errors; `messageKey` is already qualified by the declaring module. */
+  errors: Record<string, { status: number; messageKey: string | null }>
+  maxBodyBytes: number
+}
+
 export type HttpRouteContract = {
   profile: string
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  method: HttpMethod
   operationId: string
   summary?: string
   /** Application-defined authentication policy interpreted by the contract facade. */
@@ -340,6 +408,12 @@ export type FnSpec = {
   provision?: boolean
   input?: Record<string, string>
   output?: Record<string, string>
+  /**
+   * How many `output` rows the function hands back. `output` names the fields of a
+   * row but not whether the answer is one row, a row or null, a list, or nothing,
+   * and a contract cannot be generated from a guess. Declared, it is enforced.
+   */
+  returns?: FnReturns
   effects?: string[]
   /**
    * Read across legal entities. Consolidated reporting needs it; almost nothing
@@ -354,6 +428,9 @@ export type FnSpec = {
   handler: (ctx: Ctx, args: Record<string, unknown>) => unknown
 }
 
+/** `one` row, `optional` row or null, `many` rows, or `none` (the value is discarded). */
+export type FnReturns = 'one' | 'optional' | 'many' | 'none'
+
 export type FnMeta = {
   by: string
   anonymous: boolean
@@ -361,6 +438,8 @@ export type FnMeta = {
   provision: boolean
   input: Record<string, string>
   output: Record<string, string>
+  /** Present only when declared, so the manifest of a function that never said is unchanged. */
+  returns?: FnReturns
   effects: string[]
   crossCompany: boolean
   idempotent: boolean
@@ -720,6 +799,8 @@ export type Manifest = {
       anonymous: boolean
       through?: string
       contract?: HttpRouteContract
+      /** Present when the route publishes a server function through `httpRoutes()`. */
+      binding?: HttpBindingMeta
       make: (ctx: import('./server/boot.ts').ServeContext) => import('./server/boot.ts').Route
     }
   >
