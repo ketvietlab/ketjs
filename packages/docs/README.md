@@ -127,6 +127,14 @@ The same frontmatter ordering supplies desktop/mobile navigation and previous/ne
 overview names these exact groups and offers shorter reading paths for specific tasks. Existing
 article slugs and inbound URLs stay stable when a guide changes group.
 
+Docs prose uses an editorial hierarchy from the public Két type scale, a 72ch reading
+measure for paragraphs, and underlined accent links. The site's native-link reset has deliberately
+low specificity so prose and navigation retain their own link treatments. The overview presents
+responsibility groups as named sections with ordered guide lists, in two columns on desktop and one
+on mobile. Subtle separators distinguish groups without introducing another primary action.
+The website accent keeps the public Két primary hue, with slightly higher saturation and brighter
+dark-theme variants. Primary controls and prose links must retain AA contrast in both themes.
+
 Benchmarks retain measured summaries in Markdown;
 generated raw runs and reports are neither committed nor published. The Node harnesses write to
 the ignored repository-root `.artifacts/benchmarks/` directory; browser samples can be saved there
