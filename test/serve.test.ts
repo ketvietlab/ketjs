@@ -265,6 +265,19 @@ test('ket new: refuses to overwrite rather than eat work', () => {
   assert.throws(() => scaffold('shop', dir), /refusing to overwrite/)
 })
 
+test('ket new: includes a pinned Spec tool and prints the runnable API docs command', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ket-new-docs-'))
+  const output = scaffold('shop', dir)
+  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  assert.equal(pkg.devDependencies['@ketvietlab/ketspec'], '0.1.41')
+  assert.equal(
+    pkg.scripts['api:docs'],
+    'npm run openapi && ketspec build openapi/shop.json --out .ket/api-docs',
+  )
+  assert.ok(output.some((line) => line.includes('npm run api:docs') && line.includes('.ket/api-docs')))
+  assert.match(readFileSync(join(dir, '.gitignore'), 'utf8'), /^\.ket\/$/m)
+})
+
 test('ket new: rejects a name that is not a module name', () => {
   assert.throws(() => scaffold('My Shop', '/tmp/x'), /invalid deployment name/)
 })

@@ -176,6 +176,18 @@ reason. Add `servers`, and `securitySchemes` with `security`, in `tools/openapi.
 sign-in; the generator refuses a non-public operation without them. See
 [Generating OpenAPI](/ketjs/openapi/#generating-openapi).
 
+## Build the API reference
+
+```sh
+# Run from: notes/
+npm run api:docs
+```
+
+The scaffold includes a pinned Spec development tool. This command writes the OpenAPI document, then builds
+a static API reference and try-it console in `.ket/api-docs`. Serve that directory with your static host;
+the output is ignored by Git. See [Reading the document](/ketjs/openapi/#reading-the-document) for server
+addresses and alternative renderers.
+
 ## Inspect the composed application
 
 Build before using production-style CLI commands:

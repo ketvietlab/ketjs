@@ -14,6 +14,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const VERSION = '0.2.0'
+const SPEC_VERSION = '0.1.41'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
 /** Template file → path it is written to, relative to the new project's directory. */
@@ -33,6 +34,7 @@ const render = (template: string, name: string): string =>
   readFileSync(new URL(template, TEMPLATES), 'utf8')
     .replaceAll('__NAME__', name)
     .replaceAll('__VERSION__', VERSION)
+    .replaceAll('__SPEC_VERSION__', SPEC_VERSION)
 
 export function scaffold(name: string, dir: string): string[] {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) {
@@ -57,6 +59,7 @@ export function scaffold(name: string, dir: string): string[] {
     '',
     `  cd ${dir} && npm install && npm run dev`,
     `  npm run openapi  # writes openapi/${name}.json`,
+    '  npm run api:docs  # builds the API reference in .ket/api-docs',
   )
   return out
 }
