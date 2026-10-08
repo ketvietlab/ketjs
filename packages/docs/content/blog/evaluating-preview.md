@@ -1,6 +1,8 @@
 ---
 title: How to evaluate a preview framework without betting your product on it
 description: A practical KetJS evaluation plan covering a complete workflow, failure tests, deployment boundaries, reproducible upgrades and useful project feedback.
+category: Project
+author: KetJS team
 date: "2026-10-06"
 order: 8
 ---

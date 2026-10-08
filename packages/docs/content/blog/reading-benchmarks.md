@@ -1,6 +1,8 @@
 ---
 title: What a framework benchmark actually tells you
 description: Read KetJS database, HTTP and SSR comparisons by workload, durability settings and measured boundary instead of treating a chart as a universal ranking.
+category: Performance
+author: KetJS team
 date: "2026-10-02"
 order: 7
 ---

@@ -71,10 +71,34 @@ A stable scrollbar gutter prevents
 short/long-page shifts, and an external classic head script applies saved theme before first paint.
 Mobile search, theme and navigation use accessible icon controls.
 
-The main navigation contains Docs, Learn, Playground and Blog. The blog index presents eight
-long-form engineering articles in an explicit reading order, from composition through database
-correctness, isolation, rendering, asynchronous work, measurement and Preview evaluation. Each article
-links to the relevant maintained Docs or Learn contract and identifies the Preview boundary.
+The main navigation contains Docs, Learn, Playground and Blog. Blog has its own editorial recipe:
+a 72rem canvas, an explicitly selected featured article, then the remaining articles by publication
+date (newest first). Native story rows own their editorial heading, summary and metadata; related
+articles use public DS ContentCard slots. Public Text, Badge, Breadcrumbs and LinkButton components
+retain their internals. No card internals or global type roles are overridden.
+
+Article reading uses a 42rem maximum measure and a named editorial 16px/28px prose role, plus a
+14rem sticky section navigation at widths >=1024px. Below that width, a native details/summary
+provides the same anchors. Metadata uses UTC-formatted publication dates and reading time calculated
+from complete plain text at 230 words/minute. Missing dates are omitted, missing category/author
+use Engineering/KetJS team, and an empty journal offers a Learn recovery link. Titles wrap fully.
+The content is public, read-only English SSG with eight articles; translated/RTL routes are not
+provided. Permission, mutation, disabled,
+filtered-empty, pagination, realtime and 10,000-item states do not apply. No loading spinner or
+client fetch is required; the reading links and TOC work without JavaScript. Existing offline
+documents remain readable, while opening an uncached page depends on normal browser networking;
+this change does not introduce an offline cache or service worker. Each article links to maintained
+Docs or Learn contracts and identifies the Preview boundary.
+The shared header moves its main navigation into the native menu at 768–900px so fixed logo/action
+slots keep their insets; controls switch to mobile icons below 768px as before.
+The logo reserves its inline width without a fixed flex basis, so reusing it in the footer's
+column does not create a square 176px link target. The named editorial prose role stays at
+16px/28px at every width; public Text components keep their DS type roles.
+The reading column explicitly fills its grid track; code blocks and diagrams scroll inside their
+own viewports rather than expanding the article on small screens.
+Small accent text and syntax accents use the darker DS accent-hover tone in light mode,
+retaining the current accent in dark mode, so text clears AA contrast on the editorial canvas.
+Code comments use the secondary text tone for the same contrast requirement.
 
 ## Verification scope
 

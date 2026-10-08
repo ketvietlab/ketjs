@@ -1,6 +1,8 @@
 ---
 title: Database correctness before convenience
 description: Why model scope, exact decimals, validated changesets and explicit transactions matter more than a convenient CRUD wrapper.
+category: Data
+author: KetJS team
 date: "2026-08-21"
 order: 2
 ---
