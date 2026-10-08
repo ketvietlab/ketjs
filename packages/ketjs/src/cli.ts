@@ -12,6 +12,8 @@ import { resolveWorkspace } from './kernel/modules.ts'
 import type { ResolvedModuleInfo } from './kernel/modules.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
+import { httpOpenApiDocument } from './kernel/openapi.ts'
+import type { HttpOpenApiOptions } from './kernel/openapi.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
 import {
   reachOf,
@@ -180,6 +182,10 @@ const HELP = `ket — zero-dependency fullstack framework
 
   ket check                 compose every deployment and report contract violations
   ket manifest [--deployment X]    print the composed manifest
+  ket openapi [--deployment X]     print the deployment's OpenAPI 3.1 document
+    --profile NAME          contract profile (default: deployment name)
+    --options FILE          JSON HttpOpenApiOptions metadata and security definitions
+    --out FILE              write the document instead of printing JSON
   ket workspace             show deployments, datastores and shared modules
   ket modules               show resolved modules and their source paths
   ket types [--deployment X]       generate .ket/types.d.ts from the manifest
@@ -358,6 +364,77 @@ const jsonObject = (value: string | undefined, label: string): Record<string, un
 }
 
 const callInput = (): Record<string, unknown> => jsonObject(opt('input'), '--input')
+
+/** JSON supplies metadata only; the composed manifest remains the contract source. */
+const openApiOptions = (deployment: string): { options: HttpOpenApiOptions; out?: string } => {
+  const object = (held: unknown): held is Record<string, unknown> =>
+    held !== null && typeof held === 'object' && !Array.isArray(held)
+  const value = (name: string) => {
+    const given = opt(name)
+    if (
+      (flag(name) || rest.some((item) => item.startsWith(`--${name}=`))) &&
+      (!given?.trim() || given.startsWith('--'))
+    )
+      throw new Error(`--${name} requires a value`)
+    return given
+  }
+  value('deployment')
+  const profile = value('profile')
+  const optionsFile = value('options')
+  const out = value('out')
+  const options = optionsFile ? jsonObject(`@${optionsFile}`, '--options') : {}
+  const packageVersion = existsSync('package.json')
+    ? jsonObject('@package.json', 'package.json')['version']
+    : undefined
+  const info =
+    options['info'] === undefined
+      ? {
+          title: `${deployment} API`,
+          version: typeof packageVersion === 'string' && packageVersion.trim() ? packageVersion : '0.0.0',
+        }
+      : options['info']
+  if (
+    !object(info) ||
+    typeof info['title'] !== 'string' ||
+    !info['title'].trim() ||
+    typeof info['version'] !== 'string' ||
+    !info['version'].trim() ||
+    (info['description'] !== undefined && typeof info['description'] !== 'string')
+  )
+    throw new Error(
+      '--options info must contain non-empty string title and version, and an optional string description',
+    )
+  const selectedProfile = profile ?? options['profile'] ?? deployment
+  if (typeof selectedProfile !== 'string' || !selectedProfile.trim())
+    throw new Error('--options profile must be a non-empty string')
+  if (
+    options['servers'] !== undefined &&
+    (!Array.isArray(options['servers']) ||
+      !options['servers'].every((server) => object(server) && typeof server['url'] === 'string'))
+  )
+    throw new Error('--options servers must be an array of objects with string url values')
+  if (
+    options['securitySchemes'] !== undefined &&
+    (!object(options['securitySchemes']) || !Object.values(options['securitySchemes']).every(object))
+  )
+    throw new Error('--options securitySchemes must map scheme names to objects')
+  if (
+    options['security'] !== undefined &&
+    (!Array.isArray(options['security']) ||
+      !options['security'].every(
+        (requirement) =>
+          object(requirement) &&
+          Object.values(requirement).every(
+            (scopes) => Array.isArray(scopes) && scopes.every((scope) => typeof scope === 'string'),
+          ),
+      ))
+  )
+    throw new Error('--options security must be an array of scheme-to-scope-list objects')
+  return {
+    options: { ...options, profile: selectedProfile, info } as HttpOpenApiOptions,
+    ...(out === undefined ? {} : { out }),
+  }
+}
 
 const callWithClient = async (baseUrl: string): Promise<number> => {
   const fnKey = positionals([
@@ -613,6 +690,15 @@ try {
   } else if (cmd === 'manifest') {
     const [, m] = pickDeployment(ws)
     console.log(JSON.stringify(m, null, 2))
+  } else if (cmd === 'openapi') {
+    const [name, manifest] = pickDeployment(ws)
+    const { options, out } = openApiOptions(name)
+    const document = `${JSON.stringify(httpOpenApiDocument(manifest, options), null, 2)}\n`
+    if (out) {
+      mkdirSync(join(out, '..'), { recursive: true })
+      writeFileSync(out, document)
+      console.log(`wrote ${out}`)
+    } else process.stdout.write(document)
   } else if (cmd === 'types') {
     const [name, m] = pickDeployment(ws)
     const out = `.ket/types.${name}.d.ts`

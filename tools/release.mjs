@@ -236,6 +236,23 @@ const smoke = (tarballs, version, parent) => {
   run(npm, ['run', 'api:docs'], { cwd: generated })
   if (!existsSync(join(generated, '.ket/api-docs/index.html')))
     fail('ket new did not build its static API reference')
+  run(
+    node,
+    [
+      join(generated, 'node_modules/@ketvietlab/ketjs/dist/cli.js'),
+      'openapi',
+      '--deployment',
+      'release_smoke',
+      '--out',
+      '.ket/cli-openapi.json',
+    ],
+    { cwd: generated },
+  )
+  if (
+    readFileSync(join(generated, '.ket/cli-openapi.json'), 'utf8') !==
+    readFileSync(join(generated, 'openapi/release_smoke.json'), 'utf8')
+  )
+    fail('ket openapi disagrees with the generated project contract')
 
   const generatedView = join(parent, 'generated-view')
   run(node, [
