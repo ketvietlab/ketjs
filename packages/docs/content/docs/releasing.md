@@ -1,8 +1,8 @@
 ---
 title: Publishing packages
 description: Prepare, verify, and publish a coordinated KetJS release to npm.
-group: Reference
-order: 5
+group: Project evolution
+order: 6
 ---
 
 KetJS releases five public packages with one version:

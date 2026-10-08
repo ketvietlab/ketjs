@@ -38,8 +38,9 @@ indexes and `404/index.html` for missing routes. Production hosting and DNS are 
 ## Content and rendering
 
 - `content/home.md` supplies homepage copy and feature data. Other Markdown collections supply
-  docs, learning content, runnable examples and project posts. Docs use explicit frontmatter group/order in a Laravel-inspired reading hierarchy; the overview links task-specific paths. Each file requires title and description
-  frontmatter; filename determines its slug. Docs also use group/order for navigation.
+  docs, learning content, runnable examples and project posts. Docs use explicit frontmatter group/order
+  following KetJS responsibilities; the overview explains each group and links task-specific paths.
+  Each file requires title and description frontmatter; filename determines its slug.
 - `pages/index.tsx` returns `definePages()` using those collections. ketjs-view-tools renders each
   route with its initial HTML, canonical URL and metadata.
 - `site/content.mjs` parses frontmatter, sanitizes Markdown HTML, highlights code and generates
@@ -114,8 +115,19 @@ available without JavaScript or after a rendering failure. The engine contract f
 [official theme API](https://mermaid.js.org/config/theming); Tiny supports the flowchart, sequence and
 state diagrams used here, but excludes mindmap, architecture diagrams, KaTeX and ELK.
 
-Documentation organization follows the responsibility groups in [Laravel's documentation](https://laravel.com/framework/docs),
-adapted to KetJS composition and ownership. Benchmarks retain measured summaries in Markdown;
+Documentation navigation follows KetJS's own composition and execution boundaries. Its ordered groups
+are Set up KetJS, Application composition, Request execution, Data contracts, Identity and access,
+ketjs-view and KTL, Runtime services, Verify and deploy, API and tooling, and Project evolution.
+Start with a runnable project, then understand the modules and deployment manifest before following
+requests, data and identity into rendering. Runtime services follow those application contracts;
+testing and benchmarks precede deployment. API lookup and project maintenance stay at the end.
+Within composition, modules precede workspaces and deployments, followed by filesystem discovery.
+Sessions and tenants precede authorization; static ketjs-view sites precede server theme templates.
+The same frontmatter ordering supplies desktop/mobile navigation and previous/next links. The Docs
+overview names these exact groups and offers shorter reading paths for specific tasks. Existing
+article slugs and inbound URLs stay stable when a guide changes group.
+
+Benchmarks retain measured summaries in Markdown;
 generated raw runs and reports are neither committed nor published. The Node harnesses write to
 the ignored repository-root `.artifacts/benchmarks/` directory; browser samples can be saved there
 manually. After a new run, review the measured values before updating the Markdown summaries.

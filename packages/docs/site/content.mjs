@@ -5,16 +5,16 @@ import { createHighlighter, createCssVariablesTheme } from 'shiki'
 
 export const origin = 'https://ketjs.dev'
 export const groups = [
-  'Prologue',
-  'Getting started',
-  'Architecture concepts',
-  'The basics',
-  'Database',
-  'Views and frontend',
-  'Security and tenancy',
-  'Digging deeper',
-  'Testing',
-  'Reference',
+  'Set up KetJS',
+  'Application composition',
+  'Request execution',
+  'Data contracts',
+  'Identity and access',
+  'ketjs-view and KTL',
+  'Runtime services',
+  'Verify and deploy',
+  'API and tooling',
+  'Project evolution',
 ]
 const highlighter = await createHighlighter({
   themes: [createCssVariablesTheme({ name: 'ket', variablePrefix: '--syntax-' })],
@@ -114,7 +114,7 @@ export function parseContent(source, { slug, kind = 'docs' }) {
     route,
     title: metadata.title,
     description: metadata.description,
-    group: metadata.group ?? 'Reference',
+    group: metadata.group ?? 'API and tooling',
     order: metadata.order ?? metadata.sidebar?.order ?? 50,
     date: metadata.date ? String(metadata.date) : null,
     metadata,

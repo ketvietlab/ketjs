@@ -1,8 +1,8 @@
 ---
 title: Directory structure
 description: Understand the files in a scaffolded application and how modules grow.
-group: Getting started
-order: 3
+group: Set up KetJS
+order: 2
 ---
 
 ## The application scaffold

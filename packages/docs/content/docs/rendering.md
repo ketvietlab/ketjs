@@ -1,7 +1,7 @@
 ---
 title: Rendering and islands
 description: Build first-party UI with ketjs-view signals, templates, SSR, hydration, JSX, and interactive islands.
-group: Views and frontend
+group: ketjs-view and KTL
 order: 1
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: Upgrading KetJS
 description: Audit compatibility, physical schemas, queries, and tenant sessions before changing a KetJS version.
-group: Prologue
+group: Project evolution
 order: 2
 ---
 
