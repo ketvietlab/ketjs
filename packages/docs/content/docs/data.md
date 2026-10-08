@@ -1,7 +1,7 @@
 ---
 title: Queries and changesets
 description: Read and write KetJS data with immutable queries, validated changesets, and transactions.
-group: Database
+group: Data contracts
 order: 3
 ---
 

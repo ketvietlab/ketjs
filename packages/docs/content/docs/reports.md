@@ -1,7 +1,7 @@
 ---
 title: Reports and PDF
 description: Declare business-owned reports and render constrained KTL as deterministic PDF documents.
-group: Views and frontend
+group: ketjs-view and KTL
 order: 6
 ---
 
