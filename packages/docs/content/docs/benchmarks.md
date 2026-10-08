@@ -1,7 +1,7 @@
 ---
 title: Benchmarks
 description: Compare KetJS database execution, HTTP server and SSR performance with repeatable workloads, exact versions and HTML charts.
-group: Testing
+group: Verify and deploy
 order: 2
 # Maintained chart summaries; generated raw runs live outside the website.
 benchmarkReports:

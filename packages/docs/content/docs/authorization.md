@@ -1,8 +1,8 @@
 ---
 title: Authorization
 description: Grant operations, enforce declared effects and keep tenant data isolated.
-group: Security and tenancy
-order: 1
+group: Identity and access
+order: 2
 ---
 
 ## Permission grants name operations

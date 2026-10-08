@@ -1,7 +1,7 @@
 ---
 title: Menus and localization
 description: Compose permission-aware navigation and module-owned translated message catalogues.
-group: Views and frontend
+group: ketjs-view and KTL
 order: 5
 ---
 

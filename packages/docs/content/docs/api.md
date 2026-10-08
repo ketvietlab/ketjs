@@ -1,7 +1,7 @@
 ---
 title: Public API
 description: Supported KetJS, theme, testing, view, and PostgreSQL package entrypoints.
-group: Reference
+group: API and tooling
 order: 1
 ---
 

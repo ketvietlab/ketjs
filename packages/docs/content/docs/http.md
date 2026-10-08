@@ -1,8 +1,8 @@
 ---
 title: HTTP routes and responses
 description: Serve KetJS functions, module routes, dynamic paths, HTML, JSON, binary data, and streamed responses.
-group: The basics
-order: 2
+group: Request execution
+order: 3
 ---
 
 KetJS provides a Node HTTP runtime around the composed application. The framework mounts function,

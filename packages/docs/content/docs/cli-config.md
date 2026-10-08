@@ -1,7 +1,7 @@
 ---
 title: CLI and configuration
 description: Inspect, build, run, migrate, and configure KetJS applications from the ket command line.
-group: Reference
+group: API and tooling
 order: 2
 ---
 
