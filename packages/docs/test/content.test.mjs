@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseContent } from '../site/content.mjs'
+import { fileURLToPath } from 'node:url'
+import { groups, parseContent } from '../site/content.mjs'
+import { readContent } from '../site/content-store.ts'
 
 const markdown = (body) => `---\ntitle: A guide\ndescription: A useful guide\n---\n${body}`
 test('Markdown removes executable markup and unsafe links while preserving code examples', () => {
@@ -52,4 +54,31 @@ test('Mermaid keeps escaped source and an accessible fallback for static visitor
   assert.ok(page.html.includes('&lt;script&gt;'))
   assert.ok(!page.html.includes('<script>'))
   assert.ok(page.html.includes('open'))
+})
+
+test('the overview names every responsibility and lists its guides once in navigation order', () => {
+  const docs = readContent(fileURLToPath(new URL('..', import.meta.url))).filter(
+    (page) => page.kind === 'docs',
+  )
+  const overview = docs.find((page) => page.slug === 'index')
+  const sections = [
+    ...overview.html.matchAll(/<section class="docs-topic" aria-label="([^"]+)">([\s\S]*?)<\/section>/g),
+  ]
+  assert.deepEqual(
+    sections.map((section) => section[1]),
+    groups,
+  )
+  const allRoutes = []
+  for (const [, group, body] of sections) {
+    assert.ok(body.includes('<h3'), `${group}: a visible heading`)
+    assert.ok(body.includes('<ol>'), `${group}: a reading order`)
+    const routes = [...body.matchAll(/href="(\/docs\/[^"#]+)"/g)].map((link) => link[1])
+    assert.deepEqual(
+      routes,
+      docs.filter((page) => page.group === group && page.slug !== 'index').map((page) => page.route),
+    )
+    allRoutes.push(...routes)
+  }
+  assert.equal(new Set(allRoutes).size, docs.length - 1)
+  assert.equal(allRoutes.length, docs.length - 1)
 })
