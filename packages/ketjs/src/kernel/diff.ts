@@ -133,6 +133,13 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         )
       }
     }
+    if (bfn.returns !== undefined && afn.returns !== bfn.returns)
+      push(
+        'breaking',
+        'RETURNS_CHANGED',
+        `"${fkey}" returned ${bfn.returns} and now ${afn.returns === undefined ? 'does not declare it' : `returns ${afn.returns}`}`,
+        'clients and HTTP contracts read one row, a nullable row, a list or nothing from it',
+      )
     if (bfn.idempotent && !afn.idempotent)
       push(
         'risky',

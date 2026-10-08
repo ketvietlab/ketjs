@@ -14,6 +14,7 @@ import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
 import { tableNameFor } from '../data/migrate.ts'
 import { compilePermissionBundles } from './permissions.ts'
+import { composeHttpBindings, FN_RETURNS } from './http-binding.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
 const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
@@ -760,10 +761,27 @@ export function compose(
           hint: 'set exposure: "internal" so bootstrap credentials never have a generic endpoint',
         })
       }
+      if (def.returns !== undefined && !FN_RETURNS.has(def.returns)) {
+        diag.add({
+          code: 'E_FUNCTION_RETURNS',
+          module: m.name,
+          message: `function "${qualify(m.name, fname)}" has unknown returns "${String(def.returns)}"`,
+          hint: 'use "one", "optional", "many" or "none"',
+        })
+      } else if (def.returns === 'none' && Object.keys(def.output ?? {}).length) {
+        diag.add({
+          code: 'E_FUNCTION_RETURNS',
+          module: m.name,
+          message: `function "${qualify(m.name, fname)}" declares output fields but returns "none"`,
+          hint: 'drop the output fields, or say how many rows it returns',
+        })
+      }
       manifest.functions[qualify(m.name, fname)] = {
         by: m.name,
         input: def.input ?? {},
         output: def.output ?? {},
+        // Only when declared: a manifest written before `returns` existed stays byte-identical.
+        ...(def.returns !== undefined ? { returns: def.returns } : {}),
         effects: [...(def.effects ?? [])],
         crossCompany: def.crossCompany === true,
         anonymous: def.anonymous === true,
@@ -1383,6 +1401,9 @@ export function compose(
 
   // --- tokens: later modules layer over earlier ones ------------------------
   for (const m of order) Object.assign(manifest.tokens, m.tokens)
+
+  // --- HTTP bindings: last, because they read functions, routes and messages ---
+  composeHttpBindings(order, manifest, diag)
 
   diag.throwIfAny()
   manifest.diagnostics = []

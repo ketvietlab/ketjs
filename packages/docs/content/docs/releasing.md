@@ -13,7 +13,7 @@ KetJS releases five public packages with one version:
 4. `@ketvietlab/ketjs`
 5. `@ketvietlab/ketjs-postgres`
 
-The KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client` and `website-client`) are
+The KetSuite packages (`design-system`, `ketsuite`, `flow-ui`, `flow-client`, `website-client` and `ketspec`) are
 released from the KetSuite source, not from this repository.
 
 Internal dependencies use that exact version. Publish in this order so every dependency exists before
@@ -51,7 +51,8 @@ Broad release verification belongs to promotion into `develop` and the release p
 - installs all tarballs into a clean consumer and imports every public entry point;
 - invokes the installed `ket new` and `create-view` binaries;
 - installs the local tarballs into that generated project, resolves its development CLI entry, then runs its
-  check and integration test.
+  check and integration test, builds the static Spec reference, and compares CLI OpenAPI output with the
+  project's generator. The scaffold's pinned Spec version must already be published by KetSuite.
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
 embedded by the deterministic PDF renderer. A release that crosses a ceiling must inspect the tarball
