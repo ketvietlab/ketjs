@@ -47,7 +47,7 @@ The backend lab includes `npm run learn -- list`, lesson text, and selected exec
 
 ## Read the preview contract
 
-This course targets **KetJS 0.2.0 preview**. Pin that version while following the examples. The project is under active review and APIs can change before 1.0. Treat deployment exercises as evaluation environments. Keep generated lockfiles so another learner can reproduce your setup.
+This course targets **KetJS 0.3.0 preview**. Pin that version while following the examples. The project is under active review and APIs can change before 1.0. Treat deployment exercises as evaluation environments. Keep generated lockfiles so another learner can reproduce your setup.
 
 ## Checkpoint
 

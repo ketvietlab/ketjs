@@ -7,7 +7,7 @@ order: 0
 
 ## Find your entry point
 
-:::note[KetJS 0.2.0 is in preview]
+:::note[KetJS 0.3.0 is in preview]
 The project is in active review. Use it for evaluation and feedback, expect API and data-format changes before 1.0, and avoid production workloads for now.
 :::
 
@@ -16,6 +16,8 @@ For step-by-step projects, follow [Learn KetJS](/learn/). These Docs explain the
 1. [Installation and quick start](/docs/quick-start/) — scaffold and run a working SQLite application.
 2. [Directory structure](/docs/project-structure/) — locate module declarations, workspace configuration and emitted artifacts.
 3. [Configuration](/docs/configuration/) — select the workspace, deployment and runtime services.
+
+For a browsable API reference and request console, use [Spec](/spec/). It turns your OpenAPI contract into a standalone static site.
 
 ## Browse by KetJS responsibility
 
