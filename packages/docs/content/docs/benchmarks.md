@@ -313,7 +313,7 @@ At 250 variants, value/disabled/attribute writes are zero for a valid edit, whil
 mirrors perform two text writes. In a separate
 100-field probe, reading `session.values()` directly in every field effect executes **100 field
 effects, including 99 unedited fields**, instead of one with primitive selectors. See
-[form render subscriptions](/docs/form-validation/#render-subscriptions-and-cost).
+[form render subscriptions](/docs/view-forms/#render-subscriptions-and-cost).
 
 The native regression fixture at `/regressions/` passes **4 cases and 46 assertions**, including
 one control snapshot per update with 500 controls, one custom resolution per issue, dense error

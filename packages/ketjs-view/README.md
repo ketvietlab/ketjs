@@ -53,5 +53,8 @@ hints. Dynamic and externally associated controls are included in the next snaps
 available as a lower-level, transport-independent controller; its resolved handler is not a durable
 save acknowledgement.
 
-See the [form contract guide](../docs/content/docs/form-validation.md) for nested issues, server
-actions, native-route ownership, lifecycle and migration examples.
+Read [Forms and edit sessions](../docs/content/docs/view-forms.md) for browser controllers, native
+binding, island lifecycle, render subscriptions and migration examples.
+See [Form validation](../docs/content/docs/form-validation.md) for shared schemas and nested issues,
+and [Transactional form actions](../docs/content/docs/form-actions.md) for server writes, durable
+receipts and native-route ownership.
