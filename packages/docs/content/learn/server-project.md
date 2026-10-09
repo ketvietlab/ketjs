@@ -15,7 +15,7 @@ Open another terminal and create a sibling to the View project:
 
 ```bash
 # Run from: your-projects
-npx -y @ketvietlab/ketjs@0.2.0 new learn_api
+npx -y @ketvietlab/ketjs@0.3.0 new learn_api
 cd learn_api
 npm install
 npm run build
