@@ -3,6 +3,7 @@ import { basename, join, relative } from 'node:path'
 
 // A host umask must not change release integrity between macOS and GitHub's Linux runner.
 // Stage files instead of changing permissions in a developer's checkout.
+/** @param {string} source @param {string} destination */
 export function stagePackage(source, destination) {
   cpSync(source, destination, {
     recursive: true,
@@ -14,6 +15,7 @@ export function stagePackage(source, destination) {
       (path) => path.replace(/^\.\//, ''),
     ),
   )
+  /** @param {string} directory */
   const visit = (directory) => {
     chmodSync(directory, 0o755)
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
