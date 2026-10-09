@@ -3,7 +3,7 @@ import test from 'node:test'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { basename, join, dirname } from 'node:path'
 import { producers, consumers, materializeVersion, readVersion, readJson } from './version.mjs'
 import { candidateManifest, registryLock } from './version-consumers.mjs'
 import {
@@ -17,10 +17,12 @@ import {
 import { auditDocuments } from './version-documents.mjs'
 import { stagePackage } from './release-files.mjs'
 
+/** @param {string} root @param {string} path @param {unknown} value */
 const put = (root, path, value) => {
   mkdirSync(dirname(join(root, path)), { recursive: true })
   writeFileSync(join(root, path), typeof value === 'string' ? value : JSON.stringify(value, null, 2) + '\n')
 }
+/** @param {string} cwd @param {string} executable @param {string[]} args */
 const execute = (cwd, executable, args) => {
   const result = spawnSync(executable, args, { cwd, encoding: 'utf8' })
   assert.equal(result.status, 0, `${executable} ${args.join(' ')}\n${result.stdout}\n${result.stderr}`)
@@ -44,10 +46,12 @@ test('release staging normalizes host permissions without changing the source ch
   assert.equal(statSync(join(root, 'staged/dist/index.js')).mode & 0o777, 0o644)
   assert.equal(statSync(join(root, 'staged/dist/cli.js')).mode & 0o777, 0o755)
 })
+/** @param {import('node:test').TestContext} t */
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ketjs-version-contract-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   put(root, 'VERSION', '0.4.0\n')
+  /** @type {import('./version-types.d.ts').PackageLock} */
   const lock = { version: '0.4.0', packages: { '': { version: '0.4.0' } } }
   put(root, 'package.json', { name: 'fixture', version: '0.4.0' })
   for (const { name, directory } of producers) {
@@ -91,8 +95,10 @@ function fixture(t) {
   ])
   return root
 }
+/** @param {string} root @returns {import('./version-types.d.ts').AuditLedger} */
 function ledger(root) {
   const { commit, reason } = versionCommit(root)
+  /** @type {import('./version-types.d.ts').AuditEntry} */
   const entry = {
     version: readVersion(root),
     versionCommit: commit,
@@ -174,7 +180,8 @@ test('CHANGE_LOG rejects missing entries, mismatched commits/reasons, stale sour
   const valid = ledger(root)
   put(root, 'CHANGE_LOG', valid)
   assert.equal(checkAudit(root).version, '0.4.0')
-  for (const mutate of [
+  /** @type {Array<(entry: import('./version-types.d.ts').AuditEntry) => void>} */
+  const mutations = [
     (entry) => {
       entry.versionCommit = 'f'.repeat(40)
     },
@@ -185,7 +192,9 @@ test('CHANGE_LOG rejects missing entries, mismatched commits/reasons, stale sour
       entry.evidence.checks = entry.evidence.checks.filter((check) => check.id !== 'docs-audit')
     },
     (entry) => {
-      entry.evidence.checks.find((check) => check.id === 'api-tests').exitCode = 1
+      const check = entry.evidence.checks.find((check) => check.id === 'api-tests')
+      assert.ok(check)
+      check.exitCode = 1
     },
     (entry) => {
       entry.evidence.packages['@ketvietlab/ketjs'].integrity = 'invented'
@@ -193,7 +202,8 @@ test('CHANGE_LOG rejects missing entries, mismatched commits/reasons, stale sour
     (entry) => {
       entry.evidence.documents.files = []
     },
-  ]) {
+  ]
+  for (const mutate of mutations) {
     const invalid = structuredClone(valid)
     mutate(invalid.releases[0])
     put(root, 'CHANGE_LOG', invalid)
@@ -266,10 +276,11 @@ test('unpublished versions install entirely offline through the exact candidate 
       dependencies: { '@ketvietlab/ketjs-view': version },
     },
   }
+  /** @type {Record<string, import('./version-types.d.ts').Tarball>} */
   const tarballs = {}
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   for (const [name, manifest] of Object.entries(manifests)) {
-    const directory = join(root, name.split('/').at(-1))
+    const directory = join(root, basename(name))
     put(directory, 'package.json', manifest)
     put(directory, 'index.js', `export const version = '${version}'\n`)
     const output = execute(root, npm, [
@@ -281,7 +292,12 @@ test('unpublished versions install entirely offline through the exact candidate 
       directory,
     ])
     const [pack] = JSON.parse(output.slice(output.indexOf('[')))
-    tarballs[name] = { path: join(root, pack.filename), integrity: pack.integrity }
+    tarballs[name] = {
+      path: join(root, pack.filename),
+      integrity: pack.integrity,
+      shasum: pack.shasum,
+      version: pack.version,
+    }
   }
   const consumer = join(root, 'consumer')
   const manifest = {

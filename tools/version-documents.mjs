@@ -11,6 +11,7 @@ export function auditDocuments(root = ROOT) {
     'packages/docs/tutorials/api/README.md',
     'packages/docs/tutorials/view/README.md',
   ]
+  /** @param {string} directory */
   const visit = (directory) => {
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
       const path = `${directory}/${entry.name}`
