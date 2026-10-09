@@ -8,6 +8,7 @@ import {
   defineFormContract,
   defineModule,
   formConflict,
+  notificationHub,
   planMigration,
   registerFunctions,
   renderSql,
@@ -47,7 +48,7 @@ const contract = defineFormContract<Values>('example.variants.v1', {
 })
 const initial = (): Values => ({ variants: [{ rowKey: 'new-1', id: null, weight: '2' }] })
 
-function fixture() {
+function fixture(afterNotify?: () => void) {
   let refuse = false
   let malformedReceipt = false
   let executions = 0
@@ -69,7 +70,8 @@ function fixture() {
             { revision: expectedRevision },
             { revision },
           )
-          if (!('matched' in cas) || !cas.matched) return formConflict()
+          if (!('matched' in cas) || !cas.matched)
+            return { ...formConflict(), internal: { privateCost: 'hidden' } }
           const variants = []
           for (const row of values.variants) {
             const id = row.id ?? randomUUID()
@@ -77,7 +79,14 @@ function fixture() {
             else await ctx.db.insert('example.Variant', { id, weight: row.weight })
             variants.push({ ...row, id })
           }
-          if (refuse) return { status: 'invalid', issues: [validationIssue('variants.0.weight', 'refused')] }
+          await ctx.notify('form_saved', recordId)
+          afterNotify?.()
+          if (refuse)
+            return {
+              status: 'invalid',
+              issues: [validationIssue('variants.0.weight', 'refused')],
+              internal: { privateCost: 'hidden' },
+            }
           return {
             status: 'committed',
             accepted: malformedReceipt ? ({ variants: null } as unknown as Values) : { variants },
@@ -100,8 +109,8 @@ function fixture() {
   }
 }
 
-async function boot(adapter: Adapter = sqliteAdapter()) {
-  const state = fixture()
+async function boot(adapter: Adapter = sqliteAdapter(), afterNotify?: () => void) {
+  const state = fixture(afterNotify)
   const manifest = compose([state.module], { headless: true })
   await adapter.open()
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
@@ -138,6 +147,7 @@ test('form action rejects malformed replacement before writes and preserves tena
     assert.equal(app.executions(), 0)
     const other = await app.call(initial(), { scope: { company: 'b' } })
     assert.equal((other.value as FormOutcome).status, 'conflict')
+    assert.deepEqual(Object.keys(other.value as object).sort(), ['issues', 'status'])
     assert.equal((await app.adapter.all('SELECT * FROM example_variant')).length, 0)
     await assert.rejects(app.call(initial(), { idempotencyKey: undefined }), {
       code: 'E_ATOMIC_KEY_REQUIRED',
@@ -154,6 +164,7 @@ test('a normal domain refusal rolls back the revision, child writes and receipt'
     const result = await app.call()
     const outcome = result.value as FormOutcome
     assert.equal(outcome.status, 'invalid')
+    assert.deepEqual(Object.keys(outcome).sort(), ['issues', 'status'])
     if (outcome.status === 'invalid')
       assert.deepEqual(outcome.issues[0].path, ['variants', { key: 'new-1' }, 'weight'])
     assert.equal((await app.adapter.all('SELECT revision FROM example_setup'))[0].revision, 'r0')
@@ -221,6 +232,48 @@ test('failure while recording the receipt rolls back the business transaction', 
   }
 })
 
+async function assertFormNotifications(adapter: Adapter) {
+  const delivered: string[] = []
+  const app = await boot(adapter, () => assert.deepEqual(delivered, [], 'no notice before commit'))
+  let unsubscribe: (() => Promise<void>) | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    let received!: () => void
+    const notice = new Promise<void>((resolve) => {
+      received = resolve
+    })
+    unsubscribe = await notificationHub(adapter).subscribe('form_saved', (payload) => {
+      delivered.push(payload)
+      received()
+    })
+    app.setRefuse(true)
+    assert.equal(((await app.call()).value as FormOutcome).status, 'invalid')
+    assert.deepEqual(delivered, [], 'a rolled-back action does not publish')
+    app.setRefuse(false)
+    const first = await app.call()
+    await Promise.race([
+      notice,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('committed notification was not delivered')), 2000)
+      }),
+    ])
+    assert.deepEqual(delivered, ['p1'])
+    const replay = await app.call()
+    assert.equal(replay.replayed, true)
+    assert.deepEqual(replay.value, first.value)
+    assert.equal(app.executions(), 2, 'the refusal and commit execute; the replay does not')
+    assert.deepEqual(delivered, ['p1'], 'receipt replay does not publish again')
+  } finally {
+    if (timer) clearTimeout(timer)
+    await unsubscribe?.()
+    await adapter.close()
+  }
+}
+
+test('SQLite form notifications reach root listeners only after commit, never on refusal or replay', async () => {
+  await assertFormNotifications(sqliteAdapter())
+})
+
 test('Postgres form actions serialize duplicate intents and roll back domain refusals', live, async () => {
   const name = `form_${randomUUID().replaceAll('-', '')}`
   const admin = postgresAdapter(adminUrl.toString())
@@ -245,6 +298,25 @@ test('Postgres form actions serialize duplicate intents and roll back domain ref
     await admin.close()
   }
 })
+
+test(
+  'Postgres form notifications reach root listeners only after commit, never on refusal or replay',
+  live,
+  async () => {
+    const name = `form_notify_${randomUUID().replaceAll('-', '')}`
+    const admin = postgresAdapter(adminUrl.toString())
+    await admin.open()
+    try {
+      await admin.exec(`CREATE DATABASE "${name}"`)
+      const url = new URL(adminUrl)
+      url.pathname = `/${name}`
+      await assertFormNotifications(postgresAdapter(url.toString()))
+    } finally {
+      await admin.exec(`DROP DATABASE IF EXISTS "${name}"`)
+      await admin.close()
+    }
+  },
+)
 
 test('form action HTTP uses existing authorization and bindings require an intent key', async (t) => {
   const state = fixture()

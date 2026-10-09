@@ -12,6 +12,7 @@ import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
 import { queueFor } from './queue.ts'
+import { notificationHub } from './notify.ts'
 import type { Logger } from './log/logger.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
@@ -292,8 +293,9 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
 
   if (def.transactional) {
     await idemFor(o.adapter)
+    const notices: Array<[string, string]> = []
     try {
-      return await o.adapter.tx(async (adapter) => {
+      const result = await o.adapter.tx(async (adapter) => {
         const store = idempotencyStore(adapter)
         const claimed = await store.claim(idemKey!, fnKey, 5 * 60_000, idemDigest)
         if (!claimed) {
@@ -308,6 +310,8 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
         }
         const ctx = createContext({
           adapter,
+          root: o.adapter,
+          notices,
           manifest: o.manifest,
           fnKey,
           dryRun: false,
@@ -322,9 +326,16 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
         await store.complete(idemKey!, result)
         return result
       })
+      for (const [channel, payload] of notices) notificationHub(o.adapter).deliverLocally(channel, payload)
+      return result
     } catch (error) {
       if (error instanceof FormActionRefusal)
-        return { ok: true, value: error.outcome, writes: [], dryRun: false }
+        return {
+          ok: true,
+          value: project(fnKey, meta.output, error.outcome, meta.returns),
+          writes: [],
+          dryRun: false,
+        }
       throw error
     }
   }

@@ -56,6 +56,8 @@ Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvi
 `defineFormAction(contract, { effects, handler })` declares an ordinary permission- and scope-checked
 function. It validates shared nested values, requires an idempotency key, and commits database writes
 and the accepted receipt in one transaction. Returned invalid/conflict outcomes unwind earlier writes.
+All outcomes retain the declared output boundary. Notifications reach root listeners after commit,
+are discarded on rollback, and are not repeated when a receipt is replayed.
 The domain handler must check and advance the aggregate revision using the supplied transaction
 context; all writers must participate. External effects need staging or an outbox.
 
