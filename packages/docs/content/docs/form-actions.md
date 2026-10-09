@@ -9,6 +9,11 @@ order: 5
 contract, runs the domain handler and records an accepted result in one database transaction.
 It does not infer which records form an aggregate, replace permission checks or create a form route.
 
+:::note[Development API]
+`defineFormAction` is pending a framework release and is not part of published KetJS 0.3.0. The
+example below targets this development branch; npm consumers need a release containing this API.
+:::
+
 Define the browser-safe schema with [Form validation](/docs/form-validation/), then connect the browser
 with [Forms and edit sessions](/docs/view-forms/). Only a `committed` outcome acknowledges a durable save;
 a resolved Fetch promise or a completed preview/read is not that acknowledgement.
