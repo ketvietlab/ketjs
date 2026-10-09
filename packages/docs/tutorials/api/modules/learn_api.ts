@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { defineModule, defineJob, from, eq, asc } from '@ketvietlab/ketjs'
+import { asc, defineJob, defineModule, eq, from } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'learn_api',

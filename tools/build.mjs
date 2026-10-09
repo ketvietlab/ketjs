@@ -96,6 +96,7 @@ const sourceFingerprint = () => {
   const hash = createHash('sha256')
   const roots = ['packages', 'test', 'tools', 'bench']
   const files = [
+    'VERSION',
     'package.json',
     'package-lock.json',
     'tsconfig.base.json',

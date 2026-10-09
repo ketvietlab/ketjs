@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { materializeVersion } from './version.mjs'
+import { stagePackage } from './release-files.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -65,9 +67,7 @@ const exportedPaths = (value) => {
 }
 
 const verifyMetadata = () => {
-  const rootPackage = readJson(join(ROOT, 'package.json'))
-  const version = rootPackage.version
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) fail(`invalid root version ${version}`)
+  const version = materializeVersion({ check: true })
   const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
 
   for (const workspace of workspaces) {
@@ -136,11 +136,16 @@ const pack = (destination, version) => {
   /** @type {Map<string, string>} */
   const tarballs = new Map()
   for (const workspace of workspaces) {
-    const stdout = run(
-      npm,
-      ['pack', '--json', '--ignore-scripts', '--pack-destination', destination, join(ROOT, workspace.dir)],
-      { capture: true },
-    )
+    const staged = mkdtempSync(join(tmpdir(), 'ketjs-release-files-'))
+    let stdout
+    try {
+      stagePackage(join(ROOT, workspace.dir), staged)
+      stdout = run(npm, ['pack', '--json', '--ignore-scripts', '--pack-destination', destination, staged], {
+        capture: true,
+      })
+    } finally {
+      rmSync(staged, { recursive: true, force: true })
+    }
     const start = stdout.indexOf('[')
     const result =
       /** @type {{ name: string, version: string, size: number, unpackedSize: number, entryCount: number, filename: string, files: Array<{ path: string }> }} */ (

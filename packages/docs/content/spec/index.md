@@ -5,7 +5,7 @@ description: Turn an OpenAPI document into a readable API reference and an inter
 
 **Spec** is the API documentation UI from KétSuite: an alternative to Swagger UI or Redoc for OpenAPI 3.0 and 3.1 documents. It groups operations, explains their input and response schemas, and lets a reader try a request from the browser.
 
-The npm package is [`@ketvietlab/ketspec`](https://www.npmjs.com/package/@ketvietlab/ketspec). Its current version is **0.1.41**; KetJS has its own version, **0.4.0**. Spec uses the public Két Design System, supports English and Vietnamese, and includes light and dark themes and a responsive layout.
+The npm package is [`@ketvietlab/ketspec`](https://www.npmjs.com/package/@ketvietlab/ketspec). Its current version is **0.1.41**; KetJS has its own version, **{{VERSION}}**. Spec uses the public Két Design System, supports English and Vietnamese, and includes light and dark themes and a responsive layout.
 
 ## What Spec does
 
@@ -19,13 +19,15 @@ Spec consumes a contract; the API server enforces it. It does not add routes, au
 
 <span id="start-with-ketjs-0-3-0"></span>
 
-## Start with KetJS 0.4.0
+<span id="start-with-ketjs-0-4-0"></span>
+
+## Start with KetJS
 
 New KetJS projects already include Spec and an OpenAPI exporter:
 
 ```bash
 # Run from: projects
-npx -y @ketvietlab/ketjs@0.4.0 new notes
+npx -y @ketvietlab/ketjs@{{VERSION}} new notes
 cd notes
 npm install
 npm run api:docs
@@ -98,5 +100,5 @@ Requests go directly from the reader's browser to the API. Spec reports network 
 
 - [Declare HTTP contracts and generate OpenAPI](/docs/openapi/).
 - [Create and run a KetJS application](/docs/quick-start/).
-- [Review the KetJS 0.4.0 release](/docs/release-notes/).
+- [Review the KetJS {{VERSION}} release](/docs/release-notes/).
 - [Read Spec's package documentation](https://github.com/ketvietlab/ketsuite/tree/master/packages/ketspec).

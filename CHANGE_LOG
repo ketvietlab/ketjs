@@ -1,0 +1,315 @@
+{
+  "schema": 1,
+  "releases": [
+    {
+      "version": "0.4.0",
+      "versionCommit": "55ecfaedf65ee70b3fc4bc96f8d57f0f4cbdeee9",
+      "reason": "Make VERSION authoritative for framework packages, documentation and learning labs, and require reproducible audit evidence before release.",
+      "auditedCommit": "189af16af808dd2ba4487d60c2afb028020eac01",
+      "sourceDigest": "6d6dd5e2e0154bbcfc2e24e686d21eaceebdb2cb16cc4d7e4740dbc86b481e4f",
+      "evidence": {
+        "version": "0.4.0",
+        "mode": "candidate",
+        "environment": {
+          "node": "v24.14.1",
+          "platform": "darwin"
+        },
+        "packages": {
+          "@ketvietlab/ketjs-view": {
+            "integrity": "sha512-pehCaqcMKE7jJQwermt0L3sUNXGjmkgGcvALFnSubkK4tIMOZ39kzEcJSewt091KGlGiyHmJzvJzd3AzAOfN3w==",
+            "shasum": "50e1988dbaa9966d8dfe21debfacdeb6f1f533b8",
+            "version": "0.4.0"
+          },
+          "@ketvietlab/ketjs-view-tools": {
+            "integrity": "sha512-utiIE3lFFPV8UifMK5R7FGcxTZb3AzBEH9t1ZgaFeUMylQoiQTH8WrSlcGx2LRep3ngqDXMm1oNNUNQfSTfElg==",
+            "shasum": "8d6afcca421a05adf2658e76f1efbf8c8f8b8b6d",
+            "version": "0.4.0"
+          },
+          "@ketvietlab/create-view": {
+            "integrity": "sha512-BsCy+X5yZJvbfqC3bSeZNfCimq391Az25ZxZ1pquIxrD8TBxclrKLC3Tjqvp60+1E7Tix3f+G3PpJJAGIV0nww==",
+            "shasum": "92b56f73ac516a999e23fafbddbde2f2e621d146",
+            "version": "0.4.0"
+          },
+          "@ketvietlab/ketjs": {
+            "integrity": "sha512-fNR0CB59pTNaZGKb7k2WKsKLfMsul7NfzjPJwhVVS/S+5nHsfvjwPjS6WQjAUIIDn+k6D31yyXwOrddTONQ3Xg==",
+            "shasum": "a2cdc750261d79ca55d100a02375ec3eedc4f187",
+            "version": "0.4.0"
+          },
+          "@ketvietlab/ketjs-postgres": {
+            "integrity": "sha512-bSd6adR2a1GNXSMkVun/DNbnd7hEUH5zUJBjrMHD/+6vjrYuxJesNdUi1r49sLDyc7LvErmDbeV98ykWttzNgg==",
+            "shasum": "347c7e32e0d1a4fb77c113f71793c9dbd75d0d62",
+            "version": "0.4.0"
+          }
+        },
+        "documents": {
+          "files": [
+            "AGENTS.md",
+            "README.md",
+            "packages/docs/README.md",
+            "packages/docs/content/blog/database-correctness.md",
+            "packages/docs/content/blog/durable-jobs.md",
+            "packages/docs/content/blog/effects-and-data-loading.md",
+            "packages/docs/content/blog/evaluating-preview.md",
+            "packages/docs/content/blog/html-first-islands.md",
+            "packages/docs/content/blog/index.md",
+            "packages/docs/content/blog/introducing-ketjs.md",
+            "packages/docs/content/blog/reading-benchmarks.md",
+            "packages/docs/content/blog/tenant-isolation.md",
+            "packages/docs/content/docs/api.md",
+            "packages/docs/content/docs/architecture-decisions.md",
+            "packages/docs/content/docs/authorization.md",
+            "packages/docs/content/docs/benchmarks.md",
+            "packages/docs/content/docs/cli-config.md",
+            "packages/docs/content/docs/configuration.md",
+            "packages/docs/content/docs/contributing.md",
+            "packages/docs/content/docs/data.md",
+            "packages/docs/content/docs/deployment.md",
+            "packages/docs/content/docs/form-actions.md",
+            "packages/docs/content/docs/form-validation.md",
+            "packages/docs/content/docs/functions.md",
+            "packages/docs/content/docs/http.md",
+            "packages/docs/content/docs/index.md",
+            "packages/docs/content/docs/integrations.md",
+            "packages/docs/content/docs/jobs.md",
+            "packages/docs/content/docs/logging.md",
+            "packages/docs/content/docs/menus-i18n.md",
+            "packages/docs/content/docs/migrations.md",
+            "packages/docs/content/docs/models.md",
+            "packages/docs/content/docs/module-discovery.md",
+            "packages/docs/content/docs/modules.md",
+            "packages/docs/content/docs/open-questions.md",
+            "packages/docs/content/docs/openapi.md",
+            "packages/docs/content/docs/project-structure.md",
+            "packages/docs/content/docs/quick-start.md",
+            "packages/docs/content/docs/release-notes.md",
+            "packages/docs/content/docs/releasing.md",
+            "packages/docs/content/docs/rendering.md",
+            "packages/docs/content/docs/reports.md",
+            "packages/docs/content/docs/request-lifecycle.md",
+            "packages/docs/content/docs/sessions-tenants.md",
+            "packages/docs/content/docs/testing.md",
+            "packages/docs/content/docs/themes.md",
+            "packages/docs/content/docs/upgrading.md",
+            "packages/docs/content/docs/view-effects-data.md",
+            "packages/docs/content/docs/view-forms.md",
+            "packages/docs/content/docs/view-static-sites.md",
+            "packages/docs/content/docs/workspaces.md",
+            "packages/docs/content/examples/index.md",
+            "packages/docs/content/examples/notes.md",
+            "packages/docs/content/examples/static-site.md",
+            "packages/docs/content/home.md",
+            "packages/docs/content/learn/api-contracts.md",
+            "packages/docs/content/learn/authorization.md",
+            "packages/docs/content/learn/capstone.md",
+            "packages/docs/content/learn/changesets.md",
+            "packages/docs/content/learn/connect-ui.md",
+            "packages/docs/content/learn/content-routing.md",
+            "packages/docs/content/learn/counter.md",
+            "packages/docs/content/learn/data-fetching.md",
+            "packages/docs/content/learn/deployment.md",
+            "packages/docs/content/learn/deployments.md",
+            "packages/docs/content/learn/effects.md",
+            "packages/docs/content/learn/first-project.md",
+            "packages/docs/content/learn/forms.md",
+            "packages/docs/content/learn/http-api.md",
+            "packages/docs/content/learn/index.md",
+            "packages/docs/content/learn/jobs.md",
+            "packages/docs/content/learn/lifecycle.md",
+            "packages/docs/content/learn/menus-i18n.md",
+            "packages/docs/content/learn/migrations-postgres.md",
+            "packages/docs/content/learn/models.md",
+            "packages/docs/content/learn/modules.md",
+            "packages/docs/content/learn/observability.md",
+            "packages/docs/content/learn/orientation.md",
+            "packages/docs/content/learn/queries.md",
+            "packages/docs/content/learn/reports-agents.md",
+            "packages/docs/content/learn/server-project.md",
+            "packages/docs/content/learn/sessions-tenants.md",
+            "packages/docs/content/learn/static-website.md",
+            "packages/docs/content/learn/storage-streams.md",
+            "packages/docs/content/learn/testing.md",
+            "packages/docs/content/learn/themes.md",
+            "packages/docs/content/learn/todo.md",
+            "packages/docs/content/learn/transactions.md",
+            "packages/docs/content/learn/tsx.md",
+            "packages/docs/content/spec/index.md",
+            "packages/docs/tutorials/api/README.md",
+            "packages/docs/tutorials/view/README.md"
+          ],
+          "fences": 331,
+          "contract": "Location-commented examples; version expansion, metadata and rendered local links are verified by docs tests and build."
+        },
+        "checks": [
+          {
+            "id": "producer-build",
+            "command": "npm run build --silent",
+            "exitCode": 0,
+            "logSha256": "8506c5d9e600af7b6bebc2b41cec0be66f1f4a25ad6870008c617cc7a1786a54"
+          },
+          {
+            "id": "pack-ketjs-view",
+            "command": "npm pack --json --ignore-scripts --pack-destination <temporary> <temporary>/packages/ketjs-view",
+            "exitCode": 0,
+            "logSha256": "6ca820a2c6d9cde181ea5d467c9f6c6213fca8b18ead69c5703ef23363997ccd"
+          },
+          {
+            "id": "pack-ketjs-view-tools",
+            "command": "npm pack --json --ignore-scripts --pack-destination <temporary> <temporary>/packages/ketjs-view-tools",
+            "exitCode": 0,
+            "logSha256": "97a65e964504dad84f58b012dedfb66ec7b0b89c3a5ff74ac7d75349682fd0cd"
+          },
+          {
+            "id": "pack-create-view",
+            "command": "npm pack --json --ignore-scripts --pack-destination <temporary> <temporary>/packages/create-view",
+            "exitCode": 0,
+            "logSha256": "815987767aa58f6748f4a7ddc03a59975f6f93355500c3f9558787d12bb19a59"
+          },
+          {
+            "id": "pack-ketjs",
+            "command": "npm pack --json --ignore-scripts --pack-destination <temporary> <temporary>/packages/ketjs",
+            "exitCode": 0,
+            "logSha256": "3ab6265ae88a4de69f27b3c5ebc6a8bdb365ff42b57b6fa35aa4d8cb12604bbb"
+          },
+          {
+            "id": "pack-ketjs-postgres",
+            "command": "npm pack --json --ignore-scripts --pack-destination <temporary> <temporary>/packages/ketjs-postgres",
+            "exitCode": 0,
+            "logSha256": "dfbbd893a82db74ad42ab79dd41614cc806b21990142ed097ea0423e9403e313"
+          },
+          {
+            "id": "docs-lock",
+            "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "2363f8db1f1b32e4357d007725867be2feb2f53c71c1df63b970a6c10b3a862a"
+          },
+          {
+            "id": "docs-install",
+            "command": "npm ci --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "b65153cd716e8f1afe814f513ad67510211c69addd6e3f06577ad0a6912e1c3c"
+          },
+          {
+            "id": "api-lock",
+            "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "a07a32ccc0c5d62d750f80a23c6dc525f75fce6c731e6a5be74df0eeb3a84a87"
+          },
+          {
+            "id": "api-install",
+            "command": "npm ci --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "b7f4590d2231c716ff32d82101510351c80900066b7be22fc6108006be8b961b"
+          },
+          {
+            "id": "view-lock",
+            "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "c44f83e826a10cc5e3910eb9eb282ee49c4a541ebd4551d128221cda35c0ac35"
+          },
+          {
+            "id": "view-install",
+            "command": "npm ci --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "2fb6802573963aa2f601977e6f274672800e4a8e1b044f2bd83df6b4b2b62853"
+          },
+          {
+            "id": "docs-audit",
+            "command": "node tools/version-documents.mjs",
+            "exitCode": 0,
+            "logSha256": "7d255a9bc4d4bfc359b40440fee794a17668f7a0a75300ed6a4d2fa0baa4ff33"
+          },
+          {
+            "id": "docs-tests",
+            "command": "node --test test/release.test.mjs test/content.test.mjs test/navigation.test.mjs test/search.test.mjs test/playground.test.mjs test/learning-data.test.mjs",
+            "exitCode": 0,
+            "logSha256": "f1fef1df6452605844c21d9d386d614ddbe52eb77a640b27fade9c210669cafd"
+          },
+          {
+            "id": "docs-check",
+            "command": "npm run check",
+            "exitCode": 0,
+            "logSha256": "399a39f43304dc6f3d27960a65ab11501d8d0b60b605914ea58df8caf353a201"
+          },
+          {
+            "id": "docs-build",
+            "command": "npm run build",
+            "exitCode": 0,
+            "logSha256": "6d81ce165058f47225c71b330e03c00b4770c3849b10b41a5bed52831b7dc8bb"
+          },
+          {
+            "id": "api-check",
+            "command": "npm run check",
+            "exitCode": 0,
+            "logSha256": "171fcae8ccdea715115aa57c28d3f40809e7de04cb8db9e1ae3e4d89675cabcd"
+          },
+          {
+            "id": "api-tests",
+            "command": "node --test dist/test/deployment.test.js dist/test/isolation.test.js dist/test/jobs.test.js",
+            "exitCode": 0,
+            "logSha256": "5f9d37de46259547cbc241b6d02101af60aa5dd6fe0d36dfbcafebb0c6d40b2b"
+          },
+          {
+            "id": "view-check",
+            "command": "npm run check",
+            "exitCode": 0,
+            "logSha256": "bde7acced047ee4ab89f4851159ffbca7e523ff8f06851c6d7b5aba6592865d0"
+          },
+          {
+            "id": "view-build",
+            "command": "npm run build",
+            "exitCode": 0,
+            "logSha256": "c9ddaa86fb00e28b0e2b620bced9f3557f4cc51a80f5fa9cdccefdb16a26fc9e"
+          },
+          {
+            "id": "download-api-lock",
+            "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "af9ba2873b76c1cb549e51e8a6beeb5440d9c4f6159dbcda1ec9639df192d6ad"
+          },
+          {
+            "id": "download-api-install",
+            "command": "npm ci --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "9435707cff3549bde120b765d307de4f87b3e7f32f242ea900cc211fafda8c42"
+          },
+          {
+            "id": "download-api-check",
+            "command": "npm run check",
+            "exitCode": 0,
+            "logSha256": "f87314c7ce103ac3d7a6349072ab3f326516781fefe769f4bafa6ead29918a5d"
+          },
+          {
+            "id": "download-api-tests",
+            "command": "node --test dist/test/deployment.test.js dist/test/isolation.test.js dist/test/jobs.test.js",
+            "exitCode": 0,
+            "logSha256": "4abf0b992d07100da124c4ff49ab0eecca6e28b9322ec40a0199dfbda017ecaf"
+          },
+          {
+            "id": "download-view-lock",
+            "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "1ce19a5be1aa1e323f66e9c3798a5ce768ba1bb7305661885f5cdbf02552a1aa"
+          },
+          {
+            "id": "download-view-install",
+            "command": "npm ci --ignore-scripts --no-audit --no-fund",
+            "exitCode": 0,
+            "logSha256": "61a92303c23fe9fd158a68ea69538bd928d3f17544fda02d219a79a02e2813c3"
+          },
+          {
+            "id": "download-view-check",
+            "command": "npm run check",
+            "exitCode": 0,
+            "logSha256": "bde7acced047ee4ab89f4851159ffbca7e523ff8f06851c6d7b5aba6592865d0"
+          },
+          {
+            "id": "download-view-build",
+            "command": "npm run build",
+            "exitCode": 0,
+            "logSha256": "81b9eb6ef023b315c4af6f785e32061a6bfe27d31c2be8f94da6132800fdf454"
+          }
+        ]
+      }
+    }
+  ]
+}
