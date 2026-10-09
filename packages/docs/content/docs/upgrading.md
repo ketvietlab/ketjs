@@ -11,7 +11,7 @@ moving the application lock.
 
 ## Current package line
 
-The current coordinated release is `0.4.0`. Use the same exact version for the KetJS packages your
+The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
 The 0.4.0 line adds nested form contracts, immutable edit sessions, native control binding and

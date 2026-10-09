@@ -1,11 +1,15 @@
 ---
 title: Release notes
-description: The coordinated KetJS 0.4.0 release, shared form contracts, edit sessions and atomic saves.
+description: The coordinated KetJS {{VERSION}} release, shared form contracts, edit sessions and atomic saves.
 group: Project evolution
 order: 1
 ---
 
-## Current release: 0.4.0
+<span id="current-release-0-4-0"></span>
+
+## Current release
+
+Coordinated package version: **{{VERSION}}**.
 
 KetJS releases five packages together: View, View Tools, Create View, the core framework and the optional PostgreSQL adapter. Keep the framework packages used by an application on the same version.
 
@@ -18,7 +22,7 @@ KetSuite, its design system, Flow and website clients are maintained and release
 - **Atomic form actions.** `defineFormAction` commits domain writes and the accepted receipt together. Refusals roll back, declared public projections filter outcomes, and notifications publish after commit. Permissions, ownership and revision checks remain in domain handlers. See [Transactional form actions](/docs/form-actions/).
 - **Measured adapter performance.** The adapter indexes controls, groups issues once, avoids unchanged DOM assignments and caches baseline validation. In the recorded 500-field synthetic workload, one invalid edit fell from a 64.05 ms median to 2.35 ms. Full draft validation still scales with form size; these are dispatch-to-DOM-settlement measurements, not paint or INP. See [Benchmarks](/docs/benchmarks/) for the pinned RHF/Formik comparison and limitations.
 
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [0.4.0 GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v0.4.0) for the coordinated packages and release status.
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-3-0"></span>
 <span id="what-0-3-0-adds"></span>

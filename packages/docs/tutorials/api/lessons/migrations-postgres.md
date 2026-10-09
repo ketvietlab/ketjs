@@ -34,7 +34,7 @@ The adapter is a separate package. In a disposable extension of the lab:
 
 ```bash
 # Run from: learn_api
-npm install @ketvietlab/ketjs-postgres@0.3.0 postgres
+npm install @ketvietlab/ketjs-postgres@0.4.0 postgres
 ```
 
 Configure `serve.openStore` to create and open `postgresAdapter(config.databaseUrl ?? '')`, as shown in the adapter reference. Set `DATABASE_URL` to a local disposable database. Keep credentials outside source control.

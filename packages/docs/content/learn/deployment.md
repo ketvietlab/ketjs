@@ -37,7 +37,7 @@ Check startup, graceful shutdown, a real API request, a worker execution and a r
 
 Read release notes, compare manifests, review database compatibility, and rebuild under the target version. Test the behavior your deployment uses. Keep rollback artifacts and decide whether the schema change permits rolling back the application independently.
 
-KetJS 0.3.0 is preview software under active review. Use this exercise for evaluation and learning; APIs may change before 1.0. Do not infer production readiness from a successful local lab.
+KetJS {{VERSION}} is preview software under active review. Use this exercise for evaluation and learning; APIs may change before 1.0. Do not infer production readiness from a successful local lab.
 
 ## Write the handoff
 
