@@ -9,5 +9,5 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*.ts", "bench/**/*"],
-  "exclude": [".build", "packages/*/dist", "node_modules"]
+  "exclude": [".build", "packages/*/dist", "node_modules", "bench/form-comparison"]
 }

@@ -1,6 +1,22 @@
 export { signal, computed, effect, batch } from './signal.ts'
 export type { Signal, Computed } from './signal.ts'
 export {
+  defineFormContract,
+  createFormSession,
+  formActionTransport,
+  formIssuePath,
+  formConflict,
+} from './form-session.ts'
+export type {
+  FormContract,
+  FormSubmission,
+  FormOutcome,
+  FormAttempt,
+  FormTransport,
+  FormSession,
+} from './form-session.ts'
+export { attachForm } from './form-dom.ts'
+export {
   validationIssue,
   fieldErrorsOf,
   formErrorsOf,
@@ -12,6 +28,7 @@ export {
 } from './form.ts'
 export type {
   FormValues,
+  FormPath,
   FormFieldType,
   ValidationIssue,
   ValidationIssueInput,
