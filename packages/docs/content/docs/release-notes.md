@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS 0.3.0 release and its package boundaries.
+description: The coordinated KetJS 0.3.0 release, HTTP contracts, OpenAPI export and Spec integration.
 group: Project evolution
 order: 1
 ---
@@ -13,9 +13,12 @@ KetSuite, its design system, Flow and website clients are maintained and release
 
 ## What 0.3.0 adds
 
-- **Checked HTTP operations.** `httpRoutes()` publishes server functions as ordinary HTTP endpoints with explicit `returns` cardinality, contract validation, permissions and output projection. Existing function exposure remains unchanged. See [HTTP contracts and OpenAPI](/ketjs/openapi/).
-- **Deployment OpenAPI.** `ket openapi` emits deterministic OpenAPI 3.1 from a composed deployment without booting its datastore. Applications supply metadata, servers and security definitions.
-- **Runnable API reference.** `ket new` includes a checked operation, its HTTP integration test and an OpenAPI generator. `npm run api:docs` uses the pinned KetSuite Spec 0.1.41 tool to build a static reference; the application chooses where to host it.
+- **HTTP function bindings.** Publish server functions as ordinary HTTP operations using `httpRoutes()`, with input mapping and explicit public output projections. Validation, permissions and idempotency remain in `ctx.call`. See [HTTP contracts and OpenAPI](/docs/openapi/).
+- **Declared result cardinality.** Function contracts describe one result, many results or no result, so the runtime and generated response schemas agree.
+- **OpenAPI export.** Export the composed deployment with `httpOpenApiDocument()` or `ket openapi`. See [CLI and configuration](/docs/cli-config/).
+- **Spec in new projects.** `ket new` scaffolds `npm run openapi` and `npm run api:docs`, using the separately released `@ketvietlab/ketspec@0.1.41`. See [Spec](/spec/) for the static reference and try-it console.
+
+This release is available on [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and in the [0.3.0 GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v0.3.0).
 
 ## Previous release: 0.2.0
 

@@ -1,7 +1,7 @@
 # ketjs-view learning project
 
 A standalone website with a counter and keyed todo island for the
-[KetJS learning path](https://ketjs.dev/learn/). Uses **0.2.0 preview** packages from npm;
+[KetJS learning path](https://ketjs.dev/learn/). Uses **0.3.0 preview** packages from npm;
 no KetJS server package or database is needed.
 
 ```bash

@@ -14,6 +14,11 @@ moving the application lock.
 The current coordinated release is `0.3.0`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
+The 0.3.0 line adds typed HTTP function bindings, explicit result cardinality and OpenAPI export.
+When publishing an existing function through HTTP, declare its `returns` shape and the route's public
+projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing an endpoint.
+[Spec](/spec/) can render the resulting contract without changing the API implementation.
+
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
