@@ -410,7 +410,7 @@ pre {
 .desktop-navigation {
   /* Reserve label slots across fallback and Inter fonts on document navigation. */
   display: grid;
-  grid-template-columns: 2rem 2.25rem 4.5rem 1.75rem;
+  grid-template-columns: 2rem 2rem 2.25rem 4.5rem 1.75rem;
   flex: none;
   gap: var(--kv-space-6);
   align-items: center;

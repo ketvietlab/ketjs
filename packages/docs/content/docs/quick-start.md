@@ -66,6 +66,9 @@ notes/
 
 
 
+Generate the OpenAPI contract with `npm run openapi`, or build its reference UI with `npm run api:docs`.
+See [Spec](/spec/) for the output directory, hosting and request console.
+
 ## The module
 
 `modules/notes.ts` declares its data and callable surface together:
