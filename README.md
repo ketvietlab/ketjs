@@ -8,6 +8,11 @@ same modules across multiple deployments.
 
 Server-rendered pages. Reactive islands. Durable workflows. A small dependency surface.
 
+The root [VERSION](VERSION) is the single source of the coordinated release version, including the
+documentation site and learning downloads. npm manifests and locks are generated mirrors. Every version
+change has a commit with a `Version-Reason` trailer and executable documentation/lab evidence in
+[CHANGE_LOG](CHANGE_LOG). See [Publishing packages](https://ketjs.dev/docs/releasing/) for the workflow.
+
 **[Get started](#get-started)** · [Create a static site](#static-site) ·
 [View packages](#a-small-core-optional-adapters)
 
