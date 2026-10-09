@@ -387,7 +387,8 @@ continue to supply their own reader/writer and may use an indexed `control(issue
 The [browser form benchmark](/docs/benchmarks/#browser-form-sessions) compares the current session
 and adapter with RHF and Formik using shared validation and isolated field views. At revision
 `756efdf9`, the earlier default lookup took **64.05 ms median** for one invalid field in a 500-field
-form. The guide retains that baseline for comparison with the indexed adapter. Neither the fixture
+form; the indexed adapter at `d7af51c5` takes **2.35 ms median / 3.00 ms p95** with the same harness
+and recorded desktop environment. The guide retains both revisions for comparison. Neither the fixture
 nor render isolation constitutes a KetSuite editor, paint/INP or mobile performance sign-off.
 
 ### Migrate a complex editor

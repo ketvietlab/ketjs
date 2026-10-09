@@ -178,7 +178,7 @@ The old lit comparison used a different fixture and environment; no current cros
 
 ## Browser form sessions
 
-Measured **2026-10-09**, at KetJS source revision **`756efdf9`** (ketjs-view 0.2.0), against
+Measured **2026-10-09**, at KetJS source revision **`d7af51c5`** (ketjs-view 0.2.0), against
 **React 19.3.0**, **React Hook Form 7.89.0** and **Formik 2.4.9**. The private
 `bench/form-comparison/` deployment bundles minified production React with esbuild 0.28.2,
 without StrictMode. Environment: Apple M1 Pro, 32 GiB RAM, arm64 macOS Darwin 25.2.0,
@@ -211,12 +211,12 @@ This does **not** measure layout, paint or INP. Each cell is **median / p95, in 
 
 | Workload | KetJS | RHF | Formik FastField |
 | --- | ---: | ---: | ---: |
-| 10 flat fields | 0.20 / 0.30 | 0.30 / 0.40 | 0.80 / 1.00 |
-| 100 flat fields | 0.70 / 0.80 | 0.40 / 0.60 | 1.70 / 1.90 |
-| 500 flat fields | 2.70 / 3.00 | 1.10 / 1.30 | 5.35 / 5.80 |
-| 10 variants, 31 controls | 0.30 / 0.40 | 0.40 / 0.50 | 1.10 / 1.30 |
-| 100 variants, 301 controls | 1.50 / 1.80 | 0.90 / 1.10 | 3.10 / 3.60 |
-| 250 variants, 751 controls | 3.70 / 4.20 | 1.80 / 1.90 | 6.60 / 7.20 |
+| 10 flat fields | 0.20 / 0.50 | 0.30 / 0.40 | 0.90 / 1.70 |
+| 100 flat fields | 0.60 / 0.70 | 0.40 / 0.60 | 1.80 / 2.10 |
+| 500 flat fields | 2.30 / 2.60 | 1.30 / 1.50 | 5.30 / 5.90 |
+| 10 variants, 31 controls | 0.35 / 0.50 | 0.40 / 0.90 | 1.30 / 4.10 |
+| 100 variants, 301 controls | 1.30 / 1.60 | 0.90 / 1.20 | 3.00 / 3.60 |
+| 250 variants, 751 controls | 3.30 / 3.70 | 1.80 / 2.20 | 6.10 / 6.50 |
 
 ### One invalid field
 
@@ -225,19 +225,33 @@ boundary includes displaying its error. Each cell is **median / p95, in millisec
 
 | Workload | KetJS | RHF | Formik FastField |
 | --- | ---: | ---: | ---: |
-| 10 flat fields | 0.30 / 0.50 | 0.70 / 0.90 | 0.70 / 0.90 |
-| 100 flat fields | 3.10 / 3.90 | 1.30 / 1.60 | 1.60 / 1.80 |
-| 500 flat fields | **64.05 / 65.80** | 2.90 / 3.40 | 5.50 / 6.20 |
-| 10 variants, 31 controls | 0.40 / 0.60 | 1.00 / 1.40 | 1.05 / 1.30 |
-| 100 variants, 301 controls | 1.60 / 1.70 | 2.70 / 3.00 | 3.15 / 3.30 |
-| 250 variants, 751 controls | 3.75 / 4.30 | 3.90 / 4.70 | 6.65 / 7.30 |
+| 10 flat fields | 0.25 / 0.40 | 0.80 / 2.10 | 0.80 / 1.10 |
+| 100 flat fields | 0.60 / 0.70 | 1.35 / 1.70 | 1.70 / 2.00 |
+| 500 flat fields | 2.35 / 3.00 | 3.00 / 4.30 | 5.20 / 5.70 |
+| 10 variants, 31 controls | 0.40 / 1.30 | 1.30 / 2.10 | 1.35 / 3.70 |
+| 100 variants, 301 controls | 1.30 / 1.50 | 2.50 / 3.00 | 3.05 / 3.40 |
+| 250 variants, 751 controls | 3.15 / 3.50 | 4.55 / 5.00 | 6.10 / 6.80 |
 
-The default adapter's error path is a measured bottleneck. Source inspection shows that it
-resolves each issue separately for every control, rebuilding and searching the controls list
-inside that loop. A single issue therefore introduces quadratic lookup work in the number of
-controls. The nested fixture supplies an indexed resolver; its timings are not evidence that
-the default lookup handles nested forms efficiently. This revision is **not a large-form
-performance sign-off**.
+### Before and after the adapter fix
+
+The earlier revision `756efdf9` rebuilt and searched the controls list for every issue/control
+pair, introducing quadratic work even for one issue. Revision `d7af51c5` snapshots current
+controls once per pass, indexes their names, resolves each issue once, groups errors by field,
+guards DOM writes and caches baseline validation. The before/after runs have identical harness
+digests, package versions, viewport and workloads; each revision has two browser runs. Each cell
+is **median / p95, in milliseconds**.
+
+| KetJS operation | Before `756efdf9` | After `d7af51c5` |
+| --- | ---: | ---: |
+| Valid edit, 500 flat fields | 2.70 / 3.00 | 2.30 / 2.60 |
+| One invalid field, 500 flat fields | **64.05 / 65.80** | **2.35 / 3.00** |
+| Valid edit, 250 variants | 3.70 / 4.20 | 3.30 / 3.70 |
+
+The invalid-edit median is about **27× lower** in this workload. This measures the combined
+adapter/cache fix, not an isolated contribution from each optimization. Full draft validation,
+copying, comparisons and control traversal still scale with draft/control size in this fixture.
+The nested fixture still uses its
+explicit structured reader/writer, so it does not establish default nested-path support.
 
 ### API submit and accepted baseline
 
@@ -250,12 +264,12 @@ semantics, so the figures do not rank equivalent server transactions. Each cell 
 
 | Workload | KetJS | RHF | Formik FastField |
 | --- | ---: | ---: | ---: |
-| 10 flat fields | 0.20 / 0.40 | 0.50 / 1.10 | 0.15 / 0.40 |
-| 100 flat fields | 0.90 / 1.20 | 2.65 / 3.90 | 0.40 / 0.60 |
-| 500 flat fields | 5.30 / 6.20 | 13.20 / 15.40 | 2.30 / 2.60 |
-| 10 variants, 31 controls | 0.40 / 0.40 | 1.05 / 1.60 | 0.20 / 0.30 |
-| 100 variants, 301 controls | 2.90 / 3.20 | 7.75 / 9.10 | 1.10 / 1.30 |
-| 250 variants, 751 controls | 8.05 / 10.30 | 24.90 / 31.70 | 3.10 / 3.20 |
+| 10 flat fields | 0.20 / 0.50 | 0.60 / 1.40 | 0.20 / 0.60 |
+| 100 flat fields | 0.80 / 1.00 | 2.55 / 3.80 | 0.40 / 0.50 |
+| 500 flat fields | 4.70 / 5.20 | 12.80 / 14.40 | 2.20 / 2.70 |
+| 10 variants, 31 controls | 0.45 / 0.90 | 1.30 / 2.60 | 0.30 / 0.70 |
+| 100 variants, 301 controls | 2.50 / 2.80 | 6.60 / 8.40 | 1.10 / 1.20 |
+| 250 variants, 751 controls | 6.65 / 8.10 | 19.60 / 23.00 | 2.80 / 3.10 |
 
 ### Render isolation and work behind it
 
@@ -268,15 +282,15 @@ timed mounts have neither. For **one valid edit in an already dirty 500-field fo
 | Unedited field-view executions | 0 | 0 | 0 |
 | Form component renders | Not applicable | 0 | 2 |
 | Status view executions | 1 | 0 | 2 |
-| Completed root refinements | 2 | 1 | 1 |
-| Successful custom field-rule calls | 1,000 | 500 | 500 |
+| Completed root refinements | 1 | 1 | 1 |
+| Successful custom field-rule calls | 500 | 500 | 500 |
 | KetJS selector reads | 500 | Not applicable | Not applicable |
-| Native adapter effects | 1 | Not applicable | Not applicable |
-| Input `value` setter calls | 500 | 0 | 0 |
-| Disabled-property writes | 500 | 0 | 0 |
-| Attribute method calls | 501 | 0 | 0 |
-| Text setter calls | 502 | 1 | 1 |
-| MutationObserver records | 3 | 7 | 8 |
+| Form `aria-busy` setter calls | 0 | 0 | 0 |
+| Input `value` setter calls | 0 | 0 | 0 |
+| Disabled-property writes | 0 | 0 | 0 |
+| Attribute method calls | 0 | 0 | 0 |
+| Text setter calls | 2 | 1 | 1 |
+| MutationObserver records | 2 | 7 | 8 |
 
 On the invalid/recovery transitions, KetJS executes one field view and RHF/Formik execute the
 edited field twice; all three execute **zero unedited field views**. The extra React execution
@@ -286,22 +300,32 @@ warmup, not represented by the zero RHF status-render count in the valid-edit pr
 View effects and React renders are different operations. Setter calls can assign unchanged
 values, and React can update `defaultValue` or attributes without assigning `input.value`.
 Mutation records also differ by DOM implementation. A small record count does not mean a small
-amount of adapter work. Built-in validation is not represented by custom-rule counters, and a
+amount of adapter work. The legacy raw counter `adapterEffects` counts busy-attribute setters;
+with guarded writes it does not count actual adapter executions. Built-in validation is not
+represented by custom-rule counters, and a
 malformed structured child can skip the root refinement.
 
-KetJS validates the draft and revalidates the baseline for dirty comparison on each edit.
+KetJS validates the full draft on each edit and caches baseline validation until the baseline
+or a tracked rule dependency changes. Compared with the earlier 500-field probe, this reduces
+custom rule calls from 1,000 to 500 and removes 500 unchanged value/disabled assignments.
 Primitive selectors prevent unchanged field-view effects but still read the whole draft signal.
-The nested writer reduces value assignments to zero for an already edited input, yet the adapter
-still performs 751 disabled-property writes and 753 text writes at 250 variants. In a separate
+At 250 variants, value/disabled/attribute writes are zero for a valid edit, while field and status
+mirrors perform two text writes. In a separate
 100-field probe, reading `session.values()` directly in every field effect executes **100 field
 effects, including 99 unedited fields**, instead of one with primitive selectors. See
 [form render subscriptions](/docs/form-validation/#render-subscriptions-and-cost).
 
-Before claiming large-form performance readiness, the default adapter needs indexed issue lookup
-and guarded DOM writes, and session work needs baseline-validation caching and more selective
-updates. The current validator is deliberately full-schema; incremental validation must preserve
+The native regression fixture at `/regressions/` passes **4 cases and 46 assertions**, including
+one control snapshot per update with 500 controls, one custom resolution per issue, dense error
+visibility, dynamic controls, unchanged-write guards, multiple descriptions, native submitters,
+disabled-fieldset preservation and unknown-outcome retry. Its reproduction steps are in
+`bench/form-comparison/README.md`. These are deterministic operation/behavior checks, not dense-error
+latency measurements.
+
+This removes the measured default-lookup bottleneck. More selective draft/subscription work may
+still help larger editors. The current validator is deliberately full-schema; incremental validation must preserve
 cross-field and structured constraints. The timings do not establish a universal library ranking.
-Array append/remove/reorder, dense errors, async validation, memory/GC, mobile, Safari and actual
+Array append/remove/reorder, comparative dense-error latency, async validation, memory/GC, mobile, Safari and actual
 KetSuite editor performance remain unmeasured.
 
 ## Renderer host operations
