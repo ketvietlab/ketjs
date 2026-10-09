@@ -1,3 +1,4 @@
-import manifest from '../../ketjs/package.json' with { type: 'json' }
+import manifest from '../package.json' with { type: 'json' }
 
-export const frameworkVersion = manifest.version
+// Display the published runtime this independently installed site actually consumes.
+export const frameworkVersion = manifest.dependencies['@ketvietlab/ketjs-view']
