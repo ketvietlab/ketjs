@@ -36,12 +36,13 @@ A framework change a consumer needs is released from this repository and then ad
 - For shared runtime changes, run focused producer contract tests and the affected behaviour in the current deployment. Cross-deployment regression belongs to the develop gate unless the user explicitly requests broader local verification.
 - Documentation-only changes need a diff/content check, not a runtime test suite. Once the scoped checks pass, do not broaden or repeat them without a new change or a specific unresolved failure in scope.
 - Report the deployment, commands/checks run, results, and anything not verified. A local scoped pass is not a full-suite pass. Out-of-scope failures must be reported without turning this task into unrelated repairs.
-- Preserve the existing branch policy: integration has no CI; promotion to develop owns the broad verification gate. Do not move that gate into local work or change CI to compensate for scoped local testing.
+- Preserve the existing branch policy: promotion to develop owns the broad verification gate. Integration has no broad framework CI. The explicitly required VERSION/CHANGE_LOG gate is the exception: version changes must verify documentation and labs before integration. Do not move the broad gate into local work or change CI to compensate for scoped local testing.
 - These local verification rules apply to work spanning both KétJS and Két Việt; keep the same deployment boundary across repositories. A broader local run requires an explicit user request.
 
 ## Pull requests and CI
 
-- Feature pull requests carry no CI. Before pushing, run the focused checks for the changed behavior
+- Feature pull requests carry no broad CI; VERSION/CHANGE_LOG and their tooling have the dedicated
+  `version-consumers.yml` gate. Before pushing, run the focused checks for the changed behavior
   and directly affected dependencies, including live-Postgres tests when they belong to that scope.
 - Apply the quality contracts in `.github/workflows/verify.yml` (format, lint, terminology, build,
   dependency boundaries, and types) within the local scope above. Report
@@ -51,6 +52,26 @@ A framework change a consumer needs is released from this repository and then ad
   description. After review changes or a rebase, re-run checks affected by those changes.
 - The full suite runs in CI on promotion from `integration` into `develop` and on release pull
   requests into `master`. Keep that broad gate in CI; do not move it into routine local work.
+
+## Coordinated versions and audit evidence
+
+- Root `VERSION` is the only authored framework version. Change it and run `npm run version:sync`;
+  package manifests, npm locks, scaffold constants and the browser-safe docs version are generated mirrors.
+  Keep independent KetSuite/Spec/design-system versions and historical/minimum-version documentation intact.
+- Current-version Markdown uses `{{VERSION}}`; the docs compiler expands it before parsing and when
+  generating standalone learning downloads. Do not hardcode a new current version into guides.
+- Commit VERSION, generated mirrors and the completed documentation changes with exactly one meaningful
+  `Version-Reason: ...` trailer. Use merge commits so the recorded SHA remains an ancestor; do not squash
+  or rebase an audited version commit without regenerating its evidence.
+- From a clean source commit, run `npm run version:record`. It executes the producer build, documentation
+  audit/tests/check/build, both learning labs and their downloadable ZIPs against exact candidate tarballs.
+  Commit the generated root `CHANGE_LOG` separately. Never fabricate successful checks or log hashes.
+- `npm run version:audit` rejects a missing entry, wrong commit/reason, incomplete checks or changed source.
+  CI independently reruns the consumers and uploads the report and logs. A subsequent source change in a
+  version pull request requires a new audit record. Ordinary changes at the same version keep their scoped
+  local checks; release preparation always requires fresh audit evidence.
+- An already published version and tag remain immutable. Audit adoption at the existing VERSION does not
+  permit overwriting its packages; future package changes require a new version and the release gates.
 
 ## Documentation rules
 

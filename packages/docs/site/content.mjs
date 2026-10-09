@@ -2,6 +2,7 @@ import { Marked } from 'marked'
 import sanitizeHtml from 'sanitize-html'
 import { parse as parseYaml } from 'yaml'
 import { createHighlighter, createCssVariablesTheme } from 'shiki'
+import { expandVersion } from './release.ts'
 
 export const origin = 'https://ketjs.dev'
 export const groups = [
@@ -30,6 +31,7 @@ export function slugify(value) {
 }
 
 export function parseContent(source, { slug, kind = 'docs' }) {
+  source = expandVersion(source)
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error(`Invalid content slug: ${slug}`)
   const front = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source)
   if (!front) throw new Error(`${slug}: Markdown needs YAML frontmatter`)
