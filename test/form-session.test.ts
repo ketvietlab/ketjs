@@ -5,6 +5,7 @@ import {
   defineFormContract,
   formActionTransport,
   formIssuePath,
+  signal,
   validateForm,
   validationIssue,
 } from '@ketvietlab/ketjs-view'
@@ -104,6 +105,90 @@ test('native blank and boolean representations do not make an unchanged draft di
   assert.equal(session.dirty(), false)
   assert.equal('set' in session.values, false)
   session.dispose()
+})
+
+test('dirty comparison caches baseline validation while draft constraints and new baselines stay fresh', async () => {
+  let checks = 0
+  const contract = defineFormContract<{ quantity: number; limit: number }>('cached-baseline', {
+    fields: { quantity: { type: 'int', required: true }, limit: { type: 'int', required: true } },
+    validate: (values) => {
+      checks++
+      return values.quantity !== undefined && values.limit !== undefined && values.quantity > values.limit
+        ? validationIssue('quantity', 'limit')
+        : true
+    },
+  })
+  const session = createFormSession(contract, {
+    recordId: 'p1',
+    revision: 'r0',
+    initial: { quantity: 1, limit: 5 },
+    transport: async (request) => ({
+      status: 'committed',
+      accepted: { ...request.values, limit: 9 },
+      revision: 'r3',
+      value: null,
+    }),
+  })
+  assert.equal(checks, 2)
+  session.set('quantity', 2)
+  session.set('quantity', 3)
+  assert.equal(checks, 4)
+  assert.equal(session.dirty(), true)
+  session.set('limit', 2)
+  assert.equal(checks, 5)
+  assert.equal(session.errors('quantity', false)[0].code, 'limit')
+  assert.equal(session.reset(), true)
+  assert.equal(checks, 6)
+  assert.equal(session.dirty(), false)
+  assert.equal(session.receive({ values: { quantity: 4, limit: 8 }, revision: 'r2' }), true)
+  assert.equal(checks, 8)
+  assert.equal(session.dirty(), false)
+  session.set('quantity', 5)
+  assert.equal(checks, 9)
+  assert.equal((await session.submit()).status, 'committed')
+  assert.equal(checks, 12)
+  assert.deepEqual(session.values(), { quantity: 5, limit: 9 })
+  assert.equal(session.dirty(), false)
+  session.set('quantity', 6)
+  assert.equal(checks, 13)
+  assert.equal(session.dirty(), true)
+  session.dispose()
+})
+
+test('cached baseline validation tracks reactive rule dependencies and disposes them', () => {
+  const maximum = signal(5)
+  let checks = 0
+  const contract = defineFormContract<{ quantity: number }>('reactive-baseline', {
+    fields: { quantity: { type: 'int', required: true } },
+    validate: (values) => {
+      checks++
+      const limit = maximum()
+      return values.quantity !== undefined && values.quantity > limit
+        ? validationIssue('quantity', 'limit')
+        : true
+    },
+  })
+  const session = createFormSession(contract, {
+    recordId: 'p1',
+    revision: null,
+    initial: { quantity: 2 },
+    transport: async (request) => ({
+      status: 'committed',
+      accepted: request.values,
+      revision: 'r1',
+      value: null,
+    }),
+  })
+  maximum.set(1)
+  assert.equal(checks, 4)
+  assert.equal(session.errors('quantity', false)[0].code, 'limit')
+  assert.equal(session.dirty(), false)
+  maximum.set(5)
+  assert.equal(checks, 6)
+  assert.equal(session.valid(), true)
+  session.dispose()
+  maximum.set(0)
+  assert.equal(checks, 6)
 })
 
 test('a server index is mapped with the submitted row keys', () => {

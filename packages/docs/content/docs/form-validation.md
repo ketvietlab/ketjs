@@ -375,17 +375,20 @@ export function attachTitlePreview(
 ```
 
 This isolates view effects, not all work: every selector still depends on the whole draft,
-`set()` copies the draft, validation traverses the whole schema, and dirty comparison revalidates
-the baseline. The current native adapter also visits all controls and error targets. Its default
-issue lookup repeats control-list searches for each control; large forms with errors can become
-particularly expensive. A custom structured editor can supply an indexed `control(issue)` lookup
-and equality-guarded `write` implementation, but those do not eliminate the other adapter loops.
+`set()` copies the draft and validation traverses the whole schema. Dirty comparison caches the
+baseline's validation result until `reset(next)`, an accepted `receive(next)`, a committed receipt
+or a tracked rule dependency changes it. Cross-field draft constraints still run on every edit.
+The native adapter snapshots current controls once per update and resolves each issue once through
+the custom resolver or an index of the first native control with its name. It groups errors by field
+and guards native property, attribute and text writes. This removes repeated control-list searches
+and unchanged DOM writes, while still visiting all controls and error targets. Structured editors
+continue to supply their own reader/writer and may use an indexed `control(issue)` callback.
 
 The [browser form benchmark](/docs/benchmarks/#browser-form-sessions) compares the current session
 and adapter with RHF and Formik using shared validation and isolated field views. At revision
-`756efdf9`, one invalid field in a 500-field default-adapter form takes **64.05 ms median** on the
-recorded desktop environment. Treat this as a known performance gap when adopting large forms;
-the benchmark is not a KetSuite editor, paint/INP or mobile performance sign-off.
+`756efdf9`, the earlier default lookup took **64.05 ms median** for one invalid field in a 500-field
+form. The guide retains that baseline for comparison with the indexed adapter. Neither the fixture
+nor render isolation constitutes a KetSuite editor, paint/INP or mobile performance sign-off.
 
 ### Migrate a complex editor
 
