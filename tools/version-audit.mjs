@@ -28,6 +28,7 @@ export const requiredChecks = [
 ]
 const sha = /^[a-f0-9]{40}$/
 const hash = /^[a-f0-9]{64}$/
+/** @param {string} root @param {string[]} args */
 export function git(root, args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' })
   if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`)
@@ -69,6 +70,7 @@ export function checkAudit(root = ROOT) {
   const version = materializeVersion({ root, check: true })
   if (!existsSync(join(root, 'CHANGE_LOG')))
     throw new Error('Missing CHANGE_LOG; run npm run version:record after committing VERSION')
+  /** @type {import('./version-types.d.ts').AuditLedger} */
   const ledger = readJson(join(root, 'CHANGE_LOG'))
   if (ledger.schema !== 1 || !Array.isArray(ledger.releases)) throw new Error('Invalid CHANGE_LOG schema')
   if (new Set(ledger.releases.map((entry) => entry.version)).size !== ledger.releases.length)
@@ -121,6 +123,7 @@ export function checkAudit(root = ROOT) {
   return entry
 }
 
+/** @param {string} root @param {string} base */
 export function versionChanged(root, base) {
   const result = spawnSync('git', ['-C', root, 'show', `${base}:VERSION`], { encoding: 'utf8' })
   return result.status !== 0 || result.stdout.trim() !== readVersion(root)
@@ -143,6 +146,7 @@ export async function recordAudit(root = ROOT) {
   if (sourceDigest(root) !== before || git(root, ['rev-parse', 'HEAD']) !== auditedCommit)
     throw new Error('Source changed during version audit')
   const ledgerPath = join(root, 'CHANGE_LOG')
+  /** @type {import('./version-types.d.ts').AuditLedger} */
   const ledger = existsSync(ledgerPath) ? readJson(ledgerPath) : { schema: 1, releases: [] }
   if (ledger.schema !== 1 || !Array.isArray(ledger.releases))
     throw new Error('Invalid existing CHANGE_LOG schema')

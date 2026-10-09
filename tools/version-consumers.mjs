@@ -17,19 +17,26 @@ import { auditDocuments } from './version-documents.mjs'
 import { stagePackage } from './release-files.mjs'
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+/** @param {string | Uint8Array} bytes */
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex')
+/** @param {string} path @param {unknown} value */
 const json = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2) + '\n')
 const excluded = new Set(['node_modules', 'dist', '.build', '.ket', '.artifacts', '.learn', '.git'])
 
+/** @param {import('./version-types.d.ts').Manifest} manifest @param {Record<string, import('./version-types.d.ts').Tarball>} tarballs @param {Record<string, import('./version-types.d.ts').Manifest>} manifests */
 export function candidateManifest(manifest, tarballs, manifests) {
   const result = structuredClone(manifest)
   const names = new Set()
+  /** @param {string} name */
   const add = (name) => {
     if (names.has(name) || !packageNames.has(name)) return
     names.add(name)
     for (const dependency of Object.keys(manifests[name].dependencies ?? {})) add(dependency)
   }
-  for (const section of ['dependencies', 'devDependencies']) {
+  for (const section of /** @type {Array<'dependencies' | 'devDependencies'>} */ ([
+    'dependencies',
+    'devDependencies',
+  ])) {
     for (const name of Object.keys(result[section] ?? {})) add(name)
   }
   result.overrides ??= {}
@@ -42,17 +49,21 @@ export function candidateManifest(manifest, tarballs, manifests) {
   return result
 }
 
+/** @param {import('./version-types.d.ts').PackageLock} lock @param {import('./version-types.d.ts').Manifest} manifest @param {Record<string, import('./version-types.d.ts').Tarball>} tarballs */
 export function registryLock(lock, manifest, tarballs) {
   const result = structuredClone(lock)
   result.name = manifest.name
   result.version = manifest.version
   result.packages[''].version = manifest.version
-  for (const section of ['dependencies', 'devDependencies']) {
+  for (const section of /** @type {Array<'dependencies' | 'devDependencies'>} */ ([
+    'dependencies',
+    'devDependencies',
+  ])) {
     delete result.packages[''][section]
     if (manifest[section]) result.packages[''][section] = manifest[section]
   }
   for (const [path, entry] of Object.entries(result.packages)) {
-    const name = path.split('node_modules/').at(-1)
+    const name = path.split('node_modules/').at(-1) ?? ''
     if (!packageNames.has(name)) continue
     entry.version = manifest.version
     entry.resolved = `https://registry.npmjs.org/${name}/-/${name.split('/').at(-1)}-${manifest.version}.tgz`
@@ -61,6 +72,7 @@ export function registryLock(lock, manifest, tarballs) {
   return result
 }
 
+/** @param {string} logDirectory @param {import('./version-types.d.ts').Check[]} checks @param {string} [root] @param {string} [temporary] @returns {import('./version-types.d.ts').Runner} */
 function runner(logDirectory, checks, root = ROOT, temporary = '') {
   mkdirSync(logDirectory, { recursive: true })
   return (id, executable, args, cwd = ROOT) => {
@@ -77,13 +89,16 @@ function runner(logDirectory, checks, root = ROOT, temporary = '') {
   }
 }
 
+/** @param {string} root @param {string} temporary @param {import('./version-types.d.ts').Runner} run */
 function packCandidates(root, temporary, run) {
   materializeVersion({ root, check: true, producersOnly: true })
   run('producer-build', npm, ['run', 'build', '--silent'], root)
+  /** @type {Record<string, import('./version-types.d.ts').Tarball>} */
   const tarballs = {}
+  /** @type {Record<string, import('./version-types.d.ts').Manifest>} */
   const manifests = {}
   for (const { directory, name } of producers) {
-    const staged = join(temporary, 'packages', name.split('/').at(-1))
+    const staged = join(temporary, 'packages', basename(name))
     stagePackage(join(root, directory), staged)
     const output = run(
       `pack-${name.split('/').at(-1)}`,
@@ -102,6 +117,7 @@ function packCandidates(root, temporary, run) {
   return { tarballs, manifests }
 }
 
+/** @param {string} directory @param {Record<string, import('./version-types.d.ts').Tarball>} tarballs @param {Record<string, import('./version-types.d.ts').Manifest>} manifests @param {import('./version-types.d.ts').Runner} run @param {string} id @param {boolean} [install] */
 function prepareCandidate(directory, tarballs, manifests, run, id, install = true) {
   const manifestPath = join(directory, 'package.json')
   const lockPath = join(directory, 'package-lock.json')
@@ -157,11 +173,13 @@ export async function verifyConsumers({
 } = {}) {
   materializeVersion({ root, check: true })
   const temporary = mkdtempSync(join(tmpdir(), 'ketjs-version-consumers-'))
+  /** @type {import('./version-types.d.ts').Check[]} */
   const checks = []
   const run = runner(join(root, '.artifacts/version-audit/logs'), checks, root, temporary)
   const version = readVersion(root)
   try {
     const { tarballs, manifests } = packCandidates(root, temporary, run)
+    /** @type {Record<string, string>} */
     const paths = {}
     cpSync(join(root, 'biome.json'), join(temporary, 'biome.json'))
     cpSync(join(root, '.gitignore'), join(temporary, '.gitignore'))
@@ -178,7 +196,7 @@ export async function verifyConsumers({
       const copy = join(docsCopy, directory.slice('packages/docs'.length))
       paths[id] = copy
       for (const [path, entry] of Object.entries(readJson(join(copy, 'package-lock.json')).packages)) {
-        const name = path.split('node_modules/').at(-1)
+        const name = path.split('node_modules/').at(-1) ?? ''
         if (
           packageNames.has(name) &&
           (entry.version !== version || entry.integrity !== tarballs[name].integrity)
@@ -229,7 +247,9 @@ export async function verifyConsumers({
     run('view-check', npm, ['run', 'check'], paths.view)
     run('view-build', npm, ['run', 'build'], paths.view)
     // This verifies the actual downloadable projects, not just their authoring fixtures.
-    const { unzipSync } = await import(pathToFileURL(join(paths.docs, 'node_modules/fflate/esm/index.mjs')))
+    const { unzipSync } = await import(
+      pathToFileURL(join(paths.docs, 'node_modules/fflate/esm/index.mjs')).href
+    )
     for (const [name, id] of [
       ['learn-api', 'api'],
       ['learn-view', 'view'],
@@ -257,6 +277,7 @@ export async function verifyConsumers({
         )
       else run('download-view-build', npm, ['run', 'build'], target)
     }
+    /** @type {import('./version-types.d.ts').ConsumerReport} */
     const report = {
       version,
       mode: published ? 'published' : 'candidate',

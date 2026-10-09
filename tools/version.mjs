@@ -11,6 +11,7 @@ export const consumers = ['packages/docs', 'packages/docs/tutorials/api', 'packa
 export const packageNames = new Set(producers.map(({ name }) => name))
 const scaffolds = ['packages/ketjs/src/scaffold/index.ts', 'packages/create-view/src/index.ts']
 
+/** @param {string} path */
 export const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
 export function readVersion(root = ROOT) {
   const source = readFileSync(join(root, 'VERSION'), 'utf8')
@@ -29,22 +30,32 @@ export function readVersion(root = ROOT) {
   return version
 }
 
+/** @template {import('./version-types.d.ts').VersionMirror} T @param {T} manifest @param {string} version @returns {T} */
 const pin = (manifest, version) => {
   manifest.version = version
-  for (const section of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
-    for (const name of Object.keys(manifest[section] ?? {})) {
-      if (packageNames.has(name)) manifest[section][name] = version
+  for (const section of /** @type {Array<'dependencies' | 'devDependencies' | 'optionalDependencies' | 'peerDependencies'>} */ ([
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ])) {
+    const dependencies = manifest[section]
+    for (const name of Object.keys(dependencies ?? {})) {
+      if (dependencies && packageNames.has(name)) dependencies[name] = version
     }
   }
   return manifest
 }
+/** @param {string} version */
 const generatedVersion = (version) =>
   `// Generated from /VERSION by npm run version:sync. Do not edit.\nexport const frameworkVersion = '${version}'\n`
 
 // npm requires versions in manifests and locks. These are checked mirrors, not authoring inputs.
 export function materializeVersion({ root = ROOT, check = false, producersOnly = false } = {}) {
   const version = readVersion(root)
+  /** @type {string[]} */
   const failures = []
+  /** @param {string} relative @param {(value: any) => any} transform @param {boolean} [json] */
   const update = (relative, transform, json = false) => {
     const path = join(root, relative)
     let before
@@ -96,7 +107,7 @@ export function materializeVersion({ root = ROOT, check = false, producersOnly =
           lock.version = version
           pin(lock.packages[''], version)
           for (const [path, entry] of Object.entries(lock.packages)) {
-            const name = path.split('node_modules/').at(-1)
+            const name = path.split('node_modules/').at(-1) ?? ''
             if (!packageNames.has(name)) continue
             pin(entry, version)
             entry.resolved = `https://registry.npmjs.org/${name}/-/${name.split('/').at(-1)}-${version}.tgz`
