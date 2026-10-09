@@ -1,7 +1,7 @@
 # KetJS backend learning lab
 
 A completed reference application for the [KetJS learning path](https://ketjs.dev/learn/).
-Targets **KetJS 0.3.0 preview**, Node 24+, and native SQLite. APIs may change before 1.0.
+Targets the **KetJS preview version pinned in `package.json`**, Node 24+, and native SQLite. APIs may change before 1.0.
 
 ## Start
 

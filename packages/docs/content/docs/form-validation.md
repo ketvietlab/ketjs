@@ -9,11 +9,11 @@ KetJS form validation is a browser-safe contract rather than a component convent
 form values, applies field and cross-field constraints, and returns machine-readable issues. The same schema
 runs in `@ketvietlab/ketjs-view` and on the server through `@ketvietlab/ketjs`.
 
-:::note[Development APIs]
-Nested contracts, edit sessions and transactional form actions documented on this branch are pending
-a framework release. Published KetJS 0.3.0 includes the legacy schema/controller APIs, but does not
-include `defineFormContract`, `createFormSession`, `attachForm` or `defineFormAction`. Adopt a released
-version containing those exports before using the new examples in an npm consumer.
+:::note[Requires KetJS 0.4.0]
+Nested contracts, edit sessions and transactional form actions require KetJS and ketjs-view 0.4.0
+or later. The 0.3.0 packages include the legacy schema/controller APIs, but do not export
+`defineFormContract`, `createFormSession`, `attachForm` or `defineFormAction`. Keep the framework
+packages used by an application on the same released version.
 :::
 
 This guide covers shared schemas and issues. For browser drafts, submit state, native controls and

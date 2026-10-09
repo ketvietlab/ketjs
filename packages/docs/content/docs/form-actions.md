@@ -9,9 +9,9 @@ order: 5
 contract, runs the domain handler and records an accepted result in one database transaction.
 It does not infer which records form an aggregate, replace permission checks or create a form route.
 
-:::note[Development API]
-`defineFormAction` is pending a framework release and is not part of published KetJS 0.3.0. The
-example below targets this development branch; npm consumers need a release containing this API.
+:::note[Requires KetJS 0.4.0]
+`defineFormAction` requires KetJS 0.4.0 or later. Pair it with the same released ketjs-view version
+for client edit sessions. The API is not exported by KetJS 0.3.0.
 :::
 
 Define the browser-safe schema with [Form validation](/docs/form-validation/), then connect the browser

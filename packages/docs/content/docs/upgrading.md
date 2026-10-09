@@ -11,10 +11,17 @@ moving the application lock.
 
 ## Current package line
 
-The current coordinated release is `0.3.0`. Use the same exact version for the KetJS packages your
+The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The 0.3.0 line adds typed HTTP function bindings, explicit result cardinality and OpenAPI export.
+The 0.4.0 line adds nested form contracts, immutable edit sessions, native control binding and
+transactional save receipts. Existing `createForm` consumers remain supported; adopting
+`createFormSession` is explicit. Follow [Form validation](/docs/form-validation/),
+[Forms and edit sessions](/docs/view-forms/) and [Transactional form actions](/docs/form-actions/)
+when migrating an editor. Keep domain permissions, ownership and revision checks in the server
+handler, and use primitive field selectors to isolate unchanged field views.
+
+The 0.3.0 line introduced typed HTTP function bindings, explicit result cardinality and OpenAPI export.
 When publishing an existing function through HTTP, declare its `returns` shape and the route's public
 projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing an endpoint.
 [Spec](/spec/) can render the resulting contract without changing the API implementation.
