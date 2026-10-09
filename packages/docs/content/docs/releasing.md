@@ -31,8 +31,54 @@ account supports that transition.
 
 ## Prepare a version
 
-Update the root and all workspace package versions together. Also update every internal dependency and the
-version used by `ket new`. The release checker rejects drift between any of these locations.
+Edit the root `VERSION` file only. It is the authoritative version for the five framework packages,
+scaffolds, documentation runtime and learning labs. Manifests, npm locks and the browser-safe docs constant
+are generated mirrors. The checker rejects drift rather than silently repairing it in CI.
+
+```bash
+# Run from: /path/to/ketjs
+npm run version:sync
+npm run version:check
+```
+
+Synchronization builds the five producers and resolves private consumer locks against their exact npm
+tarballs, including versions that do not exist on npm yet. Committed locks retain public registry URLs and
+the actual candidate SHA-512 integrity; temporary file dependencies never enter the published downloads.
+Packing normalizes staged file permissions (0644, with executable CLI entries at 0755), so a developer's
+umask cannot change the integrity between local verification and Linux CI. Source permissions are untouched.
+KetSuite, Spec and the design system have independent versions and are not synchronized by this file.
+
+Current-version Markdown names `VERSION` between doubled braces in source. The site expands it before parsing metadata,
+examples and links, and while generating offline lessons. Historical releases and minimum API versions
+stay literal. Review changed contracts, configuration, release notes and examples before committing.
+
+## Mandatory CHANGE_LOG evidence
+
+The version change must be a source commit with exactly one meaningful `Version-Reason: ...` trailer.
+Finish documentation changes and generated mirrors in that commit, then run the audit from clean source:
+
+```bash
+# Run from: /path/to/ketjs
+git add VERSION package.json package-lock.json packages tools .github README.md AGENTS.md
+git commit -m "Prepare the coordinated release" \
+  -m "Version-Reason: Ship the reviewed contracts documented in the release notes and verified learning labs."
+npm run version:record
+git add CHANGE_LOG
+git commit -m "Record coordinated version audit evidence"
+npm run version:audit
+```
+
+`CHANGE_LOG` is a JSON ledger with one entry per version. It records the exact VERSION commit and its
+reason, the audited source commit, a source digest, reviewed document paths/fence coverage, environment,
+tarball checksums and executed checks with exit codes and log hashes. The recording command runs those
+checks itself. Logs and the full report remain under `.artifacts/version-audit/` and CI uploads them.
+
+Two commits avoid a self-referential SHA. Merge them without squashing; rebase, squash or later source
+changes require a fresh evidence record. CI fails for missing reasons, mismatched commits, missing or
+failed documentation/lab checks and stale source evidence. CI also reruns the candidate consumers, so a
+hand-written passing flag does not substitute for execution. Audit coverage includes rendered local links,
+metadata, located examples, version expansion and downloadable projects; maintainers still review prose
+and whether release notes describe the actual changes.
 
 Only the scoped `@ketvietlab` packages are part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
@@ -54,6 +100,12 @@ Broad release verification belongs to promotion into `develop` and the release p
   check and integration test, builds the static Spec reference, and compares CLI OpenAPI output with the
   project's generator. The scaffold's pinned Spec version must already be published by KetSuite.
 
+Version changes have an additional dedicated gate on pull requests into `integration`, `develop` and
+`master`. It validates `CHANGE_LOG` and reruns the docs tests/check/build, the API lab's real HTTP,
+tenant-isolation and worker checkpoints, the View lab's check/build and the same checks on the actual ZIP
+downloads. These consumers use exact candidate tarballs before publishing, so an unpublished version is
+tested without substituting workspace source. The broad framework suite remains at promotion/release.
+
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
 embedded by the deterministic PDF renderer. A release that crosses a ceiling must inspect the tarball
 contents before changing the budget.
@@ -71,21 +123,22 @@ No publish command is part of either local script.
 
 1. Create `fix/release-<version>` from `master` and merge the verified `develop` head into it. Do not release an
    arbitrary feature branch.
-2. Update the coordinated version, then open the release pull request into `master` and let the required
+2. Update `VERSION`, synchronize mirrors and commit executable `CHANGE_LOG` evidence, then open the release pull request into `master` and let the required
    checks pass. Feature pull requests are verified locally by their authors, so a failure here is fixed on
    `develop` before the release is retried.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.4.0` at that exact `master` commit.
+4. Create and publish GitHub release `v{{VERSION}}` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
+   The workflow repeats docs/lab/download verification against the public registry after publishing.
 7. Update each downstream repository to the released npm version, then run that repository's release
    process.
 8. Run the public smoke path without local tarballs:
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.4.0 new public_smoke
+npx -y @ketvietlab/ketjs@{{VERSION}} new public_smoke
 cd public_smoke
 npm install
 npm test

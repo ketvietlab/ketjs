@@ -15,7 +15,7 @@ Those are application decisions. This separation lets the same framework support
 service API, or no public HTTP API at all.
 
 Use [Spec](/spec/) to render an exported document as a static API reference and request console.
-KetJS 0.3.0 scaffolds the exporter and Spec build commands in new applications.
+The current KetJS {{VERSION}} release scaffolds the exporter and Spec build commands in new applications.
 
 ## Function bindings
 

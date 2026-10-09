@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { zipSync } from 'fflate'
+import { expandVersion } from './release.ts'
 
 // Explicit roots prevent dependencies, build output, credentials and lab databases entering downloads.
 export function prepareLearningDownloads(pages) {
@@ -9,7 +10,10 @@ export function prepareLearningDownloads(pages) {
     .sort((a, b) => a.order - b.order)
   mkdirSync('tutorials/api/lessons', { recursive: true })
   for (const lesson of lessons) {
-    writeFileSync(`tutorials/api/lessons/${lesson.slug}.md`, readFileSync(`content/learn/${lesson.slug}.md`))
+    writeFileSync(
+      `tutorials/api/lessons/${lesson.slug}.md`,
+      expandVersion(readFileSync(`content/learn/${lesson.slug}.md`, 'utf8')),
+    )
   }
   writeFileSync(
     'tutorials/api/course.json',
