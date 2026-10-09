@@ -7,7 +7,7 @@ order: 0
 
 ## Find your entry point
 
-:::note[KetJS 0.3.0 is in preview]
+:::note[KetJS 0.4.0 is in preview]
 The project is in active review. Use it for evaluation and feedback, expect API and data-format changes before 1.0, and avoid production workloads for now.
 :::
 
@@ -53,13 +53,14 @@ Define a module, select a deployment's modules in a workspace, then learn how na
 
 ### Request execution
 
-Follow a request through its context, server functions and HTTP boundary. Validate form input and describe the public HTTP contract.
+Follow a request through its context, server functions and HTTP boundary. Validate form input, commit transactional edits and describe the public HTTP contract.
 
 1. [Request lifecycle](/docs/request-lifecycle/)
 2. [Functions and effects](/docs/functions/)
 3. [HTTP routes and responses](/docs/http/)
 4. [Form validation](/docs/form-validation/)
-5. [HTTP contracts and OpenAPI](/docs/openapi/)
+5. [Transactional form actions](/docs/form-actions/)
+6. [HTTP contracts and OpenAPI](/docs/openapi/)
 
 </section>
 
@@ -90,14 +91,15 @@ Resolve sessions and tenant context before deciding which operations the current
 
 ### ketjs-view and KTL
 
-Understand pure rendering and island lifecycles, then choose browser data loading, a static site or server theme templates. Menus, localization and reports build on those output contracts.
+Understand pure rendering and island lifecycles, then add browser data loading and form sessions, or choose a static site or server theme templates. Menus, localization and reports build on those output contracts.
 
 1. [Rendering and islands](/docs/rendering/)
 2. [Effects and data fetching](/docs/view-effects-data/)
-3. [Static sites with ketjs-view](/docs/view-static-sites/)
-4. [Themes and KTL](/docs/themes/)
-5. [Menus and localization](/docs/menus-i18n/)
-6. [Reports and PDF](/docs/reports/)
+3. [Forms and edit sessions](/docs/view-forms/)
+4. [Static sites with ketjs-view](/docs/view-static-sites/)
+5. [Themes and KTL](/docs/themes/)
+6. [Menus and localization](/docs/menus-i18n/)
+7. [Reports and PDF](/docs/reports/)
 
 </section>
 
@@ -159,7 +161,7 @@ Check the current package boundaries and upgrade requirements. Review design dec
 | --- | --- |
 | A fullstack application | [Modules](/docs/modules/) → [Workspaces](/docs/workspaces/) → [Server functions](/docs/functions/) → [HTTP routes](/docs/http/) |
 | A data workflow | [Models](/docs/models/) → [Migrations](/docs/migrations/) → [Query builder](/docs/data/) |
-| An interactive view | [Rendering and islands](/docs/rendering/) → [Effects and data fetching](/docs/view-effects-data/) → [Form validation](/docs/form-validation/) |
+| An interactive view | [Rendering and islands](/docs/rendering/) → [Effects and data fetching](/docs/view-effects-data/) → [Forms and edit sessions](/docs/view-forms/) |
 | A static or client-rendered site | [Rendering and islands](/docs/rendering/) → [Static sites with ketjs-view](/docs/view-static-sites/) → [Runnable example](/examples/static-site/) |
 | A secure tenant application | [Sessions and tenants](/docs/sessions-tenants/) → [Authorization](/docs/authorization/) → [Model scopes](/docs/models/) |
 | Background and integration work | [Jobs and workers](/docs/jobs/) → [Storage, transports and streams](/docs/integrations/) |

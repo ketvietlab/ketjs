@@ -423,6 +423,8 @@ export type FnSpec = {
    */
   crossCompany?: boolean
   idempotent?: boolean
+  /** Opt-in atomic database command: requires a key; writes and receipt commit together. */
+  transactional?: boolean
   dryRun?: boolean
   agent?: boolean
   handler: (ctx: Ctx, args: Record<string, unknown>) => unknown
@@ -443,6 +445,7 @@ export type FnMeta = {
   effects: string[]
   crossCompany: boolean
   idempotent: boolean
+  transactional?: true
   dryRun: boolean
   agent: boolean
 }

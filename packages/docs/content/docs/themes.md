@@ -2,7 +2,7 @@
 title: Themes and KTL
 description: Build KetJS themes with KTL templates, browser JavaScript, styles, tokens, regions, joints, sections, and islands.
 group: ketjs-view and KTL
-order: 4
+order: 5
 ---
 
 Themes can use **JavaScript in the browser** for menus, carousels, lightboxes and other interactions.
