@@ -6,7 +6,26 @@ Home, Docs, Spec, Learn, Examples and Blog use the public Két Design System fro
 
 ## Local development
 
-The site has its own lockfile and consumes published KetJS 0.3.0 and Két Design System 0.1.41.
+The site has its own lockfile and consumes the published KetJS version materialized from the root `VERSION` and Két Design System 0.1.41.
+
+## Version source and release audit
+
+Root `VERSION` is the authoritative framework version. `npm run version:sync` from the repository root
+materializes this site's and both labs' package versions, exact dependencies, lockfiles and
+`site/version.generated.ts`. `site/release.ts` exports that browser-safe constant; `test/release.test.mjs`
+checks it against the actual independently installed npm runtime and every lab pin.
+
+Use `{{VERSION}}` for the current version in Markdown, including metadata and shell examples. The content
+compiler expands it before Markdown parsing and `site/learning-assets.mjs` expands the offline lessons.
+Keep historical releases and API introduction/minimum versions literal. Lab README files refer to their
+included package manifests, so downloaded projects remain standalone.
+
+Version changes require a committed `Version-Reason`, then `npm run version:record` and a separate
+`CHANGE_LOG` evidence commit. The dedicated CI gate checks source hashes and executes docs tests, type and
+view checks, static build/link verification, both lab checkpoints and the actual download ZIPs. Before
+publishing, consumers install candidate npm tarballs in temporary projects; the committed manifests/locks
+continue to describe public npm packages. After publishing, the release workflow repeats the checks with
+`npm ci` from the public registry. No workspace runtime substitutes for an independently installed consumer.
 It can install and build independently of the framework source checkout:
 
 ```bash
@@ -219,7 +238,7 @@ This is a learning playground, not a resource-isolated server sandbox: an infini
 freeze its browser context. Node, database and worker exercises run locally.
 
 `site/learning-assets.mjs` packages explicit source roots into two ZIP downloads, excluding
-node_modules, build output and local databases. Both projects pin published KetJS 0.3.0 rather
+node_modules, build output and local databases. Both projects pin the coordinated KetJS version from `VERSION` rather
 than workspace aliases. The View project includes counter, todo and cancellable data-loading
 examples. The API project includes a local learning CLI and three executable checkpoints:
 HTTP/validation, company isolation and durable jobs. Advanced lessons are guided extensions;
