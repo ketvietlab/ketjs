@@ -4,11 +4,12 @@ import type { IslandFactory } from '@ketvietlab/ketjs-view'
 import { BrandMark, BrandPreview, BrandWordmark } from './logo.tsx'
 import { DiagramViewer } from './diagram-viewer.tsx'
 import { MenuIcon, ThemeIcon } from './header-icons.tsx'
+import { searchItems, type SearchItem } from './search.ts'
 
-type SearchItem = { title: string; description: string; route: string; keywords: string }
 type Props = { active: string }
 const links = [
   { label: 'Docs', href: '/docs/' },
+  { label: 'Spec', href: '/spec/' },
   { label: 'Learn', href: '/learn/' },
   { label: 'Playground', href: '/playground/' },
   { label: 'Blog', href: '/blog/' },
@@ -155,12 +156,7 @@ const controls: IslandFactory<Props> = (props) => ({
         }))
     const renderResults = () => {
       const query = input.value.trim().toLowerCase()
-      const matches = items
-        .filter(
-          (item) =>
-            !query || `${item.title} ${item.description} ${item.keywords}`.toLowerCase().includes(query),
-        )
-        .slice(0, 8)
+      const matches = searchItems(items, query)
       results.replaceChildren(
         ...matches.map((item) => {
           const li = document.createElement('li'),
