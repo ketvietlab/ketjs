@@ -50,3 +50,16 @@ deployment name and `--options FILE` for JSON metadata and security definitions.
 [HTTP contracts and OpenAPI guide](https://ketjs.dev/ketjs/openapi/#generating-openapi) for protected operations.
 
 Documentation and source: [github.com/ketvietlab/ketjs](https://github.com/ketvietlab/ketjs)
+
+## Transactional form actions
+
+`defineFormAction(contract, { effects, handler })` declares an ordinary permission- and scope-checked
+function. It validates shared nested values, requires an idempotency key, and commits database writes
+and the accepted receipt in one transaction. Returned invalid/conflict outcomes unwind earlier writes.
+The domain handler must check and advance the aggregate revision using the supplied transaction
+context; all writers must participate. External effects need staging or an outbox.
+
+`transactional: true` is the underlying opt-in function contract and requires `idempotent: true` and a
+real execution with a key. Existing functions keep their execution semantics. Read the
+[form contract guide](../docs/content/docs/form-validation.md) for client sessions, keyed rows, retries,
+native routes, and a complete revision-guarded save example.
