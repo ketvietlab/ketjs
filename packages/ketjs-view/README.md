@@ -41,6 +41,8 @@ only a committed receipt replaces the baseline. Background data never replaces a
 
 `attachForm` adapts native controls or custom read/write callbacks in an island's mount lifecycle.
 It preserves native markup, associates errors and restores listeners/control state on detach.
+Repeated scalar controls receive individual array entries in form order; submit buttons retain their
+own values so the selected submitter determines the submitted action.
 `formActionTransport` calls an ordinary KetJS function with an idempotency key. `createForm` remains
 available as a lower-level, transport-independent controller; its resolved handler is not a durable
 save acknowledgement.

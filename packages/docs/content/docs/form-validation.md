@@ -258,6 +258,12 @@ A returned `invalid` or `conflict` unwinds the transaction before it becomes an 
 the revision change and any earlier row writes. A thrown error or invalid accepted projection also rolls
 back. On success, the receipt contains the accepted projection, generated IDs, and revision produced
 inside that transaction. Avoid a post-commit reread that could pick up a different writer's changes.
+Both committed and refused outcomes pass through the function's declared output projection;
+undeclared properties on a domain outcome are not returned to the caller.
+
+`ctx.notify()` uses the root adapter's listeners and publishes only after a successful commit.
+Rollback discards notifications, and receipt replay does not publish them again. PostgreSQL carries
+notifications in the database transaction; SQLite buffers them until the transaction commits.
 
 The domain handler owns the revision guard. Every other writer affecting the same aggregate must use
 the same guard and advance its revision. This API does not infer aggregate boundaries or make an
@@ -322,6 +328,9 @@ give them IDs so the adapter can link `aria-describedby`. `[data-form-summary]` 
 The application supplies status/retry copy using `session.status()` or `onOutcome`.
 
 The default reader preserves repeated controls, unchecked boolean checkboxes and empty selections.
+The default writer assigns array entries to repeated text, textarea, or single-select controls in
+form order. Submit buttons keep their declared values: the clicked submitter's name and value enter
+the draft during submission rather than being overwritten by the current session value.
 Disabled controls are not interpreted as clear operations. Set `read` and `write` for a custom editor
 whose state is not represented by the form's named controls, and `control` to resolve nested issues to
 focusable controls. Existing descriptions and disabled states are restored on detach.

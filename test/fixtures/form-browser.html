@@ -11,6 +11,8 @@
   <p id="name-error" data-form-error="name"></p>
   <label for="note">Note</label><textarea id="note" name="note"></textarea>
   <p id="note-error" data-form-error="note"></p>
+  <label for="alias-one">First alias</label><input id="alias-one" name="aliases">
+  <label for="alias-two">Second alias</label><input id="alias-two" name="aliases">
   <label><input type="checkbox" name="active" id="active">Active</label>
   <label for="tags">Tags</label><select id="tags" name="tags" multiple><option value="a">A</option><option value="b">B</option></select>
   <label>Read only <input name="ignored" value="untouched" disabled></label>
@@ -18,7 +20,9 @@
   <p data-form-summary role="alert"></p>
   <button type="reset">Reset</button>
 </form>
-<button form="edit" type="submit">Save or retry</button>
+<button id="save" form="edit" type="submit" name="command" value="save">Save or retry</button>
+<button id="archive" form="edit" type="submit" name="command" value="archive">Archive</button>
+<input id="publish" form="edit" type="submit" name="command" value="publish" aria-label="Publish">
 <button id="detach" type="button">Detach adapter</button>
 <pre id="state" role="status"></pre>
 <script type="module">
@@ -26,13 +30,14 @@ import { defineFormContract, createFormSession, attachForm, effect, validationIs
 const contract = defineFormContract('fixture.v1', { fields: {
   name: { required: true, trim: true }, note: { nullable: true, empty: 'null', required: true },
   active: { type: 'bool', required: true }, tags: { type: 'array', required: true, items: { required: true } }, protectedTags: { type: 'array', required: true, items: { required: true } },
+  aliases: { required: true, multiple: true }, command: { required: true, oneOf: ['save', 'archive', 'publish'] },
 } })
 let calls = 0
 let parentSubmits = 0
 let detached = false
 const receipts = new Map()
 const session = createFormSession(contract, {
-  recordId: 'p1', revision: 'r0', initial: { name: 'Tea', note: null, active: true, tags: ['a', 'b'], protectedTags: ['safe'] },
+  recordId: 'p1', revision: 'r0', initial: { name: 'Tea', note: null, active: true, tags: ['a', 'b'], protectedTags: ['safe'], aliases: ['alpha', 'beta'], command: 'save' },
   transport: async (request) => {
     calls++
     if (receipts.has(request.mutationId)) return receipts.get(request.mutationId)

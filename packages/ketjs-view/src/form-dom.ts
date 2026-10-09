@@ -79,6 +79,7 @@ export function attachForm<T extends FormValues, R>(
     const submitted = session.submitted()
     const touched = session.touched()
     const values = session.values()
+    const positions = new Map<string, number>()
     form.setAttribute('aria-busy', session.status() === 'submitting' ? 'true' : 'false')
     for (const element of controls()) {
       if (!original.has(element))
@@ -103,8 +104,19 @@ export function attachForm<T extends FormValues, R>(
         else if (element instanceof HTMLSelectElement && element.multiple)
           for (const option of element.options)
             option.selected = Array.isArray(value) && value.includes(option.value)
-        else if (!(element instanceof HTMLInputElement && element.type === 'file'))
-          element.value = value == null ? '' : String(value)
+        else if (
+          !(element instanceof HTMLButtonElement) &&
+          !(
+            element instanceof HTMLInputElement &&
+            ['file', 'submit', 'reset', 'button', 'image'].includes(element.type)
+          )
+        ) {
+          // Repeated scalar controls share a field, but each represents one array entry.
+          const position = positions.get(element.name) ?? 0
+          const held = Array.isArray(value) ? value[position] : value
+          positions.set(element.name, position + 1)
+          element.value = held == null ? '' : String(held)
+        }
       }
       const held = issues.filter(
         (issue) => resolve(issue) === element && (submitted || touched.includes(element.name)),
