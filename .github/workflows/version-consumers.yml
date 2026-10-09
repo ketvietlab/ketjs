@@ -1,0 +1,48 @@
+name: version documentation and labs
+
+on:
+  pull_request:
+    branches: [integration, develop, master]
+    paths:
+      - VERSION
+      - CHANGE_LOG
+      - tools/version*.mjs
+      - tools/release-files.mjs
+      - .github/workflows/version-consumers.yml
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-consumers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consumers:
+    name: version audit and consumer checks
+    runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - run: npm ci
+      - name: reject missing commits, reasons, audits and stale evidence
+        run: npm run version:check && npm run version:audit
+      - name: version and audit failure contracts
+        run: node --test tools/version.test.mjs
+      - name: rerun documentation and downloadable labs against candidate tarballs
+        run: npm run version:consumers
+      - name: retain audit reports and executable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-consumer-evidence
+          path: .artifacts/version-audit/
+          if-no-files-found: warn

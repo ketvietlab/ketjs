@@ -22,11 +22,19 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "26"
           cache: npm
       - run: npm ci
+      - name: VERSION is the only version source
+        run: npm run version:check
+      - name: version changes include audited documentation and lab evidence
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: node tools/version-audit.mjs gate "$BASE_COMMIT"
       - name: formatting is what the formatter would write
         uses: ./.github/actions/task-cache
         with:
