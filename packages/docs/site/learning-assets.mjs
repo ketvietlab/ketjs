@@ -83,9 +83,12 @@ export function prepareLearningDownloads(pages) {
     }
     if (project.name === 'learn-api') {
       // The downloaded project is standalone; the repository fixture is nested.
-      const config = JSON.parse(files['learn-api/biome.json'].toString())
+      const source = files['learn-api/biome.json'].toString()
+      const config = JSON.parse(source)
+      if (config.root !== false || (source.match(/"root"\s*:\s*false/g) ?? []).length !== 1)
+        throw new Error('The nested API lab must declare exactly one root: false configuration')
       files['learn-api/biome.json'] = new TextEncoder().encode(
-        JSON.stringify({ ...config, root: true }, null, 2) + '\n',
+        source.replace(/("root"\s*:\s*)false/, '$1true'),
       )
     }
     writeFileSync(
