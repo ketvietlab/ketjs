@@ -1,6 +1,6 @@
 ---
 title: Benchmarks
-description: Compare KetJS database execution, HTTP server and SSR performance with repeatable workloads, exact versions and HTML charts.
+description: Compare KetJS database, HTTP, SSR and browser form performance with repeatable workloads and exact versions.
 group: Verify and deploy
 order: 2
 # Maintained chart summaries; generated raw runs live outside the website.
@@ -176,6 +176,158 @@ Chromium **154.0.8037.95**, **1440 × 1000**, light theme. The native TSX fixtur
 
 The old lit comparison used a different fixture and environment; no current cross-framework ratio is claimed.
 
+## Browser form sessions
+
+Measured **2026-10-09**, at KetJS source revision **`d7af51c5`** (ketjs-view 0.2.0), against
+**React 19.3.0**, **React Hook Form 7.89.0** and **Formik 2.4.9**. The private
+`bench/form-comparison/` deployment bundles minified production React with esbuild 0.28.2,
+without StrictMode. Environment: Apple M1 Pro, 32 GiB RAM, arm64 macOS Darwin 25.2.0,
+Node.js 24.14.1, Chromium 154.0.8037.95, **1440 × 900**, device scale 1, light theme,
+no CPU throttling. This synthetic deployment is separate from KetSuite.
+
+Two fresh browser sessions each run two mounts per case and five warmup edits per mount.
+Library order rotates by case and mount. The figures below pool **80 valid edits** and
+**20 invalid edits, recoveries and API submits** per library/workload. Both runs have identical
+runtime/harness digests and diagnostic counters; **10,272 correctness assertions** passed.
+The raw reports contain the source revision, package versions, environment, digests and individual
+samples and remain local under `.artifacts/benchmarks/`.
+
+Each library uses the same full-schema validator on change, a value mirror and error text per
+field, and dirty/error/pending status. RHF uses uncontrolled `register` with exact field
+subscriptions and memoized components; Formik uses `FastField` for independent fields. Nested
+fixtures initialize `useFieldArray`/`FieldArray` and contain stable row keys, nullable IDs,
+decimal weights, boolean flags and attribute-value records. Three controls per variant plus
+one title produce 31, 301 or 751 controls. KetJS flat forms use the default native adapter;
+its nested forms use a custom structured reader, equality-guarded writer and indexed issue
+lookup. KetJS mounts native controls once and updates field mirrors through effects with primitive
+`computed` selectors; the timer does not include a KetJS TSX component-tree render on each edit.
+
+### Valid input changes
+
+Elapsed time starts at synthetic `input` event dispatch and ends when raw state, dirty state,
+error text and the changed field's value-mirror DOM settle, including asynchronous React commits.
+The driver value assignment, preceding animation frame and correctness assertions are excluded.
+This does **not** measure layout, paint or INP. Each cell is **median / p95, in milliseconds**.
+
+| Workload | KetJS | RHF | Formik FastField |
+| --- | ---: | ---: | ---: |
+| 10 flat fields | 0.20 / 0.50 | 0.30 / 0.40 | 0.90 / 1.70 |
+| 100 flat fields | 0.60 / 0.70 | 0.40 / 0.60 | 1.80 / 2.10 |
+| 500 flat fields | 2.30 / 2.60 | 1.30 / 1.50 | 5.30 / 5.90 |
+| 10 variants, 31 controls | 0.35 / 0.50 | 0.40 / 0.90 | 1.30 / 4.10 |
+| 100 variants, 301 controls | 1.30 / 1.60 | 0.90 / 1.20 | 3.00 / 3.60 |
+| 250 variants, 751 controls | 3.30 / 3.70 | 1.80 / 2.20 | 6.10 / 6.50 |
+
+### One invalid field
+
+The middle field becomes empty (flat) or a malformed decimal (nested). The same settlement
+boundary includes displaying its error. Each cell is **median / p95, in milliseconds**.
+
+| Workload | KetJS | RHF | Formik FastField |
+| --- | ---: | ---: | ---: |
+| 10 flat fields | 0.25 / 0.40 | 0.80 / 2.10 | 0.80 / 1.10 |
+| 100 flat fields | 0.60 / 0.70 | 1.35 / 1.70 | 1.70 / 2.00 |
+| 500 flat fields | 2.35 / 3.00 | 3.00 / 4.30 | 5.20 / 5.70 |
+| 10 variants, 31 controls | 0.40 / 1.30 | 1.30 / 2.10 | 1.35 / 3.70 |
+| 100 variants, 301 controls | 1.30 / 1.50 | 2.50 / 3.00 | 3.05 / 3.40 |
+| 250 variants, 751 controls | 3.15 / 3.50 | 4.55 / 5.00 | 6.10 / 6.80 |
+
+### Before and after the adapter fix
+
+The earlier revision `756efdf9` rebuilt and searched the controls list for every issue/control
+pair, introducing quadratic work even for one issue. Revision `d7af51c5` snapshots current
+controls once per pass, indexes their names, resolves each issue once, groups errors by field,
+guards DOM writes and caches baseline validation. The before/after runs have identical harness
+digests, package versions, viewport and workloads; each revision has two browser runs. Each cell
+is **median / p95, in milliseconds**.
+
+| KetJS operation | Before `756efdf9` | After `d7af51c5` |
+| --- | ---: | ---: |
+| Valid edit, 500 flat fields | 2.70 / 3.00 | 2.30 / 2.60 |
+| One invalid field, 500 flat fields | **64.05 / 65.80** | **2.35 / 3.00** |
+| Valid edit, 250 variants | 3.70 / 4.20 | 3.30 / 3.70 |
+
+The invalid-edit median is about **27× lower** in this workload. This measures the combined
+adapter/cache fix, not an isolated contribution from each optimization. Full draft validation,
+copying, comparisons and control traversal still scale with draft/control size in this fixture.
+The nested fixture still uses its
+explicit structured reader/writer, so it does not establish default nested-path support.
+
+### API submit and accepted baseline
+
+These timers include client validation, a mock accepted receipt and baseline reset, with no HTTP
+or database. KetJS additionally snapshots mutation identity, checks receipts and locks native
+controls; RHF uses `handleSubmit`/`reset`, while Formik uses `submitForm`, projects accepted values
+through the shared schema and calls `resetForm`. These application flows have different library
+semantics, so the figures do not rank equivalent server transactions. Each cell is
+**median / p95, in milliseconds**.
+
+| Workload | KetJS | RHF | Formik FastField |
+| --- | ---: | ---: | ---: |
+| 10 flat fields | 0.20 / 0.50 | 0.60 / 1.40 | 0.20 / 0.60 |
+| 100 flat fields | 0.80 / 1.00 | 2.55 / 3.80 | 0.40 / 0.50 |
+| 500 flat fields | 4.70 / 5.20 | 12.80 / 14.40 | 2.20 / 2.70 |
+| 10 variants, 31 controls | 0.45 / 0.90 | 1.30 / 2.60 | 0.30 / 0.70 |
+| 100 variants, 301 controls | 2.50 / 2.80 | 6.60 / 8.40 | 1.10 / 1.20 |
+| 250 variants, 751 controls | 6.65 / 8.10 | 19.60 / 23.00 | 2.80 / 3.10 |
+
+### Render isolation and work behind it
+
+Counters come from separate fresh mounts, with prototype wrappers and MutationObserver;
+timed mounts have neither. For **one valid edit in an already dirty 500-field form after warmup**:
+
+| Counter | KetJS | RHF | Formik FastField |
+| --- | ---: | ---: | ---: |
+| Field-view executions | 1 | 1 | 1 |
+| Unedited field-view executions | 0 | 0 | 0 |
+| Form component renders | Not applicable | 0 | 2 |
+| Status view executions | 1 | 0 | 2 |
+| Completed root refinements | 1 | 1 | 1 |
+| Successful custom field-rule calls | 500 | 500 | 500 |
+| KetJS selector reads | 500 | Not applicable | Not applicable |
+| Form `aria-busy` setter calls | 0 | 0 | 0 |
+| Input `value` setter calls | 0 | 0 | 0 |
+| Disabled-property writes | 0 | 0 | 0 |
+| Attribute method calls | 0 | 0 | 0 |
+| Text setter calls | 2 | 1 | 1 |
+| MutationObserver records | 2 | 7 | 8 |
+
+On the invalid/recovery transitions, KetJS executes one field view and RHF/Formik execute the
+edited field twice; all three execute **zero unedited field views**. The extra React execution
+reflects the separate value/error updates. Clean-to-dirty status changes are exercised during
+warmup, not represented by the zero RHF status-render count in the valid-edit probe.
+
+View effects and React renders are different operations. Setter calls can assign unchanged
+values, and React can update `defaultValue` or attributes without assigning `input.value`.
+Mutation records also differ by DOM implementation. A small record count does not mean a small
+amount of adapter work. The legacy raw counter `adapterEffects` counts busy-attribute setters;
+with guarded writes it does not count actual adapter executions. Built-in validation is not
+represented by custom-rule counters, and a
+malformed structured child can skip the root refinement.
+
+KetJS validates the full draft on each edit and caches baseline validation until the baseline
+or a tracked rule dependency changes. Compared with the earlier 500-field probe, this reduces
+custom rule calls from 1,000 to 500 and removes 500 unchanged value/disabled assignments.
+Primitive selectors prevent unchanged field-view effects but still read the whole draft signal.
+At 250 variants, value/disabled/attribute writes are zero for a valid edit, while field and status
+mirrors perform two text writes. In a separate
+100-field probe, reading `session.values()` directly in every field effect executes **100 field
+effects, including 99 unedited fields**, instead of one with primitive selectors. See
+[form render subscriptions](/docs/view-forms/#render-subscriptions-and-cost).
+
+The native regression fixture at `/regressions/` passes **4 cases and 46 assertions**, including
+one control snapshot per update with 500 controls, one custom resolution per issue, dense error
+visibility, dynamic controls, unchanged-write guards, multiple descriptions, native submitters,
+disabled-fieldset preservation and unknown-outcome retry. Its reproduction steps are in
+`bench/form-comparison/README.md`. These are deterministic operation/behavior checks, not dense-error
+latency measurements.
+
+This removes the measured default-lookup bottleneck. More selective draft/subscription work may
+still help larger editors. The current validator is deliberately full-schema; incremental validation must preserve
+cross-field and structured constraints. The timings do not establish a universal library ranking.
+Array append/remove/reorder, comparative dense-error latency, async validation, memory/GC, mobile, Safari and actual
+KetSuite editor performance remain unmeasured.
+
 ## Renderer host operations
 
 A separate counting-host fixture verifies the mutation cost independent of browser time. This fixture is not a DOM performance measurement.
@@ -197,11 +349,14 @@ The Node harnesses write generated reports and raw runs to the ignored `.artifac
 The Node harness needs emitted framework artifacts. Its build compiles the five-package workspace; it does not run the repository's test suites. Benchmark deployments are the synthetic headless catalogue fixture and `queue_benchmark`, not a KetSuite product deployment.
 
 ```bash
-# Run from: repository root
+# Run from: ketjs/
 npm run build
 node tools/benchmark-report.mjs
 node tools/benchmark-footprint.mjs
 node tools/benchmark-browser.mjs
+# Separate browser-form deployment; open its URL and click Run benchmark:
+npm ci --prefix bench/form-comparison --ignore-scripts
+npm start --prefix bench/form-comparison
 # Separate terminal for the comparative fixtures:
 npm ci --prefix bench/ssr-comparison --ignore-scripts
 node tools/benchmark-ssr.mjs
@@ -210,6 +365,10 @@ node tools/benchmark-server-db.mjs
 ```
 
 Open `http://127.0.0.1:3701/` and press **Run benchmark** for the real browser fixture. Save its JSON results and browser environment locally under `.artifacts/benchmarks/` before closing the benchmark page. The footprint command installs only the three named npm consumers into disposable directories.
+
+The form comparison opens at `http://127.0.0.1:39751/` and saves completed runs automatically.
+Its independent install and methodology are documented in `bench/form-comparison/README.md`.
+Run `node --test bench/form-comparison/workload.test.mjs` for its focused harness checks.
 
 ## Not measured here
 

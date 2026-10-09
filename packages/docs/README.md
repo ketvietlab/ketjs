@@ -49,6 +49,11 @@ See [Pages build configuration](https://developers.cloudflare.com/pages/configur
   docs, the `/spec/` introduction, learning content, runnable examples and project posts. Docs use explicit frontmatter group/order
   following KetJS responsibilities; the overview explains each group and links task-specific paths.
   Each file requires title and description frontmatter; filename determines its slug.
+- Form documentation has three entry points: [Form validation](content/docs/form-validation.md)
+  covers shared schemas and issues; [Forms and edit sessions](content/docs/view-forms.md) belongs to
+  ketjs-view and covers browser state, native binding and render subscriptions;
+  [Transactional form actions](content/docs/form-actions.md) covers server commits and receipts.
+  Former section anchors in the validation guide link to their new locations.
 - `pages/index.tsx` returns `definePages()` using those collections. ketjs-view-tools renders each
   route with its initial HTML, canonical URL and metadata.
 - `site/content.mjs` parses frontmatter, sanitizes Markdown HTML, highlights code and generates

@@ -2,7 +2,7 @@
 title: Reports and PDF
 description: Declare business-owned reports and render constrained KTL as deterministic PDF documents.
 group: ketjs-view and KTL
-order: 6
+order: 7
 ---
 
 KetJS treats a printable document as a manifest capability. The business module owns the data projection,
