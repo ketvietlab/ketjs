@@ -79,6 +79,7 @@ export function createFormSession<T extends FormValues, R = unknown>(
   const submitted = signal(false)
   const touched = signal<readonly string[]>([])
   const serverIssues = signal<readonly ValidationIssue[]>([])
+  const baselineValidation = computed(() => validateForm(contract.schema, baseline()))
   const validation = computed(() => {
     const result = validateForm(contract.schema, values())
     result.issues = result.issues.map((issue) => ({
@@ -90,7 +91,7 @@ export function createFormSession<T extends FormValues, R = unknown>(
   const issues = computed(() => [...validation().issues, ...serverIssues()])
   const dirty = computed(() => {
     const current = validation()
-    const initial = validateForm(contract.schema, baseline())
+    const initial = baselineValidation()
     return !equal(current.valid ? current.values : values(), initial.valid ? initial.values : baseline())
   })
   const locked = computed(() => status() === 'submitting' || status() === 'unknown')
@@ -233,6 +234,7 @@ export function createFormSession<T extends FormValues, R = unknown>(
       disposed = true
       request?.abort()
       validation.dispose()
+      baselineValidation.dispose()
       issues.dispose()
       dirty.dispose()
       locked.dispose()

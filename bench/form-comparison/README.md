@@ -3,6 +3,8 @@
 An independently installed, private benchmark deployment for the current KetJS form session and
 native adapter. React 19.3.0, React Hook Form 7.89.0 and Formik 2.4.9 are pinned in this directory's
 lockfile. They are not dependencies of any published framework package.
+The framework TypeScript projects exclude this private React consumer; esbuild validates and bundles
+its JavaScript/JSX independently. Framework source and producer tests retain their strict checks.
 
 ## Run
 
@@ -81,7 +83,9 @@ Render and DOM counters use separate fresh diagnostic mounts, never timed mounts
 installed before React mounts so its native input tracker sees them. The counters distinguish:
 
 - Field-view executions, executions for unedited fields, form/status renders, KetJS selector reads
-  and native adapter effects. A signal effect and a React render are different operations.
+  and busy-attribute writes. A signal effect and a React render are different operations. The legacy
+  raw key `adapterEffects` counts `form.setAttribute('aria-busy')` calls; guarded writes mean it no
+  longer represents the number of adapter effects.
 - Successful custom validation-rule calls and completed root refinements. Built-in validation
   also costs time; a malformed structured child can skip a root refinement, so that counter does
   not represent all validation attempts.
@@ -102,3 +106,18 @@ Safari, mobile, memory/GC profiling, mount/hydration, array append/remove/reorde
 async business validation or cross-field dependency graph is measured. These require their own
 workloads before making corresponding claims. Published results must identify the runtime
 revision, environment, package versions, sample counts and remaining gaps.
+
+## Adapter regression checks
+
+The native fixture checks one control snapshot per update with 500 controls, one custom resolver
+call per issue, dense errors, zero writes for unchanged DOM state, dynamic replacements, multiple
+error descriptions, native submitter values, disabled-fieldset preservation and unknown-outcome
+retry. It asserts operation counts rather than machine-dependent time budgets.
+
+```bash
+# Run from: ketjs/
+node test/fixtures/serve-form-browser.mjs
+```
+
+Open `http://127.0.0.1:39751/regressions/` and click **Run regressions**. Stop this fixture server
+before starting the comparative benchmark on the same port.

@@ -3,6 +3,20 @@ import { valuesFromFormData } from './form.ts'
 import type { FormValues, ValidationIssue } from './form.ts'
 import type { FormAttempt, FormSession } from './form-session.ts'
 
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement
+
+const attribute = (element: Element, name: string, value: string | null) => {
+  if (element.getAttribute(name) === value) return
+  if (value === null) element.removeAttribute(name)
+  else element.setAttribute(name, value)
+}
+
+const indexControls = (elements: Control[]) => {
+  const index = new Map<string, Control>()
+  for (const element of elements) if (!index.has(element.name)) index.set(element.name, element)
+  return index
+}
+
 /** Native controls are an adapter, not the source of truth for custom editors. */
 export function attachForm<T extends FormValues, R>(
   form: HTMLFormElement,
@@ -25,14 +39,14 @@ export function attachForm<T extends FormValues, R>(
   let disposed = false
   const controls = () =>
     Array.from(form.elements).filter(
-      (element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement =>
+      (element): element is Control =>
         element instanceof HTMLInputElement ||
         element instanceof HTMLSelectElement ||
         element instanceof HTMLTextAreaElement ||
         element instanceof HTMLButtonElement,
     )
-  const resolve = (issue: ValidationIssue) =>
-    options.control?.(issue) ?? controls().find((element) => element.name === issue.field) ?? null
+  const resolve = (issue: ValidationIssue, index: Map<string, Control>) =>
+    options.control?.(issue) ?? (issue.field === null ? null : (index.get(issue.field) ?? null))
   const read = (submitter: HTMLElement | null): FormValues => {
     if (options.read) return options.read(form, submitter)
     const raw = valuesFromFormData(
@@ -77,11 +91,26 @@ export function attachForm<T extends FormValues, R>(
     const locked = session.locked()
     const issues = session.issues()
     const submitted = session.submitted()
-    const touched = session.touched()
+    const touched = new Set(session.touched())
     const values = session.values()
+    // Snapshot current controls once per pass, including dynamically replaced/associated controls.
+    const elements = controls()
+    const index = indexControls(elements)
+    const byControl = new Set<HTMLElement>()
+    const byField = new Map<string, ValidationIssue[]>()
+    for (const issue of issues) {
+      const control = resolve(issue, index)
+      if (control) byControl.add(control)
+      if (issue.field !== null) {
+        const held = byField.get(issue.field) ?? []
+        held.push(issue)
+        byField.set(issue.field, held)
+      }
+    }
     const positions = new Map<string, number>()
-    form.setAttribute('aria-busy', session.status() === 'submitting' ? 'true' : 'false')
-    for (const element of controls()) {
+    const submitting = session.status() === 'submitting'
+    attribute(form, 'aria-busy', submitting ? 'true' : 'false')
+    for (const element of elements) {
       if (!original.has(element))
         original.set(element, {
           disabled: element.disabled,
@@ -91,20 +120,26 @@ export function attachForm<T extends FormValues, R>(
       const submit =
         (element instanceof HTMLButtonElement || element instanceof HTMLInputElement) &&
         element.type === 'submit'
-      element.disabled =
-        (submit ? session.status() === 'submitting' : locked) || original.get(element)!.disabled === true
+      const disabled = (submit ? submitting : locked) || original.get(element)!.disabled === true
+      if (element.disabled !== disabled) element.disabled = disabled
       if (!options.write && Object.hasOwn(session.contract.schema.fields, element.name)) {
         const value = values[element.name]
-        if (element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio'))
-          element.checked = Array.isArray(value)
+        if (
+          element instanceof HTMLInputElement &&
+          (element.type === 'checkbox' || element.type === 'radio')
+        ) {
+          const checked = Array.isArray(value)
             ? value.includes(element.value)
             : typeof value === 'boolean'
               ? value
               : value === element.value
-        else if (element instanceof HTMLSelectElement && element.multiple)
-          for (const option of element.options)
-            option.selected = Array.isArray(value) && value.includes(option.value)
-        else if (
+          if (element.checked !== checked) element.checked = checked
+        } else if (element instanceof HTMLSelectElement && element.multiple) {
+          for (const option of element.options) {
+            const selected = Array.isArray(value) && value.includes(option.value)
+            if (option.selected !== selected) option.selected = selected
+          }
+        } else if (
           !(element instanceof HTMLButtonElement) &&
           !(
             element instanceof HTMLInputElement &&
@@ -115,32 +150,37 @@ export function attachForm<T extends FormValues, R>(
           const position = positions.get(element.name) ?? 0
           const held = Array.isArray(value) ? value[position] : value
           positions.set(element.name, position + 1)
-          element.value = held == null ? '' : String(held)
+          const next = held == null ? '' : String(held)
+          if (element.value !== next) element.value = next
         }
       }
-      const held = issues.filter(
-        (issue) => resolve(issue) === element && (submitted || touched.includes(element.name)),
-      )
-      if (held.length) element.setAttribute('aria-invalid', 'true')
-      else if (original.get(element)!.invalid === null) element.removeAttribute('aria-invalid')
-      else element.setAttribute('aria-invalid', original.get(element)!.invalid!)
+      const invalid = (submitted || touched.has(element.name)) && byControl.has(element)
+      attribute(element, 'aria-invalid', invalid ? 'true' : original.get(element)!.invalid)
     }
+    const descriptions = new Map<Control, Set<string>>()
     for (const target of form.querySelectorAll<HTMLElement>('[data-form-error]')) {
       const field = target.dataset.formError ?? ''
-      const held = issues.filter((issue) => issue.field === field && (submitted || touched.includes(field)))
-      target.textContent = held.map(options.formatIssue).join(' ')
+      const held = submitted || touched.has(field) ? (byField.get(field) ?? []) : []
+      const text = held.map(options.formatIssue).join(' ')
+      if (target.textContent !== text) target.textContent = text
       if (target.id) {
-        const control = controls().find((element) => element.name === field)
+        const control = index.get(field)
         if (control) {
-          const described = new Set((original.get(control)?.described ?? '').split(/\s+/).filter(Boolean))
+          const described =
+            descriptions.get(control) ??
+            new Set((original.get(control)?.described ?? '').split(/\s+/).filter(Boolean))
           if (held.length) described.add(target.id)
-          if (described.size) control.setAttribute('aria-describedby', [...described].join(' '))
-          else control.removeAttribute('aria-describedby')
+          descriptions.set(control, described)
         }
       }
     }
+    for (const [control, described] of descriptions)
+      attribute(control, 'aria-describedby', described.size ? [...described].join(' ') : null)
     const summary = form.querySelector<HTMLElement>('[data-form-summary]')
-    if (summary) summary.textContent = submitted ? issues.map(options.formatIssue).join(' ') : ''
+    if (summary) {
+      const text = submitted ? issues.map(options.formatIssue).join(' ') : ''
+      if (summary.textContent !== text) summary.textContent = text
+    }
     options.write?.(form, values)
   })
   form.addEventListener('input', () => capture(null), { signal: lifetime.signal })
@@ -171,8 +211,9 @@ export function attachForm<T extends FormValues, R>(
       void session.submit().then((outcome) => {
         if (disposed) return
         if (outcome.status === 'invalid' || outcome.status === 'conflict') {
+          const index = indexControls(controls())
           for (const issue of outcome.issues) {
-            const target = resolve(issue)
+            const target = resolve(issue, index)
             if (target) {
               target.focus()
               break
@@ -190,17 +231,16 @@ export function attachForm<T extends FormValues, R>(
     lifetime.abort()
     stop()
     for (const [element, state] of original) {
-      if ('disabled' in element) (element as HTMLInputElement).disabled = state.disabled ?? false
+      if ('disabled' in element && (element as Control).disabled !== (state.disabled ?? false))
+        (element as Control).disabled = state.disabled ?? false
       for (const [name, value] of [
         ['aria-invalid', state.invalid],
         ['aria-describedby', state.described],
       ] as const) {
-        if (value === null) element.removeAttribute(name)
-        else element.setAttribute(name, value)
+        attribute(element, name, value)
       }
     }
-    if (busy === null) form.removeAttribute('aria-busy')
-    else form.setAttribute('aria-busy', busy)
+    attribute(form, 'aria-busy', busy)
     options.signal?.removeEventListener('abort', dispose)
   }
   if (options.signal?.aborted) dispose()
