@@ -1,6 +1,6 @@
 ---
 title: Form validation
-description: Share nested form contracts, preserve drafts, and commit server actions with revision checks and durable retries.
+description: Define shared schemas, cast native values, report nested issues, and revalidate inputs on the server.
 group: Request execution
 order: 4
 ---
@@ -8,6 +8,11 @@ order: 4
 KetJS form validation is a browser-safe contract rather than a component convention. A schema casts native
 form values, applies field and cross-field constraints, and returns machine-readable issues. The same schema
 runs in `@ketvietlab/ketjs-view` and on the server through `@ketvietlab/ketjs`.
+
+This guide covers shared schemas and issues. For browser drafts, submit state, native controls and
+render subscriptions, read [Forms and edit sessions](/docs/view-forms/) in the ketjs-view section.
+For atomic server writes, revision checks and durable receipts, read
+[Transactional form actions](/docs/form-actions/).
 
 Client validation improves feedback but is never an authorization boundary. Validate again on the server
 before calling a function or writing data.
@@ -92,54 +97,7 @@ type ValidationIssue = {
 `field: null` identifies a whole-form error. Render `messageKey` through the application's translator and
 use `params` for interpolation. Do not branch on translated text.
 
-## Manage browser form state
-
-`createForm()` adds reactive lifecycle state without owning markup or submission transport:
-
-```ts
-// File: src/modules/example/forms.ts
-import { createForm } from '@ketvietlab/ketjs-view'
-
-const formState = createForm(signupForm)
-
-formState.set('email', emailInput.value, { touch: true })
-
-const submitted = await formState.submit(async (values) => {
-  const response = await fetch('/signup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(values),
-  })
-  if (!response.ok) throw new Error('Signup was refused')
-  return response.json()
-})
-```
-
-The controller exposes read-only signals for `values`, `issues`, `touched`, `dirty`, `valid`, `submitted`,
-and `submitting`. `errors(field)` hides untouched errors until that field is touched or the form is
-submitted. `applyServerIssues()` replaces the displayed issues with the server's issues.
-Call `dispose()` when a controller outlives its island or component.
-
-This low-level controller treats a resolved handler as success, does not interpret a Fetch response,
-and does not accept a new baseline automatically. Use the transactional form session below for edit
-commands, single-flight submission, revision conflicts, and retry after an uncertain result.
-
-The controller does not intercept DOM events and does not replace native attributes such as `required`,
-`min`, or `aria-invalid`. UI packages remain responsible for markup and accessibility.
-
-## Transactional edit forms
-
-`defineFormContract()` is the shared declaration; `createFormSession()` owns one editor's draft;
-`defineFormAction()` declares a server function with atomic database writes and a durable receipt.
-The browser calls the existing `/_ket/fn/<name>` endpoint. No parallel authentication, permissions,
-tenant selection, or automatic `/_ket/forms` route is introduced.
-
-The motivating case is an attributes-and-variants editor: nested rows, stable client identities,
-decimal text, archive rather than delete, and a full replacement submitted in one command. A general
-product form, image upload, and creation of a shared attribute are separate save scopes even when
-they appear on the same page. A successful save resets only its own scope.
-
-### Declare nested values explicitly
+## Declare nested values explicitly
 
 ```ts
 // File: src/modules/catalog/variant-form.ts
@@ -194,213 +152,6 @@ Nested issues keep an indexed `field`, for example `variants.2.weight`, and add 
 for example `['variants', { key: 'draft-42' }, 'weight']`. `formIssuePath(contract, submittedValues, field)`
 maps domain errors with the submitted snapshot. Never resolve an old index against a newly sorted list.
 For dictionary keys containing dots, use the explicit path rather than inventing dotted field names.
-
-### Commit the command and its receipt together
-
-The example assumes an existing `catalog.Template` with `id` and `revision` and a `catalog.Variant`
-with `id`, `templateId`, `weight` and `active`. Both models use the deployment's ordinary scope.
-Creation of the template is a separate command.
-
-```ts
-// File: src/modules/catalog/save-variants.ts
-import { randomUUID } from 'node:crypto'
-import { defineFormAction, formConflict, validationIssue } from '@ketvietlab/ketjs'
-import { variantForm } from './variant-form.ts'
-
-export const saveVariants = defineFormAction(variantForm, {
-  effects: [
-    'read:catalog.Template', 'write:catalog.Template',
-    'read:catalog.Variant', 'write:catalog.Variant',
-  ],
-  handler: async (ctx, { recordId, expectedRevision, values }) => {
-    const revision = randomUUID()
-    const guard = await ctx.db.compareAndSet(
-      'catalog.Template', { id: recordId },
-      { revision: expectedRevision }, { revision },
-    )
-    if (!('matched' in guard) || !guard.matched) return formConflict()
-
-    const existing = await ctx.db.select('catalog.Variant', { templateId: recordId })
-    const accepted = []
-    const submittedIds = new Set<string>()
-    for (const [index, row] of values.variants.entries()) {
-      if (row.id && (submittedIds.has(row.id) || !existing.some((held) => held.id === row.id))) {
-        return {
-          status: 'invalid',
-          issues: [validationIssue(`variants.${index}.id`, 'ownership')],
-        }
-      }
-      const id = row.id ?? randomUUID()
-      submittedIds.add(id)
-      const fields = { weight: row.weight, active: row.active }
-      if (row.id) await ctx.db.update('catalog.Variant', { id }, fields)
-      else await ctx.db.insert('catalog.Variant', { id, templateId: recordId, ...fields })
-      accepted.push({ ...row, id })
-    }
-    for (const row of existing) {
-      if (!submittedIds.has(String(row.id)))
-        await ctx.db.update('catalog.Variant', { id: row.id }, { active: false })
-    }
-    return {
-      status: 'committed', accepted: { variants: accepted }, revision,
-      value: { id: recordId },
-    }
-  },
-})
-```
-
-Register `saveVariants` in the module's `functions`. The action validates again on the server, requires
-an idempotency key, and runs the handler and receipt write in **one database transaction**. It disables
-dry runs. The supplied `ctx` already owns the transaction: use it directly instead of starting another
-`ctx.tx()` or invoking another function through HTTP. Compose domain helpers that accept this context.
-
-A returned `invalid` or `conflict` unwinds the transaction before it becomes an outcome. This includes
-the revision change and any earlier row writes. A thrown error or invalid accepted projection also rolls
-back. On success, the receipt contains the accepted projection, generated IDs, and revision produced
-inside that transaction. Avoid a post-commit reread that could pick up a different writer's changes.
-Both committed and refused outcomes pass through the function's declared output projection;
-undeclared properties on a domain outcome are not returned to the caller.
-
-`ctx.notify()` uses the root adapter's listeners and publishes only after a successful commit.
-Rollback discards notifications, and receipt replay does not publish them again. PostgreSQL carries
-notifications in the database transaction; SQLite buffers them until the transaction commits.
-
-The domain handler owns the revision guard. Every other writer affecting the same aggregate must use
-the same guard and advance its revision. This API does not infer aggregate boundaries or make an
-existing series of client requests atomic. In-process callers must also supply `idempotencyKey` to
-`callFn` or `ctx.call`; permission and scope checks still run before receipt replay.
-
-The underlying opt-in function flag is `transactional: true` with `idempotent: true`. Legacy idempotent
-functions retain their existing execution order. Atomic receipts cover database effects; external
-uploads, emails and other network effects need staging or a transactional outbox. Receipt retention
-must cover the supported retry window; replay is not promised after a receipt is swept.
-
-### Keep a draft until the outcome is known
-
-```ts
-// File: src/modules/catalog/client/variant-editor.ts
-import { createFormSession, formActionTransport } from '@ketvietlab/ketjs-view'
-import type { VariantDraft } from '../variant-form.ts'
-import { variantForm } from '../variant-form.ts'
-
-export function variantEditorState(initial: VariantDraft, recordId: string, revision: string) {
-  return createFormSession(variantForm, {
-    initial, recordId, revision,
-    transport: formActionTransport('catalog.saveVariants'),
-  })
-}
-```
-
-Render `session.values()` in the editor and replace a changed top-level field with
-`session.set('variants', nextRows)`. Values and submit snapshots are cloned and frozen. A new row
-retains its client key in the accepted result alongside its assigned ID.
-
-| Outcome | Session behavior |
-| --- | --- |
-| `committed` | Replace values and baseline with accepted values; advance revision; clear dirty state. |
-| `invalid` | Preserve draft and revision; show all issues, including multiple issues per field. |
-| `conflict` | Preserve draft and revision; let the application load current state and offer reconciliation. |
-| `unknown` | Preserve the exact mutation ID and submitted values; lock editing until retry resolves the intent. |
-
-Concurrent `submit()` calls share one promise. The first implementation locks edits during submission;
-it does not silently merge typing over an in-flight snapshot. `retry()` sends the same intent after a
-lost or unusable response. A replay returns the original receipt before executing the revision guard
-again. A reused key with a different input is rejected.
-
-`reset()` discards this scope's draft. `reset({ values, revision })` explicitly installs a reviewed
-baseline, such as after conflict resolution. Both refuse while submitting or uncertain.
-`receive({ values, revision })` accepts background data only when the scope is pristine and settled.
-Unrelated edits retain server errors until that field is edited or the next submission starts.
-`errors(path)` supports stable paths as well as indexed field names. `touch()` reveals a field before
-submission; submission reveals all issues.
-
-Do not close or refresh the whole page merely because a Promise resolved. Check `outcome.status` and
-the other draft scopes. Preview/read commands are separate operations: they must not produce a
-`committed` outcome or reset an editing baseline. A file upload and creation of a shared attribute
-remain separately committed operations; Reset does not undo them.
-
-### Attach native controls or a custom editor
-
-`attachForm(form, session, options)` owns submit/input/change/reset listeners, pending controls,
-`aria-invalid`, error descriptions, and focus on the first refused control. Supply `formatIssue` using
-the application's translator. Optional `[data-form-error="field"]` elements receive translated text;
-give them IDs so the adapter can link `aria-describedby`. `[data-form-summary]` receives the summary.
-The application supplies status/retry copy using `session.status()` or `onOutcome`.
-
-The default reader preserves repeated controls, unchecked boolean checkboxes and empty selections.
-The default writer assigns array entries to repeated text, textarea, or single-select controls in
-form order. Submit buttons keep their declared values: the clicked submitter's name and value enter
-the draft during submission rather than being overwritten by the current session value.
-Disabled controls are not interpreted as clear operations. Set `read` and `write` for a custom editor
-whose state is not represented by the form's named controls, and `control` to resolve nested issues to
-focusable controls. Existing descriptions and disabled states are restored on detach.
-
-Attach effects only in `mount({ root, lifetime })`; pass `lifetime` as `options.signal` and call
-`session.dispose()` on abort. Return an island controller with `view` and `mount`, not a cleanup function
-from `mount`. Server props contain only serializable initial values, IDs, revision and labels; transport
-functions and callbacks are constructed in the browser module.
-
-Native action/method routes remain application-owned. A route must decode and bound its native body,
-validate CSRF, preserve submitted values when re-rendering, and invoke the same action through
-`ctx.call` with the viewer's request and a stable idempotency key. It passes
-`{ contractId, recordId, expectedRevision, values }`; a successful response may redirect, while
-`invalid` and `conflict` re-render the relevant scope. Preserve a native hidden intent token across a
-retry and generate a new one for a corrected, definitively refused submission. Native forms do not
-POST URL-encoded data directly to the JSON-only function endpoint. Adding an `action` attribute to an
-empty editor form cannot serialize its signal state or provide a no-JavaScript editing experience.
-
-### Render subscriptions and cost
-
-`session.values()` is one immutable signal for the complete draft. Every field effect that reads
-it directly subscribes to every draft replacement. For an independent preview, select a primitive
-with `computed` so unchanged values do not execute that preview's effect again. Keep this wiring
-in the client runtime and dispose both the effect and selector with its lifetime.
-
-```ts
-// File: src/modules/catalog/client/title-preview.ts
-import { computed, effect } from '@ketvietlab/ketjs-view'
-import type { FormSession } from '@ketvietlab/ketjs-view'
-
-export function attachTitlePreview(
-  session: FormSession<{ title: string }>,
-  preview: HTMLOutputElement,
-  lifetime: AbortSignal,
-) {
-  const title = computed(() => session.values().title)
-  const stop = effect(() => { preview.textContent = title() })
-  const dispose = () => { stop(); title.dispose() }
-  if (lifetime.aborted) dispose()
-  else lifetime.addEventListener('abort', dispose, { once: true })
-}
-```
-
-This isolates view effects, not all work: every selector still depends on the whole draft,
-`set()` copies the draft and validation traverses the whole schema. Dirty comparison caches the
-baseline's validation result until `reset(next)`, an accepted `receive(next)`, a committed receipt
-or a tracked rule dependency changes it. Cross-field draft constraints still run on every edit.
-The native adapter snapshots current controls once per update and resolves each issue once through
-the custom resolver or an index of the first native control with its name. It groups errors by field
-and guards native property, attribute and text writes. This removes repeated control-list searches
-and unchanged DOM writes, while still visiting all controls and error targets. Structured editors
-continue to supply their own reader/writer and may use an indexed `control(issue)` callback.
-
-The [browser form benchmark](/docs/benchmarks/#browser-form-sessions) compares the current session
-and adapter with RHF and Formik using shared validation and isolated field views. At revision
-`756efdf9`, the earlier default lookup took **64.05 ms median** for one invalid field in a 500-field
-form; the indexed adapter at `d7af51c5` takes **2.35 ms median / 3.00 ms p95** with the same harness
-and recorded desktop environment. The guide retains both revisions for comparison. Neither the fixture
-nor render isolation constitutes a KetSuite editor, paint/INP or mobile performance sign-off.
-
-### Migrate a complex editor
-
-Keep its existing layout and domain command. Move pure normalization and cross-field checks into the
-shared contract; replace its hand-written draft/submitting/issues lifecycle with a form session. Add
-the revision guard to every writer, then adopt `defineFormAction` and verify lost-response retry,
-refusal after a write, malformed replacement arrays, foreign IDs and concurrent editors. Translate
-legacy domain issues to `ValidationIssue` without dropping `messageKey` or multiple field errors.
-Only then replace a client-side multi-command save with a server command when the product promises
-one atomic save. Framework changes must be released and adopted by version before a KetSuite consumer
-can use these exports; this guide does not imply that existing KetSuite forms have already migrated.
 
 ## Validate on the server
 
@@ -500,3 +251,39 @@ if (!changes.valid) {
 Database-backed checks such as uniqueness, current inventory, or permissions remain server-only. Return
 their outcome as `ValidationIssue` values and call `formState.applyServerIssues(problem)` in an enhanced
 browser flow.
+
+## Browser forms and server actions
+
+The browser and transaction guides now have their own navigation entries. Existing links to their
+former sections remain available here:
+
+<span id="manage-browser-form-state"></span>
+
+[Manage browser form state](/docs/view-forms/#manage-browser-form-state) covers `createForm`,
+reactive validation, touched fields and the low-level submit handler.
+
+<span id="transactional-edit-forms"></span>
+<span id="keep-a-draft-until-the-outcome-is-known"></span>
+
+[Transactional edit forms](/docs/view-forms/#transactional-edit-forms) covers the form session,
+accepted baselines, refusal, conflict and unknown-outcome retry.
+
+<span id="commit-the-command-and-its-receipt-together"></span>
+
+[Commit the command and its receipt together](/docs/form-actions/#commit-the-command-and-its-receipt-together)
+covers the server action and its database transaction.
+
+<span id="attach-native-controls-or-a-custom-editor"></span>
+
+[Attach native controls or a custom editor](/docs/view-forms/#attach-native-controls-or-a-custom-editor)
+covers DOM binding, field errors, submitters and lifecycle ownership.
+
+<span id="render-subscriptions-and-cost"></span>
+
+[Render subscriptions and cost](/docs/view-forms/#render-subscriptions-and-cost) covers whole-draft
+subscriptions, primitive selectors, adapter work and the measured performance limits.
+
+<span id="migrate-a-complex-editor"></span>
+
+[Migrate a complex editor](/docs/view-forms/#migrate-a-complex-editor) describes adoption without
+replacing the consumer's layout or domain commands.

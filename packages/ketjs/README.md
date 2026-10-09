@@ -63,5 +63,7 @@ context; all writers must participate. External effects need staging or an outbo
 
 `transactional: true` is the underlying opt-in function contract and requires `idempotent: true` and a
 real execution with a key. Existing functions keep their execution semantics. Read the
-[form contract guide](../docs/content/docs/form-validation.md) for client sessions, keyed rows, retries,
-native routes, and a complete revision-guarded save example.
+[Transactional form actions](../docs/content/docs/form-actions.md) for native routes and a complete
+revision-guarded save example. Shared schemas and keyed rows are covered by
+[Form validation](../docs/content/docs/form-validation.md); browser sessions and retry behavior are
+covered by [Forms and edit sessions](../docs/content/docs/view-forms.md).
