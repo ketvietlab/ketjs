@@ -20,12 +20,18 @@ export const IDEM_DDL_PG = IDEM_DDL.replace('created_at TEXT NOT NULL', 'created
 export type IdemRecord = { state: 'pending' | 'done'; result: unknown; digest: string | null }
 
 export async function createIdempotency(adapter: Adapter, o: { now?: () => string } = {}) {
-  const now = o.now ?? (() => new Date().toISOString())
   const pg = adapter.name === 'postgres'
-  const p = (n: number) => (pg ? `$${n}` : '?')
   await adapter.exec(pg ? IDEM_DDL_PG : IDEM_DDL)
   const table = (await adapter.introspect()).ket_idem ?? {}
   if (!('digest' in table)) await adapter.exec('ALTER TABLE ket_idem ADD COLUMN digest TEXT')
+
+  return idempotencyStore(adapter, o)
+}
+
+/** Bind an initialized table to a transaction; never perform DDL inside the transaction. */
+export function idempotencyStore(adapter: Adapter, o: { now?: () => string } = {}) {
+  const now = o.now ?? (() => new Date().toISOString())
+  const p = (n: number) => (adapter.name === 'postgres' ? `$${n}` : '?')
 
   return {
     /**

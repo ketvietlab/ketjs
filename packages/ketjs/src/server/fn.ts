@@ -5,7 +5,8 @@
 import { createHash } from 'node:crypto'
 import { isDefectError, KetError } from '../kernel/errors.ts'
 import { createContext } from './ctx.ts'
-import { createIdempotency } from './idem.ts'
+import { createIdempotency, idempotencyStore } from './idem.ts'
+import { FormActionRefusal } from './form-action.ts'
 import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
@@ -261,6 +262,12 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false
 
+  if (def.transactional && (!o.idempotencyKey || !meta.idempotent || dryRun))
+    throw new KetError({
+      code: 'E_ATOMIC_KEY_REQUIRED',
+      message: 'transactional functions require an idempotency key, idempotent: true and a real execution',
+    })
+
   if (o.idempotencyKey && !meta.idempotent) {
     throw new KetError({
       code: 'E_NOT_IDEMPOTENT',
@@ -282,6 +289,45 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
   const idemKey = !dryRun && o.idempotencyKey ? idempotencyKey(fnKey, o.idempotencyKey, o) : null
   const idemDigest = idemKey ? (o.idempotencyDigest ?? requestDigest(args)) : null
   let idem: Idem | null = null
+
+  if (def.transactional) {
+    await idemFor(o.adapter)
+    try {
+      return await o.adapter.tx(async (adapter) => {
+        const store = idempotencyStore(adapter)
+        const claimed = await store.claim(idemKey!, fnKey, 5 * 60_000, idemDigest)
+        if (!claimed) {
+          const existing = await store.read(idemKey!)
+          if (existing?.digest !== idemDigest)
+            throw new KetError({
+              code: 'E_IDEMPOTENCY_CONFLICT',
+              message: 'the idempotency key belongs to a different request',
+            })
+          if (existing?.state === 'done') return { ...(existing.result as CallResult), replayed: true }
+          throw new KetError({ code: 'E_IDEMPOTENCY_IN_FLIGHT', message: 'the command is still running' })
+        }
+        const ctx = createContext({
+          adapter,
+          manifest: o.manifest,
+          fnKey,
+          dryRun: false,
+          actor: o.actor ?? null,
+          correlationId: o.correlationId ?? null,
+          scope: o.scope,
+          queueNotify: o.queueNotify,
+          ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun: false }) } : {}),
+        })
+        const value = project(fnKey, meta.output, await def.handler(ctx, args), meta.returns)
+        const result: CallResult = { ok: true, value, writes: ctx.writes, dryRun: false }
+        await store.complete(idemKey!, result)
+        return result
+      })
+    } catch (error) {
+      if (error instanceof FormActionRefusal)
+        return { ok: true, value: error.outcome, writes: [], dryRun: false }
+      throw error
+    }
+  }
 
   if (idemKey) {
     idem = await idemFor(o.adapter)

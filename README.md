@@ -90,6 +90,7 @@ HTML previews and deterministic PDF rendering for those report contracts.
 | --- | --- |
 | Models, queries, and migrations | A schema derived from the modules your deployment actually ships |
 | Native HTTP routes and forms | Web behavior connected to your domain functions and validation contracts |
+| Transactional form actions | Shared nested contracts, scoped drafts, revision-aware commands and atomic retry receipts |
 | HTTP function bindings and OpenAPI | REST-style operations derived from server functions, checked both ways, with a generated OpenAPI 3.1 document |
 | API reference | New applications can build a static [Spec](https://github.com/ketvietlab/ketsuite/tree/develop/packages/ketspec) reference with `npm run api:docs` |
 | Sessions, permissions, and tenant isolation | Explicit identity and access boundaries for business operations |

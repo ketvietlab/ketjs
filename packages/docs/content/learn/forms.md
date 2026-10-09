@@ -64,3 +64,8 @@ Add a confirmation field and a cross-field check. Verify that correcting one fie
 ## Reference
 
 For the complete API contract, read [Form Validation](/docs/form-validation/).
+
+When the exercise becomes an editable record with nested rows and server writes, continue with
+[Transactional edit forms](/docs/form-validation/#transactional-edit-forms). Use a form session to
+retain a draft after refusal, share one in-flight submit, and retry an uncertain result with the same
+intent. A resolved Fetch promise alone does not prove that the record was saved.
