@@ -8,6 +8,12 @@ order: 3
 A browser form needs a draft, validation feedback, submission state and a clear owner for DOM effects.
 ketjs-view provides controllers and an adapter while the application supplies markup and domain commands.
 
+:::note[Development APIs]
+`createFormSession`, `attachForm` and `formActionTransport` are pending a framework release; they are
+not exported by the published ketjs-view 0.3.0 used to build this site. The `createForm` controller is
+already available. The new examples target this development branch's public API.
+:::
+
 Import the same [form schema or contract](/docs/form-validation/) in the client and server. Keep
 schema rules pure and browser-safe. A form session cannot grant permission, establish record ownership
 or make several server requests atomic; those checks and writes belong to a
