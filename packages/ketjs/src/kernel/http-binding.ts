@@ -443,7 +443,12 @@ function deriveBinding(
     else if (spec.method === 'GET')
       report('E_HTTP_BINDING_IDEMPOTENCY', 'takes an idempotency key on GET, which is already safe')
     else idempotency = spec.idempotency
-  } else if (fn.idempotent && spec.method !== 'GET') idempotency = 'optional'
+  } else if (fn.idempotent && spec.method !== 'GET') idempotency = fn.transactional ? 'required' : 'optional'
+  if (fn.transactional && (spec.method === 'GET' || idempotency !== 'required'))
+    report(
+      'E_HTTP_BINDING_IDEMPOTENCY',
+      'transactional functions require a write method and required idempotency',
+    )
 
   const operationId = spec.operationId ?? `${spec.profile}.${spec.call}`
   if (!operationId.startsWith(`${spec.profile}.`) || !/^[A-Za-z0-9_.-]+$/.test(operationId))

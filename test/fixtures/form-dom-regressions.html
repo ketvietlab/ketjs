@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Form adapter regressions</title>
+<h1>Form adapter regressions</h1>
+<p>Native DOM checks for bounded issue lookup, guarded writes, dynamic controls and submit recovery.</p>
+<button id="run" type="button">Run regressions</button>
+<pre id="result" role="status">Ready</pre>
+<div id="fixture"></div>
+<script type="module">
+import { attachForm, createFormSession, defineFormContract, validationIssue } from '/view/index.js'
+import { counters, resetCounters, trace } from '/form-trace.mjs'
+
+const host = document.querySelector('#fixture')
+const result = document.querySelector('#result')
+const run = document.querySelector('#run')
+const nativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+let checks = 0
+const assert = (condition, message) => {
+  checks++
+  if (!condition) throw new Error(message)
+}
+const until = async (predicate) => {
+  const limit = performance.now() + 5000
+  while (!predicate()) {
+    if (performance.now() > limit) throw new Error('outcome did not settle')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+async function guardChecks() {
+  host.innerHTML = `<form aria-busy="mixed">
+    <input name="first" value="a" aria-invalid="false" aria-describedby="hint">
+    <input name="second" value="b"><input name="active" type="checkbox" checked>
+    <select name="tags" multiple><option value="x" selected>X</option><option value="y">Y</option></select>
+    <input name="aliases" value="alpha"><input name="aliases" value="beta">
+    <span id="hint">Existing hint</span><span id="first-error" data-form-error="first"></span>
+    <span id="first-other-error" data-form-error="first"></span><span data-form-error="second"></span>
+  </form>`
+  const form = host.querySelector('form')
+  const first = form.querySelector('[name=first]')
+  const second = form.querySelector('[name=second]')
+  const metrics = counters()
+  const observer = trace(host, metrics)
+  const session = createFormSession(
+    defineFormContract('guards', {
+      fields: {
+        first: { required: true },
+        second: { required: true },
+        active: { type: 'bool', required: true },
+        tags: { type: 'array', required: true, items: { required: true } },
+        aliases: { required: true, multiple: true },
+      },
+    }),
+    {
+      recordId: 'p1',
+      revision: null,
+      initial: { first: 'a', second: 'b', active: true, tags: ['x'], aliases: ['alpha', 'beta'] },
+      transport: async (request) => ({
+        status: 'committed',
+        accepted: request.values,
+        revision: 'r1',
+        value: null,
+      }),
+    },
+  )
+  const detach = attachForm(form, session, { formatIssue: (issue) => issue.code })
+  const measure = (callback) => {
+    observer.drain()
+    resetCounters(metrics)
+    metrics.enabled = true
+    callback()
+    observer.drain()
+    metrics.enabled = false
+    return { ...metrics }
+  }
+  try {
+    const touched = measure(() => session.touch('first'))
+    assert(
+      touched.valueWrites === 0 &&
+        touched.disabledWrites === 0 &&
+        touched.attributeCalls === 0 &&
+        touched.textWrites === 0,
+      'touching a valid unchanged field must not write DOM state',
+    )
+    const changed = measure(() => session.set('first', 'changed'))
+    assert(
+      changed.valueWrites === 1 &&
+        changed.disabledWrites === 0 &&
+        changed.attributeCalls === 0 &&
+        changed.textWrites === 0,
+      'programmatic edit must write only its changed input value',
+    )
+    assert(second.value === 'b', 'programmatic edit changed an unrelated input')
+    nativeValue.call(first, '')
+    measure(() => first.dispatchEvent(new Event('input', { bubbles: true })))
+    assert(first.getAttribute('aria-invalid') === 'true', 'visible issue did not mark its input')
+    assert(form.querySelector('#first-error').textContent === 'required', 'visible error text missing')
+    assert(
+      first.getAttribute('aria-describedby') === 'hint first-error first-other-error',
+      'error descriptions must retain the hint and both error IDs',
+    )
+    const unrelated = measure(() => session.set('second', 'changed'))
+    assert(
+      unrelated.valueWrites === 1 && unrelated.attributeCalls === 0 && unrelated.textWrites === 0,
+      'an unrelated edit must not rewrite unchanged errors or attributes',
+    )
+    session.reset()
+    assert(first.value === 'a' && second.value === 'b', 'reset did not restore the baseline')
+    assert(
+      first.getAttribute('aria-invalid') === 'false' && first.getAttribute('aria-describedby') === 'hint',
+      'reset did not restore original descriptions',
+    )
+    assert(
+      [...form.querySelectorAll('[name=aliases]')].map((input) => input.value).join('|') === 'alpha|beta',
+      'repeated controls lost their individual values',
+    )
+    session.set('active', false)
+    session.set('tags', ['y'])
+    assert(
+      !form.querySelector('[name=active]').checked &&
+        form.querySelector('select').selectedOptions[0].value === 'y',
+      'checkbox/multiple select state did not update',
+    )
+    const replacement = document.createElement('input')
+    replacement.name = 'second'
+    second.replaceWith(replacement)
+    session.touch('second')
+    assert(replacement.value === 'b', 'replacement control was absent from the fresh snapshot')
+    session.set('second', '')
+    assert(
+      replacement.getAttribute('aria-invalid') === 'true',
+      'replacement control did not receive its error',
+    )
+    detach()
+    assert(
+      form.getAttribute('aria-busy') === 'mixed' && first.getAttribute('aria-describedby') === 'hint',
+      'detach did not restore original form/control attributes',
+    )
+    assert(
+      replacement.getAttribute('aria-invalid') === null,
+      'detach did not restore a dynamically added control',
+    )
+  } finally {
+    metrics.enabled = false
+    detach()
+    session.dispose()
+    observer.stop()
+    host.replaceChildren()
+  }
+}
+
+async function lookupChecks(dense) {
+  const size = 500
+  const form = document.createElement('form')
+  const controls = new Map()
+  const fields = {},
+    initial = {}
+  for (let n = 0; n < size; n++) {
+    const name = `field${n}`
+    fields[name] = { required: true }
+    initial[name] = dense ? '' : 'valid'
+    const input = document.createElement('input')
+    input.name = name
+    const error = document.createElement('span')
+    error.dataset.formError = name
+    error.id = `${name}-error`
+    form.append(input, error)
+    controls.set(name, input)
+  }
+  host.append(form)
+  let snapshots = 0,
+    resolutions = 0
+  const elements = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'elements').get
+  Object.defineProperty(form, 'elements', {
+    configurable: true,
+    get() {
+      snapshots++
+      return elements.call(form)
+    },
+  })
+  const session = createFormSession(defineFormContract('lookup', { fields }), {
+    recordId: 'p1',
+    revision: null,
+    initial,
+    transport: async () => {
+      throw new Error('invalid drafts must not reach transport')
+    },
+  })
+  const detach = attachForm(form, session, {
+    formatIssue: (issue) => issue.code,
+    ...(dense
+      ? {
+          control: (issue) => {
+            resolutions++
+            return controls.get(issue.field)
+          },
+        }
+      : {}),
+  })
+  try {
+    if (dense) {
+      assert(
+        resolutions === size && snapshots === 1,
+        'mount must resolve each dense issue once and snapshot controls once',
+      )
+      snapshots = 0
+      resolutions = 0
+      session.touch('field250')
+      assert(resolutions === size && snapshots === 1, 'touch must resolve each issue once per pass')
+      resolutions = 0
+      snapshots = 0
+      assert((await session.submit()).status === 'invalid', 'dense invalid draft must refuse submission')
+      assert(
+        resolutions <= 2 * size && snapshots <= 2,
+        'dense refusal must not expand issue lookup per control',
+      )
+      assert(
+        form.querySelectorAll('[aria-invalid=true]').length === size,
+        'dense errors must mark every control',
+      )
+      assert(
+        [...form.querySelectorAll('[data-form-error]')].every((error) => error.textContent === 'required'),
+        'dense errors must show every field message',
+      )
+    } else {
+      session.touch('field250')
+      snapshots = 0
+      session.set('field250', '')
+      assert(
+        snapshots === 1,
+        'one default-resolved issue must snapshot controls once, not once per control/error target',
+      )
+      assert(
+        controls.get('field250').getAttribute('aria-invalid') === 'true',
+        'default lookup must mark the matching control',
+      )
+      assert(
+        controls.get('field249').getAttribute('aria-invalid') === null,
+        'default lookup marked an unrelated control',
+      )
+      assert(
+        controls.get('field250').getAttribute('aria-describedby') === 'field250-error',
+        'indexed default lookup must link the error description',
+      )
+    }
+  } finally {
+    detach()
+    session.dispose()
+    delete form.elements
+    host.replaceChildren()
+  }
+}
+
+async function recoveryChecks() {
+  host.innerHTML = `<form id="recovery"><input name="name" value="Tea" aria-describedby="name-hint">
+    <span id="name-hint">Hint</span><span id="name-error" data-form-error="name"></span>
+    <input name="aliases" value="alpha"><input name="aliases" value="beta">
+    <fieldset disabled><input name="protected" value="safe"></fieldset>
+    <input name="readonly" value="untouched" disabled><p data-form-summary></p></form>
+    <button form="recovery" name="command" value="save" type="submit">Save</button>
+    <button form="recovery" name="command" value="archive" type="submit">Archive</button>
+    <input form="recovery" name="command" value="publish" type="submit">`
+  const form = host.querySelector('form')
+  const name = form.querySelector('[name=name]')
+  const save = host.querySelector('button[value=save]')
+  const archive = host.querySelector('button[value=archive]')
+  const publish = host.querySelector('[value=publish]')
+  const receipts = new Map(),
+    intents = []
+  let outcome,
+    mode = 'commit',
+    calls = 0,
+    parent = 0
+  const parentListener = () => {
+    parent++
+  }
+  document.addEventListener('submit', parentListener)
+  const session = createFormSession(
+    defineFormContract('recovery', {
+      fields: {
+        name: { required: true },
+        aliases: { required: true, multiple: true },
+        command: { required: true },
+        protected: { required: true },
+      },
+    }),
+    {
+      recordId: 'p1',
+      revision: 'r0',
+      initial: { name: 'Tea', aliases: ['alpha', 'beta'], command: 'save', protected: 'safe' },
+      transport: async (request) => {
+        calls++
+        intents.push(request.mutationId)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        if (receipts.has(request.mutationId)) return receipts.get(request.mutationId)
+        if (mode === 'refuse')
+          return {
+            status: 'invalid',
+            issues: [validationIssue('name', 'taken'), validationIssue('name', 'reserved')],
+          }
+        const receipt = {
+          status: 'committed',
+          accepted: { ...request.values, name: request.values.name.toUpperCase() },
+          revision: 'r1',
+          value: null,
+        }
+        receipts.set(request.mutationId, receipt)
+        if (mode === 'lost') throw new Error('lost response')
+        return receipt
+      },
+    },
+  )
+  const detach = attachForm(form, session, {
+    formatIssue: (issue) => issue.code,
+    onOutcome: (held) => {
+      outcome = held
+    },
+  })
+  const submit = async (button) => {
+    outcome = undefined
+    form.requestSubmit(button)
+    assert(
+      name.disabled && save.disabled && archive.disabled,
+      'submitting must lock current and externally associated controls',
+    )
+    await until(() => outcome)
+    return outcome
+  }
+  try {
+    assert(
+      (await submit(archive)).status === 'committed' && session.values().command === 'archive',
+      'archive submitter lost its own value',
+    )
+    assert(
+      (await submit(publish)).status === 'committed' && session.values().command === 'publish',
+      'publish input submitter lost its own value',
+    )
+    assert(
+      save.value === 'save' && archive.value === 'archive' && publish.value === 'publish',
+      'submit controls were overwritten by accepted values',
+    )
+    mode = 'refuse'
+    nativeValue.call(name, 'reject')
+    name.dispatchEvent(new Event('input', { bubbles: true }))
+    assert((await submit(save)).status === 'invalid', 'server refusal missing')
+    assert(
+      form.querySelector('#name-error').textContent === 'taken reserved' && document.activeElement === name,
+      'refusal must retain multiple errors and focus the first control',
+    )
+    assert(
+      form.querySelector('[data-form-summary]').textContent === 'taken reserved',
+      'refusal summary missing',
+    )
+    assert(
+      name.value === 'reject' && !name.disabled && session.dirty(),
+      'refusal must retain and unlock the dirty draft',
+    )
+    mode = 'lost'
+    nativeValue.call(name, 'lost')
+    name.dispatchEvent(new Event('input', { bubbles: true }))
+    assert((await submit(save)).status === 'unknown', 'lost outcome must remain unknown')
+    assert(
+      name.disabled && !save.disabled && !archive.disabled,
+      'unknown outcome must lock edits while enabling retry controls',
+    )
+    const beforeRetry = calls,
+      intent = intents.at(-1)
+    assert((await submit(save)).status === 'committed', 'unknown intent did not resolve on retry')
+    assert(
+      calls === beforeRetry + 1 && intents.at(-1) === intent,
+      'retry must reuse the exact mutation identity',
+    )
+    assert(
+      name.value === 'LOST' && !session.dirty() && session.revision() === 'r1',
+      'retry did not install the accepted baseline',
+    )
+    assert(
+      session.values().protected === 'safe' && form.querySelector('[name=protected]').matches(':disabled'),
+      'disabled-fieldset values must remain protected',
+    )
+    assert(
+      form.querySelector('[name=readonly]').value === 'untouched' &&
+        form.querySelector('[name=readonly]').disabled,
+      'original disabled control changed',
+    )
+    assert(parent === 0, 'native adapter leaked submission to a parent controller')
+    detach()
+    assert(
+      name.getAttribute('aria-describedby') === 'name-hint' && !save.disabled,
+      'detach did not restore associated controls/descriptions',
+    )
+  } finally {
+    detach()
+    session.dispose()
+    document.removeEventListener('submit', parentListener)
+    host.replaceChildren()
+  }
+}
+
+run.addEventListener('click', async () => {
+  run.disabled = true
+  checks = 0
+  try {
+    for (const [label, check] of [
+      ['guarded writes/dynamic controls', guardChecks],
+      ['default issue lookup', () => lookupChecks(false)],
+      ['dense issue lookup', () => lookupChecks(true)],
+      ['refusal/unknown/native submitters', recoveryChecks],
+    ]) {
+      result.textContent = `Running ${label}`
+      await check()
+    }
+    result.textContent = `Passed: 4 cases; ${checks} assertions`
+  } catch (error) {
+    result.textContent = `Failed (${result.textContent}): ${error.message}`
+    console.error(error)
+  } finally {
+    run.disabled = false
+  }
+})
+</script>
+</html>
