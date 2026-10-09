@@ -349,6 +349,44 @@ retry and generate a new one for a corrected, definitively refused submission. N
 POST URL-encoded data directly to the JSON-only function endpoint. Adding an `action` attribute to an
 empty editor form cannot serialize its signal state or provide a no-JavaScript editing experience.
 
+### Render subscriptions and cost
+
+`session.values()` is one immutable signal for the complete draft. Every field effect that reads
+it directly subscribes to every draft replacement. For an independent preview, select a primitive
+with `computed` so unchanged values do not execute that preview's effect again. Keep this wiring
+in the client runtime and dispose both the effect and selector with its lifetime.
+
+```ts
+// File: src/modules/catalog/client/title-preview.ts
+import { computed, effect } from '@ketvietlab/ketjs-view'
+import type { FormSession } from '@ketvietlab/ketjs-view'
+
+export function attachTitlePreview(
+  session: FormSession<{ title: string }>,
+  preview: HTMLOutputElement,
+  lifetime: AbortSignal,
+) {
+  const title = computed(() => session.values().title)
+  const stop = effect(() => { preview.textContent = title() })
+  const dispose = () => { stop(); title.dispose() }
+  if (lifetime.aborted) dispose()
+  else lifetime.addEventListener('abort', dispose, { once: true })
+}
+```
+
+This isolates view effects, not all work: every selector still depends on the whole draft,
+`set()` copies the draft, validation traverses the whole schema, and dirty comparison revalidates
+the baseline. The current native adapter also visits all controls and error targets. Its default
+issue lookup repeats control-list searches for each control; large forms with errors can become
+particularly expensive. A custom structured editor can supply an indexed `control(issue)` lookup
+and equality-guarded `write` implementation, but those do not eliminate the other adapter loops.
+
+The [browser form benchmark](/docs/benchmarks/#browser-form-sessions) compares the current session
+and adapter with RHF and Formik using shared validation and isolated field views. At revision
+`756efdf9`, one invalid field in a 500-field default-adapter form takes **64.05 ms median** on the
+recorded desktop environment. Treat this as a known performance gap when adopting large forms;
+the benchmark is not a KetSuite editor, paint/INP or mobile performance sign-off.
+
 ### Migrate a complex editor
 
 Keep its existing layout and domain command. Move pure normalization and cross-field checks into the
