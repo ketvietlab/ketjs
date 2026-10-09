@@ -102,7 +102,7 @@ A separate 100-field KetJS probe removes the primitive `computed` selectors and 
 This is a synthetic desktop Chromium workload, not a KetSuite deployment, typing/IME test,
 production capacity estimate, browser-paint/INP measurement or a universal library ranking.
 Timer resolution and background activity affect sub-millisecond samples. No CPU throttling,
-Safari, mobile, memory/GC profiling, mount/hydration, array append/remove/reorder, dense errors,
+Safari, mobile, memory/GC profiling, mount/hydration, array append/remove/reorder, comparative dense-error latency,
 async business validation or cross-field dependency graph is measured. These require their own
 workloads before making corresponding claims. Published results must identify the runtime
 revision, environment, package versions, sample counts and remaining gaps.
