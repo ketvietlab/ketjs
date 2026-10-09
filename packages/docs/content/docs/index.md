@@ -7,7 +7,7 @@ order: 0
 
 ## Find your entry point
 
-:::note[KetJS 0.3.0 is in preview]
+:::note[KetJS 0.4.0 is in preview]
 The project is in active review. Use it for evaluation and feedback, expect API and data-format changes before 1.0, and avoid production workloads for now.
 :::
 

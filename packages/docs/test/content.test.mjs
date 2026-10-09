@@ -3,8 +3,20 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { groups, parseContent } from '../site/content.mjs'
 import { readContent } from '../site/content-store.ts'
+import { frameworkVersion } from '../site/release.ts'
 
 const markdown = (body) => `---\ntitle: A guide\ndescription: A useful guide\n---\n${body}`
+test('VERSION expands metadata, code and release links before Markdown parsing', () => {
+  const page = parseContent(
+    `---\ntitle: KetJS {{VERSION}}\ndescription: Install {{VERSION}}\n---\n## Current {{VERSION}}\n\n[Release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}})\n\n\`\`\`bash\n# Run from: projects\nnpx @ketvietlab/ketjs@{{VERSION}} new demo\n\`\`\``,
+    { slug: 'release' },
+  )
+  assert.equal(page.title, `KetJS ${frameworkVersion}`)
+  assert.equal(page.description, `Install ${frameworkVersion}`)
+  assert.ok(page.html.includes(`/tag/v${frameworkVersion}`))
+  assert.ok(page.text.includes(`@ketvietlab/ketjs@${frameworkVersion}`))
+  assert.ok(!page.html.includes('{{VERSION}}'))
+})
 test('Markdown removes executable markup and unsafe links while preserving code examples', () => {
   const page = parseContent(
     markdown('<script>alert(1)</script>\n\n[bad](javascript:alert(1))\n\n```ts\nconst value = 1\n```'),
