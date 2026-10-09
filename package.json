@@ -1,7 +1,7 @@
 {
   "name": "ketjs-monorepo",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -27,6 +27,11 @@
     "audit:terminology": "node tools/terminology-audit.mjs",
     "release:check": "npm run verify && node tools/release.mjs check",
     "release:pack": "npm run build --silent && node tools/release.mjs pack",
+    "version:sync": "node tools/version.mjs sync",
+    "version:check": "node tools/version.mjs check",
+    "version:record": "node tools/version-audit.mjs record",
+    "version:audit": "node tools/version-audit.mjs check",
+    "version:consumers": "node tools/version-consumers.mjs check",
     "format": "biome format --write",
     "format:check": "biome format",
     "lint": "biome lint",

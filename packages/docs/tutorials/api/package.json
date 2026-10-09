@@ -2,7 +2,7 @@
   "name": "learn_api",
   "private": true,
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.4.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch --clear-screen=false tools/dev.mjs serve --workspace ket.workspace.ts",
@@ -15,7 +15,7 @@
     "learn": "node tools/learn.mjs"
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "0.3.0"
+    "@ketvietlab/ketjs": "0.4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",

@@ -21,12 +21,13 @@ permissions:
 jobs:
   publish:
     runs-on: ${{ vars.CI_RUNNER == 'self-hosted' && 'kv-ci' || 'ubuntu-24.04' }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: npm
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -43,7 +44,7 @@ jobs:
         run: >-
           node --input-type=module --eval
           "import fs from 'node:fs';
-          const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+          const version = fs.readFileSync('VERSION', 'utf8').trim();
           if (process.env.RELEASE_TAG !== 'v' + version)
           throw new Error('release tag ' + process.env.RELEASE_TAG + ' does not match v' + version)"
 
@@ -63,6 +64,9 @@ jobs:
       - name: verify packages and clean-room scaffold
         run: npm run release:check
 
+      - name: verify version audit and current documentation consumers
+        run: npm run version:audit && npm run version:consumers
+
       # Internal dependencies use exact versions, so the release tool publishes
       # in dependency order. A retry skips an identical package already on npm
       # and stops if the registry contains different bytes for the same version.
@@ -71,3 +75,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: verify documentation and labs with the published npm packages
+        run: npm run version:consumers -- --published
+      - name: retain release consumer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-consumer-evidence
+          path: .artifacts/version-audit/
+          if-no-files-found: warn
