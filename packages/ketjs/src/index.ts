@@ -76,6 +76,25 @@ export {
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
 export type { Placement, LayoutError, IdentifiedPlacement, PlacementChange } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
+export { defineFormAction } from './server/form-action.ts'
+export type { FormActionInput } from './server/form-action.ts'
+export {
+  defineFormContract,
+  createFormSession,
+  formActionTransport,
+  formIssuePath,
+  formConflict,
+  attachForm,
+} from '@ketvietlab/ketjs-view'
+export type {
+  FormContract,
+  FormSubmission,
+  FormOutcome,
+  FormAttempt,
+  FormTransport,
+  FormSession,
+  FormPath,
+} from '@ketvietlab/ketjs-view'
 export { KetError, Diagnostics, isDefectError } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'
 
