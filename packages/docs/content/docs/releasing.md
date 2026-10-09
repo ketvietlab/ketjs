@@ -69,7 +69,7 @@ No publish command is part of either local script.
 
 ## Publish
 
-1. Create `release/<version>` from `master` and merge the `develop` head into it. Do not release an
+1. Create `fix/release-<version>` from `master` and merge the verified `develop` head into it. Do not release an
    arbitrary feature branch.
 2. Update the coordinated version, then open the release pull request into `master` and let the required
    checks pass. Feature pull requests are verified locally by their authors, so a failure here is fixed on

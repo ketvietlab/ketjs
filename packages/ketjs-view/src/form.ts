@@ -16,6 +16,11 @@ export type FormFieldType =
   | 'date'
   | 'datetime'
   | 'json'
+  | 'object'
+  | 'array'
+  | 'record'
+
+export type FormPath = readonly (string | number | { key: string })[]
 
 export type ValidationIssue = {
   /** Null identifies an error concerning the whole form rather than one control. */
@@ -23,6 +28,8 @@ export type ValidationIssue = {
   code: string
   messageKey: string
   params: Readonly<Record<string, unknown>>
+  /** Stable paths use an array's declared key instead of its current position. */
+  path?: FormPath
 }
 
 export type ValidationIssueInput = Omit<ValidationIssue, 'params'> & {
@@ -38,6 +45,18 @@ export type FormFieldRule = {
   trim?: boolean
   /** Accept repeated FormData entries and validate each entry with this rule. */
   multiple?: boolean
+  nullable?: boolean
+  /** Explicit clearing; omitted by default for compatibility with scalar forms. */
+  empty?: 'null' | 'keep'
+  default?: unknown
+  fields?: Record<string, FormFieldRule>
+  items?: FormFieldRule
+  /** The rule for dictionary values when type is record. */
+  entries?: FormFieldRule
+  unknown?: 'drop' | 'reject'
+  key?: string
+  minItems?: number
+  maxItems?: number
   min?: number
   max?: number
   minLength?: number
@@ -248,11 +267,29 @@ export function validateForm<TValues extends FormValues = FormValues>(
   schema: FormSchema<TValues>,
   input: Readonly<FormValues>,
 ): FormValidationResult<TValues> {
+  return validateRecord(schema, input, { remaining: 10_000, depth: 0 })
+}
+
+const plainRecord = (value: unknown): value is FormValues =>
+  value !== null &&
+  typeof value === 'object' &&
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+
+function validateRecord<TValues extends FormValues>(
+  schema: FormSchema<TValues>,
+  input: Readonly<FormValues>,
+  budget: { remaining: number; depth: number },
+): FormValidationResult<TValues> {
   const values: FormValues = {}
   const issues: ValidationIssue[] = []
   const invalid = new Set<string>()
   const fields = Object.keys(schema.fields)
+  const isRecord = plainRecord(input)
+  if (!isRecord) issues.push(validationIssue(null, 'type', 'validation.type', { expected: 'object' }))
+  input = isRecord ? input : {}
   const dropped = Object.keys(input).filter((field) => !Object.hasOwn(schema.fields, field))
+  const put = (field: string, value: unknown) =>
+    Object.defineProperty(values, field, { value, enumerable: true, writable: true, configurable: true })
 
   if (schema.unknown === 'reject')
     for (const field of dropped)
@@ -260,7 +297,116 @@ export function validateForm<TValues extends FormValues = FormValues>(
 
   for (const field of fields) {
     const rule = schema.fields[field]!
-    const raw = input[field]
+    if (--budget.remaining < 0 || budget.depth > 16) {
+      issues.push(validationIssue(field, 'limit', 'validation.limit'))
+      invalid.add(field)
+      break
+    }
+    const raw = Object.hasOwn(input, field) ? input[field] : rule.default
+    if ((raw === null && rule.nullable) || (raw === '' && rule.empty === 'null' && rule.nullable)) {
+      put(field, null)
+      continue
+    }
+    if (raw === null && rule.nullable === false) {
+      issues.push(validationIssue(field, 'type'))
+      invalid.add(field)
+      continue
+    }
+    if (rule.type === 'array' || rule.type === 'object' || rule.type === 'record') {
+      if (raw === undefined && !rule.required) continue
+      const array = rule.type === 'array'
+      if (!(array ? Array.isArray(raw) : plainRecord(raw))) {
+        issues.push(validationIssue(field, 'type', 'validation.type', { expected: rule.type }))
+        invalid.add(field)
+        continue
+      }
+      const count = array ? (raw as unknown[]).length : Object.keys(raw as object).length
+      if (count > (rule.maxItems ?? 1000) || count < (rule.minItems ?? 0)) {
+        issues.push(
+          validationIssue(field, 'items', 'validation.items', {
+            min: rule.minItems ?? 0,
+            max: rule.maxItems ?? 1000,
+          }),
+        )
+        invalid.add(field)
+        continue
+      }
+      const before = issues.length
+      const child = (
+        childFields: Record<string, FormFieldRule>,
+        data: FormValues,
+        prefix: string,
+        path: FormPath,
+      ) => {
+        budget.depth++
+        const result = validateRecord(
+          { fields: childFields, unknown: rule.unknown ?? schema.unknown },
+          data,
+          budget,
+        )
+        budget.depth--
+        for (const issue of result.issues)
+          issues.push({
+            ...issue,
+            field: issue.field === null ? prefix : `${prefix}.${issue.field}`,
+            path: [...path, ...(issue.path ?? (issue.field === null ? [] : [issue.field]))],
+          })
+        return result.values
+      }
+      if (array) {
+        if (!rule.items) throw new TypeError(`array field ${field} requires items`)
+        const keys = new Set<string>()
+        const list: unknown[] = []
+        for (const [index, entry] of (raw as unknown[]).entries()) {
+          const key = rule.key && plainRecord(entry) ? entry[rule.key] : undefined
+          const entryStart = issues.length
+          const result = child(
+            { item: { ...rule.items, required: true } },
+            { item: entry },
+            `${field}.${index}`,
+            [field, typeof key === 'string' ? { key } : index],
+          )
+          // The synthetic item wrapper is not part of the public field path.
+          for (let n = entryStart; n < issues.length; n++) {
+            const issue = issues[n]!
+            if (issue.field?.startsWith(`${field}.${index}.item`)) {
+              issue.field = issue.field.replace(`${field}.${index}.item`, `${field}.${index}`)
+              issue.path = issue.path?.filter((part, position) => !(position === 2 && part === 'item'))
+            }
+          }
+          const decodedKey = rule.key && plainRecord(result.item) ? result.item[rule.key] : undefined
+          if (rule.key && (typeof decodedKey !== 'string' || !decodedKey || keys.has(decodedKey)))
+            issues.push({ ...validationIssue(`${field}.${index}`, 'row_key'), path: [field, index] })
+          if (typeof decodedKey === 'string') keys.add(decodedKey)
+          list.push(result.item)
+          if (budget.remaining < 0) break
+        }
+        put(field, list)
+      } else if (rule.type === 'record') {
+        if (!rule.entries) throw new TypeError(`record field ${field} requires entries`)
+        put(
+          field,
+          child(
+            Object.fromEntries(
+              Object.keys(raw as FormValues).map((key) => [key, { ...rule.entries!, required: true }]),
+            ),
+            raw as FormValues,
+            field,
+            [field],
+          ),
+        )
+      } else {
+        if (!rule.fields) throw new TypeError(`object field ${field} requires fields`)
+        put(field, child(rule.fields, raw as FormValues, field, [field]))
+      }
+      if (issues.length > before) invalid.add(field)
+      continue
+    }
+    if (raw === '' && rule.empty === 'keep' && !rule.required) {
+      put(field, '')
+      checkValue(field, '', rule, issues)
+      continue
+    }
     const rawValues = rule.multiple
       ? (Array.isArray(raw) ? raw : empty(raw) ? [] : [raw]).filter((held) => !empty(held))
       : empty(raw)
@@ -291,7 +437,12 @@ export function validateForm<TValues extends FormValues = FormValues>(
     }
     if (invalid.has(field)) continue
     const value = rule.multiple ? casted : casted[0]
-    values[field] = value
+    put(field, value)
+    if (rule.required && value === '') {
+      issues.push(validationIssue(field, 'required'))
+      invalid.add(field)
+      continue
+    }
     const before = issues.length
     checkValue(field, value, rule, issues)
     if (issues.length !== before) invalid.add(field)
@@ -303,7 +454,12 @@ export function validateForm<TValues extends FormValues = FormValues>(
     const held = issuesOf(rule.validate(values[field], values))
     issues.push(...held.map((item) => (item.field === null ? { ...item, field } : item)))
   }
-  if (schema.validate) issues.push(...issuesOf(schema.validate(values as Partial<TValues>, input)))
+  if (
+    schema.validate &&
+    isRecord &&
+    ![...invalid].some((field) => ['array', 'object', 'record'].includes(schema.fields[field]?.type ?? ''))
+  )
+    issues.push(...issuesOf(schema.validate(values as Partial<TValues>, input)))
 
   const details = {
     issues,

@@ -745,6 +745,13 @@ export function compose(
   // --- server functions ----------------------------------------------------
   for (const m of order) {
     for (const [fname, def] of Object.entries(m.functions)) {
+      if (def.transactional && (def.idempotent !== true || def.dryRun === true)) {
+        diag.add({
+          code: 'E_FUNCTION_TRANSACTION',
+          module: m.name,
+          message: `transactional function "${qualify(m.name, fname)}" requires idempotent: true and cannot enable dry runs`,
+        })
+      }
       if (def.exposure !== undefined && def.exposure !== 'http' && def.exposure !== 'internal') {
         diag.add({
           code: 'E_FUNCTION_EXPOSURE',
@@ -788,7 +795,8 @@ export function compose(
         exposure: def.exposure ?? 'http',
         provision: def.provision === true,
         idempotent: def.idempotent === true,
-        dryRun: def.dryRun !== false,
+        ...(def.transactional === true ? { transactional: true as const } : {}),
+        dryRun: def.transactional ? false : def.dryRun !== false,
         agent: def.agent === true,
       }
     }
