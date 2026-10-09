@@ -3,6 +3,7 @@ import { Button, Select, Text, Surface, WorkspacePage } from '@ketvietlab/design
 import type { IslandFactory } from '@ketvietlab/ketjs-view'
 import { presets } from './playground-presets.ts'
 import { previewDocument } from './playground-frame.mjs'
+import { frameworkVersion } from './release.ts'
 
 type Compiler = typeof import('esbuild-wasm')
 let compiler: Promise<Compiler> | undefined
@@ -31,7 +32,8 @@ const playground: IslandFactory<Record<string, never>> = () => ({
             <div class="playground-intro">
               <p>Edit TSX. Run it with the real ketjs-view runtime. No account required.</p>
               <p class="metadata">
-                Browser lab · KetJS 0.2.0 preview · <a href="/learn/">Follow the learning path</a> ·{' '}
+                Browser lab · KetJS {frameworkVersion} preview ·{' '}
+                <a href="/learn/">Follow the learning path</a> ·{' '}
                 <a href="/learn/server-project/">Run server / database labs locally</a>
               </p>
             </div>

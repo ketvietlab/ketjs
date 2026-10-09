@@ -13,10 +13,10 @@
     "check": "tsc --noEmit && ket-view check"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.2.0"
+    "@ketvietlab/ketjs-view": "0.3.0"
   },
   "devDependencies": {
-    "@ketvietlab/ketjs-view-tools": "0.2.0",
+    "@ketvietlab/ketjs-view-tools": "0.3.0",
     "typescript": "^7.0.2"
   }
 }

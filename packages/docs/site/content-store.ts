@@ -6,7 +6,7 @@ import type { BenchmarkReport } from './benchmark-charts.tsx'
 
 export function readContent(root = process.cwd()): ContentPage[] {
   const pages: ContentPage[] = []
-  for (const kind of ['home', 'docs', 'learn', 'examples', 'blog']) {
+  for (const kind of ['home', 'docs', 'spec', 'learn', 'examples', 'blog']) {
     const directory = kind === 'home' ? join(root, 'content') : join(root, 'content', kind)
     for (const name of readdirSync(directory)
       .filter((file) => file.endsWith('.md'))
