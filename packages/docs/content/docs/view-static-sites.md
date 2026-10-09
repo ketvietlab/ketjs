@@ -2,7 +2,7 @@
 title: Static sites with ketjs-view
 description: Scaffold, develop, and deliver plain HTML, CSS, and JavaScript with explicit interactive islands.
 group: ketjs-view and KTL
-order: 3
+order: 4
 ---
 
 The ketjs-view static toolkit is for projects whose deliverable is a directory of HTML, CSS, and

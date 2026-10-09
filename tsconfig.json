@@ -5,5 +5,6 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": false
   },
-  "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*", "bench/**/*"]
+  "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*", "bench/**/*"],
+  "exclude": ["node_modules", "packages/*/dist", "bench/form-comparison"]
 }

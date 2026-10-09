@@ -1,6 +1,6 @@
 ---
 title: Form validation
-description: Share form schemas between server and browser, manage field state, and return structured HTTP 422 errors.
+description: Define shared schemas, cast native values, report nested issues, and revalidate inputs on the server.
 group: Request execution
 order: 4
 ---
@@ -9,6 +9,18 @@ KetJS form validation is a browser-safe contract rather than a component convent
 form values, applies field and cross-field constraints, and returns machine-readable issues. The same schema
 runs in `@ketvietlab/ketjs-view` and on the server through `@ketvietlab/ketjs`.
 
+:::note[Requires KetJS 0.4.0]
+Nested contracts, edit sessions and transactional form actions require KetJS and ketjs-view 0.4.0
+or later. The 0.3.0 packages include the legacy schema/controller APIs, but do not export
+`defineFormContract`, `createFormSession`, `attachForm` or `defineFormAction`. Keep the framework
+packages used by an application on the same released version.
+:::
+
+This guide covers shared schemas and issues. For browser drafts, submit state, native controls and
+render subscriptions, read [Forms and edit sessions](/docs/view-forms/) in the ketjs-view section.
+For atomic server writes, revision checks and durable receipts, read
+[Transactional form actions](/docs/form-actions/).
+
 Client validation improves feedback but is never an authorization boundary. Validate again on the server
 before calling a function or writing data.
 
@@ -16,7 +28,7 @@ before calling a function or writing data.
 
 ```ts
 // File: src/modules/example/forms.ts
-import { defineFormSchema, validationIssue } from '@ketvietlab/ketjs'
+import { defineFormSchema, validationIssue } from '@ketvietlab/ketjs-view'
 
 type Signup = {
   email: string
@@ -49,7 +61,8 @@ export const signupForm = defineFormSchema<Signup>({
 })
 ```
 
-Field types are `text`, `id`, `ref`, `int`, `float`, `decimal`, `bool`, `date`, `datetime`, and `json`.
+Field types are `text`, `id`, `ref`, `int`, `float`, `decimal`, `bool`, `date`, `datetime`, `json`,
+`object`, `array`, and `record`.
 Constraints include `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`, and `oneOf`. Set
 `multiple: true` for repeated controls such as a multi-select. Optional empty values are omitted from the
 normalized result.
@@ -91,34 +104,61 @@ type ValidationIssue = {
 `field: null` identifies a whole-form error. Render `messageKey` through the application's translator and
 use `params` for interpolation. Do not branch on translated text.
 
-## Manage browser form state
-
-`createForm()` adds reactive lifecycle state without owning markup or submission transport:
+## Declare nested values explicitly
 
 ```ts
-// File: src/modules/example/forms.ts
-import { createForm } from '@ketvietlab/ketjs-view'
+// File: src/modules/catalog/variant-form.ts
+import { defineFormContract } from '@ketvietlab/ketjs-view'
 
-const formState = createForm(signupForm)
+export type VariantDraft = {
+  variants: Array<{
+    rowKey: string
+    id: string | null
+    weight: string
+    active: boolean
+  }>
+}
 
-formState.set('email', emailInput.value, { touch: true })
-
-const submitted = await formState.submit(async (values) => {
-  return fetch('/signup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(values),
-  })
+export const variantForm = defineFormContract<VariantDraft>('catalog.variants.v1', {
+  fields: {
+    variants: {
+      type: 'array', required: true, key: 'rowKey', maxItems: 500,
+      items: {
+        type: 'object',
+        fields: {
+          rowKey: { type: 'id', required: true },
+          id: { type: 'id', required: true, nullable: true },
+          weight: { type: 'decimal', required: true, min: 0 },
+          active: { type: 'bool', required: true },
+        },
+      },
+    },
+  },
 })
 ```
 
-The controller exposes read-only signals for `values`, `issues`, `touched`, `dirty`, `valid`, `submitted`,
-and `submitting`. `errors(field)` hides untouched errors until that field is touched or the form is
-submitted. `applyServerIssues()` merges the authoritative server outcome into the same presentation path.
-Call `dispose()` when a controller outlives its island or component.
+- `object.fields` validates a fixed object; `array.items` validates every item; `record.entries`
+  validates dictionary values, such as an attribute-ID to selected-value-ID map.
+- A malformed list is rejected. It never becomes `[]`. An explicitly submitted `[]` is valid unless
+  `minItems` forbids it; deciding whether it archives existing records belongs to the command.
+- `key` requires unique, nonempty string row identities. Keep `rowKey` stable when a new row receives
+  its database `id`. Neither a row key nor a submitted ID establishes ownership or permission.
+- Unknown fields are rejected by default in a contract, including nested objects. A nested rule can
+  explicitly override `unknown`. Legacy `defineFormSchema()` retains its drop-by-default behavior.
+- `nullable: true` preserves explicit null. `empty: 'null'` with nullable converts an empty string
+  to null; `empty: 'keep'` preserves an optional empty string. `default` applies only when absent.
+  Missing, null, false, and an empty list are distinct. Do not clear disabled or omitted fields by accident.
+- Structured fields default to at most 1,000 entries. `minItems` and `maxItems` bound arrays, objects
+  and dictionaries. Validation also bounds recursive depth and total field visits. Domain code must
+  separately bound combination generation before allocating the Cartesian product.
+- Use the contract's `validate` callback for shared, pure cross-field rules. It receives normalized
+  partial values; malformed structured fields prevent that callback from running. Database uniqueness,
+  record ownership, permissions and current business state remain server checks.
 
-The controller does not intercept DOM events and does not replace native attributes such as `required`,
-`min`, or `aria-invalid`. UI packages remain responsible for markup and accessibility.
+Nested issues keep an indexed `field`, for example `variants.2.weight`, and add a stable `path`,
+for example `['variants', { key: 'draft-42' }, 'weight']`. `formIssuePath(contract, submittedValues, field)`
+maps domain errors with the submitted snapshot. Never resolve an old index against a newly sorted list.
+For dictionary keys containing dots, use the explicit path rather than inventing dotted field names.
 
 ## Validate on the server
 
@@ -218,3 +258,39 @@ if (!changes.valid) {
 Database-backed checks such as uniqueness, current inventory, or permissions remain server-only. Return
 their outcome as `ValidationIssue` values and call `formState.applyServerIssues(problem)` in an enhanced
 browser flow.
+
+## Browser forms and server actions
+
+The browser and transaction guides now have their own navigation entries. Existing links to their
+former sections remain available here:
+
+<span id="manage-browser-form-state"></span>
+
+[Manage browser form state](/docs/view-forms/#manage-browser-form-state) covers `createForm`,
+reactive validation, touched fields and the low-level submit handler.
+
+<span id="transactional-edit-forms"></span>
+<span id="keep-a-draft-until-the-outcome-is-known"></span>
+
+[Transactional edit forms](/docs/view-forms/#transactional-edit-forms) covers the form session,
+accepted baselines, refusal, conflict and unknown-outcome retry.
+
+<span id="commit-the-command-and-its-receipt-together"></span>
+
+[Commit the command and its receipt together](/docs/form-actions/#commit-the-command-and-its-receipt-together)
+covers the server action and its database transaction.
+
+<span id="attach-native-controls-or-a-custom-editor"></span>
+
+[Attach native controls or a custom editor](/docs/view-forms/#attach-native-controls-or-a-custom-editor)
+covers DOM binding, field errors, submitters and lifecycle ownership.
+
+<span id="render-subscriptions-and-cost"></span>
+
+[Render subscriptions and cost](/docs/view-forms/#render-subscriptions-and-cost) covers whole-draft
+subscriptions, primitive selectors, adapter work and the measured performance limits.
+
+<span id="migrate-a-complex-editor"></span>
+
+[Migrate a complex editor](/docs/view-forms/#migrate-a-complex-editor) describes adoption without
+replacing the consumer's layout or domain commands.

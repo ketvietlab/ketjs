@@ -2,7 +2,7 @@
 title: HTTP contracts and OpenAPI
 description: Publish server functions as HTTP operations, record transport-neutral HTTP contracts in the KetJS manifest, and generate deployment-specific OpenAPI documents.
 group: Request execution
-order: 5
+order: 6
 ---
 
 KetJS owns the contract substrate, not a product API. A module route can carry machine-readable HTTP metadata,

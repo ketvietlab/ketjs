@@ -147,6 +147,13 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         `"${fkey}" is no longer idempotent`,
         'agent retries may double-apply it',
       )
+    if (Boolean(bfn.transactional) !== Boolean(afn.transactional))
+      push(
+        'breaking',
+        'FUNCTION_TRANSACTION_CHANGED',
+        `"${fkey}" changed its transactional execution contract`,
+        'transactional execution requires a key and commits the receipt with database writes',
+      )
     if (bfn.exposure === 'http' && afn.exposure === 'internal')
       push(
         'breaking',

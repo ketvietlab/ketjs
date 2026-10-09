@@ -9,7 +9,7 @@ This guide creates a headless notes application backed by SQLite. It exercises a
 function, route, migration, and HTTP call without adding a database server.
 
 :::caution[Preview release]
-This guide targets KetJS `0.3.0`, which is preview software. The package workflow below is verified before each release, but APIs and
+This guide targets KetJS `0.4.0`, which is preview software. The package workflow below is verified before each release, but APIs and
 deployment contracts may still change before 1.0.
 :::
 
@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Use an exact version such as `@ketvietlab/ketjs@0.3.0` when the scaffold must be reproducible. App
+Use an exact version such as `@ketvietlab/ketjs@0.4.0` when the scaffold must be reproducible. App
 names accept lowercase letters, digits, and underscores and must start with a letter. To separate
 the app identifier from its directory name:
 
