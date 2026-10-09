@@ -30,6 +30,7 @@ const Footer = () => (
     <nav aria-label="Resources">
       <strong>Resources</strong>
       <a href="/docs/">Documentation</a>
+      <a href="/spec/">Spec API reference</a>
       <a href="/learn/">Learn KetJS</a>
       <a href="/playground/">Playground</a>
     </nav>
@@ -339,8 +340,8 @@ function Collection({ page, content }: { page: ContentPage; content: ContentPage
 function Editorial({ page }: { page: ContentPage }) {
   return (
     <main id="main-content" class="editorial-main">
-      <a class="back-link" href={`/${page.kind}/`}>
-        ← All {page.kind}
+      <a class="back-link" href={page.kind === 'spec' ? '/docs/openapi/' : `/${page.kind}/`}>
+        {page.kind === 'spec' ? '← HTTP contracts and OpenAPI' : `← All ${page.kind}`}
       </a>
       <header class="editorial-header">
         <p class="eyebrow">
@@ -465,6 +466,8 @@ export function createPage(route: string, content: ContentPage[]) {
           ) : (
             <BlogArticle page={page} content={content} />
           )
+        ) : page.kind === 'spec' ? (
+          <Editorial page={page} />
         ) : page.slug === 'index' ? (
           <Collection page={page} content={content} />
         ) : (

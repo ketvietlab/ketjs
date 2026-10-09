@@ -15,7 +15,7 @@
     "learn": "node tools/learn.mjs"
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "0.2.0"
+    "@ketvietlab/ketjs": "0.3.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
