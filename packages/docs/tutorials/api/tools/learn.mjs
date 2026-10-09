@@ -42,7 +42,7 @@ const fingerprint = () => {
 try {
   if (command === 'help') {
     console.log(
-      'KetJS learning lab · 0.2.0 preview\n\nCommands:\n  doctor                 Check Node, SQLite and local dependencies\n  list                   List lessons and their execution environment\n  lesson <slug>          Read a bundled lesson\n  check <api|isolation|jobs>  Build and run one behavioral checkpoint\n  status                 Show checkpoint results and detect changed source\n  serve                  Start the local development API at 127.0.0.1:3711\n  worker                 Run the learning queue against the same lab database\n\nRun with: npm run learn -- <command>\nLessons without an automated checkpoint have a manual acceptance checklist.\nThe dev identity is for local learning; this lab is not a production auth setup.',
+      'KetJS learning lab · 0.3.0 preview\n\nCommands:\n  doctor                 Check Node, SQLite and local dependencies\n  list                   List lessons and their execution environment\n  lesson <slug>          Read a bundled lesson\n  check <api|isolation|jobs>  Build and run one behavioral checkpoint\n  status                 Show checkpoint results and detect changed source\n  serve                  Start the local development API at 127.0.0.1:3711\n  worker                 Run the learning queue against the same lab database\n\nRun with: npm run learn -- <command>\nLessons without an automated checkpoint have a manual acceptance checklist.\nThe dev identity is for local learning; this lab is not a production auth setup.',
     )
   } else if (command === 'doctor') {
     if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Node 24 or newer is required.')

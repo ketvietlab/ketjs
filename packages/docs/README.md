@@ -2,43 +2,51 @@
 
 The private site for **https://ketjs.dev**, built with native ketjs-view TSX, Markdown content and
 `ket-view build`. Its deployment artifact is `dist/`; it requires no application server or database.
-Home, Docs, Learn, Examples and Blog use the public Két Design System from npm.
+Home, Docs, Spec, Learn, Examples and Blog use the public Két Design System from npm.
 
 ## Local development
 
-Build the two local producer packages once after a fresh checkout or a framework change:
+The site has its own lockfile and consumes published KetJS 0.3.0 and Két Design System 0.1.41.
+It can install and build independently of the framework source checkout:
 
 ```bash
-# Run from: repository root
+# Run from: packages/docs
 npm ci --ignore-scripts
-npm run build --workspace @ketvietlab/ketjs-view
-npm run build --workspace @ketvietlab/ketjs-view-tools
-cd packages/docs
-npm ci --ignore-scripts
-npm rebuild @ketvietlab/ketjs-view-tools --ignore-scripts
 npm run dev
 ```
 
-The site has its own lockfile and dependencies. It uses local file dependencies for the two view
-packages while their new contracts are developed here. Neither package imports the server framework
-or PostgreSQL. There is no consumer preparation script or separate HTML generator.
+Neither view package imports the server framework or PostgreSQL. There is no consumer preparation
+script or separate HTML generator. `site/release.ts` derives the displayed framework version from
+the site's exact runtime dependency, so an integration branch's source version cannot change it.
 
 ```bash
 # Run from: packages/docs
 npm run check
-npm test
+node --test test/content.test.mjs test/release.test.mjs test/search.test.mjs
 npm run build
 node site/seo-audit.mjs
 npm run preview
 ```
 
 Preview: **http://127.0.0.1:3700/**. Publish the contents of `dist/` on a static host serving directory
-indexes and `404/index.html` for missing routes. Production hosting and DNS are managed separately.
+indexes and `404/index.html` for missing routes.
+
+## Cloudflare Pages
+
+Production at **ketjs.dev** deploys automatically when changes reach `master`. A documentation update
+does not require a framework version bump, npm publication or GitHub release. Keep normal PR checks
+and branch promotion gates before merging to `master`.
+
+For an independent Pages build, use root directory `packages/docs`, build command
+`npm ci --ignore-scripts && npm run build`, and output directory `dist`. The build needs Node.js 24
+or newer (set `NODE_VERSION` in Pages when the image's default is older). All dependencies are public;
+the site build needs no `NPM_TOKEN`. The existing project's settings are managed in Cloudflare.
+See [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/).
 
 ## Content and rendering
 
 - `content/home.md` supplies homepage copy and feature data. Other Markdown collections supply
-  docs, learning content, runnable examples and project posts. Docs use explicit frontmatter group/order
+  docs, the `/spec/` introduction, learning content, runnable examples and project posts. Docs use explicit frontmatter group/order
   following KetJS responsibilities; the overview explains each group and links task-specific paths.
   Each file requires title and description frontmatter; filename determines its slug.
 - `pages/index.tsx` returns `definePages()` using those collections. ketjs-view-tools renders each
@@ -72,7 +80,12 @@ A stable scrollbar gutter prevents
 short/long-page shifts, and an external classic head script applies saved theme before first paint.
 Mobile search, theme and navigation use accessible icon controls.
 
-The main navigation contains Docs, Learn, Playground and Blog. Blog has its own editorial recipe:
+The main navigation contains Docs, Spec, Learn, Playground and Blog. Spec is a native standalone
+editorial route with installation, scaffold, static hosting and server-rendering examples; the
+content loader also includes it in search and the sitemap. The menu uses the same reserved label
+slots, active-route semantics and mobile navigation as the other sections. Search ranks exact and
+prefix title matches before prose matches, keeping Spec discoverable within the eight-result limit.
+Blog has its own editorial recipe:
 a 72rem canvas, an explicitly selected featured article, then the remaining articles by publication
 date (newest first). Native story rows own their editorial heading, summary and metadata; related
 articles use public DS ContentCard slots. Public Text, Badge, Breadcrumbs and LinkButton components
@@ -104,8 +117,9 @@ Code comments use the secondary text tone for the same contrast requirement.
 ## Verification scope
 
 This deployment is the KetJS documentation site. Check its content tests, types, native static build,
-local links/anchors, canonical URLs, singleton keys and JSON payloads. Producer checks are limited to
-`packages/ketjs-view-tools/test/page-collections.test.mjs` and the two package builds. Browser review
+local links/anchors, canonical URLs, singleton keys and JSON payloads. The build verifies its installed
+runtime/tool versions against the site's pins and checks Spec's desktop/mobile menu links and active state.
+No local framework producer build is needed when consuming the released npm packages. Browser review
 covers desktop/mobile, light/dark, island navigation, search and theme controls. These checks do not
 replace the repository's broad develop gate.
 
@@ -200,7 +214,7 @@ This is a learning playground, not a resource-isolated server sandbox: an infini
 freeze its browser context. Node, database and worker exercises run locally.
 
 `site/learning-assets.mjs` packages explicit source roots into two ZIP downloads, excluding
-node_modules, build output and local databases. Both projects pin published KetJS 0.2.0 rather
+node_modules, build output and local databases. Both projects pin published KetJS 0.3.0 rather
 than workspace aliases. The View project includes counter, todo and cancellable data-loading
 examples. The API project includes a local learning CLI and three executable checkpoints:
 HTTP/validation, company isolation and durable jobs. Advanced lessons are guided extensions;

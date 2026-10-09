@@ -2,6 +2,7 @@ import { signal, trustedMarkup, type IslandFactory } from '@ketvietlab/ketjs-vie
 import { Badge, Button, LinkButton, Text } from '@ketvietlab/design-system'
 import { createNavigation } from './navigation.ts'
 import { updatePageHead } from './seo.ts'
+import { frameworkVersion } from './release.ts'
 import type { ContentPage } from './model.ts'
 
 type Lesson = Pick<ContentPage, 'slug' | 'route' | 'title' | 'description' | 'order' | 'metadata'>
@@ -56,7 +57,7 @@ const learn: IslandFactory<Props> = (props) => {
                   {lessons.length} lessons · {stages.length} stages · View → Server → Data → Security →
                   Operations
                 </p>
-                <Badge label="0.2.0 Preview — APIs may change" tone="neutral" />
+                <Badge label={`${frameworkVersion} Preview — APIs may change`} tone="neutral" />
               </header>
               <details class="learn-introduction">
                 <summary>How this learning path works</summary>
@@ -139,7 +140,8 @@ const learn: IslandFactory<Props> = (props) => {
                   <h1 tabindex="-1">{current.title}</h1>
                   <p>{current.description}</p>
                   <p class="metadata">
-                    {String(current.metadata.duration)} min · {String(current.metadata.lab)} · KetJS 0.2.0
+                    {String(current.metadata.duration)} min · {String(current.metadata.lab)} · KetJS{' '}
+                    {frameworkVersion}
                     preview
                   </p>
                 </header>
@@ -190,6 +192,7 @@ const learn: IslandFactory<Props> = (props) => {
     },
     mount: ({ root, lifetime }) => {
       if (!(root instanceof HTMLElement)) return
+      // Keep the existing course key so a framework update preserves completed lessons.
       const storageKey = 'ketjs-learn-0.2.0'
       const known = new Set(lessons.map((lesson) => lesson.slug))
       try {
