@@ -1,11 +1,11 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} release, shared form contracts, edit sessions and atomic saves.
+description: The coordinated KetJS {{VERSION}} release, independent session authentication and audited adoption.
 group: Project evolution
 order: 1
 ---
 
-<span id="current-release-0-4-0"></span>
+<span id="current-release"></span>
 
 ## Current release
 
@@ -15,14 +15,24 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What 0.4.0 adds
+## What {{VERSION}} adds
+
+- **Independent session-auth starter.** `ket new NAME --auth=session` generates application-owned User, Role, Grant and Assignment models, hidden/stdin provisioning, native login/logout/me routes and owner-filtered sample operations. There is no KetSuite dependency or default password. Bare `--auth` preserves the project name and directory options. See [Authentication starter](/docs/auth-starter/).
+- **Explicit companyless identities.** `sessions.requireCompany: false` separates authentication from company scope. The default remains company-required; the opt-in does not grant access to company data. Cookie issuance, reads, updates and gateway assertions share company/branch membership validation. See [Sessions and tenants](/docs/sessions-tenants/).
+- **Credential and proxy contracts.** The starter preserves UTF-8 credentials across stdin chunks, uses bounded scrypt verification, shares origin host/port checks through TLS termination and supports explicit trusted proxy IPs for per-client login limits. Grants use one combined query, and initial authenticated reads avoid unnecessary session-context revision updates. Existing KetSuite credential helpers and account models remain unchanged.
+- **Executable release evidence.** One root `VERSION` drives package, scaffold, docs and learning-lab mirrors. `CHANGE_LOG` records the version commit, reason and verified docs/lab/download evidence; CI rejects missing or stale evidence. See [Publishing packages](/docs/releasing/).
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-4-0"></span>
+<span id="what-0-4-0-adds"></span>
+
+## Previous release: 0.4.0
 
 - **Shared nested form contracts.** Declare objects, arrays and records, explicit null/empty handling, bounded collections and stable keyed issue paths. The same browser-safe validation contract runs on the client and server. See [Form validation](/docs/form-validation/).
 - **Edit sessions and native binding.** `createFormSession` retains immutable drafts and baselines, tracks revision and dirty state, prevents concurrent submits and preserves the intent for an unknown-outcome retry. `attachForm` binds native controls and accessible errors. Existing `createForm` consumers remain supported. See [Forms and edit sessions](/docs/view-forms/).
 - **Atomic form actions.** `defineFormAction` commits domain writes and the accepted receipt together. Refusals roll back, declared public projections filter outcomes, and notifications publish after commit. Permissions, ownership and revision checks remain in domain handlers. See [Transactional form actions](/docs/form-actions/).
 - **Measured adapter performance.** The adapter indexes controls, groups issues once, avoids unchanged DOM assignments and caches baseline validation. In the recorded 500-field synthetic workload, one invalid edit fell from a 64.05 ms median to 2.35 ms. Full draft validation still scales with form size; these are dispatch-to-DOM-settlement measurements, not paint or INP. See [Benchmarks](/docs/benchmarks/) for the pinned RHF/Formik comparison and limitations.
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-3-0"></span>
 <span id="what-0-3-0-adds"></span>
@@ -47,7 +57,7 @@ Server markup must be hydrated by the same ketjs-view version and the same JSX b
 
 ## Preview stability
 
-The `0.4` line is preview software. Read the [upgrade guide](/docs/upgrading/) before updating existing application code or datastores. A shared package version does not guarantee that an application upgrade needs no migration.
+The current `{{VERSION}}` release is preview software. Read the [upgrade guide](/docs/upgrading/) before updating existing application code or datastores. A shared package version does not guarantee that an application upgrade needs no migration.
 
 ## Track changes
 
