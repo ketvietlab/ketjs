@@ -14,6 +14,21 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
+The current release adds an independent [Authentication starter](/docs/auth-starter/) and explicit
+companyless sessions. Existing deployments keep the company-required default. No account-model or
+credential migration happens automatically: KetSuite retains its own models, permission policy and
+stored hashes. Adopt the generated auth module only as an application-owned composition choice.
+
+Session contexts must select a readable company and, when branches are restricted, a readable branch.
+Invalid stored contexts are now destroyed, and gateway assertions apply the active session manager's
+policy. Reconcile real memberships in your live identity resolver rather than relying on invalid
+company/branch combinations. See [Sessions and tenants](/docs/sessions-tenants/).
+
+For the new starter behind TLS termination, preserve and validate the public Host header, enable secure
+cookies and configure `KET_AUTH_TRUSTED_PROXIES` with the edge's actual IPs. Forwarded addresses are ignored
+by default; an unconfigured proxy shares a peer rate window. Existing deployments keep their own network
+and rate policy. Follow the starter's deployment guide before exposing its login routes.
+
 The 0.4.0 line adds nested form contracts, immutable edit sessions, native control binding and
 transactional save receipts. Existing `createForm` consumers remain supported; adopting
 `createFormSession` is explicit. Follow [Form validation](/docs/form-validation/),
