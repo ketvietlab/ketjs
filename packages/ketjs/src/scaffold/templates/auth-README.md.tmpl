@@ -1,0 +1,98 @@
+# __NAME__
+
+This is a cookie-authenticated KetJS API application. The generated `auth` module owns its account,
+role, grant and assignment models. It does not depend on KetSuite or require a company model.
+
+## Start and create an account
+
+```bash
+# Run from: __NAME__
+npm install
+npm run user:add
+npm run dev
+```
+
+`user:add` prompts for a login and a hidden password of at least 15 characters. Provisioning runs
+locally; it is absent from HTTP and agent surfaces. There is no default password or public signup.
+For automation, feed a JSON object with `login` and `password` to the command's stdin. Do not put
+credentials in command arguments or commit credential files.
+
+The server listens on `http://127.0.0.1:3000`. The initial role grants `auth.me` and the sample note
+operations. New operations and revoked grants are not automatically enabled for existing roles.
+
+## Call the API
+
+Enter a JSON object with `login` and `password` matching your provisioned account on curl's standard
+input, then press Ctrl-D:
+
+```bash
+# Run from: __NAME__
+mkdir -p .ket
+curl --cookie-jar .ket/cookies --json @- http://127.0.0.1:3000/auth/login
+```
+
+```bash
+# Run from: __NAME__
+curl --cookie .ket/cookies http://127.0.0.1:3000/auth/me
+curl --cookie .ket/cookies --header 'Origin: http://127.0.0.1:3000' --json '{"title":"My first note"}' http://127.0.0.1:3000/api/v1/notes/create
+curl --cookie .ket/cookies http://127.0.0.1:3000/api/v1/notes
+curl --cookie .ket/cookies --request POST http://127.0.0.1:3000/auth/logout
+```
+
+Notes belong to the signed-in account. The API ignores client-supplied ownership: creation stamps
+the actor and reads filter by that actor. Anonymous requests are refused.
+
+## Ownership and extension
+
+`modules/auth.ts` contains your application's models, credential checking, routes and live-session
+resolver. `ket.workspace.ts` connects these to KetJS with an explicit permission resolver. Returning
+an empty grant list denies protected operations; `null` would disable that restriction.
+
+The starter opts into `sessions.requireCompany: false`. Adding company-scoped models still requires
+real membership resolution; the opt-in does not permit company data without scope. Existing KetSuite
+deployments keep the default company-required session policy and their own account models.
+
+The first provisioned account creates a Member role with the sample operations. Later accounts share
+that role. Extend the role/grant policy in your module as your application grows. Disabling a user or
+changing their `securityVersion` rejects their cookie on the next request. Grants are read live.
+
+For a deployed environment, configure a stable `KET_SECRET` shared by its replicas. Local development
+uses the framework's reported ephemeral signing key, so restarting may require signing in again.
+Login accepts bounded JSON and has a durable five-attempt-per-minute limit per client. By default
+the client is the socket peer; forwarding headers are ignored.
+
+### Deploy behind a TLS proxy
+
+The edge must preserve the public Host header and enforce accepted hosts. Origin checks compare
+HTTP(S) host/port so HTTPS login/logout work even though TLS terminates before the HTTP listener.
+Different hosts, ports and opaque origins are refused. Cookie-authenticated note writes still
+require an Origin header or same-origin browser metadata.
+Set `serve.sessions.secure: true` for HTTPS deployment, even when the listener binds localhost
+behind the edge. Keep non-secure cookies only for local HTTP development.
+
+If a proxy fronts the listener, set its actual source IPs before starting:
+
+```bash
+# Run from: __NAME__
+KET_AUTH_TRUSTED_PROXIES=192.0.2.10,192.0.2.11 npm start
+```
+
+Replace those example addresses. Without this setting, every client behind the proxy shares its
+five-attempt rate window. The resolver accepts exact IPs only (including IPv6), not CIDR ranges,
+hostnames or wildcard trust. It walks `X-Forwarded-For` from the socket to the nearest untrusted
+hop; malformed chains fall back to the peer. The edge must append or replace this header and the
+listener must be restricted to that edge. Update the configured IPs if the infrastructure changes.
+The policy belongs to `ket.workspace.ts`; do not trust arbitrary client-supplied forwarding headers.
+
+## Verify and publish contracts
+
+```bash
+# Run from: __NAME__
+npm test
+npm run openapi
+npm run api:docs
+```
+
+The integration test provisions an account, logs in through HTTP, writes and reads a note, and signs
+out. The OpenAPI reference describes the protected note operations. Use the published framework
+version containing this starter; a local candidate build is not a replacement for a release.

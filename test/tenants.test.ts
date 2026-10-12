@@ -337,6 +337,7 @@ test('tenants: a session facade retains no manager from an evicted adapter', asy
 test('tenants: a session facade rejects adapter-independent policy drift after eviction', async () => {
   const manifest = compose([core])
   const drifts: Array<[string, (sessions: Sessions) => Sessions]> = [
+    ['requireCompany', (sessions) => ({ ...sessions, requireCompany: false })],
     ['store.name', (sessions) => ({ ...sessions, store: { ...sessions.store, name: 'replacement-store' } })],
     ['tenant', (sessions) => ({ ...sessions, tenant: 'other' })],
     ['ephemeralSecret', (sessions) => ({ ...sessions, ephemeralSecret: true })],

@@ -1,0 +1,248 @@
+import { randomUUID } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
+import type { SessionContext, SessionResolveContext } from '@ketvietlab/ketjs'
+import {
+  callFn,
+  defineModule,
+  eq,
+  from,
+  hashPassword,
+  inArray,
+  isSameOriginRequest,
+  json,
+  KetError,
+  verifyPassword,
+  withHeaders,
+} from '@ketvietlab/ketjs'
+
+const normalizeLogin = (value: string) => value.trim().toLowerCase()
+const loginBody = async (req: IncomingMessage): Promise<Record<string, unknown> | number> => {
+  if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] ?? ''))) return 415
+  if (Number(req.headers['content-length']) > 4096) {
+    req.resume()
+    return 413
+  }
+  const chunks: Buffer[] = []
+  let size = 0
+  try {
+    for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+      const data = Buffer.from(chunk)
+      size += data.length
+      if (size > 4096) {
+        req.resume()
+        return 413
+      }
+      chunks.push(data)
+    }
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return 400
+    const input = value as Record<string, unknown>
+    if (
+      typeof input.login !== 'string' ||
+      typeof input.password !== 'string' ||
+      !input.login.trim() ||
+      input.login.length > 254 ||
+      Buffer.byteLength(input.password) > 1024
+    )
+      return 400
+    return input
+  } catch {
+    return 400
+  }
+}
+
+export const authModule = defineModule({
+  name: 'auth',
+  models: {
+    User: {
+      scope: 'shared',
+      fields: {
+        id: 'id',
+        login: { type: 'text', personal: true },
+        passwordHash: { type: 'text', sensitive: true },
+        active: 'bool',
+        securityVersion: 'int',
+      },
+      indexes: { login: { fields: ['login'], unique: true } },
+    },
+    Role: { scope: 'shared', fields: { id: 'id', name: 'text' } },
+    Grant: {
+      scope: 'shared',
+      fields: { id: 'id', roleId: 'ref:auth.Role', fnKey: 'text' },
+      indexes: { role_function: { fields: ['roleId', 'fnKey'], unique: true } },
+    },
+    Assignment: {
+      scope: 'shared',
+      fields: { id: 'id', userId: 'ref:auth.User', roleId: 'ref:auth.Role' },
+      indexes: { user_role: { fields: ['userId', 'roleId'], unique: true } },
+    },
+  },
+  functions: {
+    addUser: {
+      returns: 'one',
+      exposure: 'internal',
+      provision: true,
+      input: { login: 'text', password: 'text' },
+      output: { id: 'id', login: 'text' },
+      effects: [
+        'read:auth.User',
+        'write:auth.User',
+        'write:auth.Role',
+        'write:auth.Grant',
+        'write:auth.Assignment',
+      ],
+      async handler(ctx, args) {
+        const login = normalizeLogin(String(args.login))
+        const password = String(args.password)
+        if (!login || login.length > 254)
+          throw new KetError({ code: 'E_AUTH_LOGIN', message: 'login must contain 1–254 characters' })
+        if (Array.from(password).length < 15 || Buffer.byteLength(password) > 1024)
+          throw new KetError({
+            code: 'E_AUTH_PASSWORD',
+            message: 'password must contain at least 15 characters and at most 1024 UTF-8 bytes',
+          })
+        const passwordHash = await hashPassword(password)
+        const id = randomUUID()
+        await ctx.tx(async (tx) => {
+          const U = tx.table('auth.User')
+          if (await tx.db.one(from(U).where(eq(U.login, login))))
+            throw new KetError({ code: 'E_AUTH_LOGIN_EXISTS', message: 'this login is already registered' })
+          await tx.db.insert('auth.User', { id, login, passwordHash, active: true, securityVersion: 0 })
+          const role = await tx.db.insertIfAbsent('auth.Role', { id: 'member', name: 'Member' })
+          // Seed a finite grant set only when creating the role; never restore a revoked grant.
+          if ('inserted' in role && role.inserted)
+            for (const fnKey of ['auth.me', '__NAME__.list', '__NAME__.create'])
+              await tx.db.insert('auth.Grant', { id: `member:${fnKey}`, roleId: 'member', fnKey })
+          await tx.db.insert('auth.Assignment', { id: randomUUID(), userId: id, roleId: 'member' })
+        })
+        return { id, login }
+      },
+    },
+    authenticate: {
+      returns: 'one',
+      anonymous: true,
+      exposure: 'internal',
+      input: { login: 'text', password: 'text' },
+      output: { ok: 'bool', id: 'id?', login: 'text?', securityVersion: 'int?' },
+      effects: ['read:auth.User'],
+      async handler(ctx, args) {
+        const U = ctx.table('auth.User')
+        const user = await ctx.db.one(from(U).where(eq(U.login, normalizeLogin(String(args.login)))))
+        const valid = await verifyPassword(String(args.password), user ? String(user.passwordHash) : null)
+        return user?.active && valid
+          ? { ok: true, id: user.id, login: user.login, securityVersion: user.securityVersion }
+          : { ok: false }
+      },
+    },
+    session: {
+      returns: 'one',
+      exposure: 'internal',
+      input: { userId: 'id' },
+      output: { active: 'bool', securityVersion: 'int' },
+      effects: ['read:auth.User'],
+      async handler(ctx, args) {
+        const U = ctx.table('auth.User')
+        const user = await ctx.db.one(from(U).where(eq(U.id, args.userId)))
+        return { active: Boolean(user?.active), securityVersion: Number(user?.securityVersion ?? -1) }
+      },
+    },
+    permitted: {
+      returns: 'one',
+      exposure: 'internal',
+      input: { userId: 'id' },
+      output: { functions: 'json' },
+      effects: ['read:auth.Assignment', 'read:auth.Grant'],
+      async handler(ctx, args) {
+        const A = ctx.table('auth.Assignment'),
+          G = ctx.table('auth.Grant')
+        const assignments = await ctx.db.all(from(A).where(eq(A.userId, args.userId)))
+        const roleIds = [...new Set(assignments.map((assignment) => String(assignment.roleId)))]
+        if (!roleIds.length) return { functions: [] }
+        const grants = await ctx.db.all(from(G).where(inArray(G.roleId, roleIds)))
+        const functions = new Set<string>()
+        for (const grant of grants) {
+          const key = String(grant.fnKey)
+          const meta = ctx.manifest.functions[key]
+          if (meta && meta.exposure !== 'internal') functions.add(key)
+        }
+        return { functions: [...functions] }
+      },
+    },
+    me: {
+      returns: 'one',
+      input: {},
+      output: { id: 'id', login: 'text' },
+      effects: ['read:auth.User'],
+      async handler(ctx) {
+        const U = ctx.table('auth.User')
+        const user = await ctx.db.one(from(U).where(eq(U.id, ctx.actor)))
+        if (!user) throw new KetError({ code: 'E_AUTH_REQUIRED', message: 'sign in first' })
+        return user
+      },
+    },
+  },
+  routes: {
+    '/auth/login': {
+      anonymous: true,
+      handler: (ctx) => async (url, req) => {
+        if (req.method !== 'POST') return json({ error: 'POST required' }, { status: 405 })
+        if (!isSameOriginRequest(url, req, { allowMissingOrigin: true }))
+          return json({ error: 'Origin refused' }, { status: 403 })
+        const input = await loginBody(req)
+        if (typeof input === 'number') return json({ error: 'Invalid login request' }, { status: input })
+        const verdict = (await ctx.call(
+          'auth.authenticate',
+          { login: input.login, password: input.password },
+          url,
+          req,
+        )) as { ok: boolean; id?: string; login?: string; securityVersion?: number }
+        if (!verdict.ok || !verdict.id) return json({ error: 'Invalid credentials' }, { status: 401 })
+        const sessions = await ctx.sessionsOf(url, req)
+        if (!sessions)
+          throw new KetError({ code: 'E_AUTH_REQUIRED', message: 'enable sessions for this deployment' })
+        await sessions.end(req)
+        const { cookie } = await sessions.start({
+          userId: verdict.id,
+          companies: [],
+          branches: [],
+          securityVersion: verdict.securityVersion,
+        })
+        return withHeaders(json({ id: verdict.id, login: verdict.login }), {
+          'set-cookie': cookie,
+          'cache-control': 'no-store',
+        })
+      },
+    },
+    '/auth/logout': {
+      anonymous: true,
+      handler: (ctx) => async (url, req) => {
+        if (req.method !== 'POST') return json({ error: 'POST required' }, { status: 405 })
+        if (!isSameOriginRequest(url, req, { allowMissingOrigin: true }))
+          return json({ error: 'Origin refused' }, { status: 403 })
+        const sessions = await ctx.sessionsOf(url, req)
+        await sessions?.end(req)
+        return withHeaders(json({ ok: true }), {
+          ...(sessions ? { 'set-cookie': sessions.clearCookie() } : {}),
+          'cache-control': 'no-store',
+        })
+      },
+    },
+    '/auth/me': (ctx) => async (url, req) =>
+      withHeaders(json(await ctx.call('auth.me', {}, url, req)), { 'cache-control': 'no-store' }),
+  },
+})
+
+export const resolveAuthSession = async ({
+  adapter,
+  manifest,
+  record,
+}: SessionResolveContext): Promise<SessionContext | null> => {
+  const { value } = await callFn(
+    'auth.session',
+    { userId: record.userId },
+    { adapter, manifest, actor: record.userId },
+  )
+  const live = value as { active: boolean; securityVersion: number }
+  if (!live.active || live.securityVersion !== record.securityVersion) return null
+  return { company: null, companies: [], branch: null, branches: [], securityVersion: live.securityVersion }
+}
