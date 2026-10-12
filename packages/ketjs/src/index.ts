@@ -107,6 +107,7 @@ export type { HttpEndpoint, HttpRouteGroup } from './server/http-binding.ts'
 export { httpContracts, httpOpenApiDocument } from './kernel/openapi.ts'
 export type { HttpContractEntry, HttpOpenApiOptions } from './kernel/openapi.ts'
 export { createKetServer, statusForError, wantsHtml } from './server/http.ts'
+export { hashPassword, verifyPassword } from './server/password.ts'
 export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
   ServeSpec,

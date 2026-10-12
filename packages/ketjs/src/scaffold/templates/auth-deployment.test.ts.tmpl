@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { bootDeployment, callFn } from '@ketvietlab/ketjs'
+import { deployment } from '../ket.workspace.ts'
+
+test('__NAME__: provision, sign in, use the protected API and sign out', async () => {
+  const app = await bootDeployment(deployment, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
+  const at = `http://127.0.0.1:${app.port}`
+  const password = 'A local test credential only'
+  try {
+    const adapter = app.adapter
+    assert.ok(adapter)
+    assert.equal((await fetch(`${at}/api/v1/notes`)).status, 401)
+    await callFn('auth.addUser', { login: 'alice', password }, { adapter, manifest: app.manifest })
+    const login = await fetch(`${at}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'alice', password }),
+    })
+    assert.equal(login.status, 200)
+    const cookieHeader = login.headers.get('set-cookie')
+    assert.ok(cookieHeader)
+    const cookie = cookieHeader.split(';')[0]
+    assert.ok(cookie)
+    const headers = { cookie, 'content-type': 'application/json', origin: at }
+    assert.equal((await fetch(`${at}/auth/me`, { headers })).status, 200)
+    const created = await fetch(`${at}/api/v1/notes/create`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title: 'My first note' }),
+    })
+    assert.equal(created.status, 200)
+    const listed = (await fetch(`${at}/api/v1/notes`, { headers }).then((response) => response.json())) as {
+      data: Array<{ title: string }>
+    }
+    assert.equal(listed.data[0]?.title, 'My first note')
+    assert.equal((await fetch(`${at}/auth/logout`, { method: 'POST', headers })).status, 200)
+    assert.equal((await fetch(`${at}/auth/me`, { headers })).status, 401)
+  } finally {
+    await app.close()
+  }
+})

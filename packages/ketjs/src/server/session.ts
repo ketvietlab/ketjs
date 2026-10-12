@@ -16,6 +16,8 @@ export const SESSION_COOKIE = 'ket_session'
 
 export type SessionOptions = {
   store?: SessionStore
+  /** Default true. Opt out for accounts that authenticate without an organization. */
+  requireCompany?: boolean
   /** Bind records to one tenant when several tenants share the same store. */
   tenant?: string
   /**
@@ -68,6 +70,8 @@ export function parseCookies(header: string | undefined): Record<string, string>
 
 export type Sessions = {
   readonly store: SessionStore
+  /** Absent on older/custom managers means the legacy company-required policy. */
+  readonly requireCompany?: boolean
   /** Present when records in this session manager are bound to one tenant. */
   readonly tenant?: string
   /** True when the secret was generated rather than configured — see the banner. */
@@ -133,6 +137,7 @@ export function scopeForSession(record: SessionRecord | null, policy: SessionSco
 }
 
 export async function createSessions(o: SessionOptions = {}): Promise<Sessions> {
+  const requireCompany = o.requireCompany ?? true
   const now = o.now ?? (() => Date.now())
   const backingStore = o.store ?? memorySessionStore({ now })
   const belongs = (record: SessionRecord | null): record is SessionRecord =>
@@ -208,16 +213,17 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     ...(o.tenant === undefined ? {} : { tenant: o.tenant }),
     ephemeralSecret,
 
+    requireCompany,
     async start({ userId, companies, company, branch, branches, securityVersion }) {
-      if (!companies.length) {
+      if (requireCompany && !companies.length) {
         throw new KetError({
           code: 'E_SESSION_NO_COMPANY',
           message: `cannot start a session for "${userId}" with no company`,
           hint: 'grant the user at least one company first — a session that can read nothing is not a session',
         })
       }
-      const active = company ?? (companies[0] as string)
-      if (!companies.includes(active)) {
+      const active = company ?? companies[0] ?? null
+      if (active !== null && !companies.includes(active)) {
         throw new KetError({
           code: 'E_WRITE_COMPANY_NOT_READABLE',
           message: `session for "${userId}" would write to "${active}" but may only read ${companies.join(', ')}`,
@@ -226,6 +232,12 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       }
       const readableBranches = branches ?? null
       const activeBranch = branch ?? readableBranches?.[0] ?? null
+      if (!active && activeBranch) {
+        throw new KetError({
+          code: 'E_BRANCH_WITHOUT_COMPANY',
+          message: 'a branch requires an active company',
+        })
+      }
       if (activeBranch && readableBranches && !readableBranches.includes(activeBranch)) {
         throw new KetError({
           code: 'E_WRITE_BRANCH_NOT_READABLE',
@@ -256,6 +268,10 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       if (!id) return null
       const record = await store.read(id)
       if (!record) return null
+      if (requireCompany && (!record.company || !record.companies.includes(record.company))) {
+        await store.destroy(id)
+        return null
+      }
       const at = now()
       // Refreshed while in use, but never past the absolute limit: a session that
       // renews forever is a session that never ends.
@@ -286,10 +302,19 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     },
 
     update(record, context) {
-      if (!context.company || !context.companies.includes(context.company)) {
+      if (
+        (requireCompany && !context.company) ||
+        (context.company !== null && !context.companies.includes(context.company))
+      ) {
         throw new KetError({
           code: 'E_WRITE_COMPANY_NOT_READABLE',
           message: 'the active company must be one of the session readable companies',
+        })
+      }
+      if (!context.company && context.branch) {
+        throw new KetError({
+          code: 'E_BRANCH_WITHOUT_COMPANY',
+          message: 'a branch requires an active company',
         })
       }
       if (context.branch && context.branches && !context.branches.includes(context.branch)) {

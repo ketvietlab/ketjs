@@ -10,6 +10,11 @@ therefore validate the deployment artifact rather than maintaining a separate co
 
 ## Workspace selection
 
+`ket new NAME --auth=session` generates a runnable authenticated API starter with application-owned
+account/role models, stdin-based provisioning and protected sample operations. Use a matching
+CLI/runtime release containing this option. `--auth=none` (also the existing default) keeps the public
+starter. See [Authentication starter](/docs/auth-starter/) for onboarding and model ownership.
+
 Commands look for emitted workspace files in this order:
 
 1. `dist/ket.workspace.js`;

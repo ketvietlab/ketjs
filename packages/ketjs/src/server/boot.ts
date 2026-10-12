@@ -616,9 +616,9 @@ export async function bootDeployment(
           const companies = [...new Set(identity.companies)]
           if (
             !identity.userId ||
-            !companies.length ||
-            !identity.company ||
-            !companies.includes(identity.company)
+            ((serve.sessions?.requireCompany ?? true) && (!companies.length || !identity.company)) ||
+            (identity.company !== null && !companies.includes(identity.company)) ||
+            (!identity.company && Boolean(identity.branch))
           )
             return null
           const now = Date.now()
