@@ -32,11 +32,11 @@ installed KetJS CLI. Use an exact tag such as `@0.1.3` for reproducible generati
 
 ## Create an authenticated application
 
-Use a CLI and runtime release containing the auth starter (or matching candidate artifacts):
+The current coordinated release includes the auth starter. Keep the CLI and runtime on the same release:
 
 ```bash
 # Run from: /path/to/projects
-ket new notes --auth=session
+npx @ketvietlab/ketjs@latest new notes --auth=session
 cd notes
 npm install
 npm run user:add
