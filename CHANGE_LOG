@@ -315,8 +315,8 @@
       "version": "0.5.0",
       "versionCommit": "36f6406e43e5ece0425c63cdaa18239ac5bc9c92",
       "reason": "Ship the independent session-auth starter, hardened identity contracts and current-release documentation verified with candidate packages and learning labs.",
-      "auditedCommit": "7aadc9272cd9bf73098dbf1ec0954bf75e87ad6c",
-      "sourceDigest": "ca80c286857bb5fccc1d4ce6e24a9661aa868500c40eb6e0029a05e2fb9d76ac",
+      "auditedCommit": "49895d99593629ec4e0fec190e1f42636cfd84e5",
+      "sourceDigest": "6295ea38cad3ac7737f6d3e2b1beaff3505cebe3c20a8a6756c9e53b60b014e4",
       "evidence": {
         "version": "0.5.0",
         "mode": "candidate",
@@ -491,37 +491,37 @@
             "id": "docs-lock",
             "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "1dc348a1b27da91022f33f05711e402b5071917bc6bc1ebeed7fcd835a42723e"
+            "logSha256": "e40b310e9cff05ae259c8c420b7a138b6e9d2e2807cd438beee9efd376dcaa83"
           },
           {
             "id": "docs-install",
             "command": "npm ci --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "600bb7d24820eff3466d139a6e86ad0a556c96a6c459d13fa168332c5cb6f2d1"
+            "logSha256": "7719d91aed83c6458ec2c21b5a7755daa8294b71f927917a85fff36cc63e1c6c"
           },
           {
             "id": "api-lock",
             "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "d41dc9109de0487c3563b29a59986eb25e6840df747c3adbc9b2791ef30c7aca"
+            "logSha256": "596e86f04ce5c98500d5322107ce5359085baa0cc67fad85a45cbd6625bfe4a5"
           },
           {
             "id": "api-install",
             "command": "npm ci --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "d013471c47abf0dcb4cf9730396b80bd54239b16bca144bb5ea878f5671b0067"
+            "logSha256": "4fef216d7c3292a877bf6e8bfa39e9ef4cd88557d71cb3622111131018b1675c"
           },
           {
             "id": "view-lock",
             "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "e53e99b457104b82500e0f43efb84889e1208e1febcb76f9375f897475a610f2"
+            "logSha256": "bebd9c3802d1ee5c48862ca7b0c78de9704a99e1953806458bb6073f08f323ac"
           },
           {
             "id": "view-install",
             "command": "npm ci --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "f0c10480a66a6a6fa1045dec03f6b165b00f6a1913f580d862ae5370208de14d"
+            "logSha256": "bd461fda55a21d803f5ff8d272eeef883a9df558dfa15547d7f47099b8c66598"
           },
           {
             "id": "docs-audit",
@@ -533,7 +533,7 @@
             "id": "docs-tests",
             "command": "node --test test/release.test.mjs test/content.test.mjs test/navigation.test.mjs test/search.test.mjs test/playground.test.mjs test/learning-data.test.mjs",
             "exitCode": 0,
-            "logSha256": "822c997044033beae7c400798d4999f26e0d0740295602eb245dfe7cf9532cfa"
+            "logSha256": "23ee4298012bca16a5d240ce340dae1f57870930b8c698955385d1a2d0daf8cd"
           },
           {
             "id": "docs-check",
@@ -545,19 +545,19 @@
             "id": "docs-build",
             "command": "npm run build",
             "exitCode": 0,
-            "logSha256": "1824661585a3c7be2739f7d468191235a19494ae4b49e220f19589d8c6deef46"
+            "logSha256": "1e8c8015a3e5c2b5e0381d7d3e4bbc759a8acbfa07c99cfe34025ad966d3e05a"
           },
           {
             "id": "api-check",
             "command": "npm run check",
             "exitCode": 0,
-            "logSha256": "8ef93b623ac8b4251a8ce90d1ab04b41093f7360c38424bac76acf545c99ec3a"
+            "logSha256": "4ab615bf18f8c430059565fd67709d768117ccbde8f26163c9618a40cb356f43"
           },
           {
             "id": "api-tests",
             "command": "node --test dist/test/deployment.test.js dist/test/isolation.test.js dist/test/jobs.test.js",
             "exitCode": 0,
-            "logSha256": "024f184a2ca84246235e3770d66be652f2f28948ca645eee69d5d6e8a55caa93"
+            "logSha256": "c92c4744f1d78313e9d623d7054f90dfdd14c3082b7682accb51fc17ad50d87c"
           },
           {
             "id": "view-check",
@@ -569,43 +569,43 @@
             "id": "view-build",
             "command": "npm run build",
             "exitCode": 0,
-            "logSha256": "00d79d08bc365adff66d3275eedcb69889406f96d02357e9127efc24f77416e2"
+            "logSha256": "b44ae19fceddb1b45b3c40b31544fa620cb4de0ee7d6e31a2ad18d83d19c0f83"
           },
           {
             "id": "download-api-lock",
             "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "b39c0a91b146648869f6c4ee1c5a9fbd7686b88d790a48ac7666091a45be4fb6"
+            "logSha256": "f343a5f7b130ee36487c2240b49becaab92f51f8533b4351eddff7af321860aa"
           },
           {
             "id": "download-api-install",
             "command": "npm ci --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "f0a76d538b4d9275e74a2fad768257448ab6667cb77de710298a8b6b528d058f"
+            "logSha256": "5378b5c0c83dbce409dbe5eb97cc04c2749d703291c225eac11f5f3bb9617096"
           },
           {
             "id": "download-api-check",
             "command": "npm run check",
             "exitCode": 0,
-            "logSha256": "adb69fec86e31a3c1cb5a486c71bdeb142505992c8fcd70fb74fe1fe89e5d37c"
+            "logSha256": "bfd2a4125a3c67651e9d3c35b12e52f323c7812192a11a9ac1967250319c9149"
           },
           {
             "id": "download-api-tests",
             "command": "node --test dist/test/deployment.test.js dist/test/isolation.test.js dist/test/jobs.test.js",
             "exitCode": 0,
-            "logSha256": "fbaf4bd8d425edf17e2d805a2f0d2d17e3ac3f1b3402d6ef89f525e1e30c4832"
+            "logSha256": "602cde3ba52e21eb088a93ad26df4dc2c2972f7ed248e2aabb40e728f1e44bf1"
           },
           {
             "id": "download-view-lock",
             "command": "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "e17a502f151fdeff943c60fab3ac87ee2a27280b6fa30698c078d5d1945837bb"
+            "logSha256": "e83d3724e4c6d90b1d19541d397caa4213dc087ab56e89f1f4c45d68cb0a6032"
           },
           {
             "id": "download-view-install",
             "command": "npm ci --ignore-scripts --no-audit --no-fund",
             "exitCode": 0,
-            "logSha256": "6b6784995abd110842da5c8d9ff254c87d655ec0a8916e391b8e6e8b1f46bffc"
+            "logSha256": "a87a29942702a4f45549456713040221da22405a989351e9ca32ca6d20387c49"
           },
           {
             "id": "download-view-check",
@@ -617,7 +617,7 @@
             "id": "download-view-build",
             "command": "npm run build",
             "exitCode": 0,
-            "logSha256": "efe4acb09b4b6811f19da7a282ade6e716e860d7bfc57c17f39bac46ec26c793"
+            "logSha256": "bf1d0805443416a0106428696b49259cf494a2321c93cca259e0b403a64449e5"
           }
         ]
       }
