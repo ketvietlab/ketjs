@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { request as httpRequest } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { after, before, test } from 'node:test'
@@ -22,8 +23,14 @@ before(async () => {
     encoding: 'utf8',
   })
   assert.equal(built.status, 0, built.stdout + built.stderr)
-  deployment = (await import(pathToFileURL(join(dir, 'dist/ket.workspace.js')).href))
-    .deployment as DeploymentSpec
+  const previous = process.env.KET_AUTH_TRUSTED_PROXIES
+  try {
+    delete process.env.KET_AUTH_TRUSTED_PROXIES
+    deployment = (await import(pathToFileURL(join(dir, 'dist/ket.workspace.js')).href))
+      .deployment as DeploymentSpec
+  } finally {
+    if (previous !== undefined) process.env.KET_AUTH_TRUSTED_PROXIES = previous
+  }
 })
 
 after(async () => {
@@ -32,6 +39,30 @@ after(async () => {
 
 const start = () => bootDeployment(deployment, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
 const at = (app: BootedDeployment, path: string) => `http://127.0.0.1:${app.port}${path}`
+const proxyPost = (app: BootedDeployment, path: string, origin: string, cookie?: string, body?: string) =>
+  new Promise<{ status: number; cookie?: string }>((resolve, reject) => {
+    const req = httpRequest(
+      at(app, path),
+      {
+        method: 'POST',
+        headers: {
+          host: 'app.example.com',
+          origin,
+          'content-type': 'application/json',
+          ...(cookie ? { cookie } : {}),
+        },
+      },
+      (response) => {
+        response.resume()
+        response.on('error', reject)
+        response.on('end', () =>
+          resolve({ status: response.statusCode ?? 0, cookie: response.headers['set-cookie']?.[0] }),
+        )
+      },
+    )
+    req.on('error', reject)
+    req.end(body)
+  })
 const provision = (app: BootedDeployment, login: string) =>
   callFn('auth.addUser', { login, password }, { adapter: app.adapter!, manifest: app.manifest })
 const login = async (app: BootedDeployment, user: string): Promise<string> => {
@@ -190,4 +221,222 @@ test('auth scaffold: its runnable OpenAPI command documents cookie security', as
   })
   assert.deepEqual(spec.paths['/api/v1/notes'].get.security, [{ sessionAuth: [] }])
   assert.deepEqual(spec.paths['/api/v1/notes/create'].post.security, [{ sessionAuth: [] }])
+})
+
+test('auth scaffold: HTTPS origins work through a TLS-terminating proxy for login and logout', async () => {
+  const app = await start()
+  try {
+    await provision(app, 'alice')
+    const response = await proxyPost(
+      app,
+      '/auth/login',
+      'https://app.example.com',
+      undefined,
+      JSON.stringify({ login: 'alice', password }),
+    )
+    assert.equal(response.status, 200)
+    const cookie = response.cookie?.split(';')[0]
+    assert.ok(cookie)
+    const created = await proxyPost(
+      app,
+      '/api/v1/notes/create',
+      'https://app.example.com',
+      cookie,
+      JSON.stringify({ title: 'TLS proxy note' }),
+    )
+    assert.equal(created.status, 200, 'cookie-bound writes use the same proxy-compatible origin policy')
+    for (const origin of ['https://other.example.com', 'null', 'https://app.example.com:8443']) {
+      const refused = await proxyPost(app, '/auth/logout', origin, cookie)
+      assert.equal(refused.status, 403)
+    }
+    const loggedOut = await proxyPost(app, '/auth/logout', 'https://app.example.com', cookie)
+    assert.equal(loggedOut.status, 200)
+    assert.equal((await fetch(at(app, '/auth/me'), { headers: { cookie } })).status, 401)
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: initial concurrent reads do not reconcile or revise a freshly issued session', async () => {
+  const app = await start()
+  try {
+    await provision(app, 'alice')
+    const cookie = await login(app, 'alice')
+    assert.ok(app.adapter)
+    const writes: string[] = []
+    const original = app.adapter.run.bind(app.adapter)
+    app.adapter.run = async (sql, params) => {
+      if (/UPDATE ket_session SET\s+companies/.test(sql)) writes.push(sql)
+      return original(sql, params)
+    }
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () => fetch(at(app, '/auth/me'), { headers: { cookie } })),
+    )
+    assert.ok(responses.every((response) => response.status === 200))
+    const rows = await app.adapter.all('SELECT revision, branches FROM ket_session')
+    assert.equal(rows[0]?.revision, 0)
+    assert.equal(rows[0]?.branches, '[]')
+    assert.equal(writes.length, 0, 'no context-update queries on initial reads')
+    app.adapter.run = original
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: multiple roles use one grants query and return only finite public permissions', async () => {
+  const app = await start()
+  try {
+    const user = (await provision(app, 'alice')).value as { id: string }
+    assert.ok(app.adapter)
+    for (const roleId of ['extra-one', 'extra-two']) {
+      await app.adapter.run('INSERT INTO auth_role (id, name) VALUES (?, ?)', [roleId, roleId])
+      await app.adapter.run('INSERT INTO auth_assignment (id, userId, roleId) VALUES (?, ?, ?)', [
+        roleId,
+        user.id,
+        roleId,
+      ])
+      for (const fn of ['starter.list', 'auth.me', 'auth.authenticate', 'missing.function']) {
+        await app.adapter.run('INSERT INTO auth_grant (id, roleId, fnKey) VALUES (?, ?, ?)', [
+          `${roleId}:${fn}`,
+          roleId,
+          fn,
+        ])
+      }
+    }
+    let queries = 0
+    const original = app.adapter.all.bind(app.adapter)
+    app.adapter.all = async (sql, params) => {
+      if (/auth_grant/.test(sql)) queries++
+      return original(sql, params)
+    }
+    const result = await callFn(
+      'auth.permitted',
+      { userId: user.id },
+      {
+        adapter: app.adapter,
+        manifest: app.manifest,
+      },
+    )
+    app.adapter.all = original
+    assert.deepEqual((result.value as { functions: string[] }).functions.sort(), [
+      'auth.me',
+      'starter.create',
+      'starter.list',
+    ])
+    assert.equal(queries, 1)
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: logout without a session manager omits Set-Cookie', async () => {
+  const app = await bootDeployment(
+    {
+      ...deployment,
+      serve: {
+        ...deployment.serve,
+        sessions: undefined,
+        resolveSession: undefined,
+        resolveIdentity: async () => null,
+      },
+    },
+    { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } },
+  )
+  try {
+    const response = await fetch(at(app, '/auth/logout'), { method: 'POST' })
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('set-cookie'), null)
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: provisioning preserves a UTF-8 password split between stdin chunks', async () => {
+  const database = join(dir, 'split-password.sqlite')
+  const credential = 'Mật khẩu tiếng Việt nhiều byte 🔑'
+  const input = Buffer.from(JSON.stringify({ login: 'unicode', password: credential }))
+  const split = input.indexOf(Buffer.from('ậ')) + 1
+  assert.ok(split > 0)
+  const child = spawn(process.execPath, ['tools/provision.mjs'], {
+    cwd: dir,
+    env: { ...process.env, DATABASE_URL: undefined, KET_SQLITE: database, KET_LOG: 'null' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  let output = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk
+  })
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk
+  })
+  const finished = new Promise<number>((resolve, reject) => {
+    child.on('error', reject)
+    child.on('exit', (code) => resolve(code ?? 1))
+  })
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  child.stdin.write(input.subarray(0, split))
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  child.stdin.end(input.subarray(split))
+  assert.equal(await finished, 0, output)
+  assert.ok(!output.includes(credential))
+  assert.ok(!output.includes('scrypt$'))
+  const app = await bootDeployment(deployment, { port: 0, env: { KET_SQLITE: database, KET_LOG: 'null' } })
+  try {
+    const response = await fetch(at(app, '/auth/login'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'unicode', password: credential }),
+    })
+    assert.equal(response.status, 200)
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: forged forwarding headers cannot bypass the default peer rate limit', async () => {
+  const app = await start()
+  try {
+    for (let index = 0; index < 6; index++) {
+      const response = await fetch(at(app, '/auth/login'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': `198.51.100.${index + 1}` },
+        body: '{}',
+      })
+      assert.equal(response.status, index < 5 ? 400 : 429)
+    }
+  } finally {
+    await app.close()
+  }
+})
+
+test('auth scaffold: configured trusted proxies keep client rate windows separate and ignore injected leftmost hops', async () => {
+  const previous = process.env.KET_AUTH_TRUSTED_PROXIES
+  let trusted: DeploymentSpec
+  try {
+    process.env.KET_AUTH_TRUSTED_PROXIES = '127.0.0.1, ::1'
+    trusted = (await import(`${pathToFileURL(join(dir, 'dist/ket.workspace.js')).href}?trusted-proxy`))
+      .deployment
+  } finally {
+    if (previous === undefined) delete process.env.KET_AUTH_TRUSTED_PROXIES
+    else process.env.KET_AUTH_TRUSTED_PROXIES = previous
+  }
+  const app = await bootDeployment(trusted, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
+  try {
+    const post = (forwarded: string) =>
+      fetch(at(app, '/auth/login'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': forwarded },
+        body: '{}',
+      })
+    for (let index = 0; index < 5; index++) assert.equal((await post('198.51.100.1')).status, 400)
+    assert.equal((await post('198.51.100.1')).status, 429)
+    assert.equal((await post('198.51.100.2')).status, 400, 'another client still has its own rate window')
+    assert.equal(
+      (await post('203.0.113.9, 198.51.100.1')).status,
+      429,
+      'untrusted clients cannot replace their own address',
+    )
+  } finally {
+    await app.close()
+  }
 })

@@ -33,6 +33,7 @@ HTTP signup/provision endpoint. The API runs on `http://127.0.0.1:3000` with SQL
 
 The module name `auth` is reserved in this preset; choose a different application identifier.
 Omitting `--auth` or selecting `--auth=none` preserves the existing public starter.
+Bare `--auth` selects session auth without consuming the project name or the next option.
 
 ## What is generated
 
@@ -71,8 +72,9 @@ curl --cookie .ket/cookies --request POST http://127.0.0.1:3000/auth/logout
 Signed-in users see their own notes. Anonymous requests and forged development identity headers
 cannot reach these operations. Credential checking and provision functions use `exposure: 'internal'`
 and do not appear on generic HTTP or agent surfaces. Native auth routes own JSON parsing, same-origin
-checks and response shaping. Login accepts at most 4096 body bytes and uses the durable per-peer
-five-attempt-per-minute rate policy before credential hashing.
+checks and response shaping. Login accepts at most 4096 body bytes and uses a durable
+five-attempt-per-minute rate policy before credential hashing. With no trusted proxies configured,
+the key is the socket peer; see the proxy configuration below before deploying behind an ingress.
 
 Cookie-authenticated writes through HTTP bindings require a same-origin request. Browsers supply the
 origin; command-line clients must send it explicitly, as in the create example above. The starter
@@ -97,7 +99,9 @@ serve: {
 `resolveAuthSession` checks live account state and credential revision. Disabling an account or
 changing its `securityVersion` rejects existing sessions on the next request. The permission resolver
 reads grants live from the request's datastore; it returns a finite list, including an empty list when
-the user has no grant. Returning `null` instead would disable restriction.
+the user has no grant. Multiple roles use one combined grants query. Returning `null` instead would
+disable restriction. Issuance and live resolution both use `branches: []`, avoiding an unnecessary
+context update on the first authenticated requests.
 
 The starter authenticates an identity with no company. `requireCompany` remains `true` by default
 for existing business and KetSuite deployments. The opt-in grants no company access: a company-scoped
@@ -110,16 +114,49 @@ company. Read [Sessions and tenants](/docs/sessions-tenants/) and [Authorization
 The starter stores a `sensitive` password hash, never a plaintext password, and declares outputs that
 exclude it. `hashPassword` uses a random 16-byte salt and bounded scrypt (N=32768, r=8, p=3, 32-byte key),
 one of the [OWASP scrypt profiles](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt).
-`verifyPassword` accepts the encoded profile this helper produces and rejects malformed or unsupported
-parameters before expensive work. Passwords are limited to 1024 UTF-8 bytes without truncation or
+`verifyPassword` parses encoded parameters and accepts only (N, r, p) profiles (32768, 8, 3),
+(65536, 8, 2) and (131072, 8, 1), rejecting all other parameters before expensive work. Verification
+does not depend on which profile is currently used for new hashes. Passwords are limited to 1024 UTF-8 bytes without truncation or
 Unicode normalization. KetSuite's existing hashes and credential implementation are not replaced.
 Passing `null` as the encoded hash performs the current hashing work and returns false, so an unknown
 account does not take a fast verification path.
 
 Configure a stable `KET_SECRET` shared by replicas before deployment. The development ephemeral key
 is reported by the framework and may require signing in again after a restart. Keep cookies and
-credential input out of Git; `.ket/` is ignored in generated projects. Adapt the rate/network policy
-to the deployment; this starter does not provide MFA, password recovery or external identity providers.
+credential input out of Git; `.ket/` is ignored in generated projects. Piped provisioning preserves
+multibyte characters across input chunks and limits the original byte stream to 4096 bytes.
+This starter does not provide MFA, password recovery or external identity providers.
+
+### TLS and reverse proxies
+
+Native auth routes and cookie-bound operations use the framework's `isSameOriginRequest` helper.
+It compares HTTP(S) origin host/port rather than assuming the listener itself uses HTTPS. Preserve
+the public Host header at your TLS edge and enforce accepted hosts there. An opaque `Origin: null`,
+different host or different port is refused. Login/logout also allow non-browser clients without
+Origin or fetch metadata; cookie-authenticated API writes retain the stricter origin requirement.
+Set `serve.sessions.secure: true` for HTTPS deployments, including when the listener binds to
+localhost behind the TLS edge; local HTTP development needs non-secure cookies.
+
+When an ingress or load balancer fronts the listener, all requests have that proxy's socket IP.
+Configure the actual trusted proxy IPs so one client's five attempts do not consume everyone's
+login allowance:
+
+```bash
+# Run from: notes
+KET_AUTH_TRUSTED_PROXIES=192.0.2.10,192.0.2.11 npm start
+```
+
+Replace the example addresses with your edge's real source IPs. The workspace creates
+`createClientAddressResolver({ trustedProxies })` once when loaded. It accepts IP addresses only,
+not CIDR ranges, hostnames or wildcard trust. It ignores `X-Forwarded-For` unless the socket peer
+is trusted and then walks from the nearest hop to the first untrusted address. Injecting a fake
+leftmost address cannot replace that untrusted hop. Malformed or oversized chains fall back to
+the socket address. Without this configuration, the limit remains per proxy peer.
+
+The trusted edge must replace or append forwarding headers and the listener must be restricted
+to that edge. Never trust every address or client-supplied headers directly. If your edge's source
+IPs change, update this list before routing traffic through it. The policy is application-owned
+in `ket.workspace.ts`; existing KetSuite deployments keep their current policies.
 
 ## Verify
 

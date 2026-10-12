@@ -36,13 +36,15 @@ try {
     terminal.close()
     input = { login, password: await readPassword() }
   } else {
-    let source = ''
+    const chunks = []
+    let size = 0
     for await (const chunk of process.stdin) {
-      source += chunk
-      if (Buffer.byteLength(source) > 4096) throw new Error('Provision input exceeds 4096 bytes')
+      size += chunk.length
+      if (size > 4096) throw new Error('Provision input exceeds 4096 bytes')
+      chunks.push(chunk)
     }
     try {
-      input = JSON.parse(source)
+      input = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     } catch {
       throw new Error('Provide a JSON object with login and password on stdin')
     }

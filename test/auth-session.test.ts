@@ -173,3 +173,48 @@ test('auth sessions: gateway identities keep the company-required default', asyn
     await app.close()
   }
 })
+
+test('auth sessions: persisted and gateway contexts reject branches outside their readable set', async () => {
+  const store = memorySessionStore()
+  const sessions = await createSessions({ store, secret: 'local-test-only', requireCompany: false })
+  const issued = await sessions.start({ userId: 'u1', companies: ['c1'], branches: ['b1'] })
+  await store.updateContext(issued.record.id, 0, {
+    company: 'c1',
+    companies: ['c1'],
+    branch: 'outside',
+    branches: ['b1'],
+    securityVersion: 0,
+  })
+  assert.equal(await sessions.of(request(issued.cookie)), null)
+  assert.equal(await store.read(issued.record.id), null, 'invalid stored context is destroyed')
+
+  const app = await bootDeployment(
+    defineDeployment({
+      name: 'branch_identity',
+      modules: [domain],
+      headless: true,
+      serve: {
+        sessions: { requireCompany: false },
+        resolveIdentity: async () => ({
+          userId: 'u1',
+          company: 'c1',
+          companies: ['c1'],
+          branch: 'outside',
+          branches: ['b1'],
+        }),
+        permissions: async () => ['scope_auth.who'],
+      },
+    }),
+    { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } },
+  )
+  try {
+    const response = await fetch(`http://127.0.0.1:${app.port}/_ket/fn/scope_auth.who`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+    assert.equal(response.status, 403)
+  } finally {
+    await app.close()
+  }
+})

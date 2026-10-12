@@ -58,13 +58,30 @@ when configured with those session options and otherwise retain the company-requ
 
 `hashPassword()` and `verifyPassword()` are server-only, dependency-free primitives for new
 application-owned identity modules. They preserve the input's Unicode representation, enforce
-1–1024 UTF-8 bytes and encode the supported scrypt profile (N=32768, r=8, p=3), a 16-byte salt and a
-32-byte key. Verification accepts that profile only and rejects malformed parameters before doing
+1–1024 UTF-8 bytes and encode the current scrypt profile (N=32768, r=8, p=3), a 16-byte salt and a
+32-byte key. Verification reads the encoded parameters and accepts only the bounded profiles
+(32768, 8, 3), (65536, 8, 2) and (131072, 8, 1). Keep accepted profiles when changing the hashing
+default so existing hashes remain usable. Unsupported or malformed parameters are refused before
 expensive work. The starter applies a 15-character minimum. These additions do not replace
 KetSuite's existing credential helpers or stored hashes. The profile is one of the
 [OWASP scrypt configurations](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt).
 Pass `null` to `verifyPassword` for an unknown account: it performs the current hashing work and
 returns false rather than taking a fast missing-account path.
+
+`isSameOriginRequest(url, req)` compares the HTTP(S) origin's host and port to the request host,
+including when an edge terminates TLS. Without an Origin header it requires `Sec-Fetch-Site:
+same-origin`; `{ allowMissingOrigin: true }` also permits a non-browser request without either
+header, as used by the native login/logout routes. Cookie-bound HTTP operations keep the strict
+default. A reverse proxy must preserve the external Host header and enforce accepted hosts.
+
+`createClientAddressResolver({ trustedProxies })` returns a request-to-IP resolver. By default it
+uses the socket peer and ignores forwarding headers. With explicitly trusted proxy IP addresses,
+it walks `X-Forwarded-For` from the nearest hop until the first untrusted address; malformed chains
+fall back to the socket. The starter reads the comma-separated `KET_AUTH_TRUSTED_PROXIES` variable
+at workspace load. Configure the actual proxy IPs before using its per-client login limiter behind
+an ingress; otherwise all clients behind that ingress share a peer rate window. IP ranges, hostnames
+and wildcard trust are not accepted. The edge must append or replace forwarding headers and the
+application listener must be reachable only through that edge. See the generated deployment guide.
 
 ## Install in an existing project
 

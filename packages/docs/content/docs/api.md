@@ -71,6 +71,8 @@ Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `Permiss
 | `assertForm`, `invalidForm`, `FormValidationError` | Enforce form schemas and produce structured HTTP 422 failures. |
 | `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
 | `httpRoutes` | Publish server functions as HTTP operations with derived, checked contracts. |
+| `isSameOriginRequest` | Check origin host/port through TLS termination; cookie bindings require origin evidence by default. |
+| `createClientAddressResolver` | Resolve the socket peer or the nearest untrusted forwarded hop through explicitly trusted proxy IPs. See [Authentication starter](/docs/auth-starter/). |
 | `httpOpenApiDocument`, `httpContracts` | Generate an OpenAPI 3.1 document, or list route contracts, for one profile. |
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision`,
