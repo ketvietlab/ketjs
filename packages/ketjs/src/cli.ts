@@ -231,7 +231,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket jobs prune            apply the 7/30-day retention policy
   ket dev [--deployment X]         serve compiled output, restarting when an artifact changes
     --all                   run HTTP and worker together under this one watcher
-  ket new NAME [--dir D]    scaffold a deployment that runs
+  ket new NAME [--dir D] [--auth session|none]  scaffold a deployment that runs
 
 Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
          --module-path DIR (repeatable; KET_MODULE_PATH uses the platform path separator)
@@ -498,9 +498,29 @@ try {
   }
 
   if (cmd === 'new') {
-    const name = rest.find((a) => !a.startsWith('--'))
-    if (!name) throw new Error('usage: ket new NAME [--dir DIR]')
-    for (const line of scaffold(name, opt('dir') ?? name)) console.log(line)
+    const names: string[] = []
+    let auth = 'none'
+    let directory: string | undefined
+    for (let i = 0; i < rest.length; i++) {
+      const item = rest[i] as string
+      if (item === '--') {
+        names.push(...rest.slice(i + 1))
+        break
+      }
+      if (item === '--auth') {
+        const next = rest[i + 1]
+        auth = next === 'session' || next === 'none' ? (rest[++i] as string) : 'session'
+      } else if (item.startsWith('--auth=')) auth = item.slice('--auth='.length)
+      else if (item === '--dir' || item.startsWith('--dir=')) {
+        directory = item === '--dir' ? rest[++i] : item.slice('--dir='.length)
+        if (!directory || directory.startsWith('--')) throw new Error('--dir requires a directory')
+      } else if (item.startsWith('-')) throw new Error(`unknown option for ket new: ${item}`)
+      else names.push(item)
+    }
+    if (auth !== 'none' && auth !== 'session') throw new Error('--auth must be "none" or "session"')
+    if (names.length !== 1) throw new Error('usage: ket new NAME [--dir DIR] [--auth[=session|none]]')
+    const name = names[0] as string
+    for (const line of scaffold(name, directory ?? name, { auth })) console.log(line)
     process.exit(0)
   }
 

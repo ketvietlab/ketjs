@@ -100,6 +100,7 @@ export type Tenants = {
 
 type SessionFacadePolicy = {
   storeName: string
+  requireCompany: boolean
   tenant?: string
   ephemeralSecret: boolean
   clearCookie: string
@@ -108,6 +109,7 @@ type SessionFacadePolicy = {
 
 const sessionFacadePolicy = (sessions: Sessions): SessionFacadePolicy => ({
   storeName: sessions.store.name,
+  requireCompany: sessions.requireCompany ?? true,
   ...(sessions.tenant === undefined ? {} : { tenant: sessions.tenant }),
   ephemeralSecret: sessions.ephemeralSecret,
   clearCookie: sessions.clearCookie(),
@@ -119,6 +121,7 @@ const scopePolicyKey = (scope: Scope | null): string => JSON.stringify(scope)
 const assertSessionFacadePolicy = (key: string, expected: SessionFacadePolicy, sessions: Sessions): void => {
   const actual = sessionFacadePolicy(sessions)
   const changed = [
+    ...(actual.requireCompany === expected.requireCompany ? [] : ['requireCompany']),
     ...(actual.storeName === expected.storeName ? [] : ['store.name']),
     ...(actual.tenant === expected.tenant ? [] : ['tenant']),
     ...(actual.ephemeralSecret === expected.ephemeralSecret ? [] : ['ephemeralSecret']),
@@ -224,6 +227,7 @@ export function createTenants(o: {
             return body(sessions)
           })
         return {
+          requireCompany: policy.requireCompany,
           ...(policy.tenant === undefined ? {} : { tenant: policy.tenant }),
           store: {
             name: policy.storeName,
