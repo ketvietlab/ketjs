@@ -1,0 +1,46 @@
+import { randomUUID } from 'node:crypto'
+import { defineModule, eq, from, httpRoutes, KetError } from '@ketvietlab/ketjs'
+
+export default defineModule({
+  name: '__NAME__',
+  depends: ['auth'],
+  models: {
+    Note: {
+      scope: 'shared',
+      fields: { id: 'id', ownerId: 'ref:auth.User', title: 'text', body: 'text?' },
+      indexes: { owner: { fields: ['ownerId'] } },
+    },
+  },
+  functions: {
+    list: {
+      input: {},
+      output: { id: 'id', title: 'text', body: 'text?' },
+      returns: 'many',
+      effects: ['read:__NAME__.Note'],
+      handler: (ctx) => {
+        if (!ctx.actor) throw new KetError({ code: 'E_AUTH_REQUIRED', message: 'sign in first' })
+        const N = ctx.table('__NAME__.Note')
+        return ctx.db.all(from(N).where(eq(N.ownerId, ctx.actor)))
+      },
+    },
+    create: {
+      returns: 'one',
+      input: { title: 'text', body: 'text?' },
+      output: { id: 'id', title: 'text', body: 'text?' },
+      effects: ['write:__NAME__.Note'],
+      async handler(ctx, args) {
+        if (!ctx.actor) throw new KetError({ code: 'E_AUTH_REQUIRED', message: 'sign in first' })
+        const note = { id: randomUUID(), ownerId: ctx.actor, title: args.title, body: args.body ?? null }
+        await ctx.db.insert('__NAME__.Note', note)
+        return note
+      },
+    },
+  },
+  routes: httpRoutes(
+    { profile: '__NAME__', prefix: '/api/v1', auth: 'required' },
+    {
+      'GET /notes': { call: '__NAME__.list', summary: 'List your notes.' },
+      'POST /notes/create': { call: '__NAME__.create', summary: 'Create your own note.' },
+    },
+  ),
+})
