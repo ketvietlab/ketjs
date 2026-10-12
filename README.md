@@ -146,11 +146,11 @@ Add `@ketvietlab/ketjs-postgres` when you need the PostgreSQL adapter.
 
 ### Authenticated API starter
 
-With a CLI/runtime release containing the session starter, add `--auth=session`:
+The current coordinated release includes the session starter. Add `--auth=session`:
 
 ```bash
 # Run from: /path/to/projects
-ket new notes --auth=session
+npx @ketvietlab/ketjs@latest new notes --auth=session
 cd notes
 npm install
 npm run user:add
