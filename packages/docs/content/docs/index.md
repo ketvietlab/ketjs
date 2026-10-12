@@ -80,10 +80,11 @@ Declare models and scopes, prepare the schema with the selected adapter, then re
 
 ### Identity and access
 
-Resolve sessions and tenant context before deciding which operations the current identity may execute. Read this group alongside data scopes when building a tenant application.
+Start an independent account application or resolve sessions and tenant context before deciding which operations the current identity may execute. Read this group alongside data scopes when building a tenant application.
 
-1. [Sessions and tenants](/docs/sessions-tenants/)
-2. [Authorization](/docs/authorization/)
+1. [Authentication starter](/docs/auth-starter/)
+2. [Sessions and tenants](/docs/sessions-tenants/)
+3. [Authorization](/docs/authorization/)
 
 </section>
 

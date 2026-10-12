@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.4.0'
+const VERSION = '0.5.0'
 const SPEC_VERSION = '0.1.41'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
@@ -36,13 +36,40 @@ const render = (template: string, name: string): string =>
     .replaceAll('__VERSION__', VERSION)
     .replaceAll('__SPEC_VERSION__', SPEC_VERSION)
 
-export function scaffold(name: string, dir: string): string[] {
+export type ScaffoldOptions = { auth?: 'none' | 'session' }
+
+export function scaffold(name: string, dir: string, options: ScaffoldOptions = {}): string[] {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) {
     throw new Error(
       `invalid deployment name "${name}" — lowercase letters, digits and underscore, starting with a letter`,
     )
   }
-  const written = LAYOUT.map(([tpl, to]) => [to(name), render(tpl, name)] as const)
+  const auth = options.auth ?? 'none'
+  if (auth !== 'none' && auth !== 'session') throw new Error('auth must be "none" or "session"')
+  if (auth === 'session' && name === 'auth')
+    throw new Error('"auth" is reserved by the session starter; choose another application name')
+  const layout = LAYOUT.map(([tpl, to]): [string, (name: string) => string] => [
+    auth === 'session' &&
+    ['module.ts.tmpl', 'ket.workspace.ts.tmpl', 'deployment.test.ts.tmpl', 'openapi.ts.tmpl'].includes(tpl)
+      ? `auth-${tpl}`
+      : tpl,
+    to,
+  ])
+  if (auth === 'session')
+    layout.push(
+      ['auth.ts.tmpl', () => 'modules/auth.ts'],
+      ['auth-provision.mjs.tmpl', () => 'tools/provision.mjs'],
+      ['auth-README.md.tmpl', () => 'README.md'],
+    )
+  const written = layout.map(([tpl, to]) => {
+    let body = render(tpl, name)
+    if (auth === 'session' && tpl === 'package.json.tmpl') {
+      const pkg = JSON.parse(body)
+      pkg.scripts['user:add'] = 'npm run build --silent && node tools/provision.mjs'
+      body = JSON.stringify(pkg, null, 2) + '\n'
+    }
+    return [to(name), body] as const
+  })
 
   // Refuse rather than overwrite: a scaffold that can eat work is not a scaffold.
   const clashes = written.map(([p]) => p).filter((p) => existsSync(join(dir, p)))
@@ -61,5 +88,11 @@ export function scaffold(name: string, dir: string): string[] {
     `  npm run openapi  # writes openapi/${name}.json`,
     '  npm run api:docs  # builds the API reference in .ket/api-docs',
   )
+  if (auth === 'session')
+    out.push(
+      '  npm run user:add  # prompts for credentials without putting them in argv',
+      '  POST /auth/login, GET /auth/me, POST /auth/logout',
+      '  See README.md for the cookie-authenticated API example.',
+    )
   return out
 }

@@ -144,6 +144,25 @@ for a reproducible scaffold.
 Already have a project? Install the framework with `npm install @ketvietlab/ketjs`.
 Add `@ketvietlab/ketjs-postgres` when you need the PostgreSQL adapter.
 
+### Authenticated API starter
+
+The current coordinated release includes the session starter. Add `--auth=session`:
+
+```bash
+# Run from: /path/to/projects
+npx @ketvietlab/ketjs@latest new notes --auth=session
+cd notes
+npm install
+npm run user:add
+npm run dev
+```
+
+The generated application owns its User, Role, Grant and Assignment models. Provisioning prompts
+for credentials, then cookie-authenticated login/logout/me routes protect an owner-filtered notes
+API. It uses no KetSuite models. The default company-required policy remains unchanged for existing
+deployments; this starter explicitly opts into companyless sessions. Follow the generated README or
+the [authentication starter guide](https://ketjs.dev/docs/auth-starter/) for the HTTP flow.
+
 ### Static site
 
 ```bash

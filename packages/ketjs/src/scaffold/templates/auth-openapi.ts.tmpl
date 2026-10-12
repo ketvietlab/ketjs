@@ -1,0 +1,14 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { compose, httpOpenApiDocument, SESSION_COOKIE } from '@ketvietlab/ketjs'
+import { deployment } from '../ket.workspace.ts'
+
+const document = httpOpenApiDocument(compose(deployment.modules, { headless: true }), {
+  profile: '__NAME__',
+  info: { title: '__NAME__ API', version: '0.0.0' },
+  securitySchemes: { sessionAuth: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE } },
+  security: [{ sessionAuth: [] }],
+})
+
+mkdirSync('openapi', { recursive: true })
+writeFileSync('openapi/__NAME__.json', `${JSON.stringify(document, null, 2)}\n`)
+console.log('wrote openapi/__NAME__.json')
