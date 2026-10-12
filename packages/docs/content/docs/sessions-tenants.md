@@ -58,7 +58,10 @@ Existing deployments require at least one readable company and an active company
 An account-based application can explicitly opt into `sessions.requireCompany: false` and start a
 session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
 reads and writes still fail without the scope those operations require. Selected companies must
-still belong to the readable set, and a branch still requires an active company.
+still belong to the readable set, and a branch still requires an active company and membership
+in the readable branch set when that set is restricted. One context validator applies at issuance,
+cookie reads, updates and gateway assertions. Invalid stored contexts are destroyed. Gateway
+assertions use the active session manager's policy; a missing policy retains the required-company default.
 
 ```ts
 // File: example-app/ket.workspace.ts
@@ -140,6 +143,10 @@ resolveSession: async ({ adapter, record }) => {
 
 Return `null` to reject the session. KetJS updates context atomically by session revision so concurrent
 company switching cannot silently overwrite newer state.
+
+Keep `branches` consistent when issuing and resolving sessions: `null` means unrestricted branches,
+while `[]` means no readable branches. The account starter uses `[]` at both points so initial
+requests do not rewrite an otherwise unchanged session or increment its context revision.
 
 ## Resolve function permissions
 

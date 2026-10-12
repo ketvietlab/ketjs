@@ -1,6 +1,13 @@
-import { defineDeployment, json } from '@ketvietlab/ketjs'
+import { createClientAddressResolver, defineDeployment, json } from '@ketvietlab/ketjs'
 import { authModule, resolveAuthSession } from './modules/auth.ts'
 import app from './modules/__NAME__.ts'
+
+const clientAddress = createClientAddressResolver({
+  trustedProxies: (process.env.KET_AUTH_TRUSTED_PROXIES ?? '')
+    .split(',')
+    .map((ip) => ip.trim())
+    .filter(Boolean),
+})
 
 export const deployment = defineDeployment({
   name: '__NAME__',
@@ -17,7 +24,7 @@ export const deployment = defineDeployment({
     },
     rateLimit: (_ctx, url, req) =>
       url.pathname === '/auth/login' && req.method === 'POST'
-        ? { action: 'auth.login', key: req.socket.remoteAddress ?? 'unknown', limit: 5, windowMs: 60_000 }
+        ? { action: 'auth.login', key: clientAddress(req), limit: 5, windowMs: 60_000 }
         : null,
     routes: (ctx) => ({ '/': async (url, req) => json(await ctx.call('__NAME__.list', {}, url, req)) }),
   },

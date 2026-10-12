@@ -104,6 +104,39 @@ export type SessionScopePolicy = {
   anonymous?: Scope | null
 }
 
+/** One membership invariant for issuance, stored cookies, reconciliation and gateway identities. */
+export function assertSessionContext(
+  context: SessionContext,
+  policy: { requireCompany?: boolean; startingUserId?: string } = {},
+): void {
+  const requireCompany = policy.requireCompany ?? true
+  if (requireCompany && !context.companies.length && policy.startingUserId !== undefined) {
+    throw new KetError({
+      code: 'E_SESSION_NO_COMPANY',
+      message: `cannot start a session for "${policy.startingUserId}" with no company`,
+      hint: 'grant the user at least one company first — a session that can read nothing is not a session',
+    })
+  }
+  if (
+    (requireCompany && !context.company) ||
+    (context.company !== null && !context.companies.includes(context.company))
+  ) {
+    throw new KetError({
+      code: 'E_WRITE_COMPANY_NOT_READABLE',
+      message: 'the active company must be one of the session readable companies',
+    })
+  }
+  if (!context.company && context.branch) {
+    throw new KetError({ code: 'E_BRANCH_WITHOUT_COMPANY', message: 'a branch requires an active company' })
+  }
+  if (context.branch && context.branches && !context.branches.includes(context.branch)) {
+    throw new KetError({
+      code: 'E_WRITE_BRANCH_NOT_READABLE',
+      message: 'the active branch must be one of the session readable branches',
+    })
+  }
+}
+
 /**
  * Turn session data into a detached request scope.
  *
@@ -215,36 +248,19 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
 
     requireCompany,
     async start({ userId, companies, company, branch, branches, securityVersion }) {
-      if (requireCompany && !companies.length) {
-        throw new KetError({
-          code: 'E_SESSION_NO_COMPANY',
-          message: `cannot start a session for "${userId}" with no company`,
-          hint: 'grant the user at least one company first — a session that can read nothing is not a session',
-        })
-      }
       const active = company ?? companies[0] ?? null
-      if (active !== null && !companies.includes(active)) {
-        throw new KetError({
-          code: 'E_WRITE_COMPANY_NOT_READABLE',
-          message: `session for "${userId}" would write to "${active}" but may only read ${companies.join(', ')}`,
-          hint: 'the active company must be one the user is a member of',
-        })
-      }
       const readableBranches = branches ?? null
       const activeBranch = branch ?? readableBranches?.[0] ?? null
-      if (!active && activeBranch) {
-        throw new KetError({
-          code: 'E_BRANCH_WITHOUT_COMPANY',
-          message: 'a branch requires an active company',
-        })
-      }
-      if (activeBranch && readableBranches && !readableBranches.includes(activeBranch)) {
-        throw new KetError({
-          code: 'E_WRITE_BRANCH_NOT_READABLE',
-          message: `session for "${userId}" would write to branch "${activeBranch}" outside its readable set`,
-          hint: 'the active branch must be one the user is a member of',
-        })
-      }
+      assertSessionContext(
+        {
+          company: active,
+          companies,
+          branch: activeBranch,
+          branches: readableBranches,
+          securityVersion: securityVersion ?? 0,
+        },
+        { requireCompany, startingUserId: userId },
+      )
       const at = now()
       const record: SessionRecord = {
         id: randomBytes(32).toString('base64url'),
@@ -268,7 +284,9 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       if (!id) return null
       const record = await store.read(id)
       if (!record) return null
-      if (requireCompany && (!record.company || !record.companies.includes(record.company))) {
+      try {
+        assertSessionContext(record, { requireCompany })
+      } catch {
         await store.destroy(id)
         return null
       }
@@ -302,27 +320,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     },
 
     update(record, context) {
-      if (
-        (requireCompany && !context.company) ||
-        (context.company !== null && !context.companies.includes(context.company))
-      ) {
-        throw new KetError({
-          code: 'E_WRITE_COMPANY_NOT_READABLE',
-          message: 'the active company must be one of the session readable companies',
-        })
-      }
-      if (!context.company && context.branch) {
-        throw new KetError({
-          code: 'E_BRANCH_WITHOUT_COMPANY',
-          message: 'a branch requires an active company',
-        })
-      }
-      if (context.branch && context.branches && !context.branches.includes(context.branch)) {
-        throw new KetError({
-          code: 'E_WRITE_BRANCH_NOT_READABLE',
-          message: 'the active branch must be one of the session readable branches',
-        })
-      }
+      assertSessionContext(context, { requireCompany })
       return store.updateContext(record.id, record.revision, context)
     },
 

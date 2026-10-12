@@ -7,6 +7,8 @@ import {
   eq,
   from,
   hashPassword,
+  inArray,
+  isSameOriginRequest,
   json,
   KetError,
   verifyPassword,
@@ -14,9 +16,6 @@ import {
 } from '@ketvietlab/ketjs'
 
 const normalizeLogin = (value: string) => value.trim().toLowerCase()
-const sameOrigin = (url: URL, req: IncomingMessage): boolean =>
-  req.headers['sec-fetch-site'] !== 'cross-site' && (!req.headers.origin || req.headers.origin === url.origin)
-
 const loginBody = async (req: IncomingMessage): Promise<Record<string, unknown> | number> => {
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] ?? ''))) return 415
   if (Number(req.headers['content-length']) > 4096) {
@@ -157,13 +156,14 @@ export const authModule = defineModule({
         const A = ctx.table('auth.Assignment'),
           G = ctx.table('auth.Grant')
         const assignments = await ctx.db.all(from(A).where(eq(A.userId, args.userId)))
+        const roleIds = [...new Set(assignments.map((assignment) => String(assignment.roleId)))]
+        if (!roleIds.length) return { functions: [] }
+        const grants = await ctx.db.all(from(G).where(inArray(G.roleId, roleIds)))
         const functions = new Set<string>()
-        for (const assignment of assignments) {
-          for (const grant of await ctx.db.all(from(G).where(eq(G.roleId, assignment.roleId)))) {
-            const key = String(grant.fnKey)
-            if (ctx.manifest.functions[key]?.exposure !== 'internal' && ctx.manifest.functions[key])
-              functions.add(key)
-          }
+        for (const grant of grants) {
+          const key = String(grant.fnKey)
+          const meta = ctx.manifest.functions[key]
+          if (meta && meta.exposure !== 'internal') functions.add(key)
         }
         return { functions: [...functions] }
       },
@@ -186,7 +186,8 @@ export const authModule = defineModule({
       anonymous: true,
       handler: (ctx) => async (url, req) => {
         if (req.method !== 'POST') return json({ error: 'POST required' }, { status: 405 })
-        if (!sameOrigin(url, req)) return json({ error: 'Origin refused' }, { status: 403 })
+        if (!isSameOriginRequest(url, req, { allowMissingOrigin: true }))
+          return json({ error: 'Origin refused' }, { status: 403 })
         const input = await loginBody(req)
         if (typeof input === 'number') return json({ error: 'Invalid login request' }, { status: input })
         const verdict = (await ctx.call(
@@ -203,6 +204,7 @@ export const authModule = defineModule({
         const { cookie } = await sessions.start({
           userId: verdict.id,
           companies: [],
+          branches: [],
           securityVersion: verdict.securityVersion,
         })
         return withHeaders(json({ id: verdict.id, login: verdict.login }), {
@@ -215,11 +217,12 @@ export const authModule = defineModule({
       anonymous: true,
       handler: (ctx) => async (url, req) => {
         if (req.method !== 'POST') return json({ error: 'POST required' }, { status: 405 })
-        if (!sameOrigin(url, req)) return json({ error: 'Origin refused' }, { status: 403 })
+        if (!isSameOriginRequest(url, req, { allowMissingOrigin: true }))
+          return json({ error: 'Origin refused' }, { status: 403 })
         const sessions = await ctx.sessionsOf(url, req)
         await sessions?.end(req)
         return withHeaders(json({ ok: true }), {
-          'set-cookie': sessions?.clearCookie() ?? '',
+          ...(sessions ? { 'set-cookie': sessions.clearCookie() } : {}),
           'cache-control': 'no-store',
         })
       },

@@ -58,8 +58,31 @@ changing their `securityVersion` rejects their cookie on the next request. Grant
 
 For a deployed environment, configure a stable `KET_SECRET` shared by its replicas. Local development
 uses the framework's reported ephemeral signing key, so restarting may require signing in again.
-Login accepts bounded JSON, checks origin and has a durable five-attempt-per-minute limit per peer.
-Configure the network edge and policy for your deployment before exposing it publicly.
+Login accepts bounded JSON and has a durable five-attempt-per-minute limit per client. By default
+the client is the socket peer; forwarding headers are ignored.
+
+### Deploy behind a TLS proxy
+
+The edge must preserve the public Host header and enforce accepted hosts. Origin checks compare
+HTTP(S) host/port so HTTPS login/logout work even though TLS terminates before the HTTP listener.
+Different hosts, ports and opaque origins are refused. Cookie-authenticated note writes still
+require an Origin header or same-origin browser metadata.
+Set `serve.sessions.secure: true` for HTTPS deployment, even when the listener binds localhost
+behind the edge. Keep non-secure cookies only for local HTTP development.
+
+If a proxy fronts the listener, set its actual source IPs before starting:
+
+```bash
+# Run from: __NAME__
+KET_AUTH_TRUSTED_PROXIES=192.0.2.10,192.0.2.11 npm start
+```
+
+Replace those example addresses. Without this setting, every client behind the proxy shares its
+five-attempt rate window. The resolver accepts exact IPs only (including IPv6), not CIDR ranges,
+hostnames or wildcard trust. It walks `X-Forwarded-For` from the socket to the nearest untrusted
+hop; malformed chains fall back to the peer. The edge must append or replace this header and the
+listener must be restricted to that edge. Update the configured IPs if the infrastructure changes.
+The policy belongs to `ket.workspace.ts`; do not trust arbitrary client-supplied forwarding headers.
 
 ## Verify and publish contracts
 
