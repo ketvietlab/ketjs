@@ -19,7 +19,7 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
-import { createSessions, dbSessionStore, scopeForSession } from './session.ts'
+import { assertSessionContext, createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
@@ -612,15 +612,10 @@ export async function bootDeployment(
           url,
           req,
         })
+        const manager = await sessionsOf(url, req)
         if (identity) {
           const companies = [...new Set(identity.companies)]
-          if (
-            !identity.userId ||
-            !companies.length ||
-            !identity.company ||
-            !companies.includes(identity.company)
-          )
-            return null
+          if (!identity.userId) return null
           const now = Date.now()
           const asserted: SessionRecord = {
             id: `request:${identity.userId}`,
@@ -634,10 +629,14 @@ export async function bootDeployment(
             createdAt: now,
             expiresAt: now,
           }
+          try {
+            assertSessionContext(asserted, { requireCompany: manager?.requireCompany ?? true })
+          } catch {
+            return null
+          }
           requestRecords.add(asserted)
           return asserted
         }
-        const manager = await sessionsOf(url, req)
         const raw = (await manager?.of(req)) ?? null
         if (!raw || !manager || !serve.resolveSession) return raw
         const resolved = await serve.resolveSession({

@@ -52,6 +52,36 @@ Set a stable signing key in every environment:
 KET_SECRET='a-long-random-deployment-secret' ket serve
 ```
 
+### Authenticate without a company
+
+Existing deployments require at least one readable company and an active company by default.
+An account-based application can explicitly opt into `sessions.requireCompany: false` and start a
+session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
+reads and writes still fail without the scope those operations require. Selected companies must
+still belong to the readable set, and a branch still requires an active company and membership
+in the readable branch set when that set is restricted. One context validator applies at issuance,
+cookie reads, updates and gateway assertions. Invalid stored contexts are destroyed. Gateway
+assertions use the active session manager's policy; a missing policy retains the required-company default.
+
+```ts
+// File: example-app/ket.workspace.ts
+serve: {
+  sessions: { requireCompany: false, anonymous: null },
+  resolveSession: resolveAccountState,
+  permissions: resolveGrantedOperations,
+}
+```
+
+The same opt-in permits companyless `resolveIdentity` assertions when those session options are
+configured. Gateway-only deployments retain the company-required default. No account model name
+is prescribed: the application implements its live-state and permission resolvers. The
+[authentication starter](/docs/auth-starter/) generates a complete working example.
+
+Tenant session facades preserve this policy across pool eviction and reject a replacement manager
+with a different policy. Switching an existing datastore back to company-required sessions rejects
+stored companyless cookies rather than giving them an implicit company. Existing KetSuite models,
+resolvers and configuration do not need changes.
+
 If the secret is absent, KetJS generates an ephemeral value and reports it in the banner. That is
 acceptable for an isolated test, not a multi-pod deployment or restart-stable login.
 
@@ -113,6 +143,10 @@ resolveSession: async ({ adapter, record }) => {
 
 Return `null` to reject the session. KetJS updates context atomically by session revision so concurrent
 company switching cannot silently overwrite newer state.
+
+Keep `branches` consistent when issuing and resolving sessions: `null` means unrestricted branches,
+while `[]` means no readable branches. The account starter uses `[]` at both points so initial
+requests do not rewrite an otherwise unchanged session or increment its context revision.
 
 ## Resolve function permissions
 
