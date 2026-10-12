@@ -23,6 +23,7 @@ import {
 import { validateJson } from '../kernel/json-schema-subset.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { FormValidationError } from './form.ts'
+import { isSameOriginRequest } from './request.ts'
 import { json, text, withHeaders } from './respond.ts'
 import type { RouteResult } from './respond.ts'
 import type { Route, ServeContext } from './boot.ts'
@@ -217,18 +218,6 @@ const isJsonType = (header: unknown): boolean => {
  * on one must know the page asking is this site's own. A bearer token does not
  * ride along, which is why only a cookie session is checked.
  */
-const sameOrigin = (url: URL, req: IncomingMessage): boolean => {
-  const origin = req.headers.origin
-  if (origin !== undefined) {
-    try {
-      return new URL(origin).host === url.host
-    } catch {
-      return false // `Origin: null` comes from a sandboxed or opaque page
-    }
-  }
-  return req.headers['sec-fetch-site'] === 'same-origin'
-}
-
 const readBody = async (req: IncomingMessage, maxBytes: number): Promise<Buffer> => {
   const declared = Number(req.headers['content-length'])
   if (Number.isFinite(declared) && declared > maxBytes) throw new Refusal(413, 'E_PAYLOAD_TOO_LARGE')
@@ -406,7 +395,7 @@ async function answer(
     const identity = await ctx.requestIdentityOf(url, req)
     if (b.auth === 'required' && !identity) throw new Refusal(401, 'E_HTTP_UNAUTHENTICATED')
     if (identity?.origin === 'session' && b.method !== 'GET') {
-      if (!sameOrigin(url, req)) throw new Refusal(403, 'E_HTTP_CSRF')
+      if (!isSameOriginRequest(url, req)) throw new Refusal(403, 'E_HTTP_CSRF')
       if (BODY_METHODS.has(b.method) && !isJsonType(req.headers['content-type']))
         throw new Refusal(415, 'E_HTTP_CONTENT_TYPE')
     }
