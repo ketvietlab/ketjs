@@ -1,0 +1,66 @@
+// Credentials enter the provision command through stdin, never argv or environment.
+import { spawn } from 'node:child_process'
+import { emitKeypressEvents } from 'node:readline'
+import { createInterface } from 'node:readline/promises'
+import { fileURLToPath } from 'node:url'
+
+const readPassword = () =>
+  new Promise((resolve, reject) => {
+    let password = ''
+    const done = (error) => {
+      process.stdin.off('keypress', onKey)
+      process.stdin.setRawMode(false)
+      process.stdin.pause()
+      process.stdout.write('\n')
+      if (error) reject(error)
+      else resolve(password)
+    }
+    const onKey = (text, key) => {
+      if (key.ctrl && key.name === 'c') return done(new Error('Provisioning cancelled'))
+      if (key.name === 'return' || key.name === 'enter') return done()
+      if (key.name === 'backspace') password = Array.from(password).slice(0, -1).join('')
+      else if (!key.ctrl && !key.meta && text) password += text
+    }
+    process.stdout.write('Password (at least 15 characters; hidden): ')
+    emitKeypressEvents(process.stdin)
+    process.stdin.setRawMode(true)
+    process.stdin.on('keypress', onKey)
+    process.stdin.resume()
+  })
+
+try {
+  let input
+  if (process.stdin.isTTY) {
+    const terminal = createInterface({ input: process.stdin, output: process.stdout })
+    const login = await terminal.question('Login: ')
+    terminal.close()
+    input = { login, password: await readPassword() }
+  } else {
+    let source = ''
+    for await (const chunk of process.stdin) {
+      source += chunk
+      if (Buffer.byteLength(source) > 4096) throw new Error('Provision input exceeds 4096 bytes')
+    }
+    try {
+      input = JSON.parse(source)
+    } catch {
+      throw new Error('Provide a JSON object with login and password on stdin')
+    }
+  }
+  if (!input || typeof input.login !== 'string' || typeof input.password !== 'string')
+    throw new Error('Provide a JSON object with login and password on stdin')
+  const cli = fileURLToPath(new URL('../node_modules/@ketvietlab/ketjs/dist/cli.js', import.meta.url))
+  const child = spawn(
+    process.execPath,
+    [cli, 'provision', 'auth.addUser', '--workspace', 'dist/ket.workspace.js', '--input', '-'],
+    { stdio: ['pipe', 'inherit', 'inherit'] },
+  )
+  child.stdin.end(JSON.stringify({ login: input.login, password: input.password }))
+  process.exitCode = await new Promise((resolve, reject) => {
+    child.on('error', reject)
+    child.on('exit', (code) => resolve(code ?? 1))
+  })
+} catch (error) {
+  console.error(error instanceof Error ? error.message : 'Provisioning failed')
+  process.exitCode = 1
+}

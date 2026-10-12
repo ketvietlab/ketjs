@@ -84,6 +84,7 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | API | Purpose |
 | --- | --- |
 | `createSessions`, `memorySessionStore`, `dbSessionStore` | Create signed sessions over memory or database storage. |
+| `hashPassword`, `verifyPassword` | Server-only bounded scrypt primitives for application-owned credential models. See [Authentication starter](/docs/auth-starter/). |
 | `parseCookies`, `SESSION_COOKIE` | Parse cookies and reference the framework session-cookie name. |
 | `createStreams`, `memoryStreamStore`, `dbStreamStore` | Create resumable stream writers and backing stores. |
 | `createQueue`, `queueFor`, `JOB_CHANNEL` | Manage durable job state and queue wake-up channels. |

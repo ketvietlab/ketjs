@@ -30,6 +30,42 @@ Application names use lowercase letters, digits, and underscores and must start 
 Keep `@latest` when scaffolding inside another project so npm does not reuse an older locally
 installed KetJS CLI. Use an exact tag such as `@0.1.3` for reproducible generation.
 
+## Create an authenticated application
+
+Use a CLI and runtime release containing the auth starter (or matching candidate artifacts):
+
+```bash
+# Run from: /path/to/projects
+ket new notes --auth=session
+cd notes
+npm install
+npm run user:add
+npm run dev
+```
+
+`user:add` reads a login and hidden password; automated input goes through stdin, not argv.
+The generated app owns the auth models and native `/auth/login`, `/auth/logout` and `/auth/me`
+routes. Credentials and provisioning functions are internal, and the protected sample API filters
+notes by their actor. No KetSuite dependency is installed. See the generated README and
+[Authentication starter](../docs/content/docs/auth-starter.md).
+
+Session authentication and company scope are separate with the explicit opt-in
+`serve.sessions.requireCompany: false`. The default is `true`, preserving existing KetSuite and
+business deployments. An identity without company scope still cannot read or write company-scoped data.
+An explicit permission resolver remains required for role-based authorization; `[]` grants no
+protected operations, while `null` disables restriction. Gateway identities use the same policy
+when configured with those session options and otherwise retain the company-required default.
+
+`hashPassword()` and `verifyPassword()` are server-only, dependency-free primitives for new
+application-owned identity modules. They preserve the input's Unicode representation, enforce
+1–1024 UTF-8 bytes and encode the supported scrypt profile (N=32768, r=8, p=3), a 16-byte salt and a
+32-byte key. Verification accepts that profile only and rejects malformed parameters before doing
+expensive work. The starter applies a 15-character minimum. These additions do not replace
+KetSuite's existing credential helpers or stored hashes. The profile is one of the
+[OWASP scrypt configurations](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt).
+Pass `null` to `verifyPassword` for an unknown account: it performs the current hashing work and
+returns false rather than taking a fast missing-account path.
+
 ## Install in an existing project
 
 ```bash

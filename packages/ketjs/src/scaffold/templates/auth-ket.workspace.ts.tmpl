@@ -1,0 +1,26 @@
+import { defineDeployment, json } from '@ketvietlab/ketjs'
+import { authModule, resolveAuthSession } from './modules/auth.ts'
+import app from './modules/__NAME__.ts'
+
+export const deployment = defineDeployment({
+  name: '__NAME__',
+  modules: [authModule, app],
+  headless: true,
+  serve: {
+    sessions: { requireCompany: false, anonymous: null },
+    resolveSession: resolveAuthSession,
+    permissions: async (ctx, userId, url, req) => {
+      const result = (await ctx.callUnchecked('auth.permitted', { userId }, url, req)) as {
+        functions: string[]
+      }
+      return result.functions
+    },
+    rateLimit: (_ctx, url, req) =>
+      url.pathname === '/auth/login' && req.method === 'POST'
+        ? { action: 'auth.login', key: req.socket.remoteAddress ?? 'unknown', limit: 5, windowMs: 60_000 }
+        : null,
+    routes: (ctx) => ({ '/': async (url, req) => json(await ctx.call('__NAME__.list', {}, url, req)) }),
+  },
+})
+
+export const deployments = [deployment]

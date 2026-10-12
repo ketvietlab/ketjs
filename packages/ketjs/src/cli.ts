@@ -231,7 +231,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket jobs prune            apply the 7/30-day retention policy
   ket dev [--deployment X]         serve compiled output, restarting when an artifact changes
     --all                   run HTTP and worker together under this one watcher
-  ket new NAME [--dir D]    scaffold a deployment that runs
+  ket new NAME [--dir D] [--auth session|none]  scaffold a deployment that runs
 
 Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
          --module-path DIR (repeatable; KET_MODULE_PATH uses the platform path separator)
@@ -498,9 +498,17 @@ try {
   }
 
   if (cmd === 'new') {
-    const name = rest.find((a) => !a.startsWith('--'))
-    if (!name) throw new Error('usage: ket new NAME [--dir DIR]')
-    for (const line of scaffold(name, opt('dir') ?? name)) console.log(line)
+    const name = positionals(['dir', 'auth'])[0]
+    if (!name) throw new Error('usage: ket new NAME [--dir DIR] [--auth session|none]')
+    const authValue = opt('auth')
+    const auth =
+      authValue !== undefined && !authValue.startsWith('--')
+        ? authValue
+        : rest.includes('--auth')
+          ? 'session'
+          : 'none'
+    if (auth !== 'none' && auth !== 'session') throw new Error('--auth must be "none" or "session"')
+    for (const line of scaffold(name, opt('dir') ?? name, { auth })) console.log(line)
     process.exit(0)
   }
 
