@@ -10,16 +10,16 @@ protected operations immediately. KetJS owns session mechanics, actor/scope reso
 enforcement. Your generated module owns account records and policy. KetSuite continues to use its own
 User, company, role and permission models with the existing company-required defaults.
 
-:::note[Release availability]
-Use a CLI and framework runtime release containing this option, or matching candidate artifacts.
-An already-published package does not gain new scaffold options when repository source changes.
+:::note[Coordinated release]
+The session starter ships with KetJS {{VERSION}}. Use the CLI and framework runtime from the same
+coordinated release; the command below selects the current version explicitly.
 :::
 
 ## Create and run
 
 ```bash
 # Run from: /path/to/projects
-ket new notes --auth=session
+npx @ketvietlab/ketjs@{{VERSION}} new notes --auth=session
 cd notes
 npm install
 npm run user:add
