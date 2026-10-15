@@ -62,6 +62,9 @@ const OrderList = ({ orders }: { orders: Order[] }) => (
 ```
 
 Stable keys let the renderer move or update existing instances instead of rebuilding the list.
+An entry whose template starts or ends with a hole, such as a fragment around one child, moves
+together with what that hole shows at the time of the move, on the server-rendered page as after a
+client render.
 
 ## Events
 
@@ -139,6 +142,11 @@ const markup = renderToString(orderCard(order))
 SSR emits comment markers around dynamic holes. `hydrateRoot()` or `mountHydrated()` adopts those
 nodes rather than creating a second tree. A mismatch throws `HydrationMismatch` with a hint when the
 HTML parser inserted implied structure such as `<tbody>`.
+
+The adopted page then behaves exactly like one the client rendered itself. A hole inside an `<svg>`
+creates its later content in the SVG namespace and a hole inside `<foreignObject>` in the HTML one,
+as the parser did on the server. Each adopted list entry keeps its position, so the first reorder
+moves only the entries that changed place.
 
 The first hydrated render is also the first reactive dependency-collection pass. The browser calls
 the view once, adopts the existing nodes during that call, and subscribes to every signal it reads.
