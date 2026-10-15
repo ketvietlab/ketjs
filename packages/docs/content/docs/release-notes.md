@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} release, independent session authentication and audited adoption.
+description: The coordinated KetJS {{VERSION}} patch release, hydration namespaces and reliable keyed moves.
 group: Project evolution
 order: 1
 ---
@@ -15,14 +15,25 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} adds
+## What {{VERSION}} fixes
+
+- **Hydrated SVG updates.** Dynamic holes retain their SVG namespace, including nested templates and keyed entries. Content inside `foreignObject` uses the HTML namespace, and its mixed-case tag no longer causes a hydration mismatch. See [Rendering](/docs/rendering/).
+- **Reliable keyed moves.** Both hydrated and client-rendered entries move the current content of top-level holes with their anchors. Reordering no longer restores removed server content or leaves current content behind.
+- **Minimal first reorder.** Adopted list entries retain their actual positions, so the first reconciliation moves only entries whose position changed.
+
+This patch keeps public APIs and application data schemas unchanged. Deploy matching server and client bundles together; see [Upgrading KetJS](/docs/upgrading/).
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-5-0"></span>
+<span id="what-0-5-0-adds"></span>
+
+## Previous release: 0.5.0
 
 - **Independent session-auth starter.** `ket new NAME --auth=session` generates application-owned User, Role, Grant and Assignment models, hidden/stdin provisioning, native login/logout/me routes and owner-filtered sample operations. There is no KetSuite dependency or default password. Bare `--auth` preserves the project name and directory options. See [Authentication starter](/docs/auth-starter/).
 - **Explicit companyless identities.** `sessions.requireCompany: false` separates authentication from company scope. The default remains company-required; the opt-in does not grant access to company data. Cookie issuance, reads, updates and gateway assertions share company/branch membership validation. See [Sessions and tenants](/docs/sessions-tenants/).
 - **Credential and proxy contracts.** The starter preserves UTF-8 credentials across stdin chunks, uses bounded scrypt verification, shares origin host/port checks through TLS termination and supports explicit trusted proxy IPs for per-client login limits. Grants use one combined query, and initial authenticated reads avoid unnecessary session-context revision updates. Existing KetSuite credential helpers and account models remain unchanged.
 - **Executable release evidence.** One root `VERSION` drives package, scaffold, docs and learning-lab mirrors. `CHANGE_LOG` records the version commit, reason and verified docs/lab/download evidence; CI rejects missing or stale evidence. See [Publishing packages](/docs/releasing/).
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-4-0"></span>
 <span id="what-0-4-0-adds"></span>
