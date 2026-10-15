@@ -130,6 +130,16 @@ class Part {
     if (this.keyed) for (const instance of this.keyed.values()) instance.dispose(false)
   }
 
+  /** Appends the nodes this part shows now, in document order. Its anchor is not one of them. */
+  collect(out: HostNode[]): void {
+    if (this.kind === 'text') {
+      if (this.node) out.push(this.node)
+    } else if (this.kind === 'result') this.child?.collect(out)
+    else if (this.kind === 'each' && this.keyed) {
+      for (const key of this.keys) this.keyed.get(key)?.collect(out)
+    } else if (this.kind === 'markup') out.push(...this.markupNodes)
+  }
+
   firstNode(): HostNode {
     if (this.kind === 'text' && this.node) return this.node
     if (this.kind === 'result' && this.child) return this.child.firstNode() ?? this.anchor
@@ -451,8 +461,26 @@ class Instance {
     return sibs[sibs.indexOf(last) + 1] ?? null
   }
 
+  /**
+   * Appends every node this instance shows now, in document order. A hole at the top
+   * of the template contributes its current content just before its anchor: `roots`
+   * holds the anchor only, because the content changes whenever the hole is patched.
+   */
+  collect(out: HostNode[]): void {
+    let atAnchor: Map<HostNode, Part> | null = null
+    for (const part of this.parts) {
+      if (part instanceof Part) (atAnchor ??= new Map()).set(part.anchor, part)
+    }
+    for (const node of this.roots) {
+      atAnchor?.get(node)?.collect(out)
+      out.push(node)
+    }
+  }
+
   moveBefore(parent: HostNode, anchor: HostNode | null): void {
-    for (const n of this.roots) this.host.move(parent, n, anchor)
+    const nodes: HostNode[] = []
+    this.collect(nodes)
+    for (const n of nodes) this.host.move(parent, n, anchor)
   }
 
   remove(): void {
@@ -530,12 +558,14 @@ const describe = (n: DomNode | null): string =>
         ? `text "${(n.data ?? '').slice(0, 20)}"`
         : `<${n.nodeName.toLowerCase()}>`
 
+/** `into` is the namespace of `parent`, as for `Instance.mount`. */
 function hydrateInstance(
   host: Host,
   strings: readonly string[],
   values: unknown[],
   parent: DomNode,
   cursor: DomNode | null,
+  into?: string,
 ): { instance: Instance; cursor: DomNode | null } {
   const instance = new Instance(host, strings)
   let c = cursor
@@ -554,7 +584,7 @@ function hydrateInstance(
       return
     }
     if (isResult(value)) {
-      const r = hydrateInstance(host, value.strings, value.values, part.parent as DomNode, c)
+      const r = hydrateInstance(host, value.strings, value.values, part.parent as DomNode, c, part.namespace)
       part.kind = 'result'
       part.child = r.instance
       c = r.cursor
@@ -571,9 +601,12 @@ function hydrateInstance(
       for (let i = 0; i < value.items.length; i++) {
         const item = value.items[i]
         const res = value.render(item, i)
-        const r = hydrateInstance(host, res.strings, res.values, part.parent as DomNode, c)
+        const r = hydrateInstance(host, res.strings, res.values, part.parent as DomNode, c, part.namespace)
         const key = value.keyOf(item, i)
         if (part.keyed.has(key)) throw new DuplicateKeyError(key)
+        // The position the next reconciliation compares against; without it every
+        // entry looks new to the reordering pass and is moved for nothing.
+        r.instance.pos = i
         part.keyed.set(key, r.instance)
         part.keys.push(key)
         c = r.cursor
@@ -593,7 +626,7 @@ function hydrateInstance(
     c = c.nextSibling
   }
 
-  const walk = (node: TplNode, target: DomNode): void => {
+  const walk = (node: TplNode, target: DomNode, namespace?: string): void => {
     const atRoot = target === parent
     if (node.type === 'text') {
       if (!c || c.nodeType !== TEXT)
@@ -609,12 +642,12 @@ function hydrateInstance(
       const opening = c
       if (atRoot) instance.roots.push(opening)
       c = c.nextSibling
-      const part = new Part(host, target, null as unknown as HostNode)
-      const startedAt = c
+      // The server parsed this hole inside an <svg> into the SVG namespace; whatever the
+      // client puts here later has to be created in it too, exactly as after a mount.
+      const part = new Part(host, target, null as unknown as HostNode, namespace)
+      // The content stays out of `roots`: it is the part's, and changes when the part is
+      // patched. A copy taken now would be moved back into the page after it was removed.
       claimValue(values[node.index], part)
-      if (atRoot && startedAt) {
-        for (let n: DomNode | null = startedAt; n && n !== c; n = n.nextSibling) instance.roots.push(n)
-      }
       if (!c || c.nodeType !== COMMENT || c.data !== HOLE_MARKER) {
         throw new HydrationMismatch('a hole', `a <!--${HOLE_MARKER}--> marker`, describe(c))
       }
@@ -625,7 +658,9 @@ function hydrateInstance(
       return
     }
     const el = node as TplEl
-    if (!c || c.nodeType !== ELEMENT || c.nodeName.toLowerCase() !== el.tag) {
+    // An SVG element keeps its case in a parsed document (`foreignObject`), and an HTML
+    // one reports upper case; the template keeps whatever the author wrote.
+    if (!c || c.nodeType !== ELEMENT || c.nodeName.toLowerCase() !== el.tag.toLowerCase()) {
       throw new HydrationMismatch('an element', `<${el.tag}>`, describe(c))
     }
     const element = c
@@ -639,11 +674,13 @@ function hydrateInstance(
     }
     const after = element.nextSibling
     c = element.firstChild
-    for (const child of el.children) walk(child, element)
+    const childNamespace =
+      el.tag === 'svg' ? SVG_NAMESPACE : el.tag === 'foreignObject' ? undefined : namespace
+    for (const child of el.children) walk(child, element, childNamespace)
     c = after
   }
 
-  for (const n of instance.tpl.children) walk(n, parent)
+  for (const n of instance.tpl.children) walk(n, parent, into)
   instance.values = values
   return { instance, cursor: c }
 }
