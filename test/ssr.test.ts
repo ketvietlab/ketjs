@@ -4,6 +4,7 @@ import { document, parseFragment } from './helpers/dom.ts'
 import type { TNode } from './helpers/dom.ts'
 import {
   HydrationMismatch,
+  SVG_NAMESPACE,
   createRoot,
   domHost,
   each,
@@ -13,7 +14,7 @@ import {
   renderToString,
   when,
 } from '@ketvietlab/ketjs-view'
-import type { HostNode } from '@ketvietlab/ketjs-view'
+import type { HostNode, TemplateResult } from '@ketvietlab/ketjs-view'
 
 type Item = { id: number; name: string }
 const list = (items: Item[]) =>
@@ -279,4 +280,109 @@ test('ssr: and the value is still escaped there', () => {
 
 test('ssr: everywhere else the markers stay, because the hydration walk counts on them', () => {
   assert.match(renderToString(html`<p>giá trị ${5}</p>`), /<!--k\[-->5<!--k-->/)
+})
+
+// Records the namespace of every element a render creates, over the test DOM.
+function namespaceDoc() {
+  const created: { tag: string; ns: string | null }[] = []
+  return {
+    created,
+    createElement: (t: string) => {
+      created.push({ tag: t, ns: null })
+      return document.createElement(t)
+    },
+    createElementNS: (ns: string, t: string) => {
+      created.push({ tag: t, ns })
+      return document.createElement(t)
+    },
+    createTextNode: (d: string) => document.createTextNode(d),
+    createComment: (d: string) => document.createComment(d),
+  }
+}
+
+test('hydration: a template patched into a server-rendered <svg> is created in the svg namespace', () => {
+  // A design-system icon is an <svg> whose glyph arrives through a hole. On the server
+  // the HTML parser puts the glyph in the SVG namespace; after hydration, a new glyph
+  // is built by the client and has to be told, or it lands in HTML and draws nothing.
+  const icon = (glyph: TemplateResult) => html`<span>${html`<svg viewBox="0 0 24 24">${glyph}</svg>`}</span>`
+  const phone = html`<path d="M1 1" />`
+  const off = html`<path d="M2 2" /><path d="M22 2 2 22" />`
+  const container = parseFragment(renderToString(icon(phone)))
+  const doc = namespaceDoc()
+  const root = hydrateRoot(domHost(doc), container as unknown as HostNode, icon(phone))
+  assert.deepEqual(doc.created, [], 'hydration adopts the server nodes')
+
+  root.render(icon(off))
+  assert.deepEqual(doc.created, [
+    { tag: 'path', ns: SVG_NAMESPACE },
+    { tag: 'path', ns: SVG_NAMESPACE },
+  ])
+})
+
+test('hydration: list entries inside an <svg> keep the namespace, and <foreignObject> content is html', () => {
+  const chart = (bars: number[], label: TemplateResult) =>
+    html`<svg>${each(
+      bars,
+      (bar) => bar,
+      (bar) => html`<rect width=${bar} />`,
+    )}<foreignObject>${label}</foreignObject></svg>`
+  const container = parseFragment(renderToString(chart([1], html`<p>${'a'}</p>`)))
+  const doc = namespaceDoc()
+  const root = hydrateRoot(domHost(doc), container as unknown as HostNode, chart([1], html`<p>${'a'}</p>`))
+
+  root.render(chart([1, 2], html`<div>${'b'}</div>`))
+  assert.deepEqual(doc.created, [
+    { tag: 'rect', ns: SVG_NAMESPACE },
+    { tag: 'div', ns: null },
+  ])
+})
+
+test('hydration: entries that shift position leave no server nodes behind', () => {
+  // A list keyed by position whose entries wrap their content, as a layout stack does:
+  // putting an entry in front makes every entry render what its neighbour had.
+  const stack = (items: TemplateResult[]) =>
+    html`<div>${each(
+      items,
+      (_, index) => index,
+      (item) => html`${item}`,
+    )}</div>`
+  const text = (value: string) => html`<span>${value}</span>`
+  const box = (value: string) => html`<section>${value}</section>`
+  const notice = (value: string) => html`<aside>${value}</aside>`
+  const container = parseFragment(renderToString(stack([text('one'), box('two')])))
+  const root = hydrateRoot(
+    domHost(document),
+    container as unknown as HostNode,
+    stack([text('one'), box('two')]),
+  )
+
+  root.render(stack([notice('zero'), text('one'), box('two')]))
+  const visible = container.innerHTML.replace(/<!--.*?-->/g, '')
+  assert.equal(visible, '<div><aside>zero</aside><span>one</span><section>two</section></div>')
+
+  root.render(stack([text('one')]))
+  assert.equal(container.innerHTML.replace(/<!--.*?-->/g, ''), '<div><span>one</span></div>')
+})
+
+test('hydration: adopted entries know their places, so the first reorder moves only what moved', () => {
+  const rows = (ids: string[]) =>
+    html`<ul>${each(
+      ids,
+      (id) => id as string,
+      (id) => html`${html`<li>${id as string}</li>`}`,
+    )}</ul>`
+  const container = parseFragment(renderToString(rows(['a', 'b', 'c'])))
+  const host = domHost(document)
+  const moved: string[] = []
+  const move = host.move.bind(host)
+  host.move = (parent, node, before) => {
+    const element = node as unknown as TNode
+    if (element.nodeType === 1) moved.push(element.innerHTML.replace(/<!--.*?-->/g, ''))
+    move(parent, node, before)
+  }
+  const root = hydrateRoot(host, container as unknown as HostNode, rows(['a', 'b', 'c']))
+
+  root.render(rows(['c', 'a', 'b']))
+  assert.equal(container.innerHTML.replace(/<!--.*?-->/g, ''), '<ul><li>c</li><li>a</li><li>b</li></ul>')
+  assert.deepEqual(moved, ['c'], 'a and b were already in order')
 })
