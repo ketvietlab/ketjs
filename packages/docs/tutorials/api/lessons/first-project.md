@@ -15,7 +15,7 @@ Use a new directory. The generator creates the package scripts and TSX configura
 
 ```bash
 # Run from: your-projects
-npx -y @ketvietlab/create-view@0.5.0 learn-view
+npx -y @ketvietlab/create-view@0.5.1 learn-view
 cd learn-view
 npm install
 npm run dev

@@ -14,7 +14,12 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The current release adds an independent [Authentication starter](/docs/auth-starter/) and explicit
+The current patch fixes hydration namespaces and keyed entry movement without changing public APIs or
+application data schemas. Rebuild and deploy matching server and client bundles together. Check SVG
+updates, HTML content inside `foreignObject`, and reordered entries whose templates start or end with
+dynamic holes. See [Rendering](/docs/rendering/) for the adopted-node contract.
+
+The 0.5.0 line adds an independent [Authentication starter](/docs/auth-starter/) and explicit
 companyless sessions. Existing deployments keep the company-required default. No account-model or
 credential migration happens automatically: KetSuite retains its own models, permission policy and
 stored hashes. Adopt the generated auth module only as an application-owned composition choice.
