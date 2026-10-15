@@ -1,2 +1,2 @@
 // Generated from /VERSION by npm run version:sync. Do not edit.
-export const frameworkVersion = '0.5.0'
+export const frameworkVersion = '0.5.1'
