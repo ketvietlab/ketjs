@@ -392,3 +392,27 @@ test('client render: svg elements are created in the svg namespace', () => {
   assert.equal(byTag('svg')?.ns, SVG_NAMESPACE)
   assert.equal(byTag('rect')?.ns, SVG_NAMESPACE)
 })
+
+test('view: a reordered entry moves the content of a hole at the top of its template', () => {
+  // An entry that is a hole and nothing else, as a JSX fragment around one child is:
+  // its own nodes are only the hole's anchor, and what shows is the hole's content.
+  const rows = (ids: string[], tag = 'li') =>
+    html`<ul>${each(
+      ids,
+      (id) => id as string,
+      (id) => html`${tag === 'li' ? html`<li>${id as string}</li>` : html`<p>${id as string}</p>`}`,
+    )}</ul>`
+  const host = countingHost()
+  const container = host.root()
+  const root = createRoot(host, container)
+  root.render(rows(['a', 'b', 'c']))
+  host.reset()
+  root.render(rows(['c', 'a', 'b']))
+  assert.equal(host.text(container), 'cab', 'the content moves with its anchor')
+  assert.equal(host.ops.createElement, 0, 'a reorder rebuilds nothing')
+
+  // Content that replaced the first render's is the content that moves.
+  root.render(rows(['c', 'a', 'b'], 'p'))
+  root.render(rows(['b', 'c', 'a'], 'p'))
+  assert.equal(host.text(container), 'bca')
+})
