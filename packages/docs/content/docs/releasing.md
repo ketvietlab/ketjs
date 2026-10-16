@@ -90,7 +90,9 @@ specified in `AGENTS.md`. Inspect scripts before running them; do not use the ag
 as a routine local test command. Documentation-only edits need content and diff checks.
 
 Broad release verification belongs to promotion into `develop` and the release pull request into
-`master`. The release gate performs formatter, lint, build, dependency, type and test checks. It also:
+`master`. The release gate performs formatter, lint, build, dependency, type and test checks; its tests
+are the HTTP and unit suite against a real Postgres. A browser suite is not a merge gate while the
+framework settles: it would run on a schedule instead. The release gate also:
 
 - verifies package metadata, repository links, license, exports, versions, and exact internal dependencies;
 - creates the same tarballs npm will receive and enforces package-size ceilings;

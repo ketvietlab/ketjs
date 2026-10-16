@@ -52,6 +52,12 @@ A framework change a consumer needs is released from this repository and then ad
   description. After review changes or a rebase, re-run checks affected by those changes.
 - The full suite runs in CI on promotion from `integration` into `develop` and on release pull
   requests into `master`. Keep that broad gate in CI; do not move it into routine local work.
+- That gate is the quality contracts plus the HTTP and unit suite (`tests`: every `test/*.test.ts`,
+  against a real Postgres), and it stays required. A browser or other end-to-end suite is **not** a
+  merge gate while the framework is still settling: it runs on a schedule, every four hours and
+  only when a branch head moved, and its result is read before merging rather than waited on. Keep
+  any such suite in its own job and workflow, apart from `tests`. The repository has no browser
+  suite today.
 
 ## Coordinated versions and audit evidence
 
