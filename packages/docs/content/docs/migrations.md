@@ -70,6 +70,11 @@ transaction shown above, the DDL rolls back and the marker remains unchanged. SQ
 catalogs are supported; a custom adapter is refused unless KetJS can verify it safely. A subsequent
 `migrateOne(adapter, manifest)` returns no operations after a successful confirmation.
 
+An index is created as `<table>__<index>`. PostgreSQL keeps only the first 63 bytes of an identifier, so a
+longer name is stored shortened; verification looks it up under that shortened name. Two indexes of one
+table whose names agree in their first 63 bytes cannot both exist on PostgreSQL, and verification reports
+the pair so one can be renamed.
+
 ## Read-only physical verification
 
 An applied marker is a claim about the database, not proof that an older framework version enforced
