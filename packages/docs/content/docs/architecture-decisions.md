@@ -964,6 +964,14 @@ decision — tightening later is not possible.
 attempting it is `E_SCOPE_FIELD_WRITTEN`. Otherwise a write could be aimed at another
 company.
 
+**A company's row cannot point at another company's row.** On every insert, upsert and
+update of a company-scoped model, a `ref:` field whose target is company-scoped is
+checked: when the referenced row exists in another company the write is refused with
+`E_CROSS_COMPANY_REFERENCE`, a dry run included. A scoped lookup usually hides the
+other company's row already; this catches the caller that can read both companies or
+never looked. An id no row holds yet is still the caller's business, and an operation
+that declares `crossCompany: true` may link legal entities.
+
 **A request with no company cannot touch company data at all** — it fails rather than
 falling back to everything, which is the failure mode that would have gone unnoticed.
 

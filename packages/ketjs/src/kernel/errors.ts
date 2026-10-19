@@ -58,6 +58,7 @@ export class Diagnostics {
 const DEFECT_CODES: ReadonlySet<string> = new Set([
   'E_EFFECT_NOT_DECLARED',
   'E_SCOPE_FIELD_WRITTEN',
+  'E_CROSS_COMPANY_REFERENCE',
   'E_UPDATE_NEEDS_WHERE',
   'E_UNKNOWN_MODEL',
   'E_UNKNOWN_RELATION',
