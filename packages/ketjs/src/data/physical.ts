@@ -171,6 +171,22 @@ const inspectTable = (adapter: Adapter, table: string): Promise<PhysicalTable | 
 
 const describeFields = (fields: string[]): string => `(${fields.join(', ')})`
 
+/**
+ * The name the catalog holds for an identifier KetJS created.
+ *
+ * PostgreSQL keeps at most 63 bytes of an identifier and silently cuts the rest at a
+ * character boundary, so an index named `<table>__<index>` past that length exists
+ * under its first 63 bytes. Looking it up by the full name would report it missing.
+ */
+const catalogName = (adapter: Adapter, name: string): string => {
+  if (adapter.name !== 'postgres') return name
+  const bytes = new TextEncoder().encode(name)
+  if (bytes.length <= 63) return name
+  let end = 63
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
+  return new TextDecoder().decode(bytes.slice(0, end))
+}
+
 /** Return every modelled difference between the physical database and `target`. */
 export async function physicalSchemaIssues(
   adapter: Adapter,
@@ -216,9 +232,20 @@ export async function physicalSchemaIssues(
         issues.push(`column ${tableName}.${columnName} still exists; expected it to be removed`)
     }
 
+    const catalogNames = new Map<string, string>()
+    for (const name of Object.keys(expected.indexes ?? {})) {
+      const physicalName = `${tableName}__${name}`
+      const held = catalogName(adapter, physicalName)
+      const other = catalogNames.get(held)
+      if (other)
+        issues.push(
+          `indexes ${other} and ${physicalName} share the name ${held} once ${adapter.name} shortens them; rename one`,
+        )
+      else catalogNames.set(held, physicalName)
+    }
     for (const [name, index] of Object.entries(expected.indexes ?? {})) {
       const physicalName = `${tableName}__${name}`
-      const held = actual.indexes[physicalName]
+      const held = actual.indexes[catalogName(adapter, physicalName)]
       if (!held) {
         issues.push(`index ${physicalName} is missing`)
         continue
@@ -240,7 +267,7 @@ export async function physicalSchemaIssues(
     }
     for (const name of Object.keys(before?.indexes ?? {})) {
       const physicalName = `${tableName}__${name}`
-      if (!expected.indexes?.[name] && actual.indexes[physicalName])
+      if (!expected.indexes?.[name] && actual.indexes[catalogName(adapter, physicalName)])
         issues.push(`index ${physicalName} still exists; expected it to be removed`)
     }
   }
