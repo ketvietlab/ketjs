@@ -409,6 +409,41 @@ export function createContext(o: {
     return out
   }
 
+  /**
+   * Refuse a reference from one company's row to another company's row.
+   *
+   * A scoped lookup normally catches this, because the other company's row reads as
+   * missing. It does not when the caller can read both companies, or never looked the
+   * reference up at all — and then the row lands pointing across a legal-entity
+   * boundary, where every later join either drops it or leaks the other side. Only a
+   * row that exists in another company is refused: an id nothing holds yet is the
+   * caller's business, as it was before. A declared crossCompany operation is exempt.
+   */
+  const refuseCrossCompanyReferences = async (model: string, row: Row): Promise<void> => {
+    if (scopeOf(model) === 'shared' || operation.crossCompany) return
+    const company = requireCompany(model)
+    const fields = manifest.models[model]?.fields ?? {}
+    for (const [field, value] of Object.entries(row)) {
+      const def = fields[field]
+      const target = def?.base === 'ref' ? def.target : undefined
+      if (!target || typeof value !== 'string' || !value || scopeOf(target) === 'shared') continue
+      const p1 = dialect === 'postgres' ? '$1' : '?'
+      const p2 = dialect === 'postgres' ? '$2' : '?'
+      const other = await adapter.all(
+        `SELECT 1 AS found FROM ${adapter.quoteIdent(tableNameFor(target))} WHERE ${adapter.quoteIdent('id')} = ${p1} AND ${adapter.quoteIdent('companyId')} <> ${p2}`,
+        [value, company],
+      )
+      if (other.length) {
+        throw new KetError({
+          code: 'E_CROSS_COMPANY_REFERENCE',
+          module: operation.by,
+          message: `"${fnKey}" writes ${model}.${field} = "${value}" in company "${company}", but that ${target} belongs to another company`,
+          hint: 'reference a row of the company being written to, or declare crossCompany: true if this really links legal entities',
+        })
+      }
+    }
+  }
+
   const timestamped = (model: string, row: Row, action: 'insert' | 'update'): Row => {
     if (!manifest.models[model]?.timestamps) return row
     const now = new Date().toISOString()
@@ -629,6 +664,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
+      await refuseCrossCompanyReferences(model, row)
       record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -651,6 +687,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
+      await refuseCrossCompanyReferences(model, row)
       record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
@@ -681,6 +718,7 @@ export function createContext(o: {
       // must reject values a real call could not store.
       validateDecimalRow(model, where)
       validateDecimalRow(model, patch)
+      await refuseCrossCompanyReferences(model, patch)
       record({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const kind = scopeOf(model)
