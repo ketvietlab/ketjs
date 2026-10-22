@@ -233,3 +233,17 @@ test('openapi: security that cannot be honoured is refused rather than omitted',
     null,
   )
 })
+
+test('openapi: every response declares the X-Request-Id header the binding sends', () => {
+  const manifest = compose([catalogue, shopApi, handwritten()], { headless: true })
+  const paths = httpOpenApiDocument(manifest, options)['paths'] as Record<
+    string,
+    Record<string, { responses: Record<string, { headers?: Record<string, unknown> }> }>
+  >
+  const responses = Object.values(paths).flatMap((methods) =>
+    Object.values(methods).flatMap((operation) => Object.entries(operation.responses)),
+  )
+  assert.ok(responses.length > 4)
+  for (const [status, response] of responses)
+    assert.ok(response.headers?.['X-Request-Id'], `status ${status} declares X-Request-Id`)
+})

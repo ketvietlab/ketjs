@@ -30,22 +30,28 @@ export function makeDrop(manifest: Manifest, viewKey: string, row: Row): Drop {
 
 /**
  * Which fields of a view-typed prop one module may read: the ones the view's owner
- * declared, plus the ones that module declared itself over the same model.
+ * declared, plus the fields that module contributed itself, when it declared them
+ * in a view of its own over the same model.
  *
  * Not simply the named view. A module that adds a field with `extend` and then
  * publishes a view over it has declared that field theme-visible, and it is the one
  * module entitled to say so — refusing it here would mean the extension pillar and
  * the view boundary could not both be true, and `inventory` adding `leadTimeDays`
  * to `catalog.Product` and reading it back in a fill is the example the framework
- * leads with. What still cannot cross is a field nobody declared anywhere.
+ * leads with. Entitled to its own fields only: a module that lists another module's
+ * field in its own view does not thereby widen what a joint hands it.
  */
 export function visibleFields(manifest: Manifest, viewKey: string, reader?: string): readonly string[] {
   const view = manifest.views[viewKey]
   if (!view) return []
   if (reader === undefined || reader === view.by) return view.fields
+  const model = manifest.models[view.of]
   const fields = new Set(view.fields)
-  for (const other of Object.values(manifest.views))
-    if (other.by === reader && other.of === view.of) for (const f of other.fields) fields.add(f)
+  for (const other of Object.values(manifest.views)) {
+    if (other.by !== reader || other.of !== view.of) continue
+    for (const f of other.fields)
+      if (model?.owner === reader || model?.fields[f]?.by === reader) fields.add(f)
+  }
   return [...fields]
 }
 

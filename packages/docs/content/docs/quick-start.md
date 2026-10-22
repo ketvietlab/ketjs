@@ -81,8 +81,9 @@ export default defineModule({
   name: 'notes',
   title: 'notes',
   models: {
+    // One global table. For rows per company, set `companies: true` on the
+    // deployment and `scope: 'company'` here.
     Note: {
-      scope: 'company',
       fields: { id: 'id', title: 'text', body: 'text?' },
     },
   },
@@ -142,27 +143,33 @@ The module appears once, in `modules`. KetJS composes it, migrates its schema, a
 Open the route:
 
 ```bash
-# Run from: /path/to/ketjs
-curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/
+# Run from: /path/to/example-app
+curl http://127.0.0.1:3000/
 ```
 
 Or call the function transport directly:
 
 ```bash
 # Run from: /path/to/example-app
-npx ket call notes.list \
-  --against http://127.0.0.1:3000 \
-  --company demo
+npx ket call notes.list --against http://127.0.0.1:3000
 ```
 
-Until an application enables sessions, the development identity shim reads company context from
-request headers. It is a development convenience, not production authentication.
+The deployment does not scope by company, so every request reads and writes one global table. Until
+an application enables sessions, `npm run dev` sets `KET_DEV=1`, and the development identity lets every
+function be called without signing in. It is a development convenience, not production authentication.
+`npm start` does not set it: every caller is anonymous and may call only functions declared
+`anonymous: true`, such as `notes.list`.
+
+For rows per company, set `companies: true` on the deployment and `scope: 'company'` on the model; see
+[company scope](/docs/models/#company-scope-is-opt-in). Requests then act in `KET_COMPANY`, `default`
+unless you set it, and under `KET_DEV=1` an `X-Ket-Company` header (`--company` for `ket call`) picks
+another company before sign-in exists.
 
 Or the published operation, which answers `{ "data": [...] }`:
 
 ```bash
 # Run from: /path/to/example-app
-curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/api/v1/notes
+curl http://127.0.0.1:3000/api/v1/notes
 ```
 
 ## Write the OpenAPI document
@@ -210,7 +217,7 @@ npx ket permissions --workspace dist/ket.workspace.js
 ## Run the test
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 npm test
 ```
 

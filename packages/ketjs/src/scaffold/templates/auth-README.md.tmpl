@@ -48,9 +48,9 @@ the actor and reads filter by that actor. Anonymous requests are refused.
 resolver. `ket.workspace.ts` connects these to KetJS with an explicit permission resolver. Returning
 an empty grant list denies protected operations; `null` would disable that restriction.
 
-The starter opts into `sessions.requireCompany: false`. Adding company-scoped models still requires
-real membership resolution; the opt-in does not permit company data without scope. Existing KetSuite
-deployments keep the default company-required session policy and their own account models.
+The deployment does not scope by company, so sessions carry no company. Company-scoped models need
+`companies: true` on the deployment. Every model then declares its scope, sessions require a company
+by default, and `resolveAuthSession` must resolve real company memberships.
 
 The first provisioned account creates a Member role with the sample operations. Later accounts share
 that role. Extend the role/grant policy in your module as your application grows. Disabling a user or

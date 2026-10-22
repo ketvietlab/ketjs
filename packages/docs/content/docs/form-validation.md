@@ -63,6 +63,10 @@ export const signupForm = defineFormSchema<Signup>({
 
 Field types are `text`, `id`, `ref`, `int`, `float`, `decimal`, `bool`, `date`, `datetime`, `json`,
 `object`, `array`, and `record`.
+An `int` value must be a plain decimal integer within the safe integer range, so `0x10`, `1e3` and `1.0`
+are issues rather than numbers. A `datetime` value must be ISO-8601 date-time text such as
+`2026-10-21T10:00`, with an optional offset; the browser's own date parser is never consulted, so the form
+accepts what the server changeset accepts.
 Constraints include `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`, and `oneOf`. Set
 `multiple: true` for repeated controls such as a multi-select. Optional empty values are omitted from the
 normalized result.
@@ -188,58 +192,21 @@ Function signature failures also return HTTP `422` with code `E_INVALID_INPUT` a
 issues. Authentication, authorization, unknown routes, and other request failures keep their existing
 status codes.
 
-## Refuse a submit on a backend screen
+## Refuse a submit on a server-rendered screen
 
-`assertForm()` and `invalidForm()` answer a program: they end the request with `422` and a JSON body.
-A KetSuite backend screen answers a person, and a person is still looking at the dialog they typed
-into — so the same submit has to re-render that dialog rather than replace it.
+`assertForm()` and `invalidForm()` answer a program: they end the request with `422` and a JSON body. A
+server-rendered screen answers a person, who is still looking at the form they typed into, so the same
+submit has to render that screen again rather than replace it:
 
-Three things have to agree for that to read correctly, and `formRefusal()` from `ketsuite/backend`
-holds all three:
+- keep the form or dialog open, and refill it with what was submitted — not the stored row, and not the
+  normalized values, because `validateForm()` drops the invalid ones that the person has to correct;
+- put each issue on the control it names, with `aria-invalid`, so it reaches a screen reader as well as
+  an eye;
+- decide that the submit was refused from the presence of any issue, not from a count of form-level
+  messages: a refusal made only of field issues has no form-level sentence to count.
 
-```ts
-// File: src/modules/example/routes.tsx
-import { formRefusal, readForm, seeOther } from '@ketvietlab/ketsuite/backend'
-
-const refused = formRefusal(_)
-if (req.method === 'POST') {
-  const form = await readForm(req)
-  // A row's own archive control posts its identity and nothing else, so it has
-  // no form to satisfy. Only an edit is checked.
-  const values = form.action === 'archive' ? form : refused.check(programmeForm, form)
-  if (values) {
-    const result = await ctx.call('example.programme.save', values)
-    if (result.ok) return seeOther(base)
-    refused.add(errorsOf(result, _))
-  }
-}
-```
-
-Then the render asks it three questions:
-
-```ts
-// File: src/modules/example/routes.tsx
-// Keep the dialog open, and keep what was typed rather than the stored row.
-const modalOpen = Boolean(create || editing || refused.refused())
-const selected = refused.refused() ? formValues : editing
-// And put each complaint on the control that caused it.
-const fields = [{ name: 'name', value: value('name'), error: refused.error('name') }]
-```
-
-`recordForm` sets `aria-invalid` on any field it is given an `error` for, so a complaint reaches a
-screen reader as well as an eye.
-
-Two details worth stating, because both have been got wrong in product code:
-
-- **`refused()` is not `errors.length`.** When every complaint is a field mark there is no
-  form-level sentence to count, so a route testing an array of sentences closes the dialog and
-  throws away what was typed — the exact failure the schema was adopted to fix.
-- **Keep your own copy of the raw submit.** `check()` hands back normalized values and *drops the
-  invalid ones*, which is right for writing and wrong for re-rendering. What a person typed is what
-  goes back into the form, including the part that was refused.
-
-The words come from `backend.validation.*`, one sentence for each code a schema can raise. A module
-adopting a schema does not define them.
+A design system built on KetJS may package these rules for its screens; such helpers are documented with
+that design system rather than here.
 
 ## Changesets and business validation
 

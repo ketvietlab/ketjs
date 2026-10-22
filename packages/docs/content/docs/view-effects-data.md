@@ -37,9 +37,9 @@ stop()
 - A write equal to the current value according to `Object.is` does not notify. Mutating an existing object in place is not a signal update; publish a new value when state changes.
 - `.peek()` reads without subscribing. Use it intentionally when a snapshot must not become a trigger.
 - A returned cleanup runs before the next execution and on `stop()`. The disposer is safe to call again.
-- A thrown synchronous callback error propagates; an effect is not an error boundary. Handle expected network and storage failures in the owning runtime.
+- A thrown synchronous callback error propagates; an effect is not an error boundary. A failure during creation is thrown by `effect()` and leaves no subscription. A failure during a later run does not stop the other effects queued by the same write: the flush completes, then the writing `.set()` or `batch()` rethrows the error, or an `AggregateError` when several effects failed. The failed effect stays subscribed and runs again on its next change. Handle expected network and storage failures in the owning runtime.
 
-Do not unconditionally read and write the same signal in an effect. Prefer a computed value for derivations; otherwise define an explicit condition that stops a feedback cycle. Dispose a computed value as well when its owner ends.
+Do not unconditionally read and write the same signal in an effect. Prefer a computed value for derivations; otherwise define an explicit condition that stops a feedback cycle. An effect that runs more than 100 times in one flush is treated as a cycle: it is skipped for the rest of that flush and reported to the writer as an error whose message starts with `signal cycle`. Dispose a computed value as well when its owner ends.
 
 ## Browser ownership and server rendering
 

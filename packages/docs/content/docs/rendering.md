@@ -14,7 +14,7 @@ template structure, so updates touch only changed holes.
 `@ketvietlab/ketjs` already depends on `@ketvietlab/ketjs-view`. Applications may also install and use the view package alone:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 npm install @ketvietlab/ketjs-view
 ```
 
@@ -111,6 +111,8 @@ total.dispose()
 - `computed()` settles before ordinary effects observe the graph.
 - `batch()` coalesces several writes into one flush.
 - `effect()` returns a disposer and may return its own cleanup callback.
+- A failing effect does not stop the others queued by the same write; the writer receives the error after the flush.
+- An effect that runs more than 100 times in one flush is reported as a `signal cycle` instead of hanging the page.
 
 For execution timing, lifecycle cleanup, async requests, SSR initial data and stale-response protection, read [Effects and data fetching](/docs/view-effects-data/). The step-by-step exercises are [Reactive effects](/learn/effects/) and [Data fetching](/learn/data-fetching/).
 
@@ -474,5 +476,40 @@ const ThemeRegion = () => <section>{trustedMarkup(compiledThemeOutput)}</section
 
 Never wrap request or database text merely to make HTML render. The trust decision must belong to the
 producer, not the final template call.
+
+A hole inside `<style>` or `<script>` is the same rule applied to code. A plain string there is escaped
+text, so it can never close the element, and CSS such as `a > b` or script such as `a && b` arrives as
+`a &gt; b` and `a &amp;&amp; b` and does not work. Write fixed CSS and script in the template itself,
+serve them as an asset, or pass trusted code through `trustedMarkup()`. Trusted code must not contain
+`</style` or `</script`, and data for a script belongs in a `<script type="application/json">`
+element whose JSON has `<` escaped. A browser reads these elements as one text node, so the server writes
+no hydration markers inside them and hydration cannot claim a hole there: render them in the page
+document, outside any island or other hydrated root:
+
+```tsx
+// File: src/ui/order-page.tsx
+import { trustedMarkup } from '@ketvietlab/ketjs-view'
+
+const PrintStyles = () => <style>{trustedMarkup(compiledPrintCss)}</style>
+```
+
+## URL attributes and inline script
+
+Escaping protects the characters of an attribute value, not what the browser does with it. A link
+bound from data could still say `javascript:` and run script with the page origin when it is followed,
+so every renderer — SSR, JSX, the client renderer and hydration — checks a value bound to `href`, `src`,
+`action`, `formaction`, `xlink:href`, `poster`, `data` or `cite`:
+
+| Bound value | Rendered |
+| --- | --- |
+| `https:`, `mailto:`, `tel:`, an app scheme, a relative URL or a fragment | Unchanged |
+| `data:image/…`, `data:video/…`, `data:audio/…` | Unchanged; inline media is inert |
+| `javascript:`, `vbscript:` or any other `data:` type, in any case and with spaces or controls inside | `unsafe:` followed by the value, which no browser follows |
+
+An attribute the author writes out in the template is markup, not data, and is left as written. Two
+bindings are refused when the template is parsed, because no check of the value can make them safe:
+`srcdoc=${...}`, whose value is a whole document, and a string inline handler such as `onclick=${...}`;
+bind a function with `on:click=${...}` instead. `safeUrl()` and `isUrlAttribute()` are exported for
+code that writes HTML without the renderer.
 
 Continue with [Themes and KTL](/ketjs/themes/) for the restricted presentation layer.

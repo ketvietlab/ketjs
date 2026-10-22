@@ -37,7 +37,11 @@ after(async () => {
   if (dir) await rm(dir, { recursive: true, force: true })
 })
 
-const start = () => bootDeployment(deployment, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
+const start = () =>
+  bootDeployment(deployment, {
+    port: 0,
+    env: { KET_SQLITE: ':memory:', KET_LOG: 'null', KET_SECRET: 'auth scaffold test secret' },
+  })
 const at = (app: BootedDeployment, path: string) => `http://127.0.0.1:${app.port}${path}`
 const proxyPost = (app: BootedDeployment, path: string, origin: string, cookie?: string, body?: string) =>
   new Promise<{ status: number; cookie?: string }>((resolve, reject) => {
@@ -340,7 +344,7 @@ test('auth scaffold: logout without a session manager omits Set-Cookie', async (
         resolveIdentity: async () => null,
       },
     },
-    { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } },
+    { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null', KET_SECRET: 'auth scaffold test secret' } },
   )
   try {
     const response = await fetch(at(app, '/auth/logout'), { method: 'POST' })
@@ -380,7 +384,10 @@ test('auth scaffold: provisioning preserves a UTF-8 password split between stdin
   assert.equal(await finished, 0, output)
   assert.ok(!output.includes(credential))
   assert.ok(!output.includes('scrypt$'))
-  const app = await bootDeployment(deployment, { port: 0, env: { KET_SQLITE: database, KET_LOG: 'null' } })
+  const app = await bootDeployment(deployment, {
+    port: 0,
+    env: { KET_SQLITE: database, KET_LOG: 'null', KET_SECRET: 'auth scaffold test secret' },
+  })
   try {
     const response = await fetch(at(app, '/auth/login'), {
       method: 'POST',
@@ -420,7 +427,10 @@ test('auth scaffold: configured trusted proxies keep client rate windows separat
     if (previous === undefined) delete process.env.KET_AUTH_TRUSTED_PROXIES
     else process.env.KET_AUTH_TRUSTED_PROXIES = previous
   }
-  const app = await bootDeployment(trusted, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
+  const app = await bootDeployment(trusted, {
+    port: 0,
+    env: { KET_SQLITE: ':memory:', KET_LOG: 'null', KET_SECRET: 'auth scaffold test secret' },
+  })
   try {
     const post = (forwarded: string) =>
       fetch(at(app, '/auth/login'), {

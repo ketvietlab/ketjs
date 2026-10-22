@@ -20,6 +20,8 @@ import { KetError } from '../kernel/errors.ts'
 import { createLogger } from './log/logger.ts'
 import type { Logger } from './log/logger.ts'
 import { nullLog } from './log/types.ts'
+import { parseDateTime } from '../data/time.ts'
+import { isDateText } from '../kernel/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import { nextSequenceNumber } from './sequence.ts'
 import { streamsOf } from './stream.ts'
@@ -29,6 +31,16 @@ import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.t
 
 /** What a sensitive value is replaced by everywhere a write record travels. */
 export const SENSITIVE_MASK = '[sensitive]'
+
+/**
+ * Whether a deployment scopes rows by company. Composition records it; a manifest
+ * built by hand says so through its models.
+ */
+export const scopesByCompany = (manifest: Manifest): boolean =>
+  manifest.companies ?? Object.values(manifest.models).some((model) => model.scope !== 'shared')
+
+/** The one scope of a deployment that does not scope by company. */
+export const globalScope = (): Scope => ({ company: null, companies: null, branch: null, branches: null })
 
 /**
  * A writer for a call that is only rehearsing.
@@ -49,6 +61,8 @@ export function createContext(o: {
   manifest: Manifest
   fnKey: string
   dryRun?: boolean
+  /** IANA timezone a `datetime` written without an offset is read in. Defaults to UTC. */
+  timezone?: string
   actor?: string | null
   correlationId?: string | null
   scope?: Scope
@@ -71,8 +85,12 @@ export function createContext(o: {
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const root = o.root ?? adapter
-  const scope: Scope = o.scope ?? { company: null, branches: null }
+  // Without companies there is one global scope, whatever the caller passed: a
+  // company named anyway would still split sequences and job keys per company.
+  const companies = scopesByCompany(manifest)
+  const scope: Scope = companies ? (o.scope ?? { company: null, branches: null }) : globalScope()
   const dryRun = o.dryRun ?? false
+  const timezone = o.timezone ?? 'UTC'
   const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
   if (!operation)
     throw new KetError({
@@ -107,6 +125,10 @@ export function createContext(o: {
    * value is replaced before the record is kept rather than after.
    */
   const record = (write: WriteRecord): void => {
+    if (write.op === 'enqueue') {
+      writes.push(write)
+      return
+    }
     const model = manifest.models[write.model]
     const mask = (row: Row | undefined): Row | undefined => {
       if (!row || !model) return row
@@ -269,6 +291,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'json')
       .map(([n]) => n)
 
+  const datesOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'date')
+      .map(([n]) => n)
+
   const intsOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'int')
@@ -277,7 +304,7 @@ export function createContext(o: {
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     const stamps = datetimesOf(model)
-    if (!cols.length && !stamps.length) return row
+    if (!cols.length && !stamps.length && !datesOf(model).length) return row
     const out: Row = { ...row }
     // A raw db.insert/update never passes through a changeset. Validate as well as
     // render here so it cannot store exponent syntax or bypass the public budget.
@@ -294,8 +321,25 @@ export function createContext(o: {
     for (const c of stamps) {
       const held = out[c]
       if (held == null) continue
-      const at = held instanceof Date ? held : new Date(String(held))
-      if (!Number.isNaN(at.getTime())) out[c] = at.toISOString()
+      const instant = parseDateTime(held, timezone)
+      if (instant === null)
+        throw new KetError({
+          code: 'E_INVALID_DATETIME',
+          module: operation.by,
+          message: `"${fnKey}" wrote ${JSON.stringify(held)} to ${model}.${c}, which is not an ISO-8601 date-time`,
+          hint: 'write an ISO-8601 instant such as 2026-10-21T03:00:00Z, or a Date',
+        })
+      out[c] = instant
+    }
+    for (const c of datesOf(model)) {
+      const held = out[c]
+      if (held == null || isDateText(held)) continue
+      throw new KetError({
+        code: 'E_INVALID_DATE',
+        module: operation.by,
+        message: `"${fnKey}" wrote ${JSON.stringify(held)} to ${model}.${c}, which is not a calendar date`,
+        hint: 'write YYYY-MM-DD for a day that exists',
+      })
     }
     return out
   }
@@ -596,7 +640,7 @@ export function createContext(o: {
         })
       }
       checkQuery(q)
-      record({ op: 'update', model: q.model, where: {} })
+      record({ op: 'delete', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
       const { text, params } = scoped(q).toSQL(dialect)
       return adapter.run(text, params)
@@ -774,10 +818,6 @@ export function createContext(o: {
         if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
         need('enqueue', name)
         validateJobInput(name, manifest, args)
-        const queue =
-          o.queueNotify === undefined
-            ? await queueFor(adapter)
-            : await createQueue(adapter, { notify: o.queueNotify })
         // Enqueueing into another company is the fan-out a scheduled job has to
         // perform: the schedule runs once per tenant with no company, and the work
         // belongs to legal entities. It is gated on the same declaration that let
@@ -785,6 +825,14 @@ export function createContext(o: {
         // capability is in the manifest rather than in this call.
         const { company: target, ...rest } = options ?? {}
         const named = target?.trim()
+        if (named && !companies) {
+          throw new KetError({
+            code: 'E_COMPANIES_DISABLED',
+            module: operation.by,
+            message: `"${fnKey}" enqueued "${name}" into company "${named}", but the deployment does not scope by company`,
+            hint: 'drop the company, or set companies: true on the deployment',
+          })
+        }
         if (named && !operation.crossCompany) {
           throw new KetError({
             code: 'E_ENQUEUE_COMPANY_NOT_ALLOWED',
@@ -793,6 +841,14 @@ export function createContext(o: {
             hint: 'declare crossCompany: true if this really acts across legal entities, or drop the company',
           })
         }
+        record({ op: 'enqueue', job: name })
+        // A dry run validates the job like a real call and stops before storing
+        // it: a preview must not send the mail or call the integration it shows.
+        if (dryRun) return { id: '', existing: false, dryRun: true }
+        const queue =
+          o.queueNotify === undefined
+            ? await queueFor(adapter)
+            : await createQueue(adapter, { notify: o.queueNotify })
         return queue.enqueue(name, args, {
           ...rest,
           queue: meta.queue,
@@ -841,7 +897,7 @@ export function createContext(o: {
       nextSequenceNumber(adapter, name, { ...options, scope, dryRun }),
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
-      changeset(manifest, model, params, base),
+      changeset(manifest, model, params, base, { timezone }),
   }
   return ctx
 }

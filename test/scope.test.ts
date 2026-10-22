@@ -118,7 +118,7 @@ const ledger = defineModule({
   },
 })
 
-const manifest = compose([ledger], { headless: true })
+const manifest = compose([ledger], { headless: true, companies: true })
 const A = { company: 'acme', branch: 'hanoi', branches: null }
 const B = { company: 'globex', branch: 'new-york', branches: null }
 
@@ -134,7 +134,7 @@ test('scope: a model that does not declare one is a build error', () => {
   const sloppy = defineModule({ name: 'sloppy', models: { Thing: { fields: { id: 'id' } } as never } })
   const e = (() => {
     try {
-      compose([sloppy], { headless: true })
+      compose([sloppy], { headless: true, companies: true })
     } catch (err) {
       return err as KetError
     }
@@ -160,7 +160,10 @@ test('scope: a module cannot extend the scope columns', () => {
     depends: ['ledger'],
     extend: { 'ledger.Invoice': { companyId: 'text?' } },
   })
-  assert.throws(() => compose([ledger, meddler], { headless: true }), /E_SCOPE_FIELD_RESERVED/)
+  assert.throws(
+    () => compose([ledger, meddler], { headless: true, companies: true }),
+    /E_SCOPE_FIELD_RESERVED/,
+  )
 })
 
 test('scope: one company cannot read another, even asking for everything', async () => {
@@ -536,7 +539,7 @@ test('scope: changing a model scope is a breaking change the diff reports', () =
       Currency: { scope: 'shared', fields: { id: 'id', code: 'text' } },
     },
   })
-  const items = diffManifests(manifest, compose([widened], { headless: true }))
+  const items = diffManifests(manifest, compose([widened], { headless: true, companies: true }))
   const change = items.find((i) => i.code === 'MODEL_SCOPE_CHANGED')!
   assert.equal(change.severity, 'breaking')
   assert.match(change.message, /company\+branch to shared/)
@@ -560,7 +563,7 @@ test('scope: a transaction rolls back every write together', async () => {
       }),
     },
   })
-  const m = compose([ledger, risky], { headless: true })
+  const m = compose([ledger, risky], { headless: true, companies: true })
   registerFunctions([ledger, risky])
   await assert.rejects(() => callFn('risky.pair', {}, { adapter: db, manifest: m, scope: A }), /boom/)
   assert.equal((await db.all('SELECT * FROM ledger_invoice', [])).length, 0, 'neither write survived')
@@ -586,7 +589,7 @@ test('scope: a transaction keeps the company it was opened with', async () => {
       }),
     },
   })
-  const m = compose([ledger, ok], { headless: true })
+  const m = compose([ledger, ok], { headless: true, companies: true })
   registerFunctions([ledger, ok])
   assert.equal((await callFn('ok.pair', {}, { adapter: db, manifest: m, scope: A })).value, 1)
   await db.close()
@@ -611,7 +614,7 @@ test('effects: an undeclared preload is refused whether or not the table has row
       },
     },
   })
-  const manifest = compose([m])
+  const manifest = compose([m], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)
@@ -649,7 +652,7 @@ test('effects: a preload of a relation nobody declared is named, not silently em
       },
     },
   })
-  const manifest = compose([m])
+  const manifest = compose([m], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)
@@ -683,7 +686,7 @@ test('del: a select handed to db.del is refused, because it would delete nothing
       },
     },
   })
-  const manifest = compose([m])
+  const manifest = compose([m], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)
