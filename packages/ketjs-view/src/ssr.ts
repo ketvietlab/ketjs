@@ -87,13 +87,15 @@ function writeValue(value: unknown, hydratable: boolean): string {
 /**
  * Inside these, an HTML parser does not read `<!--` as a comment — the content is
  * text, and a hydration marker written there arrives as literal characters. It is
- * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab.
+ * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab. In
+ * a style sheet the marker opens a selector that swallows the rules after it, and
+ * in a script `<!--` starts a comment that runs to the end of the line.
  *
  * Nothing is lost by leaving the markers out: the reason they exist is to keep
- * adjacent text nodes apart so the hydration walk counts correctly, and neither of
+ * adjacent text nodes apart so the hydration walk counts correctly, and none of
  * these elements has children to walk.
  */
-const RCDATA = new Set(['title', 'textarea'])
+const TEXT_ONLY = new Set(['title', 'textarea', 'style', 'script'])
 
 // --- compiled templates ------------------------------------------------------
 // Everything about a template's markup except its values is fixed per call site,
@@ -167,7 +169,7 @@ function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host
     }
     chunk += '>'
     if (VOID.has(el.tag)) return
-    const rcdata = raw || RCDATA.has(el.tag)
+    const rcdata = raw || TEXT_ONLY.has(el.tag)
     const hydrateChildren = hydrate || el.tag === ISLAND_TAG || (host ?? staticHost)
     for (const c of el.children) emit(c, rcdata, hydrateChildren, null)
     chunk += `</${el.tag}>`
