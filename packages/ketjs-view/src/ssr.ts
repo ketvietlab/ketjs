@@ -13,6 +13,7 @@ import type { TplAttr, TplEl, TplNode, TplRoot } from './template.ts'
 import { EVENT_PREFIX, isResult, isEach } from './render.ts'
 import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
+import { attributeValue } from './url.ts'
 import { ISLAND_HOST_ATTRIBUTE, ISLAND_TAG } from './island-protocol.ts'
 
 export const HOLE_MARKER = 'k'
@@ -105,7 +106,7 @@ const RCDATA = new Set(['title', 'textarea'])
 /** A child hole. Its markers, when it has them, are in the neighbouring static strings. */
 type ChildOp = { hole: number; hydrate: boolean }
 /** An attribute hole, written with its leading ` name="` only when the value is present. */
-type AttrOp = { attr: string; hole: number }
+type AttrOp = { attr: string; name: string; hole: number }
 /**
  * An element whose island-host attribute is a hole. Whether its children carry
  * hydration markers depends on that value, so both outcomes are compiled, lazily.
@@ -158,7 +159,7 @@ function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host
       if (a.name.startsWith(EVENT_PREFIX)) continue
       if (a.hole != null) {
         flush()
-        ops.push({ attr: ` ${a.name}="`, hole: a.hole })
+        ops.push({ attr: ` ${a.name}="`, name: a.name, hole: a.hole })
         continue
       }
       if (a.value == null) continue
@@ -183,7 +184,7 @@ function run(ops: readonly Op[], values: readonly unknown[]): string {
     if (typeof op === 'string') {
       out += op
     } else if ('attr' in op) {
-      const value = values[op.hole]
+      const value = attributeValue(op.name, values[op.hole])
       if (value != null && value !== false) out += `${op.attr}${escapeHtml(value)}"`
     } else if ('hole' in op) {
       out += writeValue(values[op.hole], op.hydrate)

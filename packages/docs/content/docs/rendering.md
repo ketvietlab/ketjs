@@ -477,4 +477,23 @@ const ThemeRegion = () => <section>{trustedMarkup(compiledThemeOutput)}</section
 Never wrap request or database text merely to make HTML render. The trust decision must belong to the
 producer, not the final template call.
 
+## URL attributes and inline script
+
+Escaping protects the characters of an attribute value, not what the browser does with it. A link
+bound from data could still say `javascript:` and run script with the page origin when it is followed,
+so every renderer — SSR, JSX, the client renderer and hydration — checks a value bound to `href`, `src`,
+`action`, `formaction`, `xlink:href`, `poster`, `data` or `cite`:
+
+| Bound value | Rendered |
+| --- | --- |
+| `https:`, `mailto:`, `tel:`, an app scheme, a relative URL or a fragment | Unchanged |
+| `data:image/…`, `data:video/…`, `data:audio/…` | Unchanged; inline media is inert |
+| `javascript:`, `vbscript:` or any other `data:` type, in any case and with spaces or controls inside | `unsafe:` followed by the value, which no browser follows |
+
+An attribute the author writes out in the template is markup, not data, and is left as written. Two
+bindings are refused when the template is parsed, because no check of the value can make them safe:
+`srcdoc=${...}`, whose value is a whole document, and a string inline handler such as `onclick=${...}`;
+bind a function with `on:click=${...}` instead. `safeUrl()` and `isUrlAttribute()` are exported for
+code that writes HTML without the renderer.
+
 Continue with [Themes and KTL](/ketjs/themes/) for the restricted presentation layer.
