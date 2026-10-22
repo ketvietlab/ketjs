@@ -64,6 +64,7 @@ const tree = buildMenu(liveManifest, {
   translate: translator(liveManifest, locale),
   active: url.pathname,
   q: searchText,
+  locale,
 })
 
 const currentRoot = activeMenuRoot(tree)
@@ -74,7 +75,7 @@ The filters run in this order:
 1. the deployment manifest contains composed module behavior;
 2. `needs` removes entries whose function is absent or not granted;
 3. empty headings disappear with their children;
-4. optional search preserves the ancestor path to every matching leaf;
+4. optional search preserves the ancestor path to every matching leaf, folding case in `locale`;
 5. the deepest matching route marks itself and every ancestor active.
 
 A menu therefore does not advertise an operation that the viewer will be denied after clicking.

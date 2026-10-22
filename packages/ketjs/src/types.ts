@@ -554,7 +554,11 @@ export type PermissionPosture =
   | 'session/device'
   | 'internal/headless'
 
-export type PermissionLabels = { en: string; vi: string }
+/**
+ * A label per locale. English is required, because it is the framework's fallback;
+ * every other locale a deployment translates into is optional.
+ */
+export type PermissionLabels = { en: string; [locale: string]: string }
 
 export type PermissionBundleDef = {
   labels: PermissionLabels

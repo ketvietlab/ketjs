@@ -97,7 +97,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     relations: spec.relations ?? {},
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
-    category: spec.category ?? 'Khác',
+    category: spec.category ?? 'Other',
     messages: spec.messages ?? {},
   })
 }
@@ -157,5 +157,5 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       })
     }
   }
-  return defineModule({ category: 'Giao diện', ...spec, kind: 'theme' })
+  return defineModule({ category: 'Theme', ...spec, kind: 'theme' })
 }
