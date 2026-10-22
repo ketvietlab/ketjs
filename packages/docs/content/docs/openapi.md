@@ -290,8 +290,9 @@ Every failure uses one envelope:
 ```
 
 `fields` appears on validation failures and is keyed by input name; `""` holds issues about the request as a
-whole, such as a body that is not JSON. Every response carries an `x-request-id` header with the same id. It is
-also the function call's correlation id, so a client report can be joined to the server log.
+whole, such as a body that is not JSON. Every response carries an `x-request-id` header with the same id, and
+the generated document declares `X-Request-Id` on every response, successes included. It is also the
+function call's correlation id, so a client report can be joined to the server log.
 
 | Status | Code | Cause |
 | --- | --- | --- |
