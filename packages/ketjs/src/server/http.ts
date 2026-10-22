@@ -52,6 +52,7 @@ export const statusForError = (code: string): number => {
   if (code === 'E_HTTP_CONTENT_TYPE') return 415
   if (code === 'E_NOT_FOUND' || code === 'E_UNKNOWN_FUNCTION') return 404
   if (code === 'E_PAYLOAD_TOO_LARGE') return 413
+  if (code === 'conflict' || code === 'E_CONFLICT') return 409
   return 400
 }
 

@@ -89,13 +89,16 @@ function writeValue(value: unknown, hydratable: boolean): string {
  * text, and a hydration marker written there arrives as literal characters. It is
  * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab. In
  * a style sheet the marker opens a selector that swallows the rules after it, and
- * in a script `<!--` starts a comment that runs to the end of the line.
+ * in a script `<!--` starts a comment that runs to the end of the line. A
+ * `noscript` belongs here too wherever scripts run, which is the only place a page
+ * hydrates: its content arrives as one text node, never as the elements it names.
  *
  * Nothing is lost by leaving the markers out: the reason they exist is to keep
- * adjacent text nodes apart so the hydration walk counts correctly, and none of
- * these elements has children to walk.
+ * adjacent text nodes apart so the hydration walk counts correctly, and the parsed
+ * content of these elements is a single text node with nothing to walk. Hydration
+ * builds what is inside them again instead (render.ts).
  */
-const TEXT_ONLY = new Set(['title', 'textarea', 'style', 'script'])
+export const TEXT_ONLY = new Set(['title', 'textarea', 'style', 'script', 'noscript'])
 
 // --- compiled templates ------------------------------------------------------
 // Everything about a template's markup except its values is fixed per call site,
@@ -141,7 +144,9 @@ function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host
       const fenced = !raw && hydrate
       if (fenced) chunk += `<!--${HOLE_OPEN}-->`
       flush()
-      ops.push({ hole: node.index, hydrate })
+      // A template nested in text-only content is never walked either, so it is
+      // written without markers of its own.
+      ops.push({ hole: node.index, hydrate: fenced })
       if (fenced) chunk += `<!--${HOLE_MARKER}-->`
       return
     }
