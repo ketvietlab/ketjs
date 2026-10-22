@@ -797,7 +797,7 @@ export function compose(
         provision: def.provision === true,
         idempotent: def.idempotent === true,
         ...(def.transactional === true ? { transactional: true as const } : {}),
-        dryRun: def.transactional ? false : def.dryRun !== false,
+        dryRun: def.transactional ? false : def.dryRun === true,
         agent: def.agent === true,
       }
     }

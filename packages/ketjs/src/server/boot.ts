@@ -1340,6 +1340,9 @@ export async function bootDeployment(
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     resolveActor: actorOf,
+    resolveIdentityOrigin: async (url, req) => (await requestIdentityOf(url, req))?.origin ?? null,
+    functionLog: callLog,
+    errorDetail: config.developmentIdentity,
     onFunctionDenied: serve.onFunctionDenied
       ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)
       : undefined,

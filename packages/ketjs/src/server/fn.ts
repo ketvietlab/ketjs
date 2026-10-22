@@ -246,19 +246,9 @@ export async function callFn(
 async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOptions): Promise<CallResult> {
   // The handler comes from the manifest this call names, never from whichever
   // deployment this process composed last.
-  const def = functionHandler(o.manifest, fnKey)
-  if (!def)
-    throw new KetError({
-      code: 'E_UNKNOWN_FUNCTION',
-      message: `no server function "${fnKey}"`,
-      hint: hasBoundHandlers(o.manifest)
-        ? `known: ${Object.keys(o.manifest.functions).join(', ')}`
-        : 'this manifest has no bound handlers; pass the manifest returned by compose() or the booted runtime',
-    })
-
-  // Permission is checked before the input is validated, so a caller who may not
-  // call this at all learns that and nothing else — not which arguments it takes,
-  // and not whether the ones they guessed were right.
+  // Permission is checked before anything else, so a caller who may not call this
+  // at all learns that and nothing else — not whether the function exists, which
+  // arguments it takes, or whether the ones they guessed were right.
   if (o.allow && !o.allow.includes(fnKey)) {
     const owner = fnKey.split('.')[0] ?? fnKey
     throw new KetError({
@@ -268,6 +258,17 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
       hint: 'grant a role that includes it — `ket permissions --grant` shows what any set of functions reaches',
     })
   }
+  const def = functionHandler(o.manifest, fnKey)
+  if (!def)
+    throw new KetError({
+      code: 'E_UNKNOWN_FUNCTION',
+      message: `no server function "${fnKey}"`,
+      // The names of the other functions are not listed: this message reaches
+      // anonymous HTTP callers, and the manifest is not theirs to enumerate.
+      hint: hasBoundHandlers(o.manifest)
+        ? 'call a qualified name (module.function) that the deployment composes; `ket manifest` lists them'
+        : 'this manifest has no bound handlers; pass the manifest returned by compose() or the booted runtime',
+    })
   validateInput(fnKey, o.manifest, args)
 
   const meta = o.manifest.functions[fnKey]!

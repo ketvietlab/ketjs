@@ -22,6 +22,15 @@ export function isSameOriginRequest(
   )
 }
 
+/** Whether a Content-Type header names JSON, which a cross-site form or simple request cannot send. */
+export const isJsonType = (header: unknown): boolean => {
+  const media = String(header ?? '')
+    .split(';')[0]!
+    .trim()
+    .toLowerCase()
+  return media === 'application/json' || (media.startsWith('application/') && media.endsWith('+json'))
+}
+
 const normalizedIp = (value: string): string =>
   value.toLowerCase().startsWith('::ffff:') && isIP(value.slice(7)) === 4 ? value.slice(7) : value
 

@@ -107,6 +107,10 @@ export function createContext(o: {
    * value is replaced before the record is kept rather than after.
    */
   const record = (write: WriteRecord): void => {
+    if (write.op === 'enqueue') {
+      writes.push(write)
+      return
+    }
     const model = manifest.models[write.model]
     const mask = (row: Row | undefined): Row | undefined => {
       if (!row || !model) return row
@@ -596,7 +600,7 @@ export function createContext(o: {
         })
       }
       checkQuery(q)
-      record({ op: 'update', model: q.model, where: {} })
+      record({ op: 'delete', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
       const { text, params } = scoped(q).toSQL(dialect)
       return adapter.run(text, params)
@@ -774,10 +778,6 @@ export function createContext(o: {
         if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
         need('enqueue', name)
         validateJobInput(name, manifest, args)
-        const queue =
-          o.queueNotify === undefined
-            ? await queueFor(adapter)
-            : await createQueue(adapter, { notify: o.queueNotify })
         // Enqueueing into another company is the fan-out a scheduled job has to
         // perform: the schedule runs once per tenant with no company, and the work
         // belongs to legal entities. It is gated on the same declaration that let
@@ -793,6 +793,14 @@ export function createContext(o: {
             hint: 'declare crossCompany: true if this really acts across legal entities, or drop the company',
           })
         }
+        record({ op: 'enqueue', job: name })
+        // A dry run validates the job like a real call and stops before storing
+        // it: a preview must not send the mail or call the integration it shows.
+        if (dryRun) return { id: '', existing: false, dryRun: true }
+        const queue =
+          o.queueNotify === undefined
+            ? await queueFor(adapter)
+            : await createQueue(adapter, { notify: o.queueNotify })
         return queue.enqueue(name, args, {
           ...rest,
           queue: meta.queue,

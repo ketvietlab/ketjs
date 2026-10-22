@@ -44,6 +44,7 @@ const ledger = defineModule({
     addLine: {
       input: { id: 'id', accountId: 'text?', currencyId: 'text?' },
       effects: ['write:ledger.Line'],
+      dryRun: true,
       handler: (ctx: Ctx, a) => ctx.db.insert('ledger.Line', a),
     },
     addLineOnce: {
