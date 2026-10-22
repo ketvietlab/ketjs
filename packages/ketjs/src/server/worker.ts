@@ -314,6 +314,7 @@ export async function bootWorker(
         actor: job.actor,
         scope: job.scope,
         queueNotify: config.queueNotify,
+        timezone: config.defaultTimezone,
         log: logger.child({
           tenant: tenant.key || null,
           fn: job.job,

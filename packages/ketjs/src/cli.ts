@@ -616,6 +616,7 @@ try {
         manifest: runtime.manifest,
         actor: 'system:provision',
         scope: { company: null, branch: null },
+        timezone: runtime.config.defaultTimezone,
       })
       console.log(JSON.stringify(result.value, null, 2))
       if (

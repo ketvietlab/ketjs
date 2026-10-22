@@ -180,6 +180,8 @@ export type ServeOpts = {
    * Defaults to true for a server built directly; `bootDeployment` sets it from `KET_DEV`.
    */
   errorDetail?: boolean
+  /** IANA timezone a `datetime` input without an offset is read in. Defaults to UTC. */
+  timezone?: string
   /** Disable PostgreSQL notification while retaining polling correctness. */
   queueNotify?: boolean
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
@@ -1176,6 +1178,7 @@ export async function createKetServer(o: ServeOpts) {
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
             idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
             correlationId: requestId,
+            timezone: o.timezone,
             ...(o.functionLog
               ? {
                   log: o.functionLog(

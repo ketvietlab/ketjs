@@ -59,8 +59,10 @@ ket migrate --deployment erp --workspace dist/ket.workspace.js --all --dry-run
 ket migrate --deployment erp --workspace dist/ket.workspace.js --all
 ```
 
-Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order. This prevents
-many replicas from racing to alter the same schema during rollout. Destructive plans require an explicit
+Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order, so that
+schema changes happen at one reviewed point in the rollout. On PostgreSQL, replicas that do migrate on boot
+at the same time are serialised by a transaction-scoped advisory lock: the first applies the plan, and the
+others wait, read the advanced marker and find nothing left to do. Destructive plans require an explicit
 `--allow-destructive` decision and should include a restore plan.
 
 ## Run separate roles
