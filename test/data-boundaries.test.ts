@@ -182,6 +182,13 @@ test('data boundaries: a date-time without an offset is read in the deployment t
   assert.deepEqual(await call('stamp', { id: 'c4', at: '1' }), { invalid: ['at'] })
   assert.deepEqual(await call('stamp', { id: 'c5', at: '2026-13-01T00:00' }), { invalid: ['at'] })
 
+  // A date alone has no wall time: it stays UTC midnight, so the stored day is the day written.
+  assert.equal(
+    await call('stamp', { id: 'c6', at: '2099-11-30' }, 'acme', 'Asia/Ho_Chi_Minh'),
+    '2099-11-30T00:00:00.000Z',
+  )
+  assert.equal(parseDateTime('2099-11-30', 'Asia/Ho_Chi_Minh'), '2099-11-30T00:00:00.000Z')
+  assert.equal(parseDateTime('2099-11-30', 'America/New_York'), '2099-11-30T00:00:00.000Z')
   assert.equal(parseDateTime('2026-03-08T02:30', 'America/New_York') !== null, true)
   assert.equal(parseDateTime('2026-10-21T24:00'), null)
   assert.equal(parseDateTime('2026-10-21T10:00+15:00'), null)

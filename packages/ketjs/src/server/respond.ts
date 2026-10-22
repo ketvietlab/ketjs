@@ -183,10 +183,9 @@ export function withHeaders(result: RouteResult, headers: Record<string, string>
  * to have the last word, had no guarantee at all. It was documented in three
  * places and emitted in none.
  */
-// Written out rather than interpolated: a hole would put hydration markers
-// (`<!--k[-->`) inside the stylesheet, and CSS treats `<!--` as a token it then has
-// to recover from — which can swallow the statement it is here to make. The
-// literal is kept honest by a test against LAYER_ORDER_CSS.
+// Written out rather than interpolated: a string hole inside <style> is escaped
+// text, which is right for data and wrong for a stylesheet. The literal is kept
+// honest by a test against LAYER_ORDER_CSS.
 const layerOrder = html`<style>@layer ket.reset, ket.theme, ket.app, ket.user;</style>`
 
 /**

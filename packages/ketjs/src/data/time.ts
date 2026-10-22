@@ -171,6 +171,11 @@ const DATETIME_TEXT =
  * process timezone, so the same request stored different instants on servers in
  * different zones. Text with an offset is that instant; text without one, such as
  * the value of `<input type="datetime-local">`, is a wall time in `timezone`.
+ *
+ * A date alone has no wall time to place, so it stays UTC midnight, as `Date` has
+ * always read it. Moving it to midnight in `timezone` would store a day written
+ * before and after an upgrade as two different instants, and a reader that takes
+ * the first ten characters of the stored text would see the previous day.
  */
 export function parseDateTime(value: unknown, timezone = 'UTC'): string | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
@@ -184,9 +189,9 @@ export function parseDateTime(value: unknown, timezone = 'UTC'): string | null {
   const second = Number(secondText ?? 0)
   if (hour > 23 || minute > 59 || second > 59) return null
   const milliseconds = fraction ? Number(fraction.slice(1, 4).padEnd(3, '0')) : 0
-  if (offset) {
+  if (offset || hourText === undefined) {
     let shift = 0
-    if (offset.toUpperCase() !== 'Z') {
+    if (offset && offset.toUpperCase() !== 'Z') {
       const digits = offset.slice(1).replace(':', '')
       const hours = Number(digits.slice(0, 2))
       const minutes = Number(digits.slice(2) || 0)
