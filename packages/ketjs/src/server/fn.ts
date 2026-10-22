@@ -138,6 +138,10 @@ const idemFor = (adapter: Adapter): Promise<Idem> => {
   return p
 }
 
+/**
+ * @deprecated Does nothing and is removed in 1.0. Idempotency records are rows in
+ * the deployment's database, so a fresh test database already starts without any.
+ */
 export const _resetIdempotency = (): void => {
   /* records are durable; nothing to clear */
 }

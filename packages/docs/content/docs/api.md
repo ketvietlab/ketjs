@@ -43,6 +43,9 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 | `diffManifests`, `formatDiff` | Compare manifest contracts. |
 | `classificationInventory`, `formatClassification` | Enumerate personal and sensitive fields, and the models that classify none. |
 | `KetError`, `Diagnostics` | Structured framework errors and accumulated diagnostics. |
+| `isDefectError` | True when an error code means the deployment broke its own contract rather than the caller sending something wrong. |
+| `walkPlacements`, `countPlacements`, `MAX_LAYOUT_DEPTH`, `MAX_LAYOUT_NODES` | Traverse a placement tree and the limits `validateLayout` enforces on it. |
+| `withPlacementIds`, `isPlacementId`, `placementIdErrors`, `diffPlacements` | Give placements stable ids, check them, and compare two layouts by id for an editor. |
 
 Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclaration`, `DeploymentSpec`,
 `WorkspaceDeclaration`, `ResolvedWorkspace`, `Placement`, and `LayoutError`.
@@ -75,6 +78,11 @@ Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `Permiss
 | `isSameOriginRequest` | Check origin host/port through TLS termination; cookie bindings require origin evidence by default. |
 | `createClientAddressResolver` | Resolve the socket peer or the nearest untrusted forwarded hop through explicitly trusted proxy IPs. See [Authentication starter](/docs/auth-starter/). |
 | `httpOpenApiDocument`, `httpContracts` | Generate an OpenAPI 3.1 document, or list route contracts, for one profile. |
+| `statusForError`, `wantsHtml` | The HTTP status a framework error code answers with, and whether a request prefers an HTML error page. |
+| `websocket` | A route answer that upgrades the request after the route's own checks ran. |
+| `readConfig`, `sqliteStore` | Read runtime configuration from the environment, and the default single-database opener. |
+| `defineFormAction` | Declare a server function from a `@ketvietlab/ketjs-view` form contract, with atomic receipt semantics. |
+| `_resetIdempotency` | Deprecated and removed in 1.0. Does nothing: idempotency records are rows in the test database. |
 
 Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision`,
 `PolicyDenialEvidence`, `Job`, `JobContext`, `ServeSpec`,
@@ -93,7 +101,11 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | `createQueue`, `queueFor`, `JOB_CHANNEL` | Manage durable job state and queue wake-up channels. |
 | `validateSchedule`, `tickAt`, `ticksBetween`, `parseEvery`, `claimDue` | Read a job schedule, and claim its due tick in one tenant. |
 | `claimRateSlot`, `pruneRateSlots` | Spend one slot of a durable per-caller allowance, and drop stale counters. |
-| `nextSequenceNumber`, `peekSequenceNumber` | Allocate and read a company-scoped document number. |
+| `nextSequenceNumber`, `peekSequenceNumber`, `sequenceKey` | Allocate and read a company-scoped document number, and the key a sequence is stored under. |
+| `MIN_EVERY_MS` | The shortest `every` interval a job schedule accepts. |
+| `streamsOf` | The durable stream service of one adapter, shared by everything using that database. |
+| `notificationHub`, `NOTIFY_PAYLOAD_BYTES` | The publish/subscribe hub of a root adapter, and the largest payload one notification carries. |
+| `withPublicStorage` | Add a separate public backend to private storage without changing private-only callers. |
 | `auditHash`, `auditId` | Namespaced digest for an identity, and a command-derived event id. |
 | `createIdempotency` | Persist and replay idempotent operation results. |
 | `effectTransport`, `memoryTransport`, `unavailableTransport` | Execute or test declared outbound messages. |
@@ -125,6 +137,11 @@ adapters and operational tooling, not a requirement for ordinary modules. Ordina
 | `defineListSearch`, `parseListState`, `encodeListState` | Declare allowlisted URL-driven list state. |
 | `compileListFilter`, `validateListState` | Validate and compile nested list filters. |
 | `dateBucket`, `localDateTimeToUtc`, `localDayRange` | Build timezone-aware bucket and UTC range values. |
+| `bucketEq`, `GROUP_INTERVALS`, `isGroupInterval`, `assertGroupInterval` | Match a datetime column's calendar bucket, and the intervals grouping accepts. |
+| `isTimezone`, `assertTimezone` | Check an IANA timezone name. |
+| `isDateText`, `parseDateTime` | Check a `YYYY-MM-DD` date; read date-time text as a UTC instant, without an offset in a given timezone. |
+| `numericCompare` | Compare numerically with an operator chosen at run time; only `=`, `<>`, `>`, `<`, `>=`, `<=` reach SQL. |
+| `likeLiteral` | Escape typed text for use inside a `like`/`ilike` pattern. |
 | `changeset`, `Changeset` | Cast and validate create/update input. |
 | `schemaFromManifest`, `planMigration`, `renderSql` | Derive and render schema migration plans. |
 | `tableNameFor` | Resolve the physical table name for a manifest model. |
@@ -161,6 +178,7 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 | `createTheme`, `compileKtl`, `loadTemplates`, `createJoints` | Compile and execute the theme boundary. |
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
+| `isTokenValue`, `partitionTokens` | Check a token value typed into a form, and split a record into renderable and refused tokens. |
 | `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `@ketvietlab/ketjs-view` rendering helpers. |
 | `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Type, server-render, hydrate, and reconcile named islands. |
 | `BrowserBehavior`, `BrowserBehaviorContext`, `BrowserNavigation` | Document-wide progressive enhancement and the public fragment-navigation service. |
@@ -213,6 +231,8 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `signal`, `computed`, `effect`, `batch` | Fine-grained reactive state and scheduling. |
 | `defineFormSchema`, `validateForm`, `validationIssue` | Declare and execute browser-safe form validation. |
 | `valuesFromFormData`, `createForm` | Preserve native form values and manage reactive form lifecycle state. |
+| `defineFormContract`, `createFormSession`, `attachForm` | Share one form declaration between server and island, run an edit session, and adapt native controls to it. |
+| `formActionTransport`, `formIssuePath`, `formConflict` | Submit through the function transport, map server issues back to fields, and report a conflict. |
 | `validationProblem`, `fieldErrorsOf`, `formErrorsOf` | Build and group the stable validation transport shape. |
 | `html`, `each`, `when` | Tagged templates and conditional/list composition. |
 | `isResult`, `isEach`, `isMarkup` | Type guards for the three values the renderer understands. |
@@ -223,7 +243,9 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `EVENT_PREFIX` | The attribute prefix that makes an attribute a listener rather than markup. |
 | `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError` | Typed island declarations, serialization, hydration, reconciliation, disposal, and failures. |
 | `ISLAND_TAG`, `ISLAND_HOST_ATTRIBUTE`, `ISLAND_SELECTOR` | Legacy and standard-element island host protocol constants. |
-| `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
+| `countingHost`, `domHost`, `escapeHtml`, `SVG_NAMESPACE` | Host implementations, the escaping primitive, and the namespace SVG elements are created in. |
+| `safeUrl`, `isUrlAttribute` | The value a bound URL attribute renders with: scripting schemes become an inert `unsafe:` URL. |
+| `DuplicateKeyError` | Thrown when a keyed list gives two items one key. |
 
 The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
 `IslandController`, `IslandMountContext`, `IslandManager`, `IslandManagerOptions`, `IslandHostTag`,
