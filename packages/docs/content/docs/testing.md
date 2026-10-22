@@ -50,6 +50,12 @@ A file-backed database is intentional: the HTTP runtime and worker may open diff
 observe the same committed state. `close()` shuts down the server and worker, closes adapters, and removes
 the directory.
 
+Function and job handlers belong to the manifest that composed them. Several deployments can therefore be
+booted in one test process, including deployments that ship different builds of the same module name:
+each HTTP runtime, worker and direct `callFn()` executes the handler of the manifest it was given. A
+manifest read back from JSON describes functions but carries no handlers, so `callFn()` refuses it with
+`E_UNKNOWN_FUNCTION`.
+
 The harness does not inherit the host process environment by default. A developer's `DATABASE_URL` cannot
 silently redirect an isolated test to a real database.
 
