@@ -24,8 +24,8 @@ undo later.
 
 The last row is the sharp edge. A record written inside `ctx.tx()` that later rolls back is still
 emitted, because the attempt was real and knowing that it failed is the whole point. An audit row
-must disappear with the data it describes. KetSuite already has an audit trail — `pos.AuditEvent` —
-and this is not it.
+must disappear with the data it describes, so keep an audit trail as a model in the application's own
+data, written in the same transaction; this log is not it.
 
 ## Configuration
 
@@ -102,6 +102,13 @@ it, so a sink that throws cannot break the work it describes. That guarantee is 
 than a convention: a record is emitted after a function has already committed and after an
 idempotency key has been marked done, so a sink allowed to throw there would report a failure for
 work that succeeded.
+
+Redaction works on field names, not on content. A field whose name contains `password`, `secret`,
+`token`, `authorization`, `cookie`, `apikey`, `credential`, `card`, `otp`, `pin` or a similar word
+becomes `[redacted]`, a non-scalar field is dropped, and string fields and messages are only
+shortened. A message is not scanned: an error thrown as `new Error('password=…')` or one that quotes a
+customer's email is logged with that text. Put values in named fields, not in messages, and keep
+secrets and personal data out of error messages.
 
 `bufferedLog` drops the *newest* record when it is full, because in a cascade the first failure is
 the cause and the tail is repetition. A slice of the bound is reserved for error-level records so a

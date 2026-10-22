@@ -8,11 +8,9 @@ order: 2
 A server function is a named business operation. Its input, output, data reach, external effects,
 exposure, and safety properties are declared beside its handler and composed into the manifest.
 
-KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. KetSuite
-modules follow the handler organization and migration rules: named
-handlers and descriptors grouped by capability, assembled with duplicate detection at
-`functions/index.ts`. The compact framework examples below illustrate the runtime contract, not an
-alternative layout for KetSuite modules.
+KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. A module
+with many functions can keep named handlers in files grouped by capability and assemble them in one
+`functions/index.ts`; the compact examples below show the runtime contract, not a required layout.
 
 The generic `/_ket/fn` transport is not an automatic public API. `ServeSpec.resolveAudience` and `allowFor`
 classify callers before dispatch; an application facade should expose selected operations through owned HTTP
@@ -285,6 +283,12 @@ input: reusing a key with different arguments receives `E_IDEMPOTENCY_CONFLICT` 
 unrelated result or executing a second operation.
 
 The application still chooses a stable business key. Random retry keys defeat deduplication.
+
+A claim is held while the call runs. A call that fails releases its key, so the caller can retry with
+the same key. A process that dies mid-call cannot release it, so a claim still unfinished after five
+minutes counts as abandoned and the next call with that key takes it over and runs the function again.
+An operation that can run longer than five minutes is not protected by the key alone: enqueue it as a
+job, or have the handler check the business record it is about to create before creating it.
 
 ## Company reach
 

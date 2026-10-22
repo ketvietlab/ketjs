@@ -366,7 +366,16 @@ import { defineModule, json } from '@ketvietlab/ketjs'
 export const catalogueApi = defineModule({
   name: 'catalogue_api',
   version: '1.0.0',
+  depends: ['catalogue'],
   reserves: ['/api/catalogue/v1/'],
+  functions: {
+    listPublishedItems: {
+      anonymous: true,
+      returns: 'many',
+      effects: ['read:catalogue.Item'],
+      handler: (ctx) => ctx.db.select('catalogue.Item', { published: true }),
+    },
+  },
   routes: {
     '/api/catalogue/v1/items': {
       anonymous: true,
@@ -380,8 +389,10 @@ export const catalogueApi = defineModule({
           '200': { type: 'object', properties: { data: { type: 'array' } } },
         },
       },
+      // ctx.call applies the function's own checks: it is anonymous, so a caller with
+      // no session may run it, and its effects bound what it reads.
       handler: (ctx) => async (url, request) =>
-        json(await ctx.callUnchecked('catalogue_api.listPublishedItems', {}, url, request)),
+        json({ data: await ctx.call('catalogue_api.listPublishedItems', {}, url, request) }),
     },
   },
 })
