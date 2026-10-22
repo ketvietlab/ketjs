@@ -299,6 +299,11 @@ export type RequestIdentityResolveContext = {
 }
 
 export type ServeSpec = {
+  /**
+   * How long shutdown lets in-flight HTTP requests finish before dropping their
+   * connections. Defaults to 10 seconds; set it below the platform's grace period.
+   */
+  shutdownGraceMs?: number
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
   /** Immutable release/image identifier used to reject a stale browser runtime. */
@@ -1263,6 +1268,7 @@ export async function bootDeployment(
     manifest,
     adapter,
     log: logger,
+    ...(serve.shutdownGraceMs === undefined ? {} : { shutdownGraceMs: serve.shutdownGraceMs }),
     ...(serve.buildId === undefined ? {} : { buildId: serve.buildId }),
     ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
     ...(serve.streamTimeoutMs === undefined ? {} : { streamTimeoutMs: serve.streamTimeoutMs }),
