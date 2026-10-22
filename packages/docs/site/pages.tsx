@@ -416,7 +416,17 @@ export function createPage(route: string, content: ContentPage[]) {
           </div>
         </noscript>
         {route === '/playground/' ? (
-          island('playground', playground, {}, { key: [] })
+          <>
+            {island('playground', playground, {}, { key: [] })}
+            {/* Outside the island: with scripting on, a browser parses noscript content as raw
+                text, so hydration markers inside it never match. */}
+            <noscript>
+              <div class="no-script">
+                The interactive editor needs JavaScript. Every lesson also includes a local project you can
+                run with Node 24.
+              </div>
+            </noscript>
+          </>
         ) : route === '/search/' ? (
           <Search content={content} />
         ) : !page ? (
