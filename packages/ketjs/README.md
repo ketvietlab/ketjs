@@ -49,12 +49,14 @@ routes. Credentials and provisioning functions are internal, and the protected s
 notes by their actor. No KetSuite dependency is installed. See the generated README and
 [Authentication starter](../docs/content/docs/auth-starter.md).
 
-Session authentication and company scope are separate with the explicit opt-in
-`serve.sessions.requireCompany: false`. The default is `true`, preserving existing KetSuite and
-business deployments. An identity without company scope still cannot read or write company-scoped data.
+Company scope is opt-in: a deployment sets `companies: true` when it has company-scoped models.
+Without it there is one global scope, models may omit `scope`, and sessions carry no company. With it,
+sessions require a company by default, and the explicit opt-in `serve.sessions.requireCompany: false`
+separates authentication from company scope. An identity without company scope still cannot read or
+write company-scoped data.
 An explicit permission resolver remains required for role-based authorization; `[]` grants no
 protected operations, while `null` disables restriction. Gateway identities use the same policy
-when configured with those session options and otherwise retain the company-required default.
+when configured with those session options and otherwise require a company only with `companies: true`.
 
 `hashPassword()` and `verifyPassword()` are server-only, dependency-free primitives for new
 application-owned identity modules. They preserve the input's Unicode representation, enforce

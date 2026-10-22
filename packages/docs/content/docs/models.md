@@ -213,9 +213,23 @@ run the same hash. It keeps a value out of a row, not out of reach.
 What an event *means* — its subject, action, and which configuration or session it happened in —
 stays the module's. A framework that modelled that would be modelling somebody's compliance regime.
 
-## Scope is mandatory
+## Company scope is opt-in
 
-Every model selects one isolation scope:
+A deployment scopes rows by company only when it sets `companies: true`:
+
+```ts
+// File: ket.workspace.ts
+import { defineDeployment } from '@ketvietlab/ketjs'
+import { sales } from './src/modules/sales/index.ts'
+
+export const deployment = defineDeployment({ name: 'erp', modules: [sales], companies: true })
+```
+
+Without it there is one global scope. Every model is `shared`, `scope` may be left out, and requests,
+sessions, sequences and jobs carry no company. A `company` or `company+branch` model is then a
+composition error (`E_COMPANIES_DISABLED`).
+
+With it, every model selects one isolation scope:
 
 | Scope | Meaning | Typical data |
 | --- | --- | --- |
@@ -223,8 +237,8 @@ Every model selects one isolation scope:
 | `company` | Each row belongs to one legal entity. | Orders, invoices, ledgers. |
 | `company+branch` | Rows belong to one company and operational branch. | Stock moves, branch-specific sessions. |
 
-There is no default. Accidentally treating company data as shared is a silent data leak, so omission
-is a composition error.
+In such a deployment there is no default. Accidentally treating company data as shared is a silent
+data leak, so omission is a composition error (`E_MODEL_NO_SCOPE`).
 
 KetJS adds and enforces scope columns centrally, so a `company` or `company+branch` model cannot declare
 `companyId` or `branchId` itself (`E_SCOPE_FIELD_RESERVED`); a `shared` model may still name a company in

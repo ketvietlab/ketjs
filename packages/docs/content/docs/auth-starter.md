@@ -85,7 +85,7 @@ does not disable the framework's CSRF boundary.
 ```ts
 // File: notes/ket.workspace.ts
 serve: {
-  sessions: { requireCompany: false, anonymous: null },
+  sessions: { anonymous: null },
   resolveSession: resolveAuthSession,
   permissions: async (ctx, userId, url, req) => {
     const result = await ctx.callUnchecked('auth.permitted', { userId }, url, req) as {
@@ -103,11 +103,10 @@ the user has no grant. Multiple roles use one combined grants query. Returning `
 disable restriction. Issuance and live resolution both use `branches: []`, avoiding an unnecessary
 context update on the first authenticated requests.
 
-The starter authenticates an identity with no company. `requireCompany` remains `true` by default
-for existing business and KetSuite deployments. The opt-in grants no company access: a company-scoped
-operation still needs valid membership/scope, and ownership checks remain application behavior.
-If you add company-scoped modules, implement real membership resolution instead of inventing a default
-company. Read [Sessions and tenants](/docs/sessions-tenants/) and [Authorization](/docs/authorization/).
+The starter's deployment does not set `companies: true`, so it has one global scope and its sessions
+carry no company. Ownership checks remain application behavior. If you add company-scoped modules, set
+`companies: true`: sessions then require a company by default, and `resolveAuthSession` must resolve
+real memberships instead of inventing a default company. Read [Sessions and tenants](/docs/sessions-tenants/) and [Authorization](/docs/authorization/).
 
 ## Credentials and deployment
 

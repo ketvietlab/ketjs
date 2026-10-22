@@ -171,7 +171,7 @@ KetJS ships `sqliteStore`. An app using `DATABASE_URL` must provide `serve.openS
 | `KET_LOCALE` | `en` | Default locale. |
 | `KET_FALLBACK_LOCALE` | default locale | Translation fallback locale. |
 | `KET_TIMEZONE` | `UTC` | IANA timezone used when an application or viewer has no timezone. |
-| `KET_COMPANY` | `default` | Company for requests when no authentication is configured. Development headers may override it only when `KET_DEV=1`. |
+| `KET_COMPANY` | `default` | Company for requests when no authentication is configured, in a deployment with `companies: true`; ignored otherwise. Development headers may override it only when `KET_DEV=1`. |
 | `KET_DEV` | unset | `1` marks local development: it enables the development header identity for a deployment without authentication, allows a generated session secret, drops `Secure` from the session cookie and keeps `hint` in error bodies. Set by `ket dev`, `--watch`, the scaffold dev script and the test harness; never set it in production. |
 | `KET_DEV_SOURCE` | unset | `1` lets `ket` load a TypeScript workspace or module entry through a source loader. Set by the scaffold dev script; production loads emitted JavaScript. |
 | `KET_SECRET` | unset | Session-cookie signing key. Must be stable and shared across pods. Boot refuses sessions without it (or `sessions.secret`) unless `KET_DEV=1`. |

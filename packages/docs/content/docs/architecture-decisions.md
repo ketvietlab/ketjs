@@ -19,6 +19,7 @@ the others:
 | --- | --- | --- |
 | Superseded | D13 | History only; the later decision named in the entry is current. |
 | Partly superseded | D28, D50, D57 | D67 replaced the module lifecycle portion; the rest still applies. |
+| Partly superseded | D23 | D78 made company scoping opt-in; D23 applies to a deployment with `companies: true`. |
 | KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
@@ -953,6 +954,9 @@ present only if the query asked for them. The type says so instead of pretending
 every row arrives complete.
 
 ## D23 — Company is a row-level boundary; branch is a dimension
+**Status:** partly superseded; D78 made company scoping opt-in. The rest applies to a deployment that sets
+`companies: true`.
+
 **The situation being replaced:** the domain contract has no branch concept, so a business with
 several branches of one legal entity models each branch as a `res.company`. That
 forces a chart of accounts per branch, turns internal transfers into inter-company
@@ -2507,3 +2511,29 @@ upgrade. That is the intended break, but it is a break: such a deployment must c
 
 **Reversible:** for one process, by setting `KET_DEV=1` — which is a statement that the process is a
 development process, and the banner repeats it at every boot.
+
+## D78 — Company scope is opt-in per deployment
+
+D23 made every model declare a scope, because the safe-looking default leaked. That is right for a
+deployment with several legal entities, and everyone else paid for it: an internal tool or an API with
+no legal entities said `scope: 'shared'` on every model, and every request still ran in a company called
+`default` that sequences, job keys and sessions then depended on.
+
+**Chosen:** a deployment says `companies: true` when it has companies. Without it there is one global
+scope. Every model is shared and may leave `scope` out, and a `company` or `company+branch` model is a
+composition error (`E_COMPANIES_DISABLED`). No request, session, development header, `KET_COMPANY` or
+scope handed to `callFn` carries a company into a handler, a sequence or a replay key. With it, D23
+applies unchanged, including `E_MODEL_NO_SCOPE` for a model that does not say.
+
+**A switch, not a rule inferred from the models.** Inferring it would make one module's validity depend
+on the other modules in the deployment: composing a company-scoped module would turn another module's
+omitted scope from global into an error. The switch puts the decision where D23's risk lives, in the
+deployment, which says it once.
+
+**Cost:** every deployment with company-scoped models adds `companies: true`. Until it does,
+composition fails rather than silently dropping the company columns. A deployment with only shared
+models that counted sequences or job unique keys under the implicit `default` company sees those keys
+change; setting `companies: true` keeps them.
+
+**Reversible:** per deployment, by setting or removing the flag. Removing it from a deployment that has
+company-scoped models is a composition error, not a migration.
