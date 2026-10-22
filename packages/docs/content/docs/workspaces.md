@@ -42,7 +42,7 @@ Deployment and module names use lowercase letters, digits, and underscores and b
 
 | Field | Meaning |
 | --- | --- |
-| `name` | Stable deployment identity used by the CLI and runtime artifacts. |
+| `name` | Stable deployment identity used by the CLI and runtime artifacts; unique within a workspace (`E_DEPLOYMENT_DUPLICATE`). |
 | `modules` | Complete module list, including string references resolved from `modulePaths`. |
 | `theme`, `themes` | Default and selectable theme modules. |
 | `datastore` | Logical datastore name. Deployments with the same value share a checked union schema. |

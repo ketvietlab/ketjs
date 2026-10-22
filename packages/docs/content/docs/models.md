@@ -225,7 +225,11 @@ Every model selects one isolation scope:
 There is no default. Accidentally treating company data as shared is a silent data leak, so omission
 is a composition error.
 
-KetJS adds and enforces scope columns centrally. A request scope separates reads from writes:
+KetJS adds and enforces scope columns centrally, so a `company` or `company+branch` model cannot declare
+`companyId` or `branchId` itself (`E_SCOPE_FIELD_RESERVED`); a `shared` model may still name a company in
+an ordinary field. A field name is letters, digits and underscores, starting with a letter or underscore,
+and cannot be `__proto__`, `constructor` or `prototype` (`E_FIELD_NAME`). A request scope separates reads
+from writes:
 
 ```ts
 // File: src/modules/order/models.ts

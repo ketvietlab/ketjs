@@ -204,7 +204,18 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
   const manifests: Record<string, Manifest> = {}
   const usedBy = new Map<string, string[]>()
 
+  const names = new Set<string>()
   for (const deployment of deployments) {
+    if (names.has(deployment.name)) {
+      diag.add({
+        code: 'E_DEPLOYMENT_DUPLICATE',
+        module: deployment.name,
+        message: `two deployments are named "${deployment.name}"; the second would replace the first`,
+        hint: 'give every deployment in a workspace its own name',
+      })
+      continue
+    }
+    names.add(deployment.name)
     const mods = [
       ...deployment.modules,
       ...(deployment.theme ? [deployment.theme] : []),

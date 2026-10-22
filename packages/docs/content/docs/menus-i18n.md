@@ -46,7 +46,8 @@ export const sales = defineModule({
 ```
 
 A root entry is a top-level section. An entry without `path` is a heading. `parent` references a global menu ID,
-and a module parenting onto another module's entry must declare that dependency.
+and a module parenting onto another module's entry must declare that dependency. Entries whose parents lead
+back to themselves have no root to render under and are refused as `E_MENU_CYCLE`.
 
 Unknown parents, duplicate IDs, dependency violations, and invalid depths are composition errors.
 
