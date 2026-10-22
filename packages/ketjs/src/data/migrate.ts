@@ -5,6 +5,7 @@
 // you can see them, but refused unless explicitly allowed. "Don't drop fields"
 // stops being discipline someone has to remember and becomes something the tool enforces.
 
+import { KetError } from '../kernel/errors.ts'
 import { sqlTypeOf } from '../kernel/types.ts'
 import type { Adapter, Manifest, FieldBase } from '../types.ts'
 
@@ -96,6 +97,67 @@ export function schemaFromManifest(manifest: Manifest): Schema {
     }
   }
   return { version: 1, tables }
+}
+
+/**
+ * The tenant columns a table carries: none for a shared model, `companyId` for a
+ * company-scoped one, and `branchId` as well below a branch. Two deployments that
+ * disagree about this read one table under different isolation rules.
+ */
+export const scopeSignature = (table: Table): string =>
+  Object.entries(table.columns)
+    .filter(([, column]) => column.by === '(scope)')
+    .map(([name]) => name)
+    .sort()
+    .join(',') || 'shared'
+
+/**
+ * The schema one database must hold when several deployments share it: every
+ * table each of them needs, with `own` — the deployment migrating now — winning
+ * where definitions overlap. A table that is a different model, or the same model
+ * under a different scope, in two deployments cannot be merged and is refused.
+ */
+export function datastoreSchema(
+  own: Schema,
+  others: Readonly<Record<string, Schema>>,
+  deployment = '',
+): Schema {
+  const tables: Record<string, Table> = {}
+  const from: Record<string, string> = {}
+  const add = (name: string, table: Table, by: string) => {
+    const existing = tables[name]
+    if (!existing) {
+      tables[name] = structuredClone(table)
+      from[name] = by
+      return
+    }
+    const where = `table "${name}" is ${existing.model} (${scopeSignature(existing)}) in "${from[name]}" but ${table.model} (${scopeSignature(table)}) in "${by}"`
+    if (existing.model !== table.model)
+      throw new KetError({
+        code: 'E_DATASTORE_MODEL_CLASH',
+        message: `deployments sharing this datastore disagree: ${where}`,
+        hint: 'rename one of the models, or give the deployments different datastores',
+      })
+    if (scopeSignature(existing) !== scopeSignature(table))
+      throw new KetError({
+        code: 'E_DATASTORE_SCOPE_CLASH',
+        message: `deployments sharing this datastore disagree about tenant isolation: ${where}`,
+        hint: 'every deployment must install the same version of the module that owns the model',
+      })
+    const merged = structuredClone(table)
+    tables[name] = {
+      ...merged,
+      columns: { ...existing.columns, ...merged.columns },
+      indexes: { ...existing.indexes, ...merged.indexes },
+    }
+    from[name] = by
+  }
+  for (const name of Object.keys(others).sort()) {
+    if (name === deployment) continue
+    for (const [table, def] of Object.entries((others[name] as Schema).tables)) add(table, def, name)
+  }
+  for (const [table, def] of Object.entries(own.tables)) add(table, def, deployment || '(this deployment)')
+  return { version: own.version, tables }
 }
 
 export class DestructiveMigrationError extends Error {

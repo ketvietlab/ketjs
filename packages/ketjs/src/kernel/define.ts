@@ -9,6 +9,7 @@ const MODULE_KEYS = new Set([
   'name',
   'version',
   'depends',
+  'optional',
   'compatible',
   'models',
   'extend',
@@ -67,6 +68,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     name: spec.name,
     version: spec.version ?? '0.0.0',
     depends: Object.freeze([...(spec.depends ?? [])]),
+    optional: Object.freeze([...(spec.optional ?? [])]),
     compatible: Object.freeze({ ...(spec.compatible ?? {}) }),
     models: spec.models ?? {},
     extend: spec.extend ?? {},
@@ -95,7 +97,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     relations: spec.relations ?? {},
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
-    category: spec.category ?? 'Khác',
+    category: spec.category ?? 'Other',
     messages: spec.messages ?? {},
   })
 }
@@ -155,5 +157,5 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       })
     }
   }
-  return defineModule({ category: 'Giao diện', ...spec, kind: 'theme' })
+  return defineModule({ category: 'Theme', ...spec, kind: 'theme' })
 }

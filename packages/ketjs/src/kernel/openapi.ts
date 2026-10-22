@@ -58,10 +58,23 @@ const parameters = (schema: JsonSchema | undefined, location: 'path' | 'query' |
   }))
 }
 
+// Every binding response carries the id its log records and error body share, so a
+// client can quote it in a support request whatever the status.
+const REQUEST_ID_HEADER = {
+  'X-Request-Id': {
+    description: 'Identifies this request in server logs; also `error.requestId` in an error body.',
+    schema: { type: 'string' },
+  },
+}
+
 const response = (status: string, schema: JsonSchema) =>
   status === '204'
-    ? { description: REASONS[status] }
-    : { description: REASONS[status] ?? `Status ${status}`, content: { 'application/json': { schema } } }
+    ? { description: REASONS[status], headers: REQUEST_ID_HEADER }
+    : {
+        description: REASONS[status] ?? `Status ${status}`,
+        headers: REQUEST_ID_HEADER,
+        content: { 'application/json': { schema } },
+      }
 
 /**
  * An OpenAPI 3.1 document for one profile. Schemas stay inline, and the same

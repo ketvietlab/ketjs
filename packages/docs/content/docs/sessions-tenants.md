@@ -9,9 +9,15 @@ Sessions answer who a request represents; scope answers which company and branch
 read and write; tenants answer which database contains that identity and data. KetJS keeps these
 contracts separate because deployments resolve them in different orders.
 
+Companies and tenants are both opt-in. A deployment without `companies: true` has one global scope:
+requests, sessions and jobs carry no company, and the company headers and `KET_COMPANY` below are
+ignored. See [company scope](/docs/models/#company-scope-is-opt-in). A deployment without
+`serve.tenants` uses one datastore.
+
 ## Development identity shim
 
-Without `serve.sessions`, the runtime reads company context from headers:
+Without `serve.sessions` or `serve.resolveIdentity`, a development runtime allows every function. With
+`companies: true` it also reads company context from headers:
 
 ```text
 # File: packages/docs/content/docs/sessions-tenants.md
@@ -21,7 +27,14 @@ X-Ket-Current-Branch
 X-Ket-Branch
 ```
 
-This allows early development and tests but is not authentication. Production applications should
+This allows early development and tests but is not authentication. Only `KET_DEV=1` enables it.
+`ket dev`, `ket serve --watch`, the scaffold's `npm run dev`, the test harness and a local `ket call`
+without `--against` set that flag. It is read from the environment only and cannot be declared in
+`serve.defaults`.
+
+Any other runtime without authentication, including `npm start` and `ket serve`, ignores these headers.
+Every caller is anonymous and may call only functions declared `anonymous: true`; other functions
+answer `403 E_FN_NOT_PERMITTED`. With `companies: true` the caller acts in the `KET_COMPANY` company. Production applications should
 configure sessions and resolve current account state.
 
 ## Enable sessions
@@ -52,16 +65,22 @@ Set a stable signing key in every environment:
 KET_SECRET='a-long-random-deployment-secret' ket serve
 ```
 
+Outside local development, boot refuses a deployment with sessions and neither `KET_SECRET` nor
+`sessions.secret` (`E_SESSION_SECRET_REQUIRED`). A generated key would sign every user out on restart
+and differ between pods. With `KET_DEV=1`, as `ket dev` sets, KetJS generates one per process.
+
 ### Authenticate without a company
 
-Existing deployments require at least one readable company and an active company by default.
-An account-based application can explicitly opt into `sessions.requireCompany: false` and start a
-session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
+A deployment without `companies: true` has no company to require: a session starts with
+`companies: []` and acts in the global scope. With `companies: true`, sessions require at least one
+readable company and an active company by default. An account-based application can then explicitly
+opt into `sessions.requireCompany: false` and start a session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
 reads and writes still fail without the scope those operations require. Selected companies must
 still belong to the readable set, and a branch still requires an active company and membership
 in the readable branch set when that set is restricted. One context validator applies at issuance,
 cookie reads, updates and gateway assertions. Invalid stored contexts are destroyed. Gateway
-assertions use the active session manager's policy; a missing policy retains the required-company default.
+assertions use the active session manager's policy; without one, they require a company only when
+the deployment sets `companies: true`.
 
 ```ts
 // File: example-app/ket.workspace.ts
@@ -73,14 +92,13 @@ serve: {
 ```
 
 The same opt-in permits companyless `resolveIdentity` assertions when those session options are
-configured. Gateway-only deployments retain the company-required default. No account model name
+configured. Gateway-only deployments with `companies: true` require a company. No account model name
 is prescribed: the application implements its live-state and permission resolvers. The
 [authentication starter](/docs/auth-starter/) generates a complete working example.
 
 Tenant session facades preserve this policy across pool eviction and reject a replacement manager
 with a different policy. Switching an existing datastore back to company-required sessions rejects
-stored companyless cookies rather than giving them an implicit company. Existing KetSuite models,
-resolvers and configuration do not need changes.
+stored companyless cookies rather than giving them an implicit company.
 
 If the secret is absent, KetJS generates an ephemeral value and reports it in the banner. That is
 acceptable for an isolated test, not a multi-pod deployment or restart-stable login.
@@ -113,7 +131,9 @@ Logout calls `sessions.end(request)` and returns `sessions.clearCookie()`. Admin
 invalidate all sessions for a user with `endUser()` or every session except the current one with
 `endUserExcept()`.
 
-The cookie is signed, `HttpOnly`, `SameSite=Lax`, path-wide, and secure outside local plain HTTP.
+The cookie is signed, `HttpOnly`, `SameSite=Lax` and path-wide. It is `Secure` unless `KET_DEV=1`,
+whatever address the process binds: a server on `127.0.0.1` behind a TLS-terminating proxy is still
+public. Set `sessions.secure: false` only for a deployment that is deliberately served over plain HTTP.
 Sessions have an idle deadline refreshed during use plus an absolute, non-refreshable deadline.
 
 ## Revalidate live identity
@@ -141,8 +161,10 @@ resolveSession: async ({ adapter, record }) => {
 }
 ```
 
-Return `null` to reject the session. KetJS updates context atomically by session revision so concurrent
-company switching cannot silently overwrite newer state.
+Return `null` to reject the session. A `securityVersion` different from the session's also rejects
+it: KetJS destroys the session instead of re-stamping it, so raising an account's version after a
+password change or a role removal signs out every existing cookie. Otherwise KetJS updates context
+atomically by session revision so concurrent company switching cannot silently overwrite newer state.
 
 Keep `branches` consistent when issuing and resolving sessions: `null` means unrestricted branches,
 while `[]` means no readable branches. The account starter uses `[]` at both points so initial
@@ -160,8 +182,10 @@ serve: {
 ```
 
 Returning an array restricts every function call for that request, including calls made by routes.
-Returning `null` means no restriction. Prefer an explicit role resolver in production rather than
-omitting the callback accidentally.
+Returning `null` means no restriction. A deployment that authenticates users through `sessions` or
+`resolveIdentity` must declare the callback: boot refuses it otherwise (`E_PERMISSIONS_REQUIRED`), so
+forgetting it closes the deployment instead of opening every function to every signed-in user. An
+application with no roles yet says so with `permissions: async () => null`.
 
 The request comes with it because answering the question almost always means asking the database, and
 which database that is comes from the request. Pass `url` and `req` straight through to

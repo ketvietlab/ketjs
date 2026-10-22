@@ -44,6 +44,13 @@ export type RuntimeConfig = {
   /** Until there is authentication, the company a request acts as comes from here. */
   defaultCompany: string
   /**
+   * Whether a deployment without authentication trusts the X-Ket-Company family of
+   * request headers as its identity. Only `KET_DEV=1` turns it on, which `ket dev`,
+   * `--watch` and the test harness set; it cannot be a deployment default, so a
+   * production process never inherits it from source.
+   */
+  developmentIdentity: boolean
+  /**
    * Signing key for session cookies. It MUST be the same on every pod — a cookie
    * signed by one and rejected by another is a login that works until the load
    * balancer sends you elsewhere.
@@ -77,9 +84,12 @@ export type RuntimeConfig = {
   logBuffer: number
 }
 
+/** Deployment-declared fallbacks. The development identity is deliberately environment-only. */
+export type RuntimeDefaults = Partial<Omit<RuntimeConfig, 'developmentIdentity'>>
+
 export function readConfig(
   env: Record<string, string | undefined> = process.env,
-  defaults: Partial<RuntimeConfig> = {},
+  defaults: RuntimeDefaults = {},
 ): RuntimeConfig {
   const defaultTimezone = env.KET_TIMEZONE ?? defaults.defaultTimezone ?? 'UTC'
   if (!isTimezone(defaultTimezone)) {
@@ -172,6 +182,7 @@ export function readConfig(
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultTimezone,
     defaultCompany: env.KET_COMPANY ?? defaults.defaultCompany ?? 'default',
+    developmentIdentity: env.KET_DEV === '1',
     secret: env.KET_SECRET ?? defaults.secret ?? null,
     webhookSecret: env.KET_WEBHOOK_SECRET ?? defaults.webhookSecret ?? null,
     queueNotify:

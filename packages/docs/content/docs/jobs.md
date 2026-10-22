@@ -97,7 +97,9 @@ await ctx.jobs.enqueue('billing.issueInvoice', { orderId }, {
 
 - Lower priority numbers run first.
 - `runAt` schedules future availability.
-- `uniqueKey` coalesces active jobs with the same job name and key.
+- `uniqueKey` coalesces active jobs with the same job name and key in the same company. Companies that
+  share a database never coalesce with each other, so a key such as `invoice:${orderId}` cannot hand one
+  company the job of another; jobs enqueued without a company, such as schedule fan-out, share one space.
 
 Queue uniqueness prevents duplicate active delivery; it does not replace business idempotency. A key
 is released after a terminal state, and an at-least-once worker may still retry a handler whose result
@@ -212,7 +214,7 @@ ket worker --deployment erp --workspace dist/ket.workspace.js
 In development:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket dev --all --deployment erp --workspace dist/ket.workspace.js
 ```
 
@@ -271,7 +273,7 @@ idempotency keys and provider APIs that accept abort signals.
 ## Operator commands
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket jobs list --state retryable --queue mail --limit 50
 ket jobs retry JOB_ID
 ket jobs cancel JOB_ID

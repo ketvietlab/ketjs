@@ -15,6 +15,9 @@ import type { RoutePattern } from './routes.ts'
 import { tableNameFor } from '../data/migrate.ts'
 import { compilePermissionBundles } from './permissions.ts'
 import { composeHttpBindings, FN_RETURNS } from './http-binding.ts'
+import { bindHandlers } from './handlers.ts'
+import { satisfies } from './semver.ts'
+import { KETJS_VERSION } from './version.generated.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
 const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
@@ -62,6 +65,21 @@ function normalizeField(declared: string | import('../types.ts').FieldDef): Norm
 }
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
+
+// A field name is a property key everywhere a row travels. `__proto__` assigned to
+// a plain object changes its prototype instead of adding a field, so the field
+// silently vanished; the other two shadow what every object already has.
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+const RESERVED_FIELD_NAMES: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype'])
+const fieldNameProblem = (name: string): string | null =>
+  !FIELD_NAME.test(name)
+    ? 'must be letters, digits and underscores, starting with a letter or underscore'
+    : RESERVED_FIELD_NAMES.has(name)
+      ? 'is reserved by JavaScript objects'
+      : null
+// A function name is part of a URL (/_ket/fn/module.name) and of a permission key.
+// Dots and hyphens may separate segments; spaces and other characters may not.
+const FUNCTION_NAME = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*$/
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
 export function compose(
@@ -72,14 +90,95 @@ export function compose(
     requirePermissionCoverage?: boolean
     roleTemplates?: Record<string, RoleTemplateDef>
     modulePermissionDeclarations?: Record<string, ModulePermissionsDef>
+    /** Scope rows by company. Off: every model is shared and requests carry no company. */
+    companies?: boolean
   } = {},
 ): Manifest {
   const diag = new Diagnostics()
+  const companies = opts.companies === true
   const order = topoSort(modules)
   const canSee = (m: KetModule, other: string) => m.name === other || m.depends.includes(other)
 
+  // What an effect may name: the module itself, everything its depends reach
+  // transitively, and the modules it declares optional. An effect is what the
+  // runtime lets a handler touch, so it is held to the same graph a migration and
+  // a permission inventory read, not only to the direct depends list.
+  const present = new Map(order.map((m) => [m.name, m]))
+  const closures = new Map<string, ReadonlySet<string>>()
+  const closureOf = (m: KetModule): ReadonlySet<string> => {
+    const known = closures.get(m.name)
+    if (known) return known
+    const seen = new Set([m.name])
+    const pending = [...m.depends]
+    while (pending.length) {
+      const next = pending.pop() as string
+      if (seen.has(next)) continue
+      seen.add(next)
+      pending.push(...(present.get(next)?.depends ?? []))
+    }
+    closures.set(m.name, seen)
+    return seen
+  }
+  // A module object built without defineModule() has no optional list.
+  const optionalOf = (m: KetModule): readonly string[] => m.optional ?? []
+  const reaches = (m: KetModule, other: string) => closureOf(m).has(other) || optionalOf(m).includes(other)
+  for (const m of order) {
+    for (const name of optionalOf(m)) {
+      if (typeof name === 'string' && name !== m.name && name.length) continue
+      diag.add({
+        code: 'E_OPTIONAL_MODULE',
+        module: m.name,
+        message: `module "${m.name}" declares optional ${JSON.stringify(name)}`,
+        hint: 'name another module whose models or jobs this one uses when it is present',
+      })
+    }
+  }
+
+  /**
+   * One read or write effect of a function or job. A model in a module that this
+   * deployment includes must exist, so a misspelt effect fails. A module outside
+   * the depends closure must be declared optional: for a job that was always an
+   * error; for a function it was never checked, so it is a warning until 1.0.
+   */
+  const checkModelEffect = (m: KetModule, kind: 'function' | 'job', key: string, effect: string): void => {
+    const match = /^(read|write):(.+)$/.exec(effect)
+    const target = match?.[2] ?? ''
+    const model = match ? manifest.models[target] : undefined
+    const owner = model?.owner ?? target.slice(0, Math.max(0, target.indexOf('.')))
+    const code = kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT'
+    const outside = (message: string) => {
+      const finding = {
+        code: `${code}_NOT_DEPENDED`,
+        module: m.name,
+        message,
+        hint: `add "${owner}" to depends, or to optional when the integration is soft`,
+      }
+      // A job was refused before the closure rule and still is. A function's model
+      // effects were never checked, so it is told now and refused from 1.0.
+      if (kind === 'job') diag.add(finding)
+      else diag.warn({ ...finding, hint: `${finding.hint}; this becomes an error in KetJS 1.0` })
+    }
+    if (model) {
+      if (!reaches(m, owner))
+        outside(`${kind} "${key}" touches ${target} but neither depends on nor declares optional "${owner}"`)
+      return
+    }
+    // An optional module this deployment does not include: nothing to reach.
+    if (owner && !present.has(owner) && optionalOf(m).includes(owner)) return
+    if (kind === 'function' && owner && !present.has(owner)) {
+      outside(`function "${key}" touches ${target} in "${owner}", which this deployment does not include`)
+      return
+    }
+    diag.add({
+      code,
+      module: m.name,
+      message: `${kind} "${key}" declares unknown effect "${effect}"`,
+      ...(present.has(owner) ? { hint: `"${owner}" has no model "${target}"` } : {}),
+    })
+  }
+
   const manifest: Manifest = {
-    ket: '0.0.0',
+    ket: KETJS_VERSION,
     order: order.map((m) => m.name),
     modules: {},
     models: {},
@@ -114,6 +213,7 @@ export function compose(
     routePrefixes: {},
     patches: [],
     messages: {},
+    companies,
   }
 
   for (const m of order) {
@@ -144,10 +244,6 @@ export function compose(
     }
   }
 
-  const major = (version: string): number | null => {
-    const match = /^(?:\^)?(\d+)(?:\.|$)/.exec(version.trim())
-    return match ? Number(match[1]) : null
-  }
   for (const m of order) {
     for (const [dependency, range] of Object.entries(m.compatible ?? {})) {
       if (!m.depends.includes(dependency)) {
@@ -160,11 +256,16 @@ export function compose(
         continue
       }
       const actual = order.find((candidate) => candidate.name === dependency)?.version
-      const wantedMajor = major(range)
-      const actualMajor = actual ? major(actual) : null
-      const matches = range.startsWith('^')
-        ? wantedMajor != null && actualMajor === wantedMajor
-        : actual === range
+      const matches = actual === undefined ? false : satisfies(actual, range)
+      if (matches === null) {
+        diag.add({
+          code: 'E_MODULE_COMPATIBILITY_RANGE',
+          module: m.name,
+          message: `"${m.name}" declares an unreadable range ${JSON.stringify(range)} for "${dependency}" (version ${actual})`,
+          hint: 'write a version such as 1.2.3, 1.2, ^1.2.3 or ~1.2.3; the dependency version must be x.y.z',
+        })
+        continue
+      }
       if (!matches) {
         diag.add({
           code: 'E_MODULE_VERSION_SKEW',
@@ -330,20 +431,32 @@ export function compose(
         })
         continue
       }
-      if (!def.scope) {
+      // Without companies every model is shared and saying so is optional. With
+      // them there is no default, because the safe-looking one is the one that leaks.
+      if (!def.scope && companies) {
         diag.add({
           code: 'E_MODEL_NO_SCOPE',
           module: m.name,
           message: `model "${key}" does not declare a scope`,
-          hint: "every model must say 'shared', 'company' or 'company+branch' — there is no default, because the safe-looking one is the one that leaks",
+          hint: "this deployment scopes by company, so every model must say 'shared', 'company' or 'company+branch' — there is no default, because the safe-looking one is the one that leaks",
         })
         continue
       }
-      if (!['shared', 'company', 'company+branch'].includes(def.scope)) {
+      const scope = def.scope ?? 'shared'
+      if (!['shared', 'company', 'company+branch'].includes(scope)) {
         diag.add({
           code: 'E_MODEL_BAD_SCOPE',
           module: m.name,
-          message: `model "${key}" has unknown scope "${def.scope}"`,
+          message: `model "${key}" has unknown scope "${scope}"`,
+        })
+        continue
+      }
+      if (scope !== 'shared' && !companies) {
+        diag.add({
+          code: 'E_COMPANIES_DISABLED',
+          module: m.name,
+          message: `model "${key}" is scoped '${scope}', but the deployment does not scope by company`,
+          hint: "set companies: true on the deployment, or make the model 'shared'",
         })
         continue
       }
@@ -352,14 +465,37 @@ export function compose(
       // The scope columns are added by the composer, never by the module: a module
       // that spelled them itself could spell them differently, and the filter would
       // silently stop matching.
-      if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
-      if (def.scope === 'company+branch')
-        fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (scope === 'company+branch') fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
       if (def.timestamps) {
         fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
         fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
       }
       for (const [fname, declared] of Object.entries(def.fields ?? {})) {
+        const problem = fieldNameProblem(fname)
+        if (problem) {
+          diag.add({
+            code: 'E_FIELD_NAME',
+            module: m.name,
+            message: `${key}: field name "${fname}" ${problem}`,
+          })
+          continue
+        }
+        // The scope column is the company boundary. Declared by the module it would
+        // replace the composer's (and could be optional), so the filter's column and
+        // the model's could disagree.
+        if (
+          (scope !== 'shared' && fname === 'companyId') ||
+          (scope === 'company+branch' && fname === 'branchId')
+        ) {
+          diag.add({
+            code: 'E_SCOPE_FIELD_RESERVED',
+            module: m.name,
+            message: `${key}.${fname} is supplied by scope: '${scope}'`,
+            hint: 'remove the field; a scoped model gets its tenant columns from the composer',
+          })
+          continue
+        }
         if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
           diag.add({
             code: 'E_TIMESTAMP_FIELD_RESERVED',
@@ -435,7 +571,7 @@ export function compose(
       }
       manifest.models[key] = {
         owner: m.name,
-        scope: def.scope,
+        scope,
         timestamps: def.timestamps === true,
         append: def.append === true,
         fields,
@@ -478,7 +614,16 @@ export function compose(
           })
           continue
         }
-        const existing = model.fields[fname]
+        const problem = fieldNameProblem(fname)
+        if (problem) {
+          diag.add({
+            code: 'E_FIELD_NAME',
+            module: m.name,
+            message: `${target}: field name "${fname}" ${problem}`,
+          })
+          continue
+        }
+        const existing = Object.hasOwn(model.fields, fname) ? model.fields[fname] : undefined
         if (existing) {
           diag.add({
             code: 'E_FIELD_COLLISION',
@@ -649,6 +794,26 @@ export function compose(
       }
     }
   }
+  // A parent chain that returns to where it started has no root, so buildMenu()
+  // would render none of it and nobody would be told why.
+  const inCycle = new Set<string>()
+  for (const id of Object.keys(manifest.menus)) {
+    const path: string[] = []
+    let at: string | undefined = id
+    while (at !== undefined && manifest.menus[at] && !path.includes(at) && !inCycle.has(at)) {
+      path.push(at)
+      at = manifest.menus[at]?.parent
+    }
+    if (at === undefined || !path.includes(at)) continue
+    const cycle = path.slice(path.indexOf(at))
+    for (const member of cycle) inCycle.add(member)
+    diag.add({
+      code: 'E_MENU_CYCLE',
+      module: manifest.menus[at]?.by ?? null,
+      message: `menus hang under each other in a cycle: ${[...cycle, at].join(' -> ')}`,
+      hint: 'one entry of the cycle must hang under a root menu or have no parent',
+    })
+  }
 
   // --- joints (published extension points) and fills -----------------------
   for (const m of order) {
@@ -745,6 +910,15 @@ export function compose(
   // --- server functions ----------------------------------------------------
   for (const m of order) {
     for (const [fname, def] of Object.entries(m.functions)) {
+      if (!FUNCTION_NAME.test(fname)) {
+        diag.add({
+          code: 'E_FUNCTION_NAME',
+          module: m.name,
+          message: `invalid function name ${JSON.stringify(fname)}`,
+          hint: 'use letters, digits, "_" and "-", with "." between segments',
+        })
+        continue
+      }
       if (def.transactional && (def.idempotent !== true || def.dryRun === true)) {
         diag.add({
           code: 'E_FUNCTION_TRANSACTION',
@@ -783,6 +957,9 @@ export function compose(
           hint: 'drop the output fields, or say how many rows it returns',
         })
       }
+      for (const effect of def.effects ?? [])
+        if (effect.startsWith('read:') || effect.startsWith('write:'))
+          checkModelEffect(m, 'function', qualify(m.name, fname), effect)
       manifest.functions[qualify(m.name, fname)] = {
         by: m.name,
         input: def.input ?? {},
@@ -796,7 +973,7 @@ export function compose(
         provision: def.provision === true,
         idempotent: def.idempotent === true,
         ...(def.transactional === true ? { transactional: true as const } : {}),
-        dryRun: def.transactional ? false : def.dryRun !== false,
+        dryRun: def.transactional ? false : def.dryRun === true,
         agent: def.agent === true,
       }
     }
@@ -940,23 +1117,7 @@ export function compose(
           effect === 'transport:send'
         )
           continue
-        const match = /^(read|write):(.+)$/.exec(effect)
-        const model = match ? manifest.models[match[2] as string] : null
-        if (!match || !model) {
-          diag.add({
-            code: 'E_JOB_EFFECT',
-            module: m.name,
-            message: `job "${key}" declares unknown effect "${effect}"`,
-          })
-          continue
-        }
-        if (!canSee(m, model.owner)) {
-          diag.add({
-            code: 'E_JOB_EFFECT_NOT_DEPENDED',
-            module: m.name,
-            message: `job "${key}" touches ${match[2]} but does not depend on "${model.owner}"`,
-          })
-        }
+        checkModelEffect(m, 'job', key, effect)
       }
       manifest.jobs[key] = {
         by: m.name,
@@ -993,6 +1154,9 @@ export function compose(
         if (!effect.startsWith('enqueue')) continue
         const match = /^enqueue:(.+)$/.exec(effect)
         const target = match ? manifest.jobs[match[1] as string] : null
+        const owner = (match?.[1] ?? '').slice(0, (match?.[1] ?? '').indexOf('.'))
+        // A job of an optional module this deployment does not include.
+        if (match && !target && !present.has(owner) && optionalOf(m).includes(owner)) continue
         if (!match || !target) {
           diag.add({
             code: producer.kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT',
@@ -1001,7 +1165,7 @@ export function compose(
           })
           continue
         }
-        if (!canSee(m, target.by)) {
+        if (!reaches(m, target.by)) {
           diag.add({
             code: producer.kind === 'job' ? 'E_JOB_EFFECT_NOT_DEPENDED' : 'E_FN_EFFECT_NOT_DEPENDED',
             module: m.name,
@@ -1065,6 +1229,27 @@ export function compose(
           module: m.name,
           message: `view "${key}" exposes field(s) not on ${def.of}: ${missing.join(', ')}`,
           hint: `available: ${Object.keys(model.fields).join(', ')}`,
+        })
+        continue
+      }
+      // A view is what a theme receives. A sensitive field must never leave the
+      // system, and a view is the one declaration that would hand it to a template.
+      const sensitive = (def.fields ?? []).filter((f) => model.fields[f]?.sensitive)
+      if (sensitive.length) {
+        diag.add({
+          code: 'E_VIEW_SENSITIVE_FIELD',
+          module: m.name,
+          message: `view "${key}" exposes sensitive field(s) of ${def.of}: ${sensitive.join(', ')}`,
+          hint: 'a sensitive field never reaches presentation; derive a non-sensitive field if a template needs one',
+        })
+        continue
+      }
+      if (!closureOf(m).has(model.owner)) {
+        diag.add({
+          code: 'E_VIEW_NOT_DEPENDED',
+          module: m.name,
+          message: `view "${key}" projects ${def.of} but "${m.name}" does not depend on "${model.owner}"`,
+          hint: `add "${model.owner}" to depends; a module publishes views only over models it builds on`,
         })
         continue
       }
@@ -1408,12 +1593,33 @@ export function compose(
   }
 
   // --- tokens: later modules layer over earlier ones ------------------------
-  for (const m of order) Object.assign(manifest.tokens, m.tokens)
+  //
+  // Layering is the point when one module builds on another, and a theme overriding
+  // modules is what a theme is for. Two unrelated modules giving one token different
+  // values is neither: the winner is whichever the dependency sort put last.
+  const tokenSetBy: Record<string, KetModule> = {}
+  for (const m of order) {
+    if (m.kind !== 'theme') {
+      for (const [name, value] of Object.entries(m.tokens ?? {})) {
+        const previous = tokenSetBy[name]
+        if (previous && previous.tokens[name] !== value && !closureOf(m).has(previous.name))
+          diag.warn({
+            code: 'E_TOKEN_CONFLICT',
+            module: m.name,
+            message: `"${previous.name}" and "${m.name}" both set token "${name}" (${String(previous.tokens[name])} and ${String(value)}) and neither depends on the other; "${m.name}" wins by composition order only`,
+            hint: 'leave the token to one module or to the theme, or make one module depend on the other',
+          })
+        tokenSetBy[name] = m
+      }
+    }
+    Object.assign(manifest.tokens, m.tokens)
+  }
 
   // --- HTTP bindings: last, because they read functions, routes and messages ---
   composeHttpBindings(order, manifest, diag)
 
   diag.throwIfAny()
-  manifest.diagnostics = []
+  manifest.diagnostics = diag.warnings
+  bindHandlers(manifest, order)
   return manifest
 }

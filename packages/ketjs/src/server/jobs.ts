@@ -5,8 +5,6 @@
 import { KetError } from '../kernel/errors.ts'
 import type { JobSpec, KetModule } from '../types.ts'
 
-const registry = new Map<string, JobSpec>()
-
 export function defineJob(spec: JobSpec): JobSpec {
   if (spec.idempotent !== true)
     throw new KetError({
@@ -18,11 +16,16 @@ export function defineJob(spec: JobSpec): JobSpec {
   return spec
 }
 
+/**
+ * The qualified job handlers declared by `modules`.
+ *
+ * @deprecated `compose()` binds handlers to the manifest it returns, and a worker
+ * executes the handler bound to its deployment manifest. This returns a new map and
+ * no longer changes which handler any worker executes.
+ */
 export function registerJobs(modules: KetModule[]): Map<string, JobSpec> {
-  registry.clear()
+  const jobs = new Map<string, JobSpec>()
   for (const module of modules)
-    for (const [name, spec] of Object.entries(module.jobs)) registry.set(`${module.name}.${name}`, spec)
-  return registry
+    for (const [name, spec] of Object.entries(module.jobs)) jobs.set(`${module.name}.${name}`, spec)
+  return jobs
 }
-
-export const jobDefinition = (key: string): JobSpec | null => registry.get(key) ?? null

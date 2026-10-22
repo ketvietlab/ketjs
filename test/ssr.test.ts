@@ -12,6 +12,7 @@ import {
   hydrateRoot,
   renderToStaticString,
   renderToString,
+  trustedMarkup,
   when,
 } from '@ketvietlab/ketjs-view'
 import type { HostNode, TemplateResult } from '@ketvietlab/ketjs-view'
@@ -269,6 +270,22 @@ test('ssr: a hole inside <title> gets no hydration markers, because they are not
   // arrives as literal characters. The browser tab said "<!--k[-->KetSuite<!--k-->".
   assert.equal(renderToString(html`<title>${'KetSuite'}</title>`), '<title>KetSuite</title>')
   assert.equal(renderToString(html`<textarea>${'ghi chú'}</textarea>`), '<textarea>ghi chú</textarea>')
+})
+
+test('ssr: a hole inside <style> or <script> gets none either, and only trusted markup is code there', () => {
+  // A marker in a style sheet opened a selector that swallowed every rule after it,
+  // and in a script `<!--` commented out the rest of the line.
+  const css = trustedMarkup('a > b { color: red }')
+  assert.equal(renderToString(html`<style>${css}</style>`), '<style>a > b { color: red }</style>')
+  assert.equal(
+    renderToString(html`<script>${trustedMarkup('if (a && b < c) go()')}</script>`),
+    '<script>if (a && b < c) go()</script>',
+  )
+  // A plain string is text, so it is escaped: it cannot close the element, and it is not code.
+  assert.equal(
+    renderToString(html`<script>${'</script><script>alert(1)'}</script>`),
+    '<script>&lt;/script&gt;&lt;script&gt;alert(1)</script>',
+  )
 })
 
 test('ssr: and the value is still escaped there', () => {

@@ -74,7 +74,7 @@ const dateTimeOptionsKey = (options: Intl.DateTimeFormatOptions): string =>
   JSON.stringify(
     Object.entries(options)
       .filter(([, value]) => value !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right)),
+      .sort(([left], [right]) => left.localeCompare(right, 'en')),
   )
 
 /**
