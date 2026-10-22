@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} patch release, hydration namespaces and reliable keyed moves.
+description: The coordinated KetJS {{VERSION}} release, fail-closed defaults, opt-in company scope and stricter contracts.
 group: Project evolution
 order: 1
 ---
@@ -15,15 +15,29 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} fixes
+## What {{VERSION}} changes
+
+This release closes defaults that failed open before 1.0, so most applications need changes. Work through [Changes in 0.6.0](/docs/upgrading/#changes-in-0-6-0) on a staging copy first and read every `contract_warning` that `ket check` prints.
+
+- **Company scope is opt-in.** A deployment sets `companies: true` to scope rows by company. Without it, models need no `scope`, and requests, sessions and jobs carry no company. See [Models and scopes](/docs/models/#company-scope-is-opt-in).
+- **Fail-closed identity.** Signing users in requires `serve.permissions`. The development identity needs `KET_DEV=1`. Outside development, sessions need a stable secret and the cookie is always `Secure`. A `/_ket/fn` call with a session must be same-origin JSON.
+- **Explicit previews.** A real call returns `{ ok, value, dryRun }`. Dry runs are opt-in per function and discard the jobs they enqueue.
+- **Stricter contracts.** Effects are held to the transitive `depends` and the new `optional` key. Views cannot expose sensitive fields. Names and `compatible` ranges are validated. A company's row cannot reference another company's row (`E_CROSS_COMPANY_REFERENCE`).
+- **Safer values and rendering.** `datetime` accepts ISO-8601, read in `KET_TIMEZONE` when it has no offset, and `int` must be a safe integer. A bound scripting URL renders as `unsafe:`. `text()`, `bytes()` and `streamed()` refuse markup types.
+- **Operations.** Migrations take a PostgreSQL advisory lock. Deployments sharing a datastore migrate to the union of their schemas. Schema verification finds PostgreSQL indexes whose names exceed 63 bytes. HTTP shutdown is bounded by `serve.shutdownGraceMs`.
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-5-1"></span>
+<span id="what-0-5-1-fixes"></span>
+
+## Previous release: 0.5.1
 
 - **Hydrated SVG updates.** Dynamic holes retain their SVG namespace, including nested templates and keyed entries. Content inside `foreignObject` uses the HTML namespace, and its mixed-case tag no longer causes a hydration mismatch. See [Rendering](/docs/rendering/).
 - **Reliable keyed moves.** Both hydrated and client-rendered entries move the current content of top-level holes with their anchors. Reordering no longer restores removed server content or leaves current content behind.
 - **Minimal first reorder.** Adopted list entries retain their actual positions, so the first reconciliation moves only entries whose position changed.
 
 This patch keeps public APIs and application data schemas unchanged. Deploy matching server and client bundles together; see [Upgrading KetJS](/docs/upgrading/).
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-5-0"></span>
 <span id="what-0-5-0-adds"></span>
