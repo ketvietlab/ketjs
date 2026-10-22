@@ -65,6 +65,7 @@ const app = defineDeployment({
   name: 'multi',
   modules: [core, extra],
   headless: true,
+  companies: true,
   serve: {
     routes: (ctx) => ({
       '/notes': async (url, req) => json(await ctx.call('core.list', {}, url, req)),
@@ -174,7 +175,7 @@ test('tenants: migrations run per tenant, on first touch', async () => {
 test('tenants: an evicted key prepares its replacement adapter before reuse', async () => {
   const opened: string[] = []
   const prepared: string[] = []
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const pool = createAdapterPool({
     max: 1,
     create: (key) => {
@@ -236,7 +237,7 @@ test('tenants: an evicted key prepares its replacement adapter before reuse', as
 })
 
 test('tenants: a rejected preparation is removed from the cache and can retry', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const pool = createAdapterPool({ create: () => sqliteAdapter(), max: 1 })
   let attempts = 0
   const tenants = createTenants({
@@ -267,7 +268,7 @@ test('tenants: a rejected preparation is removed from the cache and can retry', 
 })
 
 test('tenants: a session facade retains no manager from an evicted adapter', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const closed = new WeakSet<Adapter>()
   const managers: string[] = []
   const pool = createAdapterPool({
@@ -338,7 +339,7 @@ test('tenants: a session facade retains no manager from an evicted adapter', asy
 })
 
 test('tenants: a session facade rejects adapter-independent policy drift after eviction', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const drifts: Array<[string, (sessions: Sessions) => Sessions]> = [
     ['requireCompany', (sessions) => ({ ...sessions, requireCompany: false })],
     ['store.name', (sessions) => ({ ...sessions, store: { ...sessions.store, name: 'replacement-store' } })],
@@ -408,6 +409,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
     name: 'async_tenants',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       tenants: {
         resolve: () => 't1',
@@ -440,7 +442,7 @@ test('tenants: with several databases there is no single adapter, and the type s
 })
 
 test('single: one datastore is the same interface, not a second code path', async () => {
-  const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, serve: {} })
+  const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, companies: true, serve: {} })
   const b = await bootDeployment(solo, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   assert.notEqual(b.adapter, null)
   assert.deepEqual(await b.tenants.keys(), [''])
@@ -450,7 +452,7 @@ test('single: one datastore is the same interface, not a second code path', asyn
 })
 
 test('migrate: every tenant is migrated, and one failure does not stop the fleet', async () => {
-  const manifest = compose([core, extra])
+  const manifest = compose([core, extra], { companies: true })
   const good = sqliteAdapter()
   await good.open()
   const ops = await migrateOne(good, manifest)
@@ -475,6 +477,7 @@ const authed = defineDeployment({
   name: 'authed',
   modules: [core],
   headless: true,
+  companies: true,
   serve: {
     sessions: {},
     permissions: async () => null,
@@ -547,6 +550,7 @@ test('sessions: a shared store binds each session to the tenant that issued it',
     name: 'onedomain',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       // Reading the session needs the database and knowing the database needs the
       // session, so the session cannot live in the tenant's database at all.
@@ -595,6 +599,7 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
     name: 'pooled_sessions',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       sessions: {},
       permissions: async () => null,
@@ -636,7 +641,7 @@ test('tenants: a listener holds its tenant open and hears that tenant only', asy
   const tenants = createTenants({
     spec: { resolve: () => null, open: () => sqliteAdapter(), list: async () => ['t1', 't2', 't3'] },
     pool,
-    manifest: compose([core]),
+    manifest: compose([core], { companies: true }),
     joints: () => ({}) as never,
   })
   try {
@@ -694,6 +699,7 @@ test('tenants: subscribe on a tenant deployment needs the request whose tenant i
     name: 'listening',
     modules: [core, notifying],
     headless: true,
+    companies: true,
     serve: {
       routes: (ctx) => ({
         '/listen': async (url, req) => {

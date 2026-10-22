@@ -20,7 +20,7 @@ const shop = (fn: Partial<FnSpec>, extra: Partial<ModuleSpec> = {}) =>
         ...extra,
       }),
     ],
-    { headless: true },
+    { headless: true, companies: true },
   )
 const codes = (before: ReturnType<typeof shop>, after: ReturnType<typeof shop>) =>
   diffManifests(before, after).map((item) => `${item.severity}:${item.code}`)
@@ -56,7 +56,7 @@ test('upgrade diff: a new anonymous function and a widened bundle are reported',
         permissions: permissions(['shop.list']),
       }),
     ],
-    { headless: true },
+    { headless: true, companies: true },
   )
   const after = compose(
     [
@@ -69,7 +69,7 @@ test('upgrade diff: a new anonymous function and a widened bundle are reported',
         },
       }),
     ],
-    { headless: true },
+    { headless: true, companies: true },
   )
   assert.deepEqual(codes(before, after).sort(), ['risky:BUNDLE_WIDENED', 'risky:FUNCTION_ADDED_ANONYMOUS'])
   assert.match(

@@ -111,7 +111,7 @@ function fixture(afterNotify?: () => void) {
 
 async function boot(adapter: Adapter = sqliteAdapter(), afterNotify?: () => void) {
   const state = fixture(afterNotify)
-  const manifest = compose([state.module], { headless: true })
+  const manifest = compose([state.module], { headless: true, companies: true })
   await adapter.open()
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
     await adapter.exec(sql)
@@ -329,6 +329,7 @@ test('form action HTTP uses existing authorization and bindings require an inten
     defineDeployment({
       name: 'form_contract',
       headless: true,
+      companies: true,
       modules: [state.module, api],
       serve: {
         resolveIdentity: async ({ req }) =>

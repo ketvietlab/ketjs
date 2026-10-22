@@ -33,6 +33,16 @@ import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.t
 export const SENSITIVE_MASK = '[sensitive]'
 
 /**
+ * Whether a deployment scopes rows by company. Composition records it; a manifest
+ * built by hand says so through its models.
+ */
+export const scopesByCompany = (manifest: Manifest): boolean =>
+  manifest.companies ?? Object.values(manifest.models).some((model) => model.scope !== 'shared')
+
+/** The one scope of a deployment that does not scope by company. */
+export const globalScope = (): Scope => ({ company: null, companies: null, branch: null, branches: null })
+
+/**
  * A writer for a call that is only rehearsing.
  *
  * A dry run reports what a command would do; announcing it to everyone watching
@@ -75,7 +85,10 @@ export function createContext(o: {
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const root = o.root ?? adapter
-  const scope: Scope = o.scope ?? { company: null, branches: null }
+  // Without companies there is one global scope, whatever the caller passed: a
+  // company named anyway would still split sequences and job keys per company.
+  const companies = scopesByCompany(manifest)
+  const scope: Scope = companies ? (o.scope ?? { company: null, branches: null }) : globalScope()
   const dryRun = o.dryRun ?? false
   const timezone = o.timezone ?? 'UTC'
   const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
@@ -812,6 +825,14 @@ export function createContext(o: {
         // capability is in the manifest rather than in this call.
         const { company: target, ...rest } = options ?? {}
         const named = target?.trim()
+        if (named && !companies) {
+          throw new KetError({
+            code: 'E_COMPANIES_DISABLED',
+            module: operation.by,
+            message: `"${fnKey}" enqueued "${name}" into company "${named}", but the deployment does not scope by company`,
+            hint: 'drop the company, or set companies: true on the deployment',
+          })
+        }
         if (named && !operation.crossCompany) {
           throw new KetError({
             code: 'E_ENQUEUE_COMPANY_NOT_ALLOWED',

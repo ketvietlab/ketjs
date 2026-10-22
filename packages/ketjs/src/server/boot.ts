@@ -18,6 +18,7 @@ import { createTheme } from '../theme/render.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
+import { globalScope, scopesByCompany } from './ctx.ts'
 import { createKetServer } from './http.ts'
 import { assertSessionContext, createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
@@ -468,6 +469,8 @@ export async function bootDeployment(
   // `logSink` is the deployment's operational sink. Different things, and the
   // older name is public API, so the new one is the one that gets qualified.
   const { config, modules, manifest, log: logSink, logger } = await bootRuntime(spec, o)
+  // Off: one global scope. No request, session or development header carries a company.
+  const byCompany = scopesByCompany(manifest)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
   const storages = new Map<string, Storage>()
   const storageFor = (key: string): Storage => {
@@ -526,6 +529,8 @@ export async function bootDeployment(
         // The cookie is Secure unless this is local development. The bind address says
         // nothing about the scheme: a server on 127.0.0.1 behind a TLS proxy is public.
         secure: !config.developmentIdentity,
+        // A deployment without companies has no company to require of a session.
+        requireCompany: byCompany,
         ...serve.sessions,
         ...(configuredSessionSecret ? { secret: configuredSessionSecret } : {}),
         ...(generatedTenantSecret ? { secret: generatedTenantSecret, ephemeralSecret: true } : {}),
@@ -661,7 +666,7 @@ export async function bootDeployment(
             expiresAt: now,
           }
           try {
-            assertSessionContext(asserted, { requireCompany: manager?.requireCompany ?? true })
+            assertSessionContext(asserted, { requireCompany: manager?.requireCompany ?? byCompany })
           } catch {
             return null
           }
@@ -731,6 +736,7 @@ export async function bootDeployment(
    * a session id issued by one tenant is not a row in another's table at all.
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
+    if (!byCompany) return globalScope()
     if (!authenticationEnabled && !developmentIdentity)
       return { company: config.defaultCompany, companies: null, branch: null, branches: null }
     if (!authenticationEnabled) {
@@ -1589,7 +1595,9 @@ export async function bootDeployment(
           : authenticationEnabled
             ? 'resolveIdentity'
             : developmentIdentity
-              ? 'X-Ket-Company header (development)'
+              ? byCompany
+                ? 'X-Ket-Company header (development)'
+                : 'development identity'
               : 'anonymous',
       ],
     ]
@@ -1602,9 +1610,12 @@ export async function bootDeployment(
       : authenticationEnabled
         ? ''
         : developmentIdentity
-          ? `\n  Development identity: the company comes from the X-Ket-Company header,` +
-            `\n  defaulting to "${config.defaultCompany}". KET_DEV=1 enables this; never set it in production.`
-          : `\n  No authentication: every caller is anonymous in company "${config.defaultCompany}"` +
+          ? byCompany
+            ? `\n  Development identity: the company comes from the X-Ket-Company header,` +
+              `\n  defaulting to "${config.defaultCompany}". KET_DEV=1 enables this; never set it in production.`
+            : `\n  Development identity: every function may be called without signing in.` +
+              `\n  KET_DEV=1 enables this; never set it in production.`
+          : `\n  No authentication: every caller is anonymous${byCompany ? ` in company "${config.defaultCompany}"` : ''}` +
             `\n  and may call only functions declared anonymous: true.`
     return (
       `\n  ${spec.name} is running\n\n` +

@@ -64,6 +64,7 @@ const app = defineDeployment({
   name: 'headless_e2e',
   modules: [headless],
   headless: true,
+  companies: true,
   worker: { queues: { default: 1 } },
   serve: {
     routes: () => ({

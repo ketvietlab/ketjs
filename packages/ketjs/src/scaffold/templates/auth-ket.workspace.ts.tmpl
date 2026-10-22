@@ -14,7 +14,7 @@ export const deployment = defineDeployment({
   modules: [authModule, app],
   headless: true,
   serve: {
-    sessions: { requireCompany: false, anonymous: null },
+    sessions: { anonymous: null },
     resolveSession: resolveAuthSession,
     permissions: async (ctx, userId, url, req) => {
       const result = (await ctx.callUnchecked('auth.permitted', { userId }, url, req)) as {

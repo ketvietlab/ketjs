@@ -62,6 +62,7 @@ export async function bootRuntime(
   const manifest = compose(modules, {
     requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
+    companies: spec.companies === true,
     requirePermissionCoverage: spec.permissions?.requireCoverage,
     modulePermissionDeclarations: spec.permissions?.modules,
     roleTemplates: spec.permissions?.roleTemplates,

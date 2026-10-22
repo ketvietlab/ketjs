@@ -67,7 +67,7 @@ const ledger = defineModule({
 })
 
 const prepare = async (adapter: Adapter): Promise<Manifest> => {
-  const manifest = compose([ledger])
+  const manifest = compose([ledger], { companies: true })
   await adapter.open()
   await migrateOne(adapter, manifest)
   registerFunctions([ledger])

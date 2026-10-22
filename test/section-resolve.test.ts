@@ -63,18 +63,27 @@ const answer = defineFn({
 })
 
 test('section resolve: the function must exist, answer anyone and change nothing', () => {
-  assert.throws(() => compose([probe({})], { headless: true }), /E_SECTION_UNKNOWN_RESOLVER/)
+  assert.throws(() => compose([probe({})], { headless: true, companies: true }), /E_SECTION_UNKNOWN_RESOLVER/)
   assert.throws(
-    () => compose([probe({ answer: defineFn({ ...answer, anonymous: false }) })], { headless: true }),
+    () =>
+      compose([probe({ answer: defineFn({ ...answer, anonymous: false }) })], {
+        headless: true,
+        companies: true,
+      }),
     /E_SECTION_RESOLVER_UNSAFE/,
   )
   for (const effect of ['write:probe.Note', 'enqueue:probe.answer'])
     assert.throws(
-      () => compose([probe({ answer: defineFn({ ...answer, effects: [effect] }) })], { headless: true }),
+      () =>
+        compose([probe({ answer: defineFn({ ...answer, effects: [effect] }) })], {
+          headless: true,
+          companies: true,
+        }),
       /E_SECTION_RESOLVER_UNSAFE/,
     )
   const manifest = compose([probe({ answer: defineFn({ ...answer, effects: ['read:probe.Note'] }) })], {
     headless: true,
+    companies: true,
   })
   assert.equal(manifest.sections['probe.block']?.resolve, 'probe.answer')
 })
@@ -98,6 +107,7 @@ test('section resolve: each placement, nested ones too, reaches the presenter by
   const app = defineDeployment({
     name: 'section_resolve',
     modules: [probe({ answer: counted }, layout)],
+    companies: true,
     // The presenter below answers every page; the theme is only what a storefront must name.
     theme: defineTheme({
       name: 'theme_probe',

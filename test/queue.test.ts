@@ -50,7 +50,7 @@ const tasks = defineModule({
 })
 
 test('queue contracts are namespaced and carry operational defaults', () => {
-  const manifest = compose([tasks], { headless: true })
+  const manifest = compose([tasks], { headless: true, companies: true })
   assert.deepEqual(manifest.jobs['tasks.deliver'], {
     by: 'tasks',
     queue: 'default',
@@ -77,12 +77,15 @@ test('queue contracts are namespaced and carry operational defaults', () => {
             },
           }),
         ],
-        { headless: true },
+        { headless: true, companies: true },
       ),
     /invalid queue/,
   )
   assert.throws(
-    () => composeWorkspace([defineDeployment({ name: 'missing_worker', modules: [tasks], headless: true })]),
+    () =>
+      composeWorkspace([
+        defineDeployment({ name: 'missing_worker', modules: [tasks], headless: true, companies: true }),
+      ]),
     /does not configure that worker queue/,
   )
 
@@ -100,7 +103,7 @@ test('queue contracts are namespaced and carry operational defaults', () => {
     },
   })
   assert.throws(
-    () => compose([consumer, producer], { headless: true }),
+    () => compose([consumer, producer], { headless: true, companies: true }),
     /does not depend on "effect_consumer"/,
   )
   assert.throws(
@@ -114,7 +117,7 @@ test('queue contracts are namespaced and carry operational defaults', () => {
             },
           }),
         ],
-        { headless: true },
+        { headless: true, companies: true },
       ),
     /unknown effect "enqueue:no_such.job"/,
   )
@@ -136,7 +139,11 @@ test('enqueue is refused unless the producer declares the exact job effect', asy
   registerFunctions([module])
   await assert.rejects(
     () =>
-      callFn('guarded_enqueue.schedule', {}, { adapter, manifest: compose([module], { headless: true }) }),
+      callFn(
+        'guarded_enqueue.schedule',
+        {},
+        { adapter, manifest: compose([module], { headless: true, companies: true }) },
+      ),
     (error: unknown) =>
       (error as { code?: string }).code === 'E_EFFECT_NOT_DECLARED' &&
       /enqueue on guarded_enqueue\.run/.test(String(error)),
@@ -172,7 +179,7 @@ test('queue schema migrates v1 rows instead of abandoning pending work', async (
 test('transactional enqueue rolls back with business data and captures actor/scope on commit', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
-  const manifest = compose([tasks], { headless: true })
+  const manifest = compose([tasks], { headless: true, companies: true })
   registerFunctions([tasks])
 
   await assert.rejects(
@@ -352,6 +359,7 @@ test('worker executes with captured context and discards an exhausted handler', 
     name: 'worker_test',
     modules: [module],
     headless: true,
+    companies: true,
     serve: {},
     worker: { queues: { default: 2 }, leaseMs: 3_000 },
   })
@@ -425,6 +433,7 @@ test('a job announces on its own tenant, and a reader elsewhere finds it there',
     name: 'tenant_stream_test',
     modules: [module],
     headless: true,
+    companies: true,
     serve: {
       tenants: {
         resolve: () => null,
@@ -495,6 +504,7 @@ test('multi-database worker refreshes tenants and round-robin prevents a hot ten
     name: 'tenant_worker_test',
     modules: [module],
     headless: true,
+    companies: true,
     serve: {
       tenants: {
         resolve: () => null,
@@ -566,6 +576,7 @@ test('cancelling an executing job aborts its handler and cannot be overwritten b
     name: 'cancel_worker_test',
     modules: [module],
     headless: true,
+    companies: true,
     serve: {},
     worker: { queues: { default: 1 }, leaseMs: 3_000, shutdownGraceMs: 100 },
   })

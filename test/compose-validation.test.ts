@@ -17,7 +17,8 @@ const codes = (run: () => unknown): string[] => {
     return ((error as { items?: Array<{ code: string }> }).items ?? []).map((item) => item.code)
   }
 }
-const one = (spec: ModuleSpec) => codes(() => compose([defineModule(spec)], { headless: true }))
+const one = (spec: ModuleSpec) =>
+  codes(() => compose([defineModule(spec)], { headless: true, companies: true }))
 
 test('compose validation: a scoped model cannot declare its own tenant columns', () => {
   assert.deepEqual(
@@ -57,11 +58,11 @@ test('compose validation: a field name is a plain identifier', () => {
       extend: { 'base.Thing': JSON.parse(`{"${name}":"text?"}`) } as never,
     })
   assert.deepEqual(
-    codes(() => compose([base, extension('__proto__')], { headless: true })),
+    codes(() => compose([base, extension('__proto__')], { headless: true, companies: true })),
     ['E_FIELD_NAME'],
   )
   assert.deepEqual(
-    codes(() => compose([base, extension('toString')], { headless: true })),
+    codes(() => compose([base, extension('toString')], { headless: true, companies: true })),
     [],
     'not a collision',
   )
@@ -93,7 +94,7 @@ test('compose validation: menus hanging under each other in a cycle are refused'
 
 test('compose validation: two deployments cannot share a name', () => {
   const app = defineModule({ name: 'app' }) as KetModule
-  const deployment = defineDeployment({ name: 'erp', modules: [app], headless: true })
+  const deployment = defineDeployment({ name: 'erp', modules: [app], headless: true, companies: true })
   assert.deepEqual(
     codes(() => composeWorkspace([deployment, deployment])),
     ['E_DEPLOYMENT_DUPLICATE'],
