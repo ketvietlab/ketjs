@@ -17,6 +17,7 @@ import { compilePermissionBundles } from './permissions.ts'
 import { composeHttpBindings, FN_RETURNS } from './http-binding.ts'
 import { bindHandlers } from './handlers.ts'
 import { satisfies } from './semver.ts'
+import { KETJS_VERSION } from './version.generated.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
 const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
@@ -174,7 +175,7 @@ export function compose(
   }
 
   const manifest: Manifest = {
-    ket: '0.0.0',
+    ket: KETJS_VERSION,
     order: order.map((m) => m.name),
     modules: {},
     models: {},

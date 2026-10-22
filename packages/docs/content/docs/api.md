@@ -5,9 +5,9 @@ group: API and tooling
 order: 1
 ---
 
-KetJS is currently unreleased and reports version `0.0.0`. Public names may change until a stable release.
-Import only from documented package entrypoints; deep imports into `dist/` or `src/` are implementation
-details.
+KetJS {{VERSION}} is a preview release; public names may change until 1.0. A composed manifest records the
+framework release it was composed with as `manifest.ket`, which the agent descriptor reports. Import only
+from documented package entrypoints; deep imports into `dist/` or `src/` are implementation details.
 
 ## Package entrypoints
 
