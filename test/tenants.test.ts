@@ -477,6 +477,7 @@ const authed = defineDeployment({
   headless: true,
   serve: {
     sessions: {},
+    permissions: async () => null,
     tenants: {
       resolve: (_url, req) => {
         const key = String(req.headers['x-tenant'] ?? '')
@@ -550,6 +551,7 @@ test('sessions: a shared store binds each session to the tenant that issued it',
       // Reading the session needs the database and knowing the database needs the
       // session, so the session cannot live in the tenant's database at all.
       sessions: { store: control },
+      permissions: async () => null,
       tenants: {
         resolve: (_url, req) => (String(req.headers['x-tenant'] ?? '') === 't1' ? 't1' : 't2'),
         open: (key) => {
@@ -595,6 +597,7 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
     headless: true,
     serve: {
       sessions: {},
+      permissions: async () => null,
       tenants: {
         resolve: (_url, req) => String(req.headers['x-tenant'] ?? 't1'),
         open: async (key) => sqliteAdapter(join(directory, `${key}.sqlite`)),
@@ -603,7 +606,8 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
       },
     },
   })
-  const b = await bootDeployment(pooled, { port: 0, openLog: () => nullLog() })
+  // KET_DEV=1: only local development may sign sessions with a generated key.
+  const b = await bootDeployment(pooled, { env: { KET_DEV: '1' }, port: 0, openLog: () => nullLog() })
   const sessions = await b.tenants.with('t1', async (tenant) => tenant.sessions!)
   const { cookie } = await sessions.start({ userId: 'u1', companies: ['c1'] })
   assert.equal(sessions.ephemeralSecret, true)

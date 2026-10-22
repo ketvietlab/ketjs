@@ -60,6 +60,10 @@ Set a stable signing key in every environment:
 KET_SECRET='a-long-random-deployment-secret' ket serve
 ```
 
+Outside local development, boot refuses a deployment with sessions and neither `KET_SECRET` nor
+`sessions.secret` (`E_SESSION_SECRET_REQUIRED`). A generated key would sign every user out on restart
+and differ between pods. With `KET_DEV=1`, as `ket dev` sets, KetJS generates one per process.
+
 ### Authenticate without a company
 
 Existing deployments require at least one readable company and an active company by default.
@@ -121,7 +125,9 @@ Logout calls `sessions.end(request)` and returns `sessions.clearCookie()`. Admin
 invalidate all sessions for a user with `endUser()` or every session except the current one with
 `endUserExcept()`.
 
-The cookie is signed, `HttpOnly`, `SameSite=Lax`, path-wide, and secure outside local plain HTTP.
+The cookie is signed, `HttpOnly`, `SameSite=Lax` and path-wide. It is `Secure` unless `KET_DEV=1`,
+whatever address the process binds: a server on `127.0.0.1` behind a TLS-terminating proxy is still
+public. Set `sessions.secure: false` only for a deployment that is deliberately served over plain HTTP.
 Sessions have an idle deadline refreshed during use plus an absolute, non-refreshable deadline.
 
 ## Revalidate live identity
@@ -149,8 +155,10 @@ resolveSession: async ({ adapter, record }) => {
 }
 ```
 
-Return `null` to reject the session. KetJS updates context atomically by session revision so concurrent
-company switching cannot silently overwrite newer state.
+Return `null` to reject the session. A `securityVersion` different from the session's also rejects
+it: KetJS destroys the session instead of re-stamping it, so raising an account's version after a
+password change or a role removal signs out every existing cookie. Otherwise KetJS updates context
+atomically by session revision so concurrent company switching cannot silently overwrite newer state.
 
 Keep `branches` consistent when issuing and resolving sessions: `null` means unrestricted branches,
 while `[]` means no readable branches. The account starter uses `[]` at both points so initial
@@ -168,8 +176,10 @@ serve: {
 ```
 
 Returning an array restricts every function call for that request, including calls made by routes.
-Returning `null` means no restriction. Prefer an explicit role resolver in production rather than
-omitting the callback accidentally.
+Returning `null` means no restriction. A deployment that authenticates users through `sessions` or
+`resolveIdentity` must declare the callback: boot refuses it otherwise (`E_PERMISSIONS_REQUIRED`), so
+forgetting it closes the deployment instead of opening every function to every signed-in user. An
+application with no roles yet says so with `permissions: async () => null`.
 
 The request comes with it because answering the question almost always means asking the database, and
 which database that is comes from the request. Pass `url` and `req` straight through to
