@@ -4,7 +4,7 @@ import { bootDeployment, callFn } from '@ketvietlab/ketjs'
 import { deployment } from '../ket.workspace.ts'
 
 test('__NAME__: provision, sign in, use the protected API and sign out', async () => {
-  const app = await bootDeployment(deployment, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null' } })
+  const app = await bootDeployment(deployment, { port: 0, env: { KET_SQLITE: ':memory:', KET_LOG: 'null', KET_SECRET: 'a local test secret only' } })
   const at = `http://127.0.0.1:${app.port}`
   const password = 'A local test credential only'
   try {

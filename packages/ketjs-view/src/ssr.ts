@@ -13,6 +13,7 @@ import type { TplAttr, TplEl, TplNode, TplRoot } from './template.ts'
 import { EVENT_PREFIX, isResult, isEach } from './render.ts'
 import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
+import { attributeValue } from './url.ts'
 import { ISLAND_HOST_ATTRIBUTE, ISLAND_TAG } from './island-protocol.ts'
 
 export const HOLE_MARKER = 'k'
@@ -86,13 +87,15 @@ function writeValue(value: unknown, hydratable: boolean): string {
 /**
  * Inside these, an HTML parser does not read `<!--` as a comment — the content is
  * text, and a hydration marker written there arrives as literal characters. It is
- * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab.
+ * why a page title rendered as "<!--k[-->KetSuite<!--k-->" in the browser tab. In
+ * a style sheet the marker opens a selector that swallows the rules after it, and
+ * in a script `<!--` starts a comment that runs to the end of the line.
  *
  * Nothing is lost by leaving the markers out: the reason they exist is to keep
- * adjacent text nodes apart so the hydration walk counts correctly, and neither of
+ * adjacent text nodes apart so the hydration walk counts correctly, and none of
  * these elements has children to walk.
  */
-const RCDATA = new Set(['title', 'textarea'])
+const TEXT_ONLY = new Set(['title', 'textarea', 'style', 'script'])
 
 // --- compiled templates ------------------------------------------------------
 // Everything about a template's markup except its values is fixed per call site,
@@ -105,7 +108,7 @@ const RCDATA = new Set(['title', 'textarea'])
 /** A child hole. Its markers, when it has them, are in the neighbouring static strings. */
 type ChildOp = { hole: number; hydrate: boolean }
 /** An attribute hole, written with its leading ` name="` only when the value is present. */
-type AttrOp = { attr: string; hole: number }
+type AttrOp = { attr: string; name: string; hole: number }
 /**
  * An element whose island-host attribute is a hole. Whether its children carry
  * hydration markers depends on that value, so both outcomes are compiled, lazily.
@@ -158,7 +161,7 @@ function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host
       if (a.name.startsWith(EVENT_PREFIX)) continue
       if (a.hole != null) {
         flush()
-        ops.push({ attr: ` ${a.name}="`, hole: a.hole })
+        ops.push({ attr: ` ${a.name}="`, name: a.name, hole: a.hole })
         continue
       }
       if (a.value == null) continue
@@ -166,7 +169,7 @@ function compile(nodes: readonly TplNode[], raw: boolean, hydrate: boolean, host
     }
     chunk += '>'
     if (VOID.has(el.tag)) return
-    const rcdata = raw || RCDATA.has(el.tag)
+    const rcdata = raw || TEXT_ONLY.has(el.tag)
     const hydrateChildren = hydrate || el.tag === ISLAND_TAG || (host ?? staticHost)
     for (const c of el.children) emit(c, rcdata, hydrateChildren, null)
     chunk += `</${el.tag}>`
@@ -183,7 +186,7 @@ function run(ops: readonly Op[], values: readonly unknown[]): string {
     if (typeof op === 'string') {
       out += op
     } else if ('attr' in op) {
-      const value = values[op.hole]
+      const value = attributeValue(op.name, values[op.hole])
       if (value != null && value !== false) out += `${op.attr}${escapeHtml(value)}"`
     } else if ('hole' in op) {
       out += writeValue(values[op.hole], op.hydrate)

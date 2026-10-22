@@ -188,7 +188,7 @@ const HELP = `ket — zero-dependency fullstack framework
     --out FILE              write the document instead of printing JSON
   ket workspace             show deployments, datastores and shared modules
   ket modules               show resolved modules and their source paths
-  ket types [--deployment X]       generate .ket/types.d.ts from the manifest
+  ket types [--deployment X]       generate .ket/types.<deployment>.d.ts from the manifest
   ket agent [--deployment X]       print the agent capability descriptor
   ket permissions           every function that exists to be granted
   ket classification        which fields hold personal data, and which never leave
@@ -570,7 +570,14 @@ try {
         await testDeployment.close()
       }
     } else {
-      const env = { ...process.env, ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}) }
+      // A short-lived local server for this one command: it is reached only over
+      // loopback, and the --company family of options is the development identity.
+      const env = {
+        ...process.env,
+        HOST: '127.0.0.1',
+        KET_DEV: '1',
+        ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}),
+      }
       const deployment = await bootDeployment(spec, {
         env,
         port: 0,
@@ -603,12 +610,13 @@ try {
       : await (spec.serve.openStore ?? sqliteStore)(runtime.config)
     if (spec.serve.tenants) await adapter.open()
     try {
-      await migrateOne(adapter, runtime.manifest)
+      await migrateOne(adapter, runtime.manifest, { deployment: spec.name })
       const result = await callFn(fnKey, jsonObject('-', '--input'), {
         adapter,
         manifest: runtime.manifest,
         actor: 'system:provision',
         scope: { company: null, branch: null },
+        timezone: runtime.config.defaultTimezone,
       })
       console.log(JSON.stringify(result.value, null, 2))
       if (
@@ -702,6 +710,10 @@ try {
     }
   } else if (cmd === 'check') {
     console.log(explainWorkspace(ws))
+    const warnings = Object.entries(ws.deployments).flatMap(([name, manifest]) =>
+      (manifest.diagnostics ?? []).map((warning) => `  [${warning.code}] ${name}: ${warning.message}`),
+    )
+    if (warnings.length) console.log(`\n${warnings.length} contract warning(s):\n${warnings.join('\n')}`)
     console.log('\nall contracts hold')
   } else if (cmd === 'workspace') {
     console.log(explainWorkspace(ws))
@@ -735,7 +747,7 @@ try {
         if (opt('deployment'))
           throw new Error('permissions --json accepts either --deployment NAME or --all, not both')
         const deployments = Object.entries(ws.deployments)
-          .sort(([left], [right]) => left.localeCompare(right))
+          .sort(([left], [right]) => left.localeCompare(right, 'en'))
           .map(([name, manifest]) => ({ name, inventory: permissionInventory(manifest) }))
         console.log(JSON.stringify({ version: 1, deployments }, null, 2))
       } else {
@@ -833,7 +845,9 @@ try {
               )
               continue
             }
-            const report = await pool.with(key, (adapter) => verifyPhysicalSchema(adapter, manifest))
+            const report = await pool.with(key, (adapter) =>
+              verifyPhysicalSchema(adapter, manifest, { deployment: spec.name }),
+            )
             lines.push(formatSchemaVerification(key, report))
             failed ||= !report.ok
           } catch (error) {
@@ -887,7 +901,9 @@ try {
         : await (spec.serve.openStore ?? sqliteStore)(config)
       if (spec.serve.tenants) await adapter.open()
       try {
-        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest)
+        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest, {
+          deployment: spec.name,
+        })
         console.log(formatSchemaVerification(tenant ?? spec.name, report))
         process.exitCode = report.ok ? 0 : 1
       } finally {
@@ -908,6 +924,7 @@ try {
         const keys = await tenants.list()
         const m = ws.deployments[spec.name] as Manifest
         const results = await migrateFleet(pool, keys, m, {
+          deployment: spec.name,
           allowDestructive: flag('allow-destructive'),
           dryRun: flag('dry-run'),
         })

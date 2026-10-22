@@ -17,7 +17,7 @@ import type { DeploymentSpec } from './kernel/workspace.ts'
 import type { Adapter, Manifest, Scope } from './types.ts'
 
 export type TestIdentity = {
-  /** The company new rows are written to. Ignored by apps using sessions. */
+  /** The company new rows are written to. Ignored by apps using sessions or without companies. */
   company?: string | null
   /** Other companies a read may include. The write company is included automatically. */
   companies?: readonly string[] | null
@@ -85,7 +85,7 @@ export class CookieJar {
   }
 
   toJSON(): Record<string, string> {
-    return Object.fromEntries([...this.#cookies].sort(([a], [b]) => a.localeCompare(b)))
+    return Object.fromEntries([...this.#cookies].sort(([a], [b]) => a.localeCompare(b, 'en')))
   }
 
   clone(): CookieJar {
@@ -474,6 +474,9 @@ export async function createTestDeployment(
   env.KET_STORAGE_DIR ??= join(artifactsDir, 'storage')
   env.KET_SECRET ??= `ket-e2e-${spec.name}`
   env.KET_QUEUE_NOTIFY ??= '0'
+  // The harness sends the development identity headers. Pass KET_DEV: '0' to test
+  // how the deployment treats callers when no authentication is configured.
+  env.KET_DEV ??= '1'
 
   const records = memoryLog()
   const openLog = () => records
@@ -535,6 +538,7 @@ export async function createTestDeployment(
             idempotencyKey: callOptions.idempotencyKey,
             correlationId: callOptions.correlationId,
             queueNotify: false,
+            timezone: booted.config.defaultTimezone,
             // A fixture call is not HTTP traffic and says so, but it is still a
             // call: it goes through the same pipeline rather than around it.
             log: booted.logger.child({

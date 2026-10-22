@@ -187,13 +187,16 @@ export type ComposedModel = {
  *                     dimension, not an isolation boundary: aggregating across the
  *                     branches of one company is ordinary and needs no permission.
  *
- * There is no default. A model that does not say is a build error, because the
- * safe-looking default — 'shared' — is the one that leaks.
+ * Company scoping is opt-in per deployment (`companies: true`). Without it every
+ * model is 'shared', `scope` may be left out, and a company scope is a build error.
+ * With it there is no default: a model that does not say is a build error, because
+ * the safe-looking default — 'shared' — is the one that leaks.
  */
 export type ModelScope = 'shared' | 'company' | 'company+branch'
 
 export type ModelDef = {
-  scope: ModelScope
+  /** Required when the deployment sets `companies: true`; otherwise always 'shared'. */
+  scope?: ModelScope
   /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
   timestamps?: boolean
   /**
@@ -425,6 +428,12 @@ export type FnSpec = {
   idempotent?: boolean
   /** Opt-in atomic database command: requires a key; writes and receipt commit together. */
   transactional?: boolean
+  /**
+   * Opt in to dry runs. A dry run executes the handler and discards its writes,
+   * jobs and notifications, so the handler itself must cause no other side effect
+   * (a provider call, a mail) when `ctx.dryRun` is true. Without it, a dry run is
+   * refused with `E_NO_DRY_RUN`.
+   */
   dryRun?: boolean
   agent?: boolean
   handler: (ctx: Ctx, args: Record<string, unknown>) => unknown
@@ -504,6 +513,10 @@ export type JobMeta = {
 
 export type JobEnqueueOptions = {
   runAt?: Date
+  /**
+   * Coalesce with an active job of the same name and key in the same company.
+   * Another company's job never shares the key; jobs without a company share one space.
+   */
   uniqueKey?: string
   /** Zero is highest priority. */
   priority?: number
@@ -518,7 +531,8 @@ export type JobEnqueueOptions = {
   company?: string
 }
 
-export type JobEnqueueResult = { id: string; existing: boolean }
+/** `dryRun` is set when a dry run validated the job and did not store it; `id` is then empty. */
+export type JobEnqueueResult = { id: string; existing: boolean; dryRun?: true }
 
 export type JobExecution = {
   id: string
@@ -543,7 +557,11 @@ export type PermissionPosture =
   | 'session/device'
   | 'internal/headless'
 
-export type PermissionLabels = { en: string; vi: string }
+/**
+ * A label per locale. English is required, because it is the framework's fallback;
+ * every other locale a deployment translates into is optional.
+ */
+export type PermissionLabels = { en: string; [locale: string]: string }
 
 export type PermissionBundleDef = {
   labels: PermissionLabels
@@ -654,6 +672,14 @@ export type ModuleSpec = ModuleMeta & {
   name: string
   version?: string
   depends?: string[]
+  /**
+   * Modules this one integrates with when a deployment includes them, without
+   * requiring them. A read, write or enqueue effect may name a model or job in one
+   * of these modules; when the module is absent the effect simply has nothing to
+   * reach, and when it is present the model or job must exist. The handler decides
+   * at run time whether the integration is there, for example with `can()`.
+   */
+  optional?: string[]
   /** Version ranges required at compose time for published extension contracts. */
   compatible?: Record<string, string>
   models?: Record<string, ModelDef>
@@ -733,6 +759,12 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly name: string
   readonly version: string
   readonly depends: readonly string[]
+  /**
+   * Modules this one integrates with without requiring them. `defineModule` always
+   * fills it; it is optional so a module object built before the key existed, or
+   * typed from such a build, is still a module.
+   */
+  readonly optional?: readonly string[]
   readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string | FieldDef>>
@@ -810,6 +842,17 @@ export type Manifest = {
   /** Prefix -> owning module. Longest prefix wins, though overlapping claims are rejected. */
   routePrefixes: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
+  /**
+   * Whether this deployment scopes rows by company (`companies: true`). False
+   * means one global scope: requests and sessions carry no company. Absent on a
+   * manifest built by hand, where it is read from the models' scopes.
+   */
+  companies?: boolean
+  /**
+   * Contract problems composition reported without failing, such as an effect
+   * outside the module's depends (an error from 1.0) or two unrelated modules
+   * setting one token.
+   */
   diagnostics?: Diagnostic[]
 }
 
@@ -821,7 +864,13 @@ export type Diagnostic = {
   at?: string | null
 }
 
-export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
+/**
+ * One entry of a call's write log: a row write, or a durable job the call
+ * enqueued. A job entry names the job only; its arguments can carry anything.
+ */
+export type WriteRecord =
+  | { op: 'insert' | 'update' | 'delete'; model: string; row?: Row; where?: Row; patch?: Row }
+  | { op: 'enqueue'; job: string }
 export type Row = Record<string, unknown>
 export type WriteResult = { changes: number }
 export type InsertIfAbsentResult = WriteResult & { inserted: boolean }

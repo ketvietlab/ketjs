@@ -7,6 +7,7 @@ import { basename, join, dirname } from 'node:path'
 import { producers, consumers, materializeVersion, readVersion, readJson } from './version.mjs'
 import { candidateManifest, registryLock } from './version-consumers.mjs'
 import {
+  auditRequired,
   checkAudit,
   git,
   requiredChecks,
@@ -159,6 +160,11 @@ test('a version change synchronizes every mirror and detects drift without rewri
   for (const directory of ['', ...producers.map((item) => item.directory), ...consumers])
     assert.equal(readJson(join(root, directory, 'package.json')).version, '0.5.0')
   assert.ok(readFileSync(join(root, 'packages/docs/site/version.generated.ts'), 'utf8').includes("'0.5.0'"))
+  assert.ok(
+    readFileSync(join(root, 'packages/ketjs/src/kernel/version.generated.ts'), 'utf8').includes(
+      "KETJS_VERSION = '0.5.0'",
+    ),
+  )
   assert.equal(
     readJson(join(root, 'packages/docs/tutorials/api/package-lock.json')).packages[
       'node_modules/@ketvietlab/ketjs-view'
@@ -212,6 +218,34 @@ test('CHANGE_LOG rejects missing entries, mismatched commits/reasons, stale sour
   put(root, 'CHANGE_LOG', valid)
   put(root, 'README.md', '# Changed after audit\n')
   assert.throws(() => checkAudit(root), /Stale CHANGE_LOG evidence/)
+})
+
+test('a pull request needs current audit evidence only when it changes VERSION or CHANGE_LOG', (t) => {
+  const root = fixture(t)
+  put(root, 'CHANGE_LOG', ledger(root))
+  execute(root, 'git', ['add', '.'])
+  execute(root, 'git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'Record the audit'])
+  const base = git(root, ['rev-parse', 'HEAD'])
+  const recorded = readFileSync(join(root, 'CHANGE_LOG'), 'utf8')
+  assert.equal(auditRequired(root, base), false)
+
+  // The published version's evidence goes stale with the first change after it,
+  // and a pull request that leaves VERSION and CHANGE_LOG alone is not refused for that.
+  put(root, 'README.md', '# Changed after the release\n')
+  assert.throws(() => checkAudit(root), /Stale CHANGE_LOG evidence/)
+  assert.equal(auditRequired(root, base), false)
+
+  const edited = JSON.parse(recorded)
+  edited.releases[0].reason = 'A release reason nobody recorded'
+  put(root, 'CHANGE_LOG', edited)
+  assert.equal(auditRequired(root, base), true, 'an edited CHANGE_LOG is checked')
+  rmSync(join(root, 'CHANGE_LOG'))
+  assert.equal(auditRequired(root, base), true, 'a deleted CHANGE_LOG is checked')
+  put(root, 'CHANGE_LOG', recorded)
+  put(root, 'VERSION', '0.5.0\n')
+  assert.equal(auditRequired(root, base), true, 'a changed VERSION is checked')
+  put(root, 'VERSION', '0.4.0\n')
+  assert.equal(auditRequired(root, 'f'.repeat(40)), true, 'an unreadable base requires the audit')
 })
 
 test('the version commit requires a meaningful reason and an audit of the current source', (t) => {

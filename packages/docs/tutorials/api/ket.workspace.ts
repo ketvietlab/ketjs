@@ -6,6 +6,7 @@ export const deployment = defineDeployment({
   name: 'learn_api',
   modules: [learn_api],
   headless: true,
+  companies: true,
   worker: { queues: { learning: 1 } },
   serve: {
     routes: (ctx) => ({
