@@ -35,7 +35,31 @@ const inner: IslandFactory<{ label: string }> = (props) => () => html`<em>${prop
 const outer: IslandFactory<{ title: string }> = (props) => () =>
   html`<section><h2>${props.title}</h2>${trustedMarkup(renderIsland('inner', inner, { label: 'nested' }))}</section>`
 
-const registry = { counter, jsxCounter, inner, outer } as Record<string, IslandFactory>
+const withNoscript: IslandFactory<{ start: number }> = (props) => {
+  const count = signal(props.start)
+  counters.push(count)
+  return () => (
+    <section>
+      <p class="counter">
+        <span>Count: {count()}</span>
+      </p>
+      <noscript>The editor needs {'JavaScript'}.</noscript>
+    </section>
+  )
+}
+const drafts: Signal<string>[] = []
+const note: IslandFactory<{ text: string }> = (props) => {
+  const draft = signal(props.text)
+  drafts.push(draft)
+  return () => (
+    <form>
+      <textarea name="note">{draft()}</textarea>
+      <span>{draft().length}</span>
+    </form>
+  )
+}
+
+const registry = { counter, jsxCounter, inner, outer, withNoscript, note } as Record<string, IslandFactory>
 
 const page = (...islands: string[]): Page => parseFragment(islands.join(''))
 const root = (node: Page) => node as unknown as IslandElement
@@ -64,6 +88,47 @@ test('island hydration: html and JSX islands adopt their own server markup', () 
   assert.equal(spans(server)[0], first, 'the html island adopts its span')
   assert.equal(spans(server)[1], second, 'the JSX island adopts its span')
   assert.match(text(server), /Count: 5.*Count: 6/)
+})
+
+test('island hydration: noscript content is text to a browser running scripts, so it is never a mismatch', () => {
+  counters.length = 0
+  const markup = renderIsland('withNoscript', withNoscript, { start: 1 })
+  assert.match(
+    markup,
+    /<noscript>The editor needs JavaScript\.<\/noscript>/,
+    'no hydration markers inside noscript',
+  )
+  const server = page(markup)
+  const adopted = spans(server)[0]
+  const reported: unknown[] = []
+
+  hydrateIslands(domHost(document), root(server), registry, {
+    onHydrationMismatch: (error) => reported.push(error),
+  })
+
+  assert.deepEqual(reported, [])
+  assert.equal(spans(server)[0], adopted, 'the island adopts its server markup')
+  counters[1]?.set(7)
+  assert.match(text(server), /Count: 7/)
+  assert.equal(server.querySelectorAll('noscript')[0]?.innerHTML, 'The editor needs JavaScript.')
+})
+
+test('island hydration: a hole in a textarea keeps updating after hydration', () => {
+  drafts.length = 0
+  const server = page(renderIsland('note', note, { text: 'hi & bye' }))
+  const field = server.querySelectorAll('textarea')[0]
+  const reported: unknown[] = []
+
+  hydrateIslands(domHost(document), root(server), registry, {
+    onHydrationMismatch: (error) => reported.push(error),
+  })
+
+  assert.deepEqual(reported, [])
+  assert.equal(server.querySelectorAll('textarea')[0], field, 'the textarea itself is adopted')
+  assert.equal(field?.childNodes.map((node) => node.data).join(''), 'hi & bye')
+  drafts[1]?.set('<b>ok</b>')
+  assert.equal(field?.childNodes.map((node) => node.data).join(''), '<b>ok</b>')
+  assert.equal(text(spans(server)[0] ?? { innerHTML: '' }), '9')
 })
 
 test('island hydration: a mismatched island renders on the client and the islands after it still hydrate', () => {
