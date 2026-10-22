@@ -281,7 +281,17 @@ implements KetJS's public `Adapter` contract; core does not import a PostgreSQL 
 - Use ESM and Node.js 24 or later.
 - Depend on package entrypoints, not file layout.
 - Generate types from the exact composed app with `ket types`.
-- Pin versions while KetJS remains pre-release.
+- Pin versions while KetJS remains pre-release. `ket new` writes the exact release, and overrides the
+  `@ketvietlab/ketjs-view` that `@ketvietlab/ketspec` depends on so one renderer is installed.
 - Review manifest and migration diffs when upgrading.
 - Treat identifiers persisted in databases, queues, storage, and cookies as compatibility contracts even
   when TypeScript signatures still compile.
+
+A breaking change is one after which an application that composed, migrated and passed its tests needs
+a change of its own: a composition that is now refused, a public name or signature removed or changed, a
+documented behavior changed, an HTTP contract that accepts less or answers differently, or a persisted
+identifier — table, column, index, queue, cookie, digest — read or written differently. Before 1.0 a
+minor release (0.x to 0.x+1) may contain breaking changes and lists each one in
+[Upgrading](/ketjs/upgrading/); a patch release does not. A deprecated name keeps working for at least
+one minor release before it is removed, and its documentation says so. From 1.0, breaking changes wait
+for a major release.

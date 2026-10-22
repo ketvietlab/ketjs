@@ -342,6 +342,17 @@ test('ket new: writes a deployment whose workspace composes', async () => {
     /"openapi": "npm run build && node dist\/tools\/openapi\.js"/,
   )
   assert.match(readFileSync(join(dir, 'tsconfig.json'), 'utf8'), /"tools\/\*\*\/\*\.ts"/)
+  // A pre-release is pinned exactly, and the API reference tool renders with the
+  // same ketjs-view the application installs instead of a second, older copy.
+  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+    dependencies: Record<string, string>
+    overrides: Record<string, Record<string, string>>
+  }
+  assert.match(pkg.dependencies['@ketvietlab/ketjs'] ?? '', /^\d+\.\d+\.\d+/)
+  assert.equal(
+    pkg.overrides['@ketvietlab/ketspec']?.['@ketvietlab/ketjs-view'],
+    pkg.dependencies['@ketvietlab/ketjs'],
+  )
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
