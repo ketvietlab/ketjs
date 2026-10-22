@@ -238,9 +238,10 @@ Changesets derive casts from the manifest:
   would merely guess at, such as `1`, `yesterday` or `Oct 21 2026`, is invalid, as is an impossible
   date or hour. An offset is normalised on the way in, so the same instant is the same text in SQLite
   and in Postgres — and so the stored text sorts chronologically, which is what a range query compares.
-  Text without an offset, which is what a `datetime-local` input sends, is read as wall-clock time in the
-  deployment timezone (`KET_TIMEZONE`, UTC when unset), never in the timezone of the server process. It
-  reads back as the UTC text, never as a `Date`; `date` likewise stays `YYYY-MM-DD` on both.
+  Date-time text without an offset, which is what a `datetime-local` input sends, is read as wall-clock
+  time in the deployment timezone (`KET_TIMEZONE`, UTC when unset), never in the timezone of the server
+  process. A date alone, such as `2026-10-21`, is UTC midnight, as `Date` reads it, so its first ten
+  characters read back as the same day. It reads back as the UTC text, never as a `Date`; `date` likewise stays `YYYY-MM-DD` on both.
 - `json` accepts objects, including arrays; scalar strings are rejected.
 
 Inspect `changeset.toJSON()` when returning validation data to a UI or agent.

@@ -148,8 +148,9 @@ const castValue = (
       // verbatim would put a different string in SQLite than in Postgres for the
       // same instant. It also makes the text sort chronologically, which is what
       // a range query on SQLite compares.
-      // Text without an offset is a wall time in the deployment's timezone
-      // (KET_TIMEZONE), never in whatever zone the server process happens to run.
+      // Date-time text without an offset is a wall time in the deployment's timezone
+      // (KET_TIMEZONE), never in whatever zone the server process happens to run;
+      // a date alone stays UTC midnight.
       {
         const instant = parseDateTime(v, timezone)
         return instant === null
