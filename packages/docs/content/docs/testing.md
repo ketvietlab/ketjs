@@ -134,13 +134,15 @@ const tenant = e2e.client.as({ tenant: 'acme' })
 const customTenant = e2e.client.as({ tenant: 'acme', tenantHeader: 'x-database' })
 ```
 
-Apps with sessions ignore development company headers. Authenticate through the real route:
+Apps with sessions ignore development company headers. Authenticate through the real route. `login()`
+and `logout()` post to `/login` and `/logout` unless given the path your application mounts; the
+[authentication starter](/ketjs/auth-starter/) mounts them under `/auth`:
 
 ```ts
 // File: test/order.test.ts
-await e2e.client.login({ login: 'admin', password: 'secret' })
+await e2e.client.login({ login: 'admin', password: 'secret' }, '/auth/login')
 await e2e.client.call('order.privateList')
-await e2e.client.logout()
+await e2e.client.logout('/auth/logout')
 ```
 
 The cookie jar captures cookies across same-origin redirects and applies deletion attributes. Clone it for

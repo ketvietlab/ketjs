@@ -64,9 +64,10 @@ For managed, disposable runtime behavior, use a normal module's [islands and bro
 Keep shared views render-pure, attach listeners with a lifetime and clean up enhancements when their
 surface is removed. Browser requests use the application's existing HTTP and permission contracts.
 
-Website Studio is a consumer-specific integration: company themes may carry a stylesheet and a
-browser module served from tenant storage. Its registry, review and loading policy belong to that
-consumer; they are not a universal restriction of the KetJS theme API. The historical context is
+An application may also let each company supply its own stylesheet or browser module, for example from
+tenant storage. Serve that script from an origin other than the one staff screens use: script running on
+the staff origin carries the staff session cookie and can call `/_ket/fn` as that person. The historical
+context is
 [decision D3a](/docs/architecture-decisions/#d3a-a-website-theme-may-run-javascript-in-the-browser-2026-10-05).
 
 ## Template files

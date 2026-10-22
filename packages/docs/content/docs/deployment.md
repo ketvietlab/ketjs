@@ -54,7 +54,7 @@ controlled boot migrate before normal replicas start.
 For a tenant fleet, the CLI opens each database and owns the apply step:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket migrate --deployment erp --workspace dist/ket.workspace.js --all --dry-run
 ket migrate --deployment erp --workspace dist/ket.workspace.js --all
 ```
@@ -137,13 +137,11 @@ data between environments.
 persistent volume, local storage loses every upload when the pod restarts. Set `KET_STORAGE=s3` for
 containerised deployments, or mount a durable volume at `KET_STORAGE_DIR` for a single host.
 
-With object storage, an upload is durable once `POST /files` answers `201`. The request spools the
-body to a temporary directory only to compute its checksum, writes the object to storage, and then
-commits the attachment row together with its follow-up jobs (publication copy, image renditions).
-The temporary directory is removed before the response. Those jobs read the original back from
-storage, so any worker pod can run them. If a pod stops mid-request, the client sees a failed upload.
-An object written before the row was committed has no attachment row, and the storage sweep removes
-it once it is old enough.
+KetJS provides storage, not an upload route. When an application accepts uploads, write the object to
+storage before committing the database row that refers to it, and enqueue any follow-up work in that same
+transaction; a job reading the object back from storage can then run on any worker pod. If a pod stops
+between the two writes, the object has no row, so pair uploads with a sweep that removes unreferenced
+objects once they are older than any request could take.
 
 ## Health and graceful shutdown
 

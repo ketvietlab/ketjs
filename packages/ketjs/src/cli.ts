@@ -188,7 +188,7 @@ const HELP = `ket — zero-dependency fullstack framework
     --out FILE              write the document instead of printing JSON
   ket workspace             show deployments, datastores and shared modules
   ket modules               show resolved modules and their source paths
-  ket types [--deployment X]       generate .ket/types.d.ts from the manifest
+  ket types [--deployment X]       generate .ket/types.<deployment>.d.ts from the manifest
   ket agent [--deployment X]       print the agent capability descriptor
   ket permissions           every function that exists to be granted
   ket classification        which fields hold personal data, and which never leave

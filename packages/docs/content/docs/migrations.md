@@ -129,7 +129,7 @@ For a single datastore, `ket migrate` compares the current manifest schema to it
 prints SQL, and updates `.ket/schema.<app>.json`:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket migrate --deployment backoffice --workspace dist/ket.workspace.js
 ket migrate --deployment backoffice --allow-destructive --workspace dist/ket.workspace.js
 ```
@@ -174,7 +174,7 @@ to one connection and cannot represent cross-process visibility.
 Install the separate adapter and its optional driver:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 npm install @ketvietlab/ketjs-postgres postgres
 ```
 
@@ -242,7 +242,7 @@ notifications must never be the only job-delivery guarantee.
 Apps with `serve.tenants` expose a database list and an opener. Migrate every tenant with:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket migrate --deployment erp --all --workspace dist/ket.workspace.js
 ket migrate --deployment erp --all --dry-run --workspace dist/ket.workspace.js
 ket migrate --deployment erp --all --allow-destructive --workspace dist/ket.workspace.js

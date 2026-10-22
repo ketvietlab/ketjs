@@ -245,7 +245,7 @@ provisionAdmin: {
 The CLI reads secret input from stdin so credentials do not enter shell history:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 printf '%s' '{"login":"admin","password":"..."}' | \
   ket provision user.provisionAdmin --input -
 ```
@@ -312,7 +312,7 @@ because both read `sales.Order`.
 Inspect reach before creating a role:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket permissions --grant sales.listOrders,sales.createOrder
 ket permissions --module sales
 ket permissions --role sales_manager

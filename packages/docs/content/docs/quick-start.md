@@ -142,21 +142,21 @@ The module appears once, in `modules`. KetJS composes it, migrates its schema, a
 Open the route:
 
 ```bash
-# Run from: /path/to/ketjs
-curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/
+# Run from: /path/to/example-app
+curl http://127.0.0.1:3000/
 ```
 
 Or call the function transport directly:
 
 ```bash
 # Run from: /path/to/example-app
-npx ket call notes.list \
-  --against http://127.0.0.1:3000 \
-  --company demo
+npx ket call notes.list --against http://127.0.0.1:3000
 ```
 
-Until an application enables sessions, the development identity shim reads company context from
-request headers. `npm run dev` enables it with `KET_DEV=1`; it is a development convenience, not
+Every row belongs to a company, and without sessions the requests above all land in one: `KET_COMPANY`,
+`default` unless you set it. Until an application enables sessions, the development identity shim can
+also take the company from an `X-Ket-Company` header (`--company` for `ket call`), which is how you try a
+second company before sign-in exists. `npm run dev` enables it with `KET_DEV=1`; it is a development convenience, not
 production authentication. `npm start` ignores the headers: every caller is anonymous in the
 `KET_COMPANY` company and may call only functions declared `anonymous: true`, such as `notes.list`.
 
@@ -164,7 +164,7 @@ Or the published operation, which answers `{ "data": [...] }`:
 
 ```bash
 # Run from: /path/to/example-app
-curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/api/v1/notes
+curl http://127.0.0.1:3000/api/v1/notes
 ```
 
 ## Write the OpenAPI document
@@ -212,7 +212,7 @@ npx ket permissions --workspace dist/ket.workspace.js
 ## Run the test
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 npm test
 ```
 

@@ -365,5 +365,5 @@ Generate app-specific declarations from the composed manifest:
 ket types --deployment backoffice --workspace dist/ket.workspace.js
 ```
 
-The output under `.ket/types.<app>.d.ts` includes the composed fields and contribution provenance.
+The output under `.ket/types.<deployment>.d.ts` includes the composed fields and contribution provenance.
 Run it after composition changes; do not maintain a parallel handwritten model registry.
