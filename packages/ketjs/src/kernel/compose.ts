@@ -16,6 +16,7 @@ import { tableNameFor } from '../data/migrate.ts'
 import { compilePermissionBundles } from './permissions.ts'
 import { composeHttpBindings, FN_RETURNS } from './http-binding.ts'
 import { bindHandlers } from './handlers.ts'
+import { satisfies } from './semver.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
 const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
@@ -238,10 +239,6 @@ export function compose(
     }
   }
 
-  const major = (version: string): number | null => {
-    const match = /^(?:\^)?(\d+)(?:\.|$)/.exec(version.trim())
-    return match ? Number(match[1]) : null
-  }
   for (const m of order) {
     for (const [dependency, range] of Object.entries(m.compatible ?? {})) {
       if (!m.depends.includes(dependency)) {
@@ -254,11 +251,16 @@ export function compose(
         continue
       }
       const actual = order.find((candidate) => candidate.name === dependency)?.version
-      const wantedMajor = major(range)
-      const actualMajor = actual ? major(actual) : null
-      const matches = range.startsWith('^')
-        ? wantedMajor != null && actualMajor === wantedMajor
-        : actual === range
+      const matches = actual === undefined ? false : satisfies(actual, range)
+      if (matches === null) {
+        diag.add({
+          code: 'E_MODULE_COMPATIBILITY_RANGE',
+          module: m.name,
+          message: `"${m.name}" declares an unreadable range ${JSON.stringify(range)} for "${dependency}" (version ${actual})`,
+          hint: 'write a version such as 1.2.3, 1.2, ^1.2.3 or ~1.2.3; the dependency version must be x.y.z',
+        })
+        continue
+      }
       if (!matches) {
         diag.add({
           code: 'E_MODULE_VERSION_SKEW',
