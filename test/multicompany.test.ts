@@ -186,7 +186,7 @@ const app = defineDeployment({
 
 test('multi-company: the server reads both headers, and the active company joins the set', async () => {
   const b = await bootDeployment(app, {
-    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
     port: 0,
   })
   const at = `http://127.0.0.1:${b.port}`
@@ -212,7 +212,7 @@ test('multi-company: the server reads both headers, and the active company joins
 
 test('multi-company: verified callback dispatch ignores request headers and selects one company', async () => {
   const b = await bootDeployment(app, {
-    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
     port: 0,
   })
   try {

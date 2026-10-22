@@ -278,7 +278,7 @@ has to be allowed to ask; nothing else has that excuse.
 
 **What this did not change:** an app that has not turned sessions on is unaffected,
 because there is no login to be outside of — the header shim is still the identity
-there, and the banner still says so.
+there, and the banner still says so. D77 later limited that shim to development processes.
 
 ## D37 — One deployment, many databases, and one door into each
 **Chosen:** the domain contract's model — the code ships with the deployment, the decision about
@@ -2438,3 +2438,33 @@ something changed is a client that then asks for it. That is D75's line, and it 
 
 **Reversible:** yes — `serve.streamStore` still overrides everything with one store, which is what a
 deployment that wants the old shape passes.
+
+## D77 — A header names the company only in development
+
+D27 made the request's identity one function so that replacing headers with a login would be one
+change. Until that change is made, the headers were the identity everywhere: any process without
+`serve.sessions` or `serve.resolveIdentity` let a request choose its company with `X-Ket-Company` and
+call every function, because the allow-list of a deployment with no login was "everything". The
+banner said "NOT for production", and nothing else did. A scaffold started with `npm start` behind a
+proxy served every company's data to anyone who could type a header.
+
+**The shim now needs `KET_DEV=1`.** The tools that are development already set it: `ket dev`,
+`--watch`, the scaffold's dev script, the test harness, and a local `ket call` that boots its own
+loopback server. It is read from the environment only. `serve.defaults` cannot carry it, so a
+deployment cannot ship with development identity switched on in its source.
+
+**Without it, a caller is a stranger.** The same stranger D36 defined for a deployment with sessions:
+only `anonymous: true` functions, and the company is the one the operator configured in
+`KET_COMPANY`, never one the request names. A public, read-only deployment keeps working unchanged
+when its operations are declared anonymous; everything else answers `403 E_FN_NOT_PERMITTED`.
+
+**Not decided by the bind address.** Refusing to listen beyond loopback would miss the commonest
+production shape — a proxy on the same host forwarding to `127.0.0.1` — and would also refuse a
+legitimate public deployment that has nothing to authenticate.
+
+**Cost:** a deployment that relied on the headers outside development stops accepting them on
+upgrade. That is the intended break, but it is a break: such a deployment must configure sessions or
+`resolveIdentity`, or declare its public operations anonymous.
+
+**Reversible:** for one process, by setting `KET_DEV=1` — which is a statement that the process is a
+development process, and the banner repeats it at every boot.

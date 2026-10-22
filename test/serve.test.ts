@@ -108,7 +108,8 @@ const notes = defineModule({
   messages: { en: { 'page.notFound': 'Nothing here' } },
 })
 
-const memory = { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }
+// These deployments have no authentication and pick companies with the development headers.
+const memory = { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' }
 
 test('boot: one declaration produces a running server, framework routes included', async () => {
   const app = defineDeployment({
@@ -177,6 +178,90 @@ test('boot: an absent development branch header keeps branch reads unrestricted'
     assert.deepEqual(result.value.map((row) => row.id).sort(), ['hanoi', 'saigon'])
   } finally {
     await booted.close()
+  }
+})
+
+test('config: the development identity comes only from KET_DEV=1, never from deployment defaults', () => {
+  assert.equal(readConfig({}).developmentIdentity, false)
+  assert.equal(readConfig({ KET_DEV: '1' }).developmentIdentity, true)
+  assert.equal(readConfig({ KET_DEV: 'true' }).developmentIdentity, false, 'only the exact flag enables it')
+  const baked = { developmentIdentity: true } as Parameters<typeof readConfig>[1]
+  assert.equal(readConfig({}, baked).developmentIdentity, false, 'a deployment cannot ship it on')
+})
+
+test('boot: without authentication, request headers choose the company only in development', async () => {
+  const ledger = defineModule({
+    name: 'open_ledger',
+    models: { Entry: { scope: 'company', fields: { id: 'id', memo: 'text' } } },
+    functions: {
+      entries: {
+        anonymous: true,
+        output: { id: 'id', memo: 'text' },
+        effects: ['read:open_ledger.Entry'],
+        handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('open_ledger.Entry'))),
+      },
+      record: {
+        input: { id: 'id', memo: 'text' },
+        effects: ['write:open_ledger.Entry'],
+        handler: (ctx: Ctx, args) => ctx.db.insert('open_ledger.Entry', args),
+      },
+    },
+  })
+  const app = defineDeployment({ name: 'open_ledger', modules: [ledger], headless: true })
+  // Every request claims another company, as any client on the network could.
+  const call = (port: number, fn: string, body: Record<string, unknown> = {}) =>
+    fetch(`http://127.0.0.1:${port}/_ket/fn/open_ledger.${fn}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-ket-company': 'globex' },
+      body: JSON.stringify(body),
+    })
+  const seed = (booted: { adapter: { run: (sql: string, args: unknown[]) => Promise<unknown> } | null }) =>
+    booted.adapter!.run('INSERT INTO open_ledger_entry (id, memo, "companyId") VALUES (?, ?, ?), (?, ?, ?)', [
+      'a1',
+      'acme row',
+      'acme',
+      'g1',
+      'globex row',
+      'globex',
+    ])
+
+  const production = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
+  try {
+    await seed(production)
+    const forged = await call(production.port, 'record', { id: 'x1', memo: 'forged' })
+    assert.equal(forged.status, 403, 'a function that is not anonymous is closed to a stranger')
+    assert.equal(((await forged.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+    const listed = (await (await call(production.port, 'entries')).json()) as { value: Array<{ id: string }> }
+    assert.deepEqual(
+      listed.value.map((row) => row.id),
+      ['a1'],
+      'the header is ignored; the configured company is the only one a stranger acts in',
+    )
+    assert.match(await production.banner(), /No authentication: every caller is anonymous in company "acme"/)
+  } finally {
+    await production.close()
+  }
+
+  const development = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
+    port: 0,
+  })
+  try {
+    await seed(development)
+    assert.equal((await call(development.port, 'record', { id: 'g2', memo: 'dev write' })).status, 200)
+    const listed = (await (await call(development.port, 'entries')).json()) as {
+      value: Array<{ id: string }>
+    }
+    assert.deepEqual(listed.value.map((row) => row.id).sort(), ['g1', 'g2'])
+    assert.match(
+      await development.banner(),
+      /Development identity: the company comes from the X-Ket-Company header/,
+    )
+  } finally {
+    await development.close()
   }
 })
 

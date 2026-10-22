@@ -156,7 +156,9 @@ npx ket call notes.list \
 ```
 
 Until an application enables sessions, the development identity shim reads company context from
-request headers. It is a development convenience, not production authentication.
+request headers. `npm run dev` enables it with `KET_DEV=1`; it is a development convenience, not
+production authentication. `npm start` ignores the headers: every caller is anonymous in the
+`KET_COMPANY` company and may call only functions declared `anonymous: true`, such as `notes.list`.
 
 Or the published operation, which answers `{ "data": [...] }`:
 

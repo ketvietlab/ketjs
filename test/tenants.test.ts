@@ -21,6 +21,9 @@ import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
 // The same module instance as createTenants: a hub is per adapter per module copy.
 import { notificationHub } from '../packages/ketjs/src/server/notify.ts'
 
+// Tests that pick a company with request headers run with the development identity.
+const development = { ...process.env, KET_DEV: '1' }
+
 /**
  * One deployment, many databases. Every tenant runs the deployment's immutable
  * module composition while keeping its data and sessions isolated.
@@ -98,7 +101,7 @@ const get = (port: number, tenant: string, path: string, init: RequestInit = {})
 
 test('tenants: each request lands in its own database', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(app, { env: development, port: 0, openLog: () => nullLog() })
   const post = (host: string, id: string) =>
     get(b.port, host, '/_ket/fn/core.add', {
       method: 'POST',
@@ -417,7 +420,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
       },
     },
   })
-  const b = await bootDeployment(asyncApp, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(asyncApp, { env: development, port: 0, openLog: () => nullLog() })
   const response = await fetch(`http://127.0.0.1:${b.port}/_ket/fn/core.list`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-ket-company': 'c1' },
@@ -711,7 +714,7 @@ test('tenants: subscribe on a tenant deployment needs the request whose tenant i
       tenants: app.serve!.tenants,
     },
   })
-  const b = await bootDeployment(listening, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(listening, { env: development, port: 0, openLog: () => nullLog() })
   try {
     assert.deepEqual(await get(b.port, 't1', '/bare').then((r) => r.json()), { code: 'E_NOT_SUPPORTED' })
     assert.deepEqual(await get(b.port, 't1', '/listen').then((r) => r.json()), { tenant: 't1' })

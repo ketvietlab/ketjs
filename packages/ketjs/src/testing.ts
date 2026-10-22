@@ -474,6 +474,9 @@ export async function createTestDeployment(
   env.KET_STORAGE_DIR ??= join(artifactsDir, 'storage')
   env.KET_SECRET ??= `ket-e2e-${spec.name}`
   env.KET_QUEUE_NOTIFY ??= '0'
+  // The harness sends the development identity headers. Pass KET_DEV: '0' to test
+  // how the deployment treats callers when no authentication is configured.
+  env.KET_DEV ??= '1'
 
   const records = memoryLog()
   const openLog = () => records
