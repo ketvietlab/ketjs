@@ -9,12 +9,23 @@ type Effect = {
   disposed: boolean
   cleanup: Cleanup | null
   computed: boolean
+  /** The flush that last counted this effect's runs. */
+  epoch: number
+  runs: number
 }
+
+/**
+ * One effect re-running this often inside a single flush is a feedback cycle,
+ * not a workload: it writes a signal it also reads. Without a bound the flush
+ * loop never ends and the page stops responding.
+ */
+const MAX_EFFECT_RUNS_PER_FLUSH = 100
 
 let active: Effect | null = null
 let batchDepth = 0
 const pending = new Set<Effect>()
 let flushing = false
+let flushEpoch = 0
 
 export type Signal<T> = {
   (): T
@@ -47,6 +58,11 @@ export function signal<T>(initial: T): Signal<T> {
 function flush(): void {
   if (flushing || batchDepth > 0) return
   flushing = true
+  const epoch = ++flushEpoch
+  // One failing effect must not starve the others queued by the same write, and
+  // must not surface at an unrelated later write either. Every queued effect runs;
+  // the failures are rethrown to this writer once the graph has settled.
+  const errors: unknown[] = []
   try {
     while (pending.size) {
       // Derived values must settle before ordinary effects observe them. Picking one
@@ -61,11 +77,33 @@ function flush(): void {
       next ??= pending.values().next().value
       if (!next) break
       pending.delete(next)
-      runEffect(next)
+      if (next.epoch !== epoch) {
+        next.epoch = epoch
+        next.runs = 0
+      }
+      if (++next.runs > MAX_EFFECT_RUNS_PER_FLUSH) {
+        // Skipped for the rest of this flush and reported once. It stays subscribed,
+        // so the next write retries it rather than silently disabling it.
+        if (next.runs === MAX_EFFECT_RUNS_PER_FLUSH + 1)
+          errors.push(
+            new Error(
+              `signal cycle: an effect ran ${MAX_EFFECT_RUNS_PER_FLUSH} times in one flush; ` +
+                'it writes a signal it also reads',
+            ),
+          )
+        continue
+      }
+      try {
+        runEffect(next)
+      } catch (error) {
+        errors.push(error)
+      }
     }
   } finally {
     flushing = false
   }
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) throw new AggregateError(errors, `${errors.length} effects failed in one flush`)
 }
 
 function runEffect(eff: Effect): void {
@@ -86,7 +124,7 @@ function runEffect(eff: Effect): void {
 }
 
 function makeEffect(fn: () => unknown, computed: boolean): () => void {
-  const eff: Effect = { fn, deps: new Set(), disposed: false, cleanup: null, computed }
+  const eff: Effect = { fn, deps: new Set(), disposed: false, cleanup: null, computed, epoch: 0, runs: 0 }
   try {
     runEffect(eff)
   } catch (error) {

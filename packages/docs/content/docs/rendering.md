@@ -111,6 +111,8 @@ total.dispose()
 - `computed()` settles before ordinary effects observe the graph.
 - `batch()` coalesces several writes into one flush.
 - `effect()` returns a disposer and may return its own cleanup callback.
+- A failing effect does not stop the others queued by the same write; the writer receives the error after the flush.
+- An effect that runs more than 100 times in one flush is reported as a `signal cycle` instead of hanging the page.
 
 For execution timing, lifecycle cleanup, async requests, SSR initial data and stale-response protection, read [Effects and data fetching](/docs/view-effects-data/). The step-by-step exercises are [Reactive effects](/learn/effects/) and [Data fetching](/learn/data-fetching/).
 
