@@ -836,7 +836,8 @@ export type Manifest = {
   patches: Array<{ by: string; target: string; reason: string }>
   /**
    * Contract problems composition reported without failing, such as an effect
-   * outside the module's depends. Each is expected to become an error in 1.0.
+   * outside the module's depends (an error from 1.0) or two unrelated modules
+   * setting one token.
    */
   diagnostics?: Diagnostic[]
 }

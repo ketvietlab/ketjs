@@ -298,6 +298,11 @@ are those of the modules that actually render the page — composed modules plus
 so a deployment shipping several themes gets the palette of the one the site chose rather than the
 one that composed last.
 
+A module layers over the tokens of the modules it depends on, and the selected theme over all of them.
+Two modules that do not depend on each other and give one token different values have no such order:
+the one the dependency sort puts last wins, and composition reports `E_TOKEN_CONFLICT` as a
+`contract_warning` naming both.
+
 `tokensToCss()` performs the conversion to `--ket-*` custom properties and emits the cascade order:
 
 ```text

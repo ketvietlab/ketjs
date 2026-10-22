@@ -81,8 +81,8 @@ export async function bootRuntime(
     // cannot derive the same trace for one request.
     traceKeyed: Boolean(config.secret),
   })
-  // Contract problems composition reports without failing yet. Each becomes an
-  // error in 1.0, so they are logged on every boot rather than once at build time.
+  // Contract problems composition reports without failing. Logged on every boot
+  // rather than once at build time, because some of them become errors in 1.0.
   for (const warning of manifest.diagnostics ?? [])
     logger.warn('contract_warning', {
       code: warning.code,
