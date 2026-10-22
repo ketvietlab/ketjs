@@ -7,7 +7,7 @@ import type { TplNode, TplRoot, TplEl } from './template.ts'
 import { SVG_NAMESPACE } from './host.ts'
 import { attributeValue } from './url.ts'
 import type { Host, HostNode } from './host.ts'
-import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
+import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, TEXT_ONLY, isMarkup } from './ssr.ts'
 import type { Markup } from './ssr.ts'
 
 const RESULT = Symbol('ket.result')
@@ -385,41 +385,49 @@ class Instance {
 
   /** `into` is the namespace of `parent`: set when this template is mounted inside an `<svg>`. */
   mount(parent: HostNode, anchor: HostNode | null, into?: string): void {
-    const build = (node: TplNode, target: HostNode, namespace?: string): void => {
-      const atRoot = target === parent
-      if (node.type === 'text') {
-        const t = this.host.createText(node.value)
-        this.host.insert(target, t, atRoot ? anchor : null)
-        if (atRoot) this.roots.push(t)
-        return
-      }
-      if (node.type === 'hole') {
-        const marker = this.host.createText('')
-        this.host.insert(target, marker, atRoot ? anchor : null)
-        if (atRoot) this.roots.push(marker)
-        this.parts[node.index] = new Part(this.host, target, marker, namespace)
-        return
-      }
-      const tag = (node as TplEl).tag
-      // SVG elements are only drawn when they are created in the SVG namespace.
-      // Server-rendered markup gets this from the HTML parser; a client render
-      // builds every node itself, so it has to carry the namespace down.
-      const childNamespace = tag === 'svg' ? SVG_NAMESPACE : tag === 'foreignObject' ? undefined : namespace
-      const el = this.host.createElement(tag, childNamespace)
-      for (const a of (node as TplEl).attrs) {
-        if (a.hole == null) {
-          this.host.setAttribute(el, a.name, a.value ?? '')
-          continue
-        }
-        this.parts[a.hole] = isEventAttr(a.name)
-          ? bindEvent(this.host, el, a.name, undefined)
-          : { attr: true, node: el, name: a.name, last: undefined }
-      }
-      this.host.insert(target, el, atRoot ? anchor : null)
-      if (atRoot) this.roots.push(el)
-      for (const c of (node as TplEl).children) build(c, el, childNamespace)
+    for (const n of this.tpl.children) this.build(n, parent, into, parent, anchor)
+  }
+
+  /** Create `node` in `target`. What lands directly in `root` goes before `anchor` and is one of this instance's roots. */
+  build(
+    node: TplNode,
+    target: HostNode,
+    namespace: string | undefined,
+    root: HostNode | null,
+    anchor: HostNode | null,
+  ): void {
+    const atRoot = target === root
+    if (node.type === 'text') {
+      const t = this.host.createText(node.value)
+      this.host.insert(target, t, atRoot ? anchor : null)
+      if (atRoot) this.roots.push(t)
+      return
     }
-    for (const n of this.tpl.children) build(n, parent, into)
+    if (node.type === 'hole') {
+      const marker = this.host.createText('')
+      this.host.insert(target, marker, atRoot ? anchor : null)
+      if (atRoot) this.roots.push(marker)
+      this.parts[node.index] = new Part(this.host, target, marker, namespace)
+      return
+    }
+    const tag = (node as TplEl).tag
+    // SVG elements are only drawn when they are created in the SVG namespace.
+    // Server-rendered markup gets this from the HTML parser; a client render
+    // builds every node itself, so it has to carry the namespace down.
+    const childNamespace = tag === 'svg' ? SVG_NAMESPACE : tag === 'foreignObject' ? undefined : namespace
+    const el = this.host.createElement(tag, childNamespace)
+    for (const a of (node as TplEl).attrs) {
+      if (a.hole == null) {
+        this.host.setAttribute(el, a.name, a.value ?? '')
+        continue
+      }
+      this.parts[a.hole] = isEventAttr(a.name)
+        ? bindEvent(this.host, el, a.name, undefined)
+        : { attr: true, node: el, name: a.name, last: undefined }
+    }
+    this.host.insert(target, el, atRoot ? anchor : null)
+    if (atRoot) this.roots.push(el)
+    for (const c of (node as TplEl).children) this.build(c, el, childNamespace, root, anchor)
   }
 
   update(values: unknown[]): void {
@@ -427,21 +435,26 @@ class Instance {
       const p = this.parts[i]
       if (!p) continue
       const v = values[i]
-      if ('event' in p) {
-        p.box.fn = typeof v === 'function' ? (v as (e: unknown) => void) : null
-        continue
-      }
-      if (p.attr) {
-        if (!Object.is(p.last, v)) {
-          this.host.setAttribute(p.node, p.name, attributeValue(p.name, v))
-          p.last = v
-        }
-        continue
-      }
-      if (Object.is(this.values[i], v) && !isResult(v) && !isEach(v)) continue
-      p.commit(v)
+      if (!('event' in p) && !p.attr && Object.is(this.values[i], v) && !isResult(v) && !isEach(v)) continue
+      this.apply(p, v)
     }
     this.values = values
+  }
+
+  /** Give a part its value: a handler, an attribute (when it changed) or a hole's content. */
+  apply(p: AnyPart, v: unknown): void {
+    if ('event' in p) {
+      p.box.fn = typeof v === 'function' ? (v as (e: unknown) => void) : null
+      return
+    }
+    if (p.attr) {
+      if (!Object.is(p.last, v)) {
+        this.host.setAttribute(p.node, p.name, attributeValue(p.name, v))
+        p.last = v
+      }
+      return
+    }
+    p.commit(v)
   }
 
   firstNode(): HostNode | null {
@@ -559,6 +572,18 @@ const describe = (n: DomNode | null): string =>
         ? `text "${(n.data ?? '').slice(0, 20)}"`
         : `<${n.nodeName.toLowerCase()}>`
 
+/** The value indexes of every hole and attribute hole in `nodes`. */
+function holesIn(nodes: readonly TplNode[], out: number[] = []): number[] {
+  for (const node of nodes) {
+    if (node.type === 'hole') out.push(node.index)
+    else if (node.type === 'el') {
+      for (const a of node.attrs) if (a.hole != null) out.push(a.hole)
+      holesIn(node.children, out)
+    }
+  }
+  return out
+}
+
 /** `into` is the namespace of `parent`, as for `Instance.mount`. */
 function hydrateInstance(
   host: Host,
@@ -674,9 +699,22 @@ function hydrateInstance(
         : { attr: true, node: element, name: a.name, last: values[a.hole] }
     }
     const after = element.nextSibling
-    c = element.firstChild
     const childNamespace =
       el.tag === 'svg' ? SVG_NAMESPACE : el.tag === 'foreignObject' ? undefined : namespace
+    if (TEXT_ONLY.has(el.tag.toLowerCase())) {
+      // The parser kept this content as text and the server wrote no markers into it,
+      // so there is nothing to adopt. Build it as a client render does: a hole in a
+      // textarea or title keeps updating, and a noscript stays inert.
+      for (let child = element.firstChild; child; child = element.firstChild) host.remove(child)
+      for (const child of el.children) instance.build(child, element, childNamespace, null, null)
+      for (const index of holesIn(el.children)) {
+        const part = instance.parts[index]
+        if (part) instance.apply(part, values[index])
+      }
+      c = after
+      return
+    }
+    c = element.firstChild
     for (const child of el.children) walk(child, element, childNamespace)
     c = after
   }
