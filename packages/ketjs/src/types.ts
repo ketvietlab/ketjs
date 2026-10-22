@@ -425,6 +425,12 @@ export type FnSpec = {
   idempotent?: boolean
   /** Opt-in atomic database command: requires a key; writes and receipt commit together. */
   transactional?: boolean
+  /**
+   * Opt in to dry runs. A dry run executes the handler and discards its writes,
+   * jobs and notifications, so the handler itself must cause no other side effect
+   * (a provider call, a mail) when `ctx.dryRun` is true. Without it, a dry run is
+   * refused with `E_NO_DRY_RUN`.
+   */
   dryRun?: boolean
   agent?: boolean
   handler: (ctx: Ctx, args: Record<string, unknown>) => unknown
@@ -518,7 +524,8 @@ export type JobEnqueueOptions = {
   company?: string
 }
 
-export type JobEnqueueResult = { id: string; existing: boolean }
+/** `dryRun` is set when a dry run validated the job and did not store it; `id` is then empty. */
+export type JobEnqueueResult = { id: string; existing: boolean; dryRun?: true }
 
 export type JobExecution = {
   id: string
@@ -821,7 +828,13 @@ export type Diagnostic = {
   at?: string | null
 }
 
-export type WriteRecord = { op: 'insert' | 'update'; model: string; row?: Row; where?: Row; patch?: Row }
+/**
+ * One entry of a call's write log: a row write, or a durable job the call
+ * enqueued. A job entry names the job only; its arguments can carry anything.
+ */
+export type WriteRecord =
+  | { op: 'insert' | 'update' | 'delete'; model: string; row?: Row; where?: Row; patch?: Row }
+  | { op: 'enqueue'; job: string }
 export type Row = Record<string, unknown>
 export type WriteResult = { changes: number }
 export type InsertIfAbsentResult = WriteResult & { inserted: boolean }

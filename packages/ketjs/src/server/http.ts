@@ -3,7 +3,7 @@
 
 import { isVersioned } from './assets.ts'
 import { createServer } from 'node:http'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { isNavigationRequest, navigablePage } from './respond.ts'
 import type { RouteResult } from './respond.ts'
@@ -12,6 +12,7 @@ import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
+import { isJsonType, isSameOriginRequest } from './request.ts'
 import { partitionTokens, tokensToCss } from '../theme/tokens.ts'
 import { createStreams, memoryStreamStore, streamsOf } from './stream.ts'
 import type { Streams } from './stream.ts'
@@ -47,7 +48,8 @@ const INTERNAL_ERROR = { code: 'E_INTERNAL', message: 'internal error' } as cons
 
 export const statusForError = (code: string): number => {
   if (isDefectError(code)) return 500
-  if (code === 'E_FN_NOT_PERMITTED') return 403
+  if (code === 'E_FN_NOT_PERMITTED' || code === 'E_HTTP_CSRF' || code === 'E_FUNCTION_BOUND') return 403
+  if (code === 'E_HTTP_CONTENT_TYPE') return 415
   if (code === 'E_NOT_FOUND' || code === 'E_UNKNOWN_FUNCTION') return 404
   if (code === 'E_PAYLOAD_TOO_LARGE') return 413
   return 400
@@ -164,6 +166,20 @@ export type ServeOpts = {
   ) => Promise<void>
   /** Functions this request may call. Null means unrestricted — see boot.ts. */
   resolveAllow?: (url: URL, req: IncomingMessage) => Promise<readonly string[] | null>
+  /**
+   * How this request authenticated, if it did. A browser session carries ambient
+   * credentials, so `/_ket/fn` then requires a same-origin JSON request, the same
+   * cross-site boundary an HTTP binding applies.
+   */
+  resolveIdentityOrigin?: (url: URL, req: IncomingMessage) => Promise<'session' | 'request' | null>
+  /** Logger for one function call over `/_ket/fn`, so it records `fn_call`, `fn_error` and `fn_denied`. */
+  functionLog?: (tenant: string, scope: Scope, actor: string | null, correlationId: string) => Logger
+  /**
+   * Include `hint` and `at` in JSON error bodies. They are developer guidance and
+   * can name fields and files, so a deployment outside development leaves them out.
+   * Defaults to true for a server built directly; `bootDeployment` sets it from `KET_DEV`.
+   */
+  errorDetail?: boolean
   /** Disable PostgreSQL notification while retaining polling correctness. */
   queueNotify?: boolean
   /** Serve files from disk under a URL prefix. Meant for stylesheets during design. */
@@ -887,6 +903,15 @@ export async function createKetServer(o: ServeOpts) {
     return o.browserBehaviors ?? theme?.behaviors ?? {}
   }
 
+  // Functions an HTTP binding feeds from the caller's identity (`bind`).
+  const identityBound = new Set(
+    Object.values(o.manifest.routes ?? {}).flatMap((route) =>
+      route.binding && Object.values(route.binding.inputs).some((input) => input.from === 'identity')
+        ? [route.binding.fn]
+        : [],
+    ),
+  )
+
   const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
     try {
       return o.resolveDatastore?.(url, req) ?? null
@@ -900,6 +925,9 @@ export async function createKetServer(o: ServeOpts) {
   // a listener for 'upgrade' existed.
   const server = createServer({ shouldUpgradeCallback: isWebSocketUpgrade }, async (req, res) => {
     const started = Date.now()
+    // Every response states its type and asks the browser not to guess another:
+    // an upload served as text/plain must never be sniffed into HTML.
+    res.setHeader('x-content-type-options', 'nosniff')
     // The route pattern, never the pathname: a raw path carries record ids and a
     // query string, which is how customer data reaches a log aggregator. An
     // unmatched path stays unnamed for the same reason — the status already says
@@ -1085,6 +1113,11 @@ export async function createKetServer(o: ServeOpts) {
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
         route = '/_ket/fn'
+        // Every answer names its request and build, like an HTTP binding's does,
+        // so a client report and the server log can be matched.
+        const requestId = randomUUID()
+        res.setHeader('x-request-id', requestId)
+        if (buildId !== undefined) res.setHeader('x-ket-build', buildId)
         const fnKey = decodeRequestPath(url.pathname.slice('/_ket/fn/'.length))
         const meta = o.manifest.functions[fnKey]
         if (meta?.exposure === 'internal') {
@@ -1094,14 +1127,43 @@ export async function createKetServer(o: ServeOpts) {
             hint: 'call it from the trusted route that owns its security policy',
           })
         }
+        // A binding that fills an input from the caller's identity is the only
+        // place that input is trustworthy. Here the caller would choose it.
+        if (identityBound.has(fnKey)) {
+          throw new KetError({
+            code: 'E_FUNCTION_BOUND',
+            message: `server function "${fnKey}" takes input from the caller's identity and is served only by its HTTP binding`,
+            hint: 'call the binding route, or call the function from a trusted route',
+          })
+        }
         // Bound the untrusted body before authentication/session resolvers run. A
         // caller must not be able to make those expensive paths retain an unbounded
         // payload first, whether or not Content-Length was supplied.
         const args = await readBody(req, maxJsonBodyBytes)
+        // A session cookie is sent by the browser with any request to this host,
+        // including one a page on another site makes. SameSite=Lax does not stop a
+        // sibling subdomain, and a text/plain body needs no preflight, so the
+        // generic transport applies the binding's rule: same origin, and JSON.
+        // Browsers send Origin with every POST, so a request with neither Origin
+        // nor Sec-Fetch-Site came from a program holding the cookie itself.
+        if ((await o.resolveIdentityOrigin?.(url, req)) === 'session') {
+          if (!isSameOriginRequest(url, req, { allowMissingOrigin: true }))
+            throw new KetError({
+              code: 'E_HTTP_CSRF',
+              message: 'a request carrying a session must come from the same origin',
+              hint: 'send it from a page of this site, with its Origin header',
+            })
+          if (!isJsonType(req.headers['content-type']))
+            throw new KetError({
+              code: 'E_HTTP_CONTENT_TYPE',
+              message: 'a request carrying a session must send Content-Type: application/json',
+            })
+        }
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)
         const allow = await o.resolveAllow?.(url, req)
         const actor = await o.resolveActor?.(url, req)
+        const dryRun = url.searchParams.get('dryRun') === '1'
         const result = await withDb(url, req, (adapter) =>
           callFn(fnKey, args, {
             adapter,
@@ -1110,9 +1172,20 @@ export async function createKetServer(o: ServeOpts) {
             allow,
             actor,
             queueNotify: o.queueNotify,
-            dryRun: url.searchParams.get('dryRun') === '1',
+            dryRun,
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
             idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
+            correlationId: requestId,
+            ...(o.functionLog
+              ? {
+                  log: o.functionLog(
+                    tenantForLog(url, req) ?? '',
+                    scope ?? { company: null },
+                    actor ?? null,
+                    requestId,
+                  ),
+                }
+              : {}),
           }),
         ).catch(async (error) => {
           if (
@@ -1129,7 +1202,21 @@ export async function createKetServer(o: ServeOpts) {
           }
           throw error
         })
-        return json(res, 200, result)
+        // The write log is a dry run's preview and nothing else. A real call's log
+        // can hold every column the handler wrote, including the ones the declared
+        // output leaves out, so it never leaves the server.
+        return json(
+          res,
+          200,
+          result.dryRun
+            ? result
+            : {
+                ok: result.ok,
+                value: result.value,
+                dryRun: false,
+                ...(result.replayed ? { replayed: true } : {}),
+              },
+        )
       }
 
       if (o.theme) {
@@ -1215,7 +1302,8 @@ export async function createKetServer(o: ServeOpts) {
         }
       }
       if (defect) return json(res, 500, INTERNAL_ERROR)
-      return json(res, status, (e as KetError).toJSON())
+      const body = (e as KetError).toJSON()
+      return json(res, status, o.errorDetail === false ? { ...body, hint: null, at: null } : body)
     } finally {
       requestLog?.log({
         // A stylesheet is not an application event. One page load is dozens of

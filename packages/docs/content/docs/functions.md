@@ -128,7 +128,7 @@ The handler receives a `Ctx` containing:
 - checked `db` read and write methods;
 - `tx()` for atomic work;
 - `jobs.enqueue()` for transactional durable work;
-- `writes`, the intended mutation log used by dry-run.
+- `writes`, the intended write log (`insert`, `update`, `delete`, `enqueue`) used by dry-run.
 
 There is no module-scope database client. Keeping access on `ctx` makes an operation without identity,
 scope, or effects unrepresentable through the normal API.
@@ -166,6 +166,29 @@ handling, or response shaping.
 To publish a function as a REST-style operation with its own method, path, and OpenAPI contract,
 bind it with [`httpRoutes()`](/ketjs/openapi/#function-bindings) instead of writing a route by hand.
 
+### The generic transport
+
+`POST /_ket/fn/<module>.<function>` calls an `http` function with a JSON object body. It applies the
+same boundaries as a binding:
+
+| Check | Refusal |
+| --- | --- |
+| The function is `internal` | `400 E_FUNCTION_INTERNAL` |
+| A binding fills one of its inputs from identity (`bind`) | `403 E_FUNCTION_BOUND`; call the binding instead |
+| A session cookie authenticates the request and `Origin` or `Sec-Fetch-Site` names another origin | `403 E_HTTP_CSRF` |
+| A session cookie authenticates the request and the body is not `application/json` | `415 E_HTTP_CONTENT_TYPE` |
+| The caller's allow-list does not include the function, whether or not it exists | `403 E_FN_NOT_PERMITTED` |
+| The function does not exist and the caller is unrestricted | `404 E_UNKNOWN_FUNCTION`, without listing other names |
+
+A program that holds a session cookie and sends neither `Origin` nor `Sec-Fetch-Site` is not a browser,
+so it is accepted with a JSON body. A successful answer is `{ ok, value, dryRun }`, plus `replayed`
+when an idempotency key replays a stored result. The write log is returned only by a dry run, because
+a real call's log can hold columns the declared output leaves out. Every answer carries `x-request-id`
+and `x-ket-build`, and the call is logged as `fn_call`, `fn_error` or `fn_denied`.
+
+Outside development (`KET_DEV` unset), error bodies carry `hint: null` and `at: null`; the code and
+message remain.
+
 ## Provisioning functions
 
 One-shot bootstrap operations must be explicitly internal and opt in with `provision: true`:
@@ -193,8 +216,14 @@ printf '%s' '{"login":"admin","password":"..."}' | \
 
 ## Dry-run and idempotency
 
-Declare `dryRun: true` only when the operation can safely preview all writes. A caller requesting
-dry-run on another function receives `E_NO_DRY_RUN`.
+A dry run executes the handler and discards what it would change: row writes, enqueued jobs and
+notifications. The result reports them in `writes`, for example `{ op: 'enqueue', job: 'sales.mail' }`,
+and `ctx.jobs.enqueue()` returns `{ id: '', existing: false, dryRun: true }`.
+
+Dry runs are opt-in. Declare `dryRun: true` only when the handler causes no other side effect while
+`ctx.dryRun` is true: it must not call a provider, send mail, or write to storage. A caller requesting a
+dry run of any other function receives `E_NO_DRY_RUN` before the handler runs, and the agent
+descriptor reports `dryRunnable: false` for it.
 
 Declare `idempotent: true` when repeated calls can be keyed:
 

@@ -23,7 +23,7 @@ import {
 import { validateJson } from '../kernel/json-schema-subset.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { FormValidationError } from './form.ts'
-import { isSameOriginRequest } from './request.ts'
+import { isJsonType, isSameOriginRequest } from './request.ts'
 import { json, text, withHeaders } from './respond.ts'
 import type { RouteResult } from './respond.ts'
 import type { Route, ServeContext } from './boot.ts'
@@ -203,14 +203,6 @@ const FIXED: Readonly<Record<string, { status: number; message: string }>> = {
   E_HTTP_INVALID_REQUEST: { status: 422, message: 'the request is invalid' },
   E_HTTP_IDEMPOTENCY_REQUIRED: { status: 428, message: 'an Idempotency-Key header is required' },
   E_INTERNAL: { status: 500, message: 'internal error' },
-}
-
-const isJsonType = (header: unknown): boolean => {
-  const media = String(header ?? '')
-    .split(';')[0]!
-    .trim()
-    .toLowerCase()
-  return media === 'application/json' || (media.startsWith('application/') && media.endsWith('+json'))
 }
 
 /**

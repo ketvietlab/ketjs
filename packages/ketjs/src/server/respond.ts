@@ -92,13 +92,27 @@ export function json(value: unknown, o: { status?: number } = {}): RouteResult {
   return made(JSON.stringify(value, null, 2), 'application/json', o.status)
 }
 
+/**
+ * Content types a browser renders as an active document: HTML, XHTML, SVG, and
+ * every XML type, because an XML document may carry an XHTML or SVG namespace
+ * and run its scripts. Only raw() and the escaper's helpers may produce them.
+ */
+const MARKUP_TYPE =
+  /^\s*(?:text\/html|text\/xml|text\/xsl|application\/xml|application\/xslt\+xml|[a-z0-9.!#$&^_-]+\/[a-z0-9.!#$&^_-]+\+xml)\s*(?:;|$)/i
+
+/** Whether a content type is rendered by a browser as markup. */
+export const isMarkupType = (type: string): boolean => MARKUP_TYPE.test(type)
+
+/** Plain text in any non-markup type; raw() remains the one word to grep for markup. */
 export function text(body: string, o: { type?: string; status?: number } = {}): RouteResult {
-  return made(body, o.type ?? 'text/plain', o.status)
+  const type = o.type ?? 'text/plain'
+  if (isMarkupType(type)) throw new Error(`text() will not serve "${type}"; use raw() if markup is intended`)
+  return made(body, type, o.status)
 }
 
 /** Octets are not markup, and these two keep it that way; raw() remains the one word to grep for. */
 const octets = (type: string): string => {
-  if (/^\s*(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)\b/i.test(type))
+  if (isMarkupType(type))
     throw new Error(`bytes()/streamed() will not serve "${type}"; use raw() if markup is intended`)
   return type
 }
@@ -146,6 +160,16 @@ export function raw(body: string, o: { type?: string; status?: number } = {}): R
  * is exactly the hole the brand exists to close.
  */
 export function withHeaders(result: RouteResult, headers: Record<string, string>): RouteResult {
+  // A header must not turn a response that was refused markup into markup: that
+  // would make bytes(), streamed() and text() a second raw() nobody greps for.
+  for (const [name, value] of Object.entries(headers)) {
+    if (
+      name.toLowerCase() === 'content-type' &&
+      isMarkupType(value) &&
+      !isMarkupType(result.type ?? 'text/html')
+    )
+      throw new Error(`withHeaders() will not change a ${result.type} response into "${value}"; use raw()`)
+  }
   return { ...result, headers: { ...result.headers, ...headers } } as RouteResult
 }
 

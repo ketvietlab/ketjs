@@ -121,7 +121,7 @@ silently — the same care applies as to renaming a permission.
 | `unhandled` | error | An exception escaped the request handler, with its stack |
 | `http_binding_failed` | error | An HTTP binding answered 500 for an error its contract does not declare |
 | `http_binding_output` | error | A function's result broke its HTTP binding contract; the pointer and rule, never the value |
-| `fn_call` | info | A server function returned |
+| `fn_call` | info | A server function returned, whether called by a route, a binding or `/_ket/fn` |
 | `fn_error` | warn / error | A server function failed |
 | `fn_denied` | warn | A caller invoked a function it may not call |
 | `policy_denied` | warn | A record-level domain policy refused an operation |
