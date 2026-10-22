@@ -189,7 +189,9 @@ await storage.put(`attachments/${attachmentId}`, body, {
 ```
 
 Callers see logical keys; the base backend receives a tenant prefix. Keep attachment metadata in the
-tenant database and blob bytes in the storage backend.
+tenant database and blob bytes in the storage backend. The prefix is one path segment, so a tenant key
+containing `/` is refused with `E_STORAGE_NAMESPACE`: tenant `a` writing `b/x` would otherwise land on
+tenant `a/b`'s `x`.
 
 Job storage is additionally wrapped by `storage:read`, `storage:write`, and `storage:remove` effects.
 
