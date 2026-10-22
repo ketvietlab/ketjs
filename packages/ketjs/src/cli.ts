@@ -748,7 +748,7 @@ try {
         if (opt('deployment'))
           throw new Error('permissions --json accepts either --deployment NAME or --all, not both')
         const deployments = Object.entries(ws.deployments)
-          .sort(([left], [right]) => left.localeCompare(right))
+          .sort(([left], [right]) => left.localeCompare(right, 'en'))
           .map(([name, manifest]) => ({ name, inventory: permissionInventory(manifest) }))
         console.log(JSON.stringify({ version: 1, deployments }, null, 2))
       } else {
