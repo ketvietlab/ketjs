@@ -14,7 +14,10 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The current patch fixes hydration namespaces and keyed entry movement without changing public APIs or
+The 0.6.0 line closes defaults that failed open before 1.0, so most applications need changes. Work
+through [Changes in 0.6.0](#changes-in-0-6-0) on a staging copy first.
+
+The 0.5.1 patch fixes hydration namespaces and keyed entry movement without changing public APIs or
 application data schemas. Rebuild and deploy matching server and client bundles together. Check SVG
 updates, HTML content inside `foreignObject`, and reordered entries whose templates start or end with
 dynamic holes. See [Rendering](/docs/rendering/) for the adopted-node contract.
@@ -50,11 +53,12 @@ Server-rendered islands must be hydrated by the same ketjs-view version and JSX 
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
 
-## Changes in the next release
+<span id="changes-in-the-next-release"></span>
 
-These changes are merged after `{{VERSION}}` and ship in the next KetJS release; the release that
-includes them gives this section its version. Most turn a default that failed open, or a declaration
-that composed and then misbehaved, into a refusal. Upgrade a staging copy first and read every
+## Changes in 0.6.0
+
+Most of these changes turn a default that failed open, or a declaration that composed and then
+misbehaved, into a refusal. Upgrade a staging copy first and read every
 `contract_warning` that `ket check` prints.
 
 | Area | What changes | What to do |
@@ -70,6 +74,7 @@ that composed and then misbehaved, into a refusal. Upgrade a staging copy first 
 | Theme views | A view cannot expose a sensitive field (`E_VIEW_SENSITIVE_FIELD`) or a model outside `depends` (`E_VIEW_NOT_DEPENDED`). A view over another module's model is widened only by fields its own module contributed to that model. | Remove the field from the view or depend on its module. |
 | Data values | `datetime` accepts a `Date` or ISO-8601 text; date-time text without an offset is wall-clock time in `KET_TIMEZONE` (default `UTC`), not the server zone, and a date alone stays UTC midnight. `int` must be decimal digits within the safe-integer range. Direct `ctx.db` writes refuse impossible dates. A comparison operator or sort direction outside the fixed set throws `E_INVALID_OPERATOR` or `E_INVALID_ORDER`. | Set `KET_TIMEZONE` and send ISO instants. Check imports that wrote free-form dates. |
 | Rendering | A bound URL attribute with `javascript:`, `vbscript:` or a non-media `data:` URL renders as `unsafe:…`. Binding `srcdoc` or a string inline handler is refused. The KTL `json` filter escapes `<`, `>`, `&`, U+2028 and U+2029. A hole inside `<style>` or `<script>` has no hydration markers. | Bind handlers as functions with `on:click`. Pass trusted CSS or script through `trustedMarkup()`. |
+| Company references | A write to a company-scoped model, a dry run included, is refused with `E_CROSS_COMPANY_REFERENCE` when a `ref:` field points at a row of another company. An operation that declares `crossCompany: true` may link companies. | Fix code that links companies by mistake; declare `crossCompany: true` where linking legal entities is intended. |
 | Shared datastores | Deployments sharing one database migrate to the union of their recorded schemas instead of dropping each other's tables; a model scoped differently by two deployments is refused (`E_DATASTORE_SCOPE_CLASH`). | Migrate the deployment with the most models first so the union starts complete. |
 | Jobs | A job `uniqueKey` is unique per company. The migration creates the new index before dropping the old one. | None; check that no code relied on a key shared across companies. |
 | Ordering and digests | Names are compared with the `en` collation, so module order and permission digests no longer depend on `LANG`. Under an unset, `C` or `POSIX` locale nothing changes. | Re-record a permission digest computed under another locale. |
