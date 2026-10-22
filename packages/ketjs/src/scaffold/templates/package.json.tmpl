@@ -16,7 +16,7 @@
     "lint": "biome lint ."
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "^__VERSION__"
+    "@ketvietlab/ketjs": "__VERSION__"
   },
   "devDependencies": {
     "@ketvietlab/ketspec": "__SPEC_VERSION__",
@@ -24,5 +24,10 @@
     "@types/node": "^26.2.0",
     "tsx": "4.23.12",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "@ketvietlab/ketspec": {
+      "@ketvietlab/ketjs-view": "__VERSION__"
+    }
   }
 }
