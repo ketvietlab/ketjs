@@ -18,6 +18,7 @@ import { createTheme } from '../theme/render.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
+import { globalScope, scopesByCompany } from './ctx.ts'
 import { createKetServer } from './http.ts'
 import { assertSessionContext, createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
@@ -37,7 +38,7 @@ import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
 import type { RatePolicy } from './ratelimit.ts'
 import type { Logger, OpenLog } from './log/index.ts'
-import type { RuntimeConfig, OpenStore } from './config.ts'
+import type { RuntimeConfig, RuntimeDefaults, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
 import type { OpenTransport } from './transport/index.ts'
@@ -299,6 +300,11 @@ export type RequestIdentityResolveContext = {
 }
 
 export type ServeSpec = {
+  /**
+   * How long shutdown lets in-flight HTTP requests finish before dropping their
+   * connections. Defaults to 10 seconds; set it below the platform's grace period.
+   */
+  shutdownGraceMs?: number
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
   /** Immutable release/image identifier used to reject a stale browser runtime. */
@@ -408,7 +414,7 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => Promise<void>
-  defaults?: Partial<RuntimeConfig>
+  defaults?: RuntimeDefaults
 }
 
 export type ClientCompatibilityPolicy = {
@@ -463,6 +469,8 @@ export async function bootDeployment(
   // `logSink` is the deployment's operational sink. Different things, and the
   // older name is public API, so the new one is the one that gets qualified.
   const { config, modules, manifest, log: logSink, logger } = await bootRuntime(spec, o)
+  // Off: one global scope. No request, session or development header carries a company.
+  const byCompany = scopesByCompany(manifest)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
   const storages = new Map<string, Storage>()
   const storageFor = (key: string): Storage => {
@@ -480,7 +488,7 @@ export async function bootDeployment(
   const adapter: Adapter | null = serve.tenants ? null : await (serve.openStore ?? sqliteStore)(config)
   if (adapter) {
     if (config.migrateOnBoot) {
-      const ops = await migrateOne(adapter, manifest)
+      const ops = await migrateOne(adapter, manifest, { deployment: spec.name })
       if (ops.length) log(`  migrate: ${ops.length} operation(s)`)
     }
   }
@@ -507,9 +515,22 @@ export async function bootDeployment(
   const configuredSessionSecret = serve.sessions?.secret || config.secret
   const generatedTenantSecret =
     serve.sessions && serve.tenants && !configuredSessionSecret ? randomBytes(32).toString('base64url') : null
+  // Outside development a session secret must be stable: a generated one signs out
+  // every user on restart and differs on every pod, which looks like random logouts.
+  if (serve.sessions && !configuredSessionSecret && !config.developmentIdentity)
+    throw new KetError({
+      code: 'E_SESSION_SECRET_REQUIRED',
+      module: 'server',
+      message: `deployment "${spec.name}" has sessions but no KET_SECRET or sessions.secret`,
+      hint: 'set KET_SECRET to one stable random value shared by every replica; KET_DEV=1 generates one for local development',
+    })
   const sessionOpts = serve.sessions
     ? {
-        secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
+        // The cookie is Secure unless this is local development. The bind address says
+        // nothing about the scheme: a server on 127.0.0.1 behind a TLS proxy is public.
+        secure: !config.developmentIdentity,
+        // A deployment without companies has no company to require of a session.
+        requireCompany: byCompany,
         ...serve.sessions,
         ...(configuredSessionSecret ? { secret: configuredSessionSecret } : {}),
         ...(generatedTenantSecret ? { secret: generatedTenantSecret, ephemeralSecret: true } : {}),
@@ -568,7 +589,7 @@ export async function bootDeployment(
         ...(config.migrateOnBoot
           ? {
               prepare: async (key, a) => {
-                const ops = await migrateOne(a, manifest)
+                const ops = await migrateOne(a, manifest, { deployment: spec.name })
                 if (ops.length) log(`  migrate [${key}]: ${ops.length} operation(s)`)
               },
             }
@@ -597,6 +618,21 @@ export async function bootDeployment(
   // One cookie lookup per request even though scope, permissions and actor all
   // depend on it. With tenant databases this also avoids three separate leases.
   const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
+  // A login without a permission policy used to let every signed-in user call every
+  // function. Forgetting the callback must close the deployment, not open it.
+  if (authenticationEnabled && !serve.permissions)
+    throw new KetError({
+      code: 'E_PERMISSIONS_REQUIRED',
+      module: 'server',
+      message: `deployment "${spec.name}" authenticates users but declares no serve.permissions`,
+      hint: 'return the functions a user may call from serve.permissions; return null there to let every signed-in user call every http function',
+    })
+  /**
+   * Without authentication, request headers may name the company only in
+   * development. Anywhere else a header is something any client can send, so the
+   * caller is a stranger acting in the configured default company.
+   */
+  const developmentIdentity = !authenticationEnabled && config.developmentIdentity
   const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
   // Records built from `resolveIdentity`, so `requestIdentityOf` can say where an identity came from
   // without reading meaning into an id.
@@ -630,7 +666,7 @@ export async function bootDeployment(
             expiresAt: now,
           }
           try {
-            assertSessionContext(asserted, { requireCompany: manager?.requireCompany ?? true })
+            assertSessionContext(asserted, { requireCompany: manager?.requireCompany ?? byCompany })
           } catch {
             return null
           }
@@ -646,7 +682,10 @@ export async function bootDeployment(
           url,
           req,
         })
-        if (!resolved) {
+        // A different security version is a revocation: the account changed its password,
+        // lost a role or was signed out everywhere. The session is not re-stamped with
+        // the new version, which would keep a stolen cookie alive.
+        if (!resolved || resolved.securityVersion !== raw.securityVersion) {
           await manager.store.destroy(raw.id)
           return null
         }
@@ -697,6 +736,9 @@ export async function bootDeployment(
    * a session id issued by one tenant is not a row in another's table at all.
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
+    if (!byCompany) return globalScope()
+    if (!authenticationEnabled && !developmentIdentity)
+      return { company: config.defaultCompany, companies: null, branch: null, branches: null }
     if (!authenticationEnabled) {
       const list = (h: string) =>
         ((req.headers[h] as string | undefined) ?? '')
@@ -902,6 +944,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              timezone: config.defaultTimezone,
               log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
@@ -933,6 +976,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              timezone: config.defaultTimezone,
               log: callLog(t.key, verifiedScope, actor, options?.correlationId),
             })
           ).value,
@@ -961,6 +1005,7 @@ export async function bootDeployment(
                 idempotencyDigest: options?.idempotencyDigest,
                 correlationId: options?.correlationId,
                 queueNotify: config.queueNotify,
+                timezone: config.defaultTimezone,
                 log: callLog(t.key, scope, actor, options?.correlationId),
               })
             ).value,
@@ -1055,7 +1100,9 @@ export async function bootDeployment(
     .map(([k]) => k)
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!authenticationEnabled) return null // no login exists yet; the shim is the identity
+    // No login exists. In development the header shim is the identity; anywhere
+    // else nobody has proven anything, so every caller is a stranger.
+    if (!authenticationEnabled) return developmentIdentity ? null : anonymousFns
     const audience = await serve.resolveAudience?.(url, req)
     const customAudience = Boolean(audience && audience !== 'anonymous' && audience !== 'staff')
     const record = await sessionRecordOf(url, req)
@@ -1065,8 +1112,8 @@ export async function bootDeployment(
     // A custom bearer audience is fail-closed unless the deployment explicitly
     // maps it to exact functions. This lets Channel routes call their domain
     // functions without turning a POS/customer token into a staff session.
-    if (!serve.permissions) return customAudience ? [] : null
-    const granted = await serve.permissions(ctx, record.userId, url, req)
+    // Boot refuses authentication without serve.permissions, so this is never absent here.
+    const granted = await serve.permissions!(ctx, record.userId, url, req)
     return granted === null ? (customAudience ? [] : null) : [...new Set([...anonymousFns, ...granted])]
   }
 
@@ -1227,6 +1274,7 @@ export async function bootDeployment(
     manifest,
     adapter,
     log: logger,
+    ...(serve.shutdownGraceMs === undefined ? {} : { shutdownGraceMs: serve.shutdownGraceMs }),
     ...(serve.buildId === undefined ? {} : { buildId: serve.buildId }),
     ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
     ...(serve.streamTimeoutMs === undefined ? {} : { streamTimeoutMs: serve.streamTimeoutMs }),
@@ -1330,6 +1378,10 @@ export async function bootDeployment(
     resolveScope: scopeOf,
     resolveAllow: allowFor,
     resolveActor: actorOf,
+    resolveIdentityOrigin: async (url, req) => (await requestIdentityOf(url, req))?.origin ?? null,
+    functionLog: callLog,
+    timezone: config.defaultTimezone,
+    errorDetail: config.developmentIdentity,
     onFunctionDenied: serve.onFunctionDenied
       ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)
       : undefined,
@@ -1540,7 +1592,13 @@ export async function bootDeployment(
         'identity',
         makeSessions
           ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})`
-          : 'X-Ket-Company header',
+          : authenticationEnabled
+            ? 'resolveIdentity'
+            : developmentIdentity
+              ? byCompany
+                ? 'X-Ket-Company header (development)'
+                : 'development identity'
+              : 'anonymous',
       ],
     ]
     const w = Math.max(...rows.map((r) => (r[0] as string).length))
@@ -1549,8 +1607,16 @@ export async function bootDeployment(
         ? `\n  KET_SECRET is not set, so a signing key was generated for this process.` +
           `\n  Sessions will not survive a restart and will not work across pods.`
         : ''
-      : `\n  No authentication yet: the company comes from the X-Ket-Company header,` +
-        `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.`
+      : authenticationEnabled
+        ? ''
+        : developmentIdentity
+          ? byCompany
+            ? `\n  Development identity: the company comes from the X-Ket-Company header,` +
+              `\n  defaulting to "${config.defaultCompany}". KET_DEV=1 enables this; never set it in production.`
+            : `\n  Development identity: every function may be called without signing in.` +
+              `\n  KET_DEV=1 enables this; never set it in production.`
+          : `\n  No authentication: every caller is anonymous${byCompany ? ` in company "${config.defaultCompany}"` : ''}` +
+            `\n  and may call only functions declared anonymous: true.`
     return (
       `\n  ${spec.name} is running\n\n` +
       rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n') +

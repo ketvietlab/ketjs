@@ -80,7 +80,7 @@ const timeline = defineModule({
   },
 })
 
-const manifestOf = (): Manifest => compose([timeline], { headless: true })
+const manifestOf = (): Manifest => compose([timeline], { headless: true, companies: true })
 
 const boot = async (t: TestContext): Promise<{ adapter: Adapter; manifest: Manifest }> => {
   const adapter = sqliteAdapter(':memory:')
@@ -138,7 +138,10 @@ test('append-only is not storage, so declaring it plans no migration', async (t)
     },
   })
   void t
-  assert.deepEqual(schemaFromManifest(compose([plain], { headless: true })), schemaFromManifest(manifestOf()))
+  assert.deepEqual(
+    schemaFromManifest(compose([plain], { headless: true, companies: true })),
+    schemaFromManifest(manifestOf()),
+  )
 })
 
 test('an upgrade shows a timeline that stopped being one', () => {
@@ -149,7 +152,7 @@ test('an upgrade shows a timeline that stopped being one', () => {
       Draft: { scope: 'company', fields: { id: 'id', note: 'text?' } },
     },
   })
-  const dropped = diffManifests(manifestOf(), compose([plain], { headless: true })).find(
+  const dropped = diffManifests(manifestOf(), compose([plain], { headless: true, companies: true })).find(
     (item) => item.code === 'MODEL_APPEND_CHANGED',
   )
   assert.ok(dropped, 'a record that can suddenly be edited must be visible')

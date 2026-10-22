@@ -58,7 +58,7 @@ const product = defineModule({
   },
 })
 
-const manifest = compose([product], { headless: true })
+const manifest = compose([product], { headless: true, companies: true })
 
 async function boot(): Promise<Adapter> {
   const db = sqliteAdapter()
@@ -110,7 +110,7 @@ test('models: physical table collisions are rejected during composition', () => 
     name: 'foo_bar',
     models: { Baz: { scope: 'shared', fields: { id: 'id' } } },
   })
-  assert.throws(() => compose([first, second], { headless: true }), /E_TABLE_NAME_COLLISION/)
+  assert.throws(() => compose([first, second], { headless: true, companies: true }), /E_TABLE_NAME_COLLISION/)
 })
 
 test('relations: large has-many preloads are split into bounded queries', async () => {
@@ -147,7 +147,7 @@ test('relations: a key that does not exist is a build error, not an empty result
     },
     relations: { 'typo.A': { bs: { hasMany: 'typo.B', by: 'a_id' } } },
   })
-  const e = fails(() => compose([typo], { headless: true }))
+  const e = fails(() => compose([typo], { headless: true, companies: true }))
   assert.match(e.message, /E_RELATION_NO_KEY/)
   assert.match(e.message, /travels on "typo.B.a_id", which does not exist/)
 })
@@ -159,7 +159,7 @@ test('relations: reaching a module you do not depend on is refused', () => {
     relations: { 'outsider.X': { t: { belongsTo: 'product.Template', by: 'templateId' } } },
   })
   assert.match(
-    fails(() => compose([product, outsider], { headless: true })).message,
+    fails(() => compose([product, outsider], { headless: true, companies: true })).message,
     /E_RELATION_NOT_DEPENDED/,
   )
 })
@@ -173,7 +173,7 @@ test('relations: a shared model may not reach a company-scoped one', () => {
     },
     relations: { 'leaky.Public': { privates: { hasMany: 'leaky.Private', by: 'publicId' } } },
   })
-  const e = fails(() => compose([leaky], { headless: true }))
+  const e = fails(() => compose([leaky], { headless: true, companies: true }))
   assert.match(e.message, /E_RELATION_WIDENS_SCOPE/)
   assert.match(e.message, /a shared row would expose rows of every company/)
 })
@@ -271,7 +271,7 @@ test('preload: children go through the scope, so a relation is not a way around 
       }),
     },
   })
-  const m = compose([scoped], { headless: true })
+  const m = compose([scoped], { headless: true, companies: true })
   const db = sqliteAdapter()
   await db.open()
   await migrateOne(db, m)

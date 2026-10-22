@@ -6,7 +6,8 @@ import { deployment } from '../ket.workspace.ts'
 // disabled module never leaves a stale operation behind. The document is
 // deterministic: commit it and review its diff. Add `servers`, and
 // `securitySchemes` with `security`, once an operation requires sign-in.
-const document = httpOpenApiDocument(compose(deployment.modules, { headless: true }), {
+const manifest = compose(deployment.modules, { headless: true, companies: deployment.companies })
+const document = httpOpenApiDocument(manifest, {
   profile: '__NAME__',
   info: { title: '__NAME__ API', version: '0.0.0' },
 })

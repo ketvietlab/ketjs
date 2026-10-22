@@ -9,6 +9,37 @@ order: 2
 
 KetJS grants callable functions, rather than granting a table and assuming every operation on it is safe. A permission check and an effect declaration solve separate problems: the grant decides whether the caller may invoke an operation; effects bound what that operation can access.
 
+## Resolve grants per request
+
+A deployment that signs users in declares `serve.permissions`. It receives the user id and the request,
+and returns the function keys that user may call, or `null` for every function:
+
+```ts
+// File: src/app.ts
+serve: {
+  sessions: { secret: process.env.KET_SECRET },
+  permissions: async (ctx, userId, url, req) => {
+    const { functions } = (await ctx.callUnchecked('access.grantsOf', { userId }, url, req)) as {
+      functions: string[]
+    }
+    return functions
+  },
+}
+```
+
+| Caller | Functions it may call |
+| --- | --- |
+| No identity | Functions declared `anonymous: true` |
+| Signed in, callback returns an array | Those functions plus the anonymous ones |
+| Signed in, callback returns `null` | Every `http` function |
+| Deployment authenticates but declares no callback | Boot fails with `E_PERMISSIONS_REQUIRED` |
+| No authentication configured and `KET_DEV=1` | Every function, as the development identity |
+| No authentication configured, outside development | Anonymous functions only |
+
+A refused call answers `403 E_FN_NOT_PERMITTED` before its input is validated, whether or not the
+function exists. A role is an application model: store grants as function keys, resolve them in the
+callback, and inspect what a grant set reaches with `ket permissions --grant` or `--role`.
+
 ## Declare and inspect behavior
 
 Define input/output contracts and effects with the function. Use the same domain function from HTTP handlers, jobs and agent capabilities when their context permits it. Read [Server functions](/docs/functions/) for declarations, callable clients, dry-run and idempotency.

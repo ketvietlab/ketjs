@@ -158,8 +158,8 @@ export function reachOf(manifest: Manifest, functions: string[]): Reach {
   }
 
   return {
-    functions: granted.sort((a, b) => a.key.localeCompare(b.key)),
-    models: [...models.values()].sort((a, b) => a.model.localeCompare(b.model)),
+    functions: granted.sort((a, b) => a.key.localeCompare(b.key, 'en')),
+    models: [...models.values()].sort((a, b) => a.model.localeCompare(b.model, 'en')),
     crossCompany: granted.filter((f) => f.crossCompany).map((f) => f.key),
     unprojected: granted.filter((f) => !f.projected).map((f) => f.key),
     unknown,
@@ -182,7 +182,7 @@ export function functionsOf(manifest: Manifest, module: string): string[] {
 }
 
 const sortedRecord = (value: Record<string, string>): Record<string, string> =>
-  Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)))
+  Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right, 'en')))
 
 /**
  * The complete permission-relevant composition surface in a deterministic, machine-readable shape.
@@ -193,7 +193,7 @@ const sortedRecord = (value: Record<string, string>): Record<string, string> =>
  */
 export function permissionInventory(manifest: Manifest): PermissionInventory {
   const functions = Object.entries(manifest.functions)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => left.localeCompare(right, 'en'))
     .map(
       ([key, fn]): PermissionFunctionInventory => ({
         key,
@@ -212,7 +212,7 @@ export function permissionInventory(manifest: Manifest): PermissionInventory {
       }),
     )
   const modules = Object.entries(manifest.modules)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => left.localeCompare(right, 'en'))
     .map(
       ([name, module]): PermissionModuleInventory => ({
         name,

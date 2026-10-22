@@ -46,7 +46,7 @@ const books = defineModule({
 })
 
 const boot = async (): Promise<{ adapter: Adapter; manifest: Manifest }> => {
-  const manifest = compose([books])
+  const manifest = compose([books], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)
@@ -167,6 +167,7 @@ const app = defineDeployment({
   name: 'booksapp',
   modules: [books],
   headless: true,
+  companies: true,
   serve: {
     routes: (ctx) => ({
       '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)),
@@ -186,7 +187,7 @@ const app = defineDeployment({
 
 test('multi-company: the server reads both headers, and the active company joins the set', async () => {
   const b = await bootDeployment(app, {
-    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
     port: 0,
   })
   const at = `http://127.0.0.1:${b.port}`
@@ -212,7 +213,7 @@ test('multi-company: the server reads both headers, and the active company joins
 
 test('multi-company: verified callback dispatch ignores request headers and selects one company', async () => {
   const b = await bootDeployment(app, {
-    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
     port: 0,
   })
   try {

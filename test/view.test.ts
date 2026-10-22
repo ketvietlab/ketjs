@@ -102,6 +102,74 @@ test('signals: a failed eager effect leaves no live subscription behind', () => 
   assert.equal(runs, 1)
 })
 
+test('signals: a failing effect does not starve the others and fails only its writer', () => {
+  const source = signal(0)
+  const seen: number[] = []
+  const stopFailing = effect(() => {
+    if (source() === 1) throw new Error('effect failed')
+  })
+  const stopSeen = effect(() => {
+    seen.push(source())
+  })
+
+  assert.throws(() => source.set(1), /effect failed/)
+  assert.deepEqual(seen, [0, 1])
+  // The failure belongs to the write that caused it, not to the next one.
+  source.set(2)
+  assert.deepEqual(seen, [0, 1, 2])
+  stopFailing()
+  stopSeen()
+})
+
+test('signals: several failing effects are reported together once the flush settles', () => {
+  const source = signal(0)
+  const stops = ['first', 'second'].map((name) =>
+    effect(() => {
+      if (source() > 0) throw new Error(`${name} failed`)
+    }),
+  )
+  assert.throws(
+    () => batch(() => source.set(1)),
+    (error: unknown) =>
+      error instanceof AggregateError &&
+      error.errors.map((cause: Error) => cause.message).join() === 'first failed,second failed',
+  )
+  for (const stop of stops) stop()
+})
+
+test('signals: an effect that writes what it reads is stopped as a cycle', () => {
+  const source = signal(0)
+  const echo = signal(0)
+  const seen: number[] = []
+  let runs = 0
+  const stopLoop = effect(() => {
+    runs++
+    if (source() > 0) echo.set(echo() + 1)
+  })
+  const stopSeen = effect(() => {
+    seen.push(source())
+  })
+
+  assert.throws(() => source.set(1), /signal cycle/)
+  assert.equal(runs, 1 + 100)
+  assert.deepEqual(seen, [0, 1], 'other effects still run in the flush that found the cycle')
+  stopLoop()
+  stopSeen()
+
+  // A cycle in the eager first run fails creation and leaves nothing subscribed.
+  const count = signal(0)
+  assert.throws(
+    () =>
+      effect(() => {
+        count.set(count() + 1)
+      }),
+    /signal cycle/,
+  )
+  const settled = count.peek()
+  count.set(settled + 1)
+  assert.equal(count.peek(), settled + 1)
+})
+
 test('signals: a computed subscription can be disposed', () => {
   const source = signal(1)
   let runs = 0

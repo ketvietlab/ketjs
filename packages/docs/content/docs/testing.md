@@ -50,6 +50,16 @@ A file-backed database is intentional: the HTTP runtime and worker may open diff
 observe the same committed state. `close()` shuts down the server and worker, closes adapters, and removes
 the directory.
 
+Function and job handlers belong to the manifest that composed them. Several deployments can therefore be
+booted in one test process, including deployments that ship different builds of the same module name:
+each HTTP runtime, worker and direct `callFn()` executes the handler of the manifest it was given. A
+manifest read back from JSON describes functions but carries no handlers, so `callFn()` refuses it with
+`E_UNKNOWN_FUNCTION`.
+
+The harness sets `KET_DEV=1` unless `env` supplies another value, so test clients may choose companies
+with the development identity headers. Pass `env: { KET_DEV: '0' }` to test how a deployment without
+authentication treats callers outside development.
+
 The harness does not inherit the host process environment by default. A developer's `DATABASE_URL` cannot
 silently redirect an isolated test to a real database.
 
@@ -124,13 +134,15 @@ const tenant = e2e.client.as({ tenant: 'acme' })
 const customTenant = e2e.client.as({ tenant: 'acme', tenantHeader: 'x-database' })
 ```
 
-Apps with sessions ignore development company headers. Authenticate through the real route:
+Apps with sessions ignore development company headers. Authenticate through the real route. `login()`
+and `logout()` post to `/login` and `/logout` unless given the path your application mounts; the
+[authentication starter](/ketjs/auth-starter/) mounts them under `/auth`:
 
 ```ts
 // File: test/order.test.ts
-await e2e.client.login({ login: 'admin', password: 'secret' })
+await e2e.client.login({ login: 'admin', password: 'secret' }, '/auth/login')
 await e2e.client.call('order.privateList')
-await e2e.client.logout()
+await e2e.client.logout('/auth/logout')
 ```
 
 The cookie jar captures cookies across same-origin redirects and applies deletion attributes. Clone it for

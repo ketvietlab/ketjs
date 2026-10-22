@@ -8,11 +8,9 @@ order: 2
 A server function is a named business operation. Its input, output, data reach, external effects,
 exposure, and safety properties are declared beside its handler and composed into the manifest.
 
-KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. KetSuite
-modules follow the handler organization and migration rules: named
-handlers and descriptors grouped by capability, assembled with duplicate detection at
-`functions/index.ts`. The compact framework examples below illustrate the runtime contract, not an
-alternative layout for KetSuite modules.
+KetJS accepts a `Record<string, FnSpec>` and does not require one source file per registry. A module
+with many functions can keep named handlers in files grouped by capability and assemble them in one
+`functions/index.ts`; the compact examples below show the runtime contract, not a required layout.
 
 The generic `/_ket/fn` transport is not an automatic public API. `ServeSpec.resolveAudience` and `allowFor`
 classify callers before dispatch; an application facade should expose selected operations through owned HTTP
@@ -65,7 +63,9 @@ export const sales = defineModule({
 })
 ```
 
-The composed key is `sales.createOrder`.
+The composed key is `sales.createOrder`. A function name starts with a letter and uses letters, digits,
+`_` and `-`, with `.` between segments (`screen.list`); anything else, a space included, is
+`E_FUNCTION_NAME`, because the name is part of `/_ket/fn/...` and of every permission key.
 
 ## Signatures
 
@@ -119,6 +119,42 @@ and every relation preload therefore require their own read effects.
 Moving work into a job does not widen authority: the producer needs `enqueue:*`, and the job declares
 the exact effects its handler uses.
 
+An effect may name a model or job of the declaring module, of any module its `depends` reach
+transitively, or of a module it lists in `optional`. Composition checks this for functions and jobs:
+
+| The effect names | Result |
+| --- | --- |
+| A model or job of a reachable module | Allowed |
+| A model or job of an `optional` module the deployment does not include | Allowed; there is nothing to reach |
+| A model or job that does not exist in a module the deployment includes | Error: `E_FN_EFFECT` or `E_JOB_EFFECT` |
+| A module that is neither reachable nor `optional` | Error for a job and for any enqueue; a function's `read:` or `write:` is a `contract_warning` until 1.0, then an error |
+
+Use `optional` for a soft integration — a CRM screen that also shows sales orders when the sales module
+is installed — and decide at run time whether to use it:
+
+```ts
+// File: src/modules/crm/index.ts
+export const crm = defineModule({
+  name: 'crm',
+  depends: ['party'],
+  optional: ['sale'],
+  functions: {
+    caseContext: {
+      input: { partyId: 'id' },
+      effects: ['read:party.Party', 'read:sale.Order'],
+      handler: async (ctx, input) => {
+        const orders = ctx.manifest.models['sale.Order'] ? await ctx.db.select('sale.Order', { partyId: input.partyId }) : []
+        return { orders }
+      },
+    },
+  },
+})
+```
+
+`optional` does not order composition and cannot replace `depends` for a module whose models this one
+extends or whose joints it fills. Warnings are kept on `manifest.diagnostics`, printed by `ket check`
+and logged as `contract_warning` on every boot.
+
 ## Function context
 
 The handler receives a `Ctx` containing:
@@ -128,7 +164,7 @@ The handler receives a `Ctx` containing:
 - checked `db` read and write methods;
 - `tx()` for atomic work;
 - `jobs.enqueue()` for transactional durable work;
-- `writes`, the intended mutation log used by dry-run.
+- `writes`, the intended write log (`insert`, `update`, `delete`, `enqueue`) used by dry-run.
 
 There is no module-scope database client. Keeping access on `ctx` makes an operation without identity,
 scope, or effects unrepresentable through the normal API.
@@ -166,6 +202,29 @@ handling, or response shaping.
 To publish a function as a REST-style operation with its own method, path, and OpenAPI contract,
 bind it with [`httpRoutes()`](/ketjs/openapi/#function-bindings) instead of writing a route by hand.
 
+### The generic transport
+
+`POST /_ket/fn/<module>.<function>` calls an `http` function with a JSON object body. It applies the
+same boundaries as a binding:
+
+| Check | Refusal |
+| --- | --- |
+| The function is `internal` | `400 E_FUNCTION_INTERNAL` |
+| A binding fills one of its inputs from identity (`bind`) | `403 E_FUNCTION_BOUND`; call the binding instead |
+| A session cookie authenticates the request and `Origin` or `Sec-Fetch-Site` names another origin | `403 E_HTTP_CSRF` |
+| A session cookie authenticates the request and the body is not `application/json` | `415 E_HTTP_CONTENT_TYPE` |
+| The caller's allow-list does not include the function, whether or not it exists | `403 E_FN_NOT_PERMITTED` |
+| The function does not exist and the caller is unrestricted | `404 E_UNKNOWN_FUNCTION`, without listing other names |
+
+A program that holds a session cookie and sends neither `Origin` nor `Sec-Fetch-Site` is not a browser,
+so it is accepted with a JSON body. A successful answer is `{ ok, value, dryRun }`, plus `replayed`
+when an idempotency key replays a stored result. The write log is returned only by a dry run, because
+a real call's log can hold columns the declared output leaves out. Every answer carries `x-request-id`
+and `x-ket-build`, and the call is logged as `fn_call`, `fn_error` or `fn_denied`.
+
+Outside development (`KET_DEV` unset), error bodies carry `hint: null` and `at: null`; the code and
+message remain.
+
 ## Provisioning functions
 
 One-shot bootstrap operations must be explicitly internal and opt in with `provision: true`:
@@ -184,7 +243,7 @@ provisionAdmin: {
 The CLI reads secret input from stdin so credentials do not enter shell history:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 printf '%s' '{"login":"admin","password":"..."}' | \
   ket provision user.provisionAdmin --input -
 ```
@@ -193,8 +252,14 @@ printf '%s' '{"login":"admin","password":"..."}' | \
 
 ## Dry-run and idempotency
 
-Declare `dryRun: true` only when the operation can safely preview all writes. A caller requesting
-dry-run on another function receives `E_NO_DRY_RUN`.
+A dry run executes the handler and discards what it would change: row writes, enqueued jobs and
+notifications. The result reports them in `writes`, for example `{ op: 'enqueue', job: 'sales.mail' }`,
+and `ctx.jobs.enqueue()` returns `{ id: '', existing: false, dryRun: true }`.
+
+Dry runs are opt-in. Declare `dryRun: true` only when the handler causes no other side effect while
+`ctx.dryRun` is true: it must not call a provider, send mail, or write to storage. A caller requesting a
+dry run of any other function receives `E_NO_DRY_RUN` before the handler runs, and the agent
+descriptor reports `dryRunnable: false` for it.
 
 Declare `idempotent: true` when repeated calls can be keyed:
 
@@ -218,6 +283,12 @@ input: reusing a key with different arguments receives `E_IDEMPOTENCY_CONFLICT` 
 unrelated result or executing a second operation.
 
 The application still chooses a stable business key. Random retry keys defeat deduplication.
+
+A claim is held while the call runs. A call that fails releases its key, so the caller can retry with
+the same key. A process that dies mid-call cannot release it, so a claim still unfinished after five
+minutes counts as abandoned and the next call with that key takes it over and runs the function again.
+An operation that can run longer than five minutes is not protected by the key alone: enqueue it as a
+job, or have the handler check the business record it is about to create before creating it.
 
 ## Company reach
 
@@ -245,7 +316,7 @@ because both read `sales.Order`.
 Inspect reach before creating a role:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket permissions --grant sales.listOrders,sales.createOrder
 ket permissions --module sales
 ket permissions --role sales_manager
