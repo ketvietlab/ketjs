@@ -108,13 +108,15 @@ const notes = defineModule({
   messages: { en: { 'page.notFound': 'Nothing here' } },
 })
 
-const memory = { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }
+// These deployments have no authentication and pick companies with the development headers.
+const memory = { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' }
 
 test('boot: one declaration produces a running server, framework routes included', async () => {
   const app = defineDeployment({
     name: 'notesapp',
     modules: [notes],
     headless: true,
+    companies: true,
     serve: {
       routes: (ctx) => ({ '/notes': async (url, req) => json(await ctx.call('notes.list', {}, url, req)) }),
     },
@@ -160,7 +162,7 @@ test('boot: an absent development branch header keeps branch reads unrestricted'
       },
     },
   })
-  const app = defineDeployment({ name: 'branches', modules: [branchNotes], headless: true })
+  const app = defineDeployment({ name: 'branches', modules: [branchNotes], headless: true, companies: true })
   const booted = await bootDeployment(app, { env: memory, port: 0 })
   try {
     await booted.adapter!.run(
@@ -180,10 +182,95 @@ test('boot: an absent development branch header keeps branch reads unrestricted'
   }
 })
 
+test('config: the development identity comes only from KET_DEV=1, never from deployment defaults', () => {
+  assert.equal(readConfig({}).developmentIdentity, false)
+  assert.equal(readConfig({ KET_DEV: '1' }).developmentIdentity, true)
+  assert.equal(readConfig({ KET_DEV: 'true' }).developmentIdentity, false, 'only the exact flag enables it')
+  const baked = { developmentIdentity: true } as Parameters<typeof readConfig>[1]
+  assert.equal(readConfig({}, baked).developmentIdentity, false, 'a deployment cannot ship it on')
+})
+
+test('boot: without authentication, request headers choose the company only in development', async () => {
+  const ledger = defineModule({
+    name: 'open_ledger',
+    models: { Entry: { scope: 'company', fields: { id: 'id', memo: 'text' } } },
+    functions: {
+      entries: {
+        anonymous: true,
+        output: { id: 'id', memo: 'text' },
+        effects: ['read:open_ledger.Entry'],
+        handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('open_ledger.Entry'))),
+      },
+      record: {
+        input: { id: 'id', memo: 'text' },
+        effects: ['write:open_ledger.Entry'],
+        handler: (ctx: Ctx, args) => ctx.db.insert('open_ledger.Entry', args),
+      },
+    },
+  })
+  const app = defineDeployment({ name: 'open_ledger', modules: [ledger], headless: true, companies: true })
+  // Every request claims another company, as any client on the network could.
+  const call = (port: number, fn: string, body: Record<string, unknown> = {}) =>
+    fetch(`http://127.0.0.1:${port}/_ket/fn/open_ledger.${fn}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-ket-company': 'globex' },
+      body: JSON.stringify(body),
+    })
+  const seed = (booted: { adapter: { run: (sql: string, args: unknown[]) => Promise<unknown> } | null }) =>
+    booted.adapter!.run('INSERT INTO open_ledger_entry (id, memo, "companyId") VALUES (?, ?, ?), (?, ?, ?)', [
+      'a1',
+      'acme row',
+      'acme',
+      'g1',
+      'globex row',
+      'globex',
+    ])
+
+  const production = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
+  try {
+    await seed(production)
+    const forged = await call(production.port, 'record', { id: 'x1', memo: 'forged' })
+    assert.equal(forged.status, 403, 'a function that is not anonymous is closed to a stranger')
+    assert.equal(((await forged.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+    const listed = (await (await call(production.port, 'entries')).json()) as { value: Array<{ id: string }> }
+    assert.deepEqual(
+      listed.value.map((row) => row.id),
+      ['a1'],
+      'the header is ignored; the configured company is the only one a stranger acts in',
+    )
+    assert.match(await production.banner(), /No authentication: every caller is anonymous in company "acme"/)
+  } finally {
+    await production.close()
+  }
+
+  const development = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme', KET_DEV: '1' },
+    port: 0,
+  })
+  try {
+    await seed(development)
+    assert.equal((await call(development.port, 'record', { id: 'g2', memo: 'dev write' })).status, 200)
+    const listed = (await (await call(development.port, 'entries')).json()) as {
+      value: Array<{ id: string }>
+    }
+    assert.deepEqual(listed.value.map((row) => row.id).sort(), ['g1', 'g2'])
+    assert.match(
+      await development.banner(),
+      /Development identity: the company comes from the X-Ket-Company header/,
+    )
+  } finally {
+    await development.close()
+  }
+})
+
 test('boot: a page resolver naming a function nobody declares is refused at boot, not at the first request', async () => {
   const app = defineDeployment({
     name: 'broken',
     modules: [notes],
+    companies: true,
     theme: undefined,
     serve: { pages: { resolve: 'website.getPageByPath' } },
   })
@@ -203,6 +290,7 @@ test('boot: a headless deployment cannot claim to resolve pages', () => {
         name: 'contradiction',
         modules: [notes],
         headless: true,
+        companies: true,
         serve: { pages: { resolve: 'notes.byPath' } },
       }),
     /headless but resolves pages/,
@@ -218,6 +306,7 @@ test('boot: a deployment route cannot silently shadow a module route', async () 
     name: 'route_clash',
     modules: [routed],
     headless: true,
+    companies: true,
     serve: { routes: () => ({ '/things/{slug}': async () => json({ owner: 'deployment' }) }) },
   })
   await assert.rejects(
@@ -250,13 +339,24 @@ test('ket new: writes a deployment whose workspace composes', async () => {
   assert.match(readFileSync(join(dir, 'modules/shop.ts'), 'utf8'), /'GET \/notes': \{ call: 'shop\.list'/)
   assert.match(
     readFileSync(join(dir, 'tools/openapi.ts'), 'utf8'),
-    /httpOpenApiDocument\(compose\(deployment\.modules/,
+    /compose\(deployment\.modules, \{ headless: true, companies: deployment\.companies \}\)/,
   )
   assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),
     /"openapi": "npm run build && node dist\/tools\/openapi\.js"/,
   )
   assert.match(readFileSync(join(dir, 'tsconfig.json'), 'utf8'), /"tools\/\*\*\/\*\.ts"/)
+  // A pre-release is pinned exactly, and the API reference tool renders with the
+  // same ketjs-view the application installs instead of a second, older copy.
+  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+    dependencies: Record<string, string>
+    overrides: Record<string, Record<string, string>>
+  }
+  assert.match(pkg.dependencies['@ketvietlab/ketjs'] ?? '', /^\d+\.\d+\.\d+/)
+  assert.equal(
+    pkg.overrides['@ketvietlab/ketspec']?.['@ketvietlab/ketjs-view'],
+    pkg.dependencies['@ketvietlab/ketjs'],
+  )
 })
 
 test('ket new: refuses to overwrite rather than eat work', () => {
@@ -289,6 +389,7 @@ test('function refusal telemetry covers HTTP and route calls without exposing in
     name: 'denial_telemetry',
     modules: [probe],
     headless: true,
+    companies: true,
     serve: {
       resolveIdentity: async () => ({ userId: 'staff', company: 'acme', companies: ['acme'] }),
       permissions: async () => [],

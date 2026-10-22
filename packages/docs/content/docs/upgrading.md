@@ -14,7 +14,10 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The current patch fixes hydration namespaces and keyed entry movement without changing public APIs or
+The 0.6.0 line closes defaults that failed open before 1.0, so most applications need changes. Work
+through [Changes in 0.6.0](#changes-in-0-6-0) on a staging copy first.
+
+The 0.5.1 patch fixes hydration namespaces and keyed entry movement without changing public APIs or
 application data schemas. Rebuild and deploy matching server and client bundles together. Check SVG
 updates, HTML content inside `foreignObject`, and reordered entries whose templates start or end with
 dynamic holes. See [Rendering](/docs/rendering/) for the adopted-node contract.
@@ -49,6 +52,40 @@ projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
+
+<span id="changes-in-the-next-release"></span>
+
+## Changes in 0.6.0
+
+Most of these changes turn a default that failed open, or a declaration that composed and then
+misbehaved, into a refusal. Upgrade a staging copy first and read every
+`contract_warning` that `ket check` prints.
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| Company scope | Company scoping is opt-in: a deployment sets `companies: true`, and `compose()` takes the same option. Without it every model is shared and may omit `scope`, a `company` or `company+branch` model fails composition (`E_COMPANIES_DISABLED`), and requests, sessions, sequences, job keys and replay keys carry no company; `KET_COMPANY` and `X-Ket-Company` are ignored. Sessions and gateway identities require a company by default only with `companies: true`. | Add `companies: true` to every deployment and direct `compose()` call that composes a company-scoped model. A deployment with only shared models that counted sequences or job unique keys under the implicit `default` company keeps them by setting `companies: true`. |
+| Development identity | Only `KET_DEV=1` takes the company from `X-Ket-Company` and allows every function. Without it, a deployment with no authentication resolves only the `KET_COMPANY` company and serves only anonymous functions. | Set `KET_DEV=1` for local work; `ket dev` and the test harness do. Production gets sessions or a resolver. |
+| Signing in | Sessions or `resolveIdentity` without `serve.permissions` refuse to boot (`E_PERMISSIONS_REQUIRED`). Outside `KET_DEV=1`, sessions need `KET_SECRET` or `sessions.secret` (`E_SESSION_SECRET_REQUIRED`) and the cookie is always `Secure`. A changed security version destroys the session. | Write `permissions`, returning `null` where every function is intended. Set a stable secret. |
+| `/_ket/fn` | A session call must be same-origin JSON (`E_HTTP_CSRF`, `E_HTTP_CONTENT_TYPE`). A function with an identity `bind` is served only by its binding (`E_FUNCTION_BOUND`). A call returns `{ ok, value, dryRun }`; the write log comes only from `dryRun: true`, which also discards enqueued jobs. Outside `KET_DEV`, error bodies have no hint or source location. | Send `content-type: application/json` from the page origin. Read `value`, not `writes`. |
+| Write log | `WriteRecord` gains `op: 'delete'` and `{ op: 'enqueue', job }`, so TypeScript no longer lets code read `model` from any record. | Narrow on `op` first: `write.op === 'enqueue' ? write.job : write.model`. |
+| Responses | `text()`, `bytes()` and `streamed()` refuse markup types, including XML, and every response carries `X-Content-Type-Options: nosniff`. | Return HTML with `page()` or `fragment()`, or trusted markup such as an XML sitemap with `raw()`. |
+| Function effects | A model effect may name the module, its transitive `depends` or a module in the new `optional` key. Outside that, a function gets a warning (an error from 1.0); a job or `enqueue` gets an error. A model missing from an included module is an error. | Add the module to `depends` or `optional`, or fix the name. |
+| Composition checks | Refused: a scoped model declaring `companyId` or `branchId` (`E_SCOPE_FIELD_RESERVED`), a field that is not a plain identifier (`E_FIELD_NAME`), a malformed function name (`E_FUNCTION_NAME`), a menu cycle (`E_MENU_CYCLE`), two deployments with one name (`E_DEPLOYMENT_DUPLICATE`), an unreadable `compatible` range (`E_MODULE_COMPATIBILITY_RANGE`). `compatible` now reads caret and tilde ranges as npm does, so `^1.5.0` no longer accepts `1.2.0`. | Fix the declaration the error names. |
+| Theme views | A view cannot expose a sensitive field (`E_VIEW_SENSITIVE_FIELD`) or a model outside `depends` (`E_VIEW_NOT_DEPENDED`). A view over another module's model is widened only by fields its own module contributed to that model. | Remove the field from the view or depend on its module. |
+| Data values | `datetime` accepts a `Date` or ISO-8601 text; date-time text without an offset is wall-clock time in `KET_TIMEZONE` (default `UTC`), not the server zone, and a date alone stays UTC midnight. `int` must be decimal digits within the safe-integer range. Direct `ctx.db` writes refuse impossible dates. A comparison operator or sort direction outside the fixed set throws `E_INVALID_OPERATOR` or `E_INVALID_ORDER`. | Set `KET_TIMEZONE` and send ISO instants. Check imports that wrote free-form dates. |
+| Rendering | A bound URL attribute with `javascript:`, `vbscript:` or a non-media `data:` URL renders as `unsafe:…`. Binding `srcdoc` or a string inline handler is refused. The KTL `json` filter escapes `<`, `>`, `&`, U+2028 and U+2029. A hole inside `<style>` or `<script>` has no hydration markers. | Bind handlers as functions with `on:click`. Pass trusted CSS or script through `trustedMarkup()`. |
+| Company references | A write to a company-scoped model, a dry run included, is refused with `E_CROSS_COMPANY_REFERENCE` when a `ref:` field points at a row of another company. An operation that declares `crossCompany: true` may link companies. | Fix code that links companies by mistake; declare `crossCompany: true` where linking legal entities is intended. |
+| Shared datastores | Deployments sharing one database migrate to the union of their recorded schemas instead of dropping each other's tables; a model scoped differently by two deployments is refused (`E_DATASTORE_SCOPE_CLASH`). | Migrate the deployment with the most models first so the union starts complete. |
+| Jobs | A job `uniqueKey` is unique per company. The migration creates the new index before dropping the old one. | None; check that no code relied on a key shared across companies. |
+| Ordering and digests | Names are compared with the `en` collation, so module order and permission digests no longer depend on `LANG`. Under an unset, `C` or `POSIX` locale nothing changes. | Re-record a permission digest computed under another locale. |
+| Labels and categories | A permission bundle or role template needs only an `en` label; other locales are optional. A module without a category is `Other`, a theme `Theme`. | Give a category explicitly if the old default was shown. |
+| Tokens | Two unrelated modules giving one token different values are reported as `E_TOKEN_CONFLICT`. | Make one depend on the other, or agree on the value. |
+| Upgrade diff | `diffManifests` reports permission widening as `risky`: a function made anonymous, moved to HTTP or agents, given wider effects, and wider bundles or role templates. | Review new risky findings in the upgrade gate. |
+| Storage | `namespacedStorage` refuses a namespace containing `/` (`E_STORAGE_NAMESPACE`). | Use one segment per tenant. |
+| Shutdown | `close()` ends event streams and drops connections still busy after `serve.shutdownGraceMs` (10 seconds by default). | Set it below the platform's kill timeout. |
+| Handlers | Function and job handlers belong to the manifest that composed them, so two deployments in one process no longer replace each other's. `registerFunctions` and `registerJobs` are deprecated no-ops. | Remove the calls; `compose()` binds the handlers. |
+| Signals | A flush runs every scheduled effect even when one throws, then rethrows that error or an `AggregateError`. More than 100 runs in one flush report a signal cycle. | Fix an effect that writes a signal it reads. |
+| Manifest and scaffold | `manifest.ket` is the real framework version. `ket new` pins the exact version and installs one `ketjs-view`. `_resetIdempotency` is deprecated for removal in 1.0. | Remove calls to `_resetIdempotency`. |
 
 ## Preflight
 

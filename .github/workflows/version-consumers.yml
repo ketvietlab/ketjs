@@ -33,11 +33,23 @@ jobs:
           node-version: '26'
           cache: npm
       - run: npm ci
+      # A pull request that changes VERSION or CHANGE_LOG must carry current evidence,
+      # and its consumers are rerun against the candidate tarballs. One that changes
+      # only the version tooling runs the tooling contracts: between releases the
+      # published version's evidence and candidate locks are stale by design, and the
+      # next version pull request reruns everything.
       - name: reject missing commits, reasons, audits and stale evidence
-        run: npm run version:check && npm run version:audit
+        id: audit
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: |
+          npm run version:check
+          node tools/version-audit.mjs gate "$BASE_COMMIT"
+          echo "required=$(node tools/version-audit.mjs required "$BASE_COMMIT")" >> "$GITHUB_OUTPUT"
       - name: version and audit failure contracts
         run: node --test tools/version.test.mjs
       - name: rerun documentation and downloadable labs against candidate tarballs
+        if: steps.audit.outputs.required == 'true'
         run: npm run version:consumers
       - name: retain audit reports and executable evidence
         if: always()

@@ -3,7 +3,7 @@
 // each without any of them stepping on the others — Ecto's composability with a
 // chainable surface.
 
-import { assertCol, exprTouches, and, makeCol } from './expr.ts'
+import { assertCol, assertComparison, exprTouches, and, makeCol } from './expr.ts'
 import type { Col, Expr } from './expr.ts'
 import { tableNameFor } from './migrate.ts'
 import { KetError } from '../kernel/errors.ts'
@@ -122,7 +122,10 @@ export class Query {
     return this.with({ condition: this.condition ? and(this.condition, next) : next })
   }
   orderBy(...order: Order[]): Query {
-    for (const item of order) assertCol(item.col)
+    for (const item of order) {
+      assertCol(item.col)
+      assertDirection(item.dir)
+    }
     return this.with({ order: [...this.order, ...order] })
   }
   limit(n: number): Query {
@@ -206,7 +209,7 @@ export class Query {
     const isSqliteDecimal = (c: Col): boolean => dialect === 'sqlite' && isDecimal(c)
     const nulls = (dir: 'asc' | 'desc'): 'FIRST' | 'LAST' => (dir === 'asc' ? 'LAST' : 'FIRST')
     const orderTerm = (sql: string, dir: 'asc' | 'desc'): string =>
-      `${sql} ${dir.toUpperCase()} NULLS ${nulls(dir)}`
+      `${sql} ${assertDirection(dir).toUpperCase()} NULLS ${nulls(dir)}`
     const bindDecimal = (c: Col, value: unknown): string => {
       if (!isDecimal(c) || value === null) return bind(value)
       const parsed = parseDecimal(value)
@@ -271,6 +274,9 @@ export class Query {
           return `(${e.values.map((value) => `ket_decimal_cmp(${colSql(e.col)}, ${bindDecimal(e.col, value)}) = 0`).join(' OR ')})`
         return `${colSql(e.col)} IN (${e.values.map((value) => bindDecimal(e.col, value)).join(', ')})`
       }
+      // Checked where it is written into SQL as well as where it was built: an Expr
+      // is a plain object, and a hand-made one never went through numericCompare().
+      assertComparison(e.cmp)
       if (isSqliteDecimal(e.col))
         return `ket_decimal_cmp(${colSql(e.col)}, ${bindDecimal(e.col, e.value)}) ${e.cmp} 0`
       const compared = e.numeric && dialect === 'sqlite' ? `CAST(${colSql(e.col)} AS REAL)` : colSql(e.col)
@@ -413,5 +419,16 @@ export class Query {
 
 export const from = (t: Table): Query => new Query({ kind: 'select', model: t.$model })
 export const deleteFrom = (t: Table): Query => new Query({ kind: 'delete', model: t.$model })
+/** Refuse a sort direction other than 'asc' or 'desc'; it is written into SQL as a keyword. */
+export const assertDirection = (dir: unknown): 'asc' | 'desc' => {
+  if (dir !== 'asc' && dir !== 'desc')
+    throw new KetError({
+      code: 'E_INVALID_ORDER',
+      message: `sort direction must be 'asc' or 'desc' (received ${JSON.stringify(dir)})`,
+      hint: 'map a request value onto asc() or desc() instead of passing it through',
+    })
+  return dir
+}
+
 export const asc = (col: Col): Order => ({ col: assertCol(col), dir: 'asc' })
 export const desc = (col: Col): Order => ({ col: assertCol(col), dir: 'desc' })

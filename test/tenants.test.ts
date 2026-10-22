@@ -21,6 +21,9 @@ import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
 // The same module instance as createTenants: a hub is per adapter per module copy.
 import { notificationHub } from '../packages/ketjs/src/server/notify.ts'
 
+// Tests that pick a company with request headers run with the development identity.
+const development = { ...process.env, KET_DEV: '1' }
+
 /**
  * One deployment, many databases. Every tenant runs the deployment's immutable
  * module composition while keeping its data and sessions isolated.
@@ -62,6 +65,7 @@ const app = defineDeployment({
   name: 'multi',
   modules: [core, extra],
   headless: true,
+  companies: true,
   serve: {
     routes: (ctx) => ({
       '/notes': async (url, req) => json(await ctx.call('core.list', {}, url, req)),
@@ -98,7 +102,7 @@ const get = (port: number, tenant: string, path: string, init: RequestInit = {})
 
 test('tenants: each request lands in its own database', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(app, { env: development, port: 0, openLog: () => nullLog() })
   const post = (host: string, id: string) =>
     get(b.port, host, '/_ket/fn/core.add', {
       method: 'POST',
@@ -171,7 +175,7 @@ test('tenants: migrations run per tenant, on first touch', async () => {
 test('tenants: an evicted key prepares its replacement adapter before reuse', async () => {
   const opened: string[] = []
   const prepared: string[] = []
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const pool = createAdapterPool({
     max: 1,
     create: (key) => {
@@ -233,7 +237,7 @@ test('tenants: an evicted key prepares its replacement adapter before reuse', as
 })
 
 test('tenants: a rejected preparation is removed from the cache and can retry', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const pool = createAdapterPool({ create: () => sqliteAdapter(), max: 1 })
   let attempts = 0
   const tenants = createTenants({
@@ -264,7 +268,7 @@ test('tenants: a rejected preparation is removed from the cache and can retry', 
 })
 
 test('tenants: a session facade retains no manager from an evicted adapter', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const closed = new WeakSet<Adapter>()
   const managers: string[] = []
   const pool = createAdapterPool({
@@ -335,7 +339,7 @@ test('tenants: a session facade retains no manager from an evicted adapter', asy
 })
 
 test('tenants: a session facade rejects adapter-independent policy drift after eviction', async () => {
-  const manifest = compose([core])
+  const manifest = compose([core], { companies: true })
   const drifts: Array<[string, (sessions: Sessions) => Sessions]> = [
     ['requireCompany', (sessions) => ({ ...sessions, requireCompany: false })],
     ['store.name', (sessions) => ({ ...sessions, store: { ...sessions.store, name: 'replacement-store' } })],
@@ -405,6 +409,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
     name: 'async_tenants',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       tenants: {
         resolve: () => 't1',
@@ -417,7 +422,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
       },
     },
   })
-  const b = await bootDeployment(asyncApp, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(asyncApp, { env: development, port: 0, openLog: () => nullLog() })
   const response = await fetch(`http://127.0.0.1:${b.port}/_ket/fn/core.list`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-ket-company': 'c1' },
@@ -437,7 +442,7 @@ test('tenants: with several databases there is no single adapter, and the type s
 })
 
 test('single: one datastore is the same interface, not a second code path', async () => {
-  const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, serve: {} })
+  const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, companies: true, serve: {} })
   const b = await bootDeployment(solo, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   assert.notEqual(b.adapter, null)
   assert.deepEqual(await b.tenants.keys(), [''])
@@ -447,7 +452,7 @@ test('single: one datastore is the same interface, not a second code path', asyn
 })
 
 test('migrate: every tenant is migrated, and one failure does not stop the fleet', async () => {
-  const manifest = compose([core, extra])
+  const manifest = compose([core, extra], { companies: true })
   const good = sqliteAdapter()
   await good.open()
   const ops = await migrateOne(good, manifest)
@@ -472,8 +477,10 @@ const authed = defineDeployment({
   name: 'authed',
   modules: [core],
   headless: true,
+  companies: true,
   serve: {
     sessions: {},
+    permissions: async () => null,
     tenants: {
       resolve: (_url, req) => {
         const key = String(req.headers['x-tenant'] ?? '')
@@ -543,10 +550,12 @@ test('sessions: a shared store binds each session to the tenant that issued it',
     name: 'onedomain',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       // Reading the session needs the database and knowing the database needs the
       // session, so the session cannot live in the tenant's database at all.
       sessions: { store: control },
+      permissions: async () => null,
       tenants: {
         resolve: (_url, req) => (String(req.headers['x-tenant'] ?? '') === 't1' ? 't1' : 't2'),
         open: (key) => {
@@ -590,8 +599,10 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
     name: 'pooled_sessions',
     modules: [core],
     headless: true,
+    companies: true,
     serve: {
       sessions: {},
+      permissions: async () => null,
       tenants: {
         resolve: (_url, req) => String(req.headers['x-tenant'] ?? 't1'),
         open: async (key) => sqliteAdapter(join(directory, `${key}.sqlite`)),
@@ -600,7 +611,8 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
       },
     },
   })
-  const b = await bootDeployment(pooled, { port: 0, openLog: () => nullLog() })
+  // KET_DEV=1: only local development may sign sessions with a generated key.
+  const b = await bootDeployment(pooled, { env: { KET_DEV: '1' }, port: 0, openLog: () => nullLog() })
   const sessions = await b.tenants.with('t1', async (tenant) => tenant.sessions!)
   const { cookie } = await sessions.start({ userId: 'u1', companies: ['c1'] })
   assert.equal(sessions.ephemeralSecret, true)
@@ -629,7 +641,7 @@ test('tenants: a listener holds its tenant open and hears that tenant only', asy
   const tenants = createTenants({
     spec: { resolve: () => null, open: () => sqliteAdapter(), list: async () => ['t1', 't2', 't3'] },
     pool,
-    manifest: compose([core]),
+    manifest: compose([core], { companies: true }),
     joints: () => ({}) as never,
   })
   try {
@@ -687,6 +699,7 @@ test('tenants: subscribe on a tenant deployment needs the request whose tenant i
     name: 'listening',
     modules: [core, notifying],
     headless: true,
+    companies: true,
     serve: {
       routes: (ctx) => ({
         '/listen': async (url, req) => {
@@ -711,7 +724,7 @@ test('tenants: subscribe on a tenant deployment needs the request whose tenant i
       tenants: app.serve!.tenants,
     },
   })
-  const b = await bootDeployment(listening, { port: 0, openLog: () => nullLog() })
+  const b = await bootDeployment(listening, { env: development, port: 0, openLog: () => nullLog() })
   try {
     assert.deepEqual(await get(b.port, 't1', '/bare').then((r) => r.json()), { code: 'E_NOT_SUPPORTED' })
     assert.deepEqual(await get(b.port, 't1', '/listen').then((r) => r.json()), { tenant: 't1' })

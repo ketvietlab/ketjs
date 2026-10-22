@@ -102,7 +102,7 @@ export function compileRoutes<T>(routes: Record<string, T>): (pathname: string) 
     (a, b) =>
       b.pattern.staticCount - a.pattern.staticCount ||
       b.pattern.segments.length - a.pattern.segments.length ||
-      a.pattern.path.localeCompare(b.pattern.path),
+      a.pattern.path.localeCompare(b.pattern.path, 'en'),
   )
   return (pathname) => {
     for (const entry of entries) {

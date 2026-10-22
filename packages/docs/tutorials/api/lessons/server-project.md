@@ -15,7 +15,7 @@ Open another terminal and create a sibling to the View project:
 
 ```bash
 # Run from: your-projects
-npx -y @ketvietlab/ketjs@0.5.1 new learn_api
+npx -y @ketvietlab/ketjs@0.6.0 new learn_api
 cd learn_api
 npm install
 npm run build
@@ -49,7 +49,7 @@ Use the development command in a dedicated terminal:
 npm run learn -- serve
 ```
 
-The lab binds to `127.0.0.1:3711`. The starter development identity uses the `X-Ket-Company` header so you can experiment with company scope locally. This convenience is not a production authentication design.
+The lab binds to `127.0.0.1:3711`. The lab sets `companies: true`, so its development identity reads the `X-Ket-Company` header and you can experiment with company scope locally. This convenience is not a production authentication design.
 
 ```bash
 # Run from: learn_api
