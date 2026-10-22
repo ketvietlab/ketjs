@@ -159,6 +159,11 @@ test('a version change synchronizes every mirror and detects drift without rewri
   for (const directory of ['', ...producers.map((item) => item.directory), ...consumers])
     assert.equal(readJson(join(root, directory, 'package.json')).version, '0.5.0')
   assert.ok(readFileSync(join(root, 'packages/docs/site/version.generated.ts'), 'utf8').includes("'0.5.0'"))
+  assert.ok(
+    readFileSync(join(root, 'packages/ketjs/src/kernel/version.generated.ts'), 'utf8').includes(
+      "KETJS_VERSION = '0.5.0'",
+    ),
+  )
   assert.equal(
     readJson(join(root, 'packages/docs/tutorials/api/package-lock.json')).packages[
       'node_modules/@ketvietlab/ketjs-view'
