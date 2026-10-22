@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.5.1'
+const VERSION = '0.6.0'
 const SPEC_VERSION = '0.1.41'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
