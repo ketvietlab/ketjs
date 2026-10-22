@@ -29,6 +29,14 @@ The workflow requests an OIDC token and publishes with npm provenance. After the
 packages, configure npm trusted publishing for this repository and remove the long-lived token when the npm
 account supports that transition.
 
+## One-time documentation deploy setup
+
+ketjs.dev is built by Cloudflare Workers Builds from `master` and installs the published packages. The build
+that a release merge starts runs before npm has the new version, so `release.yml` rebuilds the site after
+publishing. In the `ketjs-docs` Worker, open Settings > Builds > Deploy Hooks, create a hook for `master`, and
+store its URL as the `KETJS_DOCS_DEPLOY_HOOK` secret of the GitHub `npm` environment. Anyone with the URL can
+start a build, so keep it out of source and recreate the hook if it leaks.
+
 ## Prepare a version
 
 Edit the root `VERSION` file only. It is the authoritative version for the five framework packages,
@@ -136,10 +144,15 @@ No publish command is part of either local script.
 4. Create and publish GitHub release `v{{VERSION}}` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
-   The workflow repeats docs/lab/download verification against the public registry after publishing.
-7. Update each downstream repository to the released npm version, then run that repository's release
+   The workflow repeats docs/lab/download verification against the public registry after publishing, then
+   rebuilds ketjs.dev through the documentation Deploy Hook. The build of the merge commit fails because it
+   ran before publishing; confirm that the rebuilt site shows `{{VERSION}}`.
+7. Merge `fix/release-<version>` back into `integration` with a pull request, then promote `integration` to
+   `develop`. Until then those branches keep the previous `VERSION`, so new work and its documentation still
+   describe the previous release.
+8. Update each downstream repository to the released npm version, then run that repository's release
    process.
-8. Run the public smoke path without local tarballs:
+9. Run the public smoke path without local tarballs:
 
 ```bash
 # Run from: /path/to/projects
