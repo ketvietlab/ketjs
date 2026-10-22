@@ -55,10 +55,11 @@ Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `Permiss
 
 | API | Purpose |
 | --- | --- |
-| `defineFn`, `registerFunctions`, `callFn` | Declare, register, and execute effect-checked functions. |
+| `defineFn`, `callFn` | Declare effect-checked functions and execute the handler bound to the given composed manifest. |
+| `registerFunctions`, `registerJobs` | Deprecated. Return a module handler map; `compose()` binds handlers to its manifest, so registration no longer selects what runs. |
 | `enforcePolicy` | Apply one stable domain policy decision and emit sanitized denial evidence. |
 | `project` | Apply output projection rules. |
-| `defineJob`, `registerJobs` | Declare and register durable job handlers. |
+| `defineJob` | Declare durable job handlers. |
 | `createKetServer` | Create the low-level HTTP server from composed runtime services. |
 | `bootRuntime`, `bootDeployment`, `serveDeployment` | Boot runtime services or a complete HTTP deployment. |
 | `bootWorker`, `serveWorker` | Boot or continuously serve configured durable queues. |

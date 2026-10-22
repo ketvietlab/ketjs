@@ -1,12 +1,10 @@
 // The common process role foundation. HTTP and workers load exactly the same
-// configuration, build artifact, module graph and executable registries; only
+// configuration, build artifact, module graph and manifest-bound handlers; only
 // their outer loops differ.
 
 import { fingerprintAssets } from './assets.ts'
 import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
-import { registerFunctions } from './fn.ts'
-import { registerJobs } from './jobs.ts'
 import { consoleLog, createLogger, isolatedLog, leveledLog, logFromConfig, redactLog } from './log/index.ts'
 import type { LogDriver, LogProcess, Logger, OpenLog } from './log/index.ts'
 import type { DeploymentSpec } from '../kernel/workspace.ts'
@@ -71,8 +69,6 @@ export async function bootRuntime(
   // Asset URLs carry their file's digest from here on, so a browser and
   // anything in front of it may keep them until the bytes change.
   await fingerprintAssets(manifest)
-  registerFunctions(modules)
-  registerJobs(modules)
 
   logger.info('boot', {
     driver: opened.name,

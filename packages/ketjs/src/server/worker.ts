@@ -7,7 +7,7 @@ import { createAdapterPool } from '../data/pool.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { createContext } from './ctx.ts'
 import { sqliteStore } from './config.ts'
-import { jobDefinition } from './jobs.ts'
+import { jobHandler } from '../kernel/handlers.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
 import { claimDue } from './schedule.ts'
 import { pruneRateSlots } from './ratelimit.ts'
@@ -258,7 +258,7 @@ export async function bootWorker(
 
   const execute = async (tenant: WorkerTenant, queue: Queue, job: DurableJob): Promise<void> => {
     const started = now().getTime()
-    const definition = jobDefinition(job.job)
+    const definition = jobHandler(tenant.live, job.job)
     const meta = tenant.live.jobs[job.job]
     if (!definition || !meta) {
       await queue.discard(

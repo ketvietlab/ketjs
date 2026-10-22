@@ -15,6 +15,7 @@ import type { RoutePattern } from './routes.ts'
 import { tableNameFor } from '../data/migrate.ts'
 import { compilePermissionBundles } from './permissions.ts'
 import { composeHttpBindings, FN_RETURNS } from './http-binding.ts'
+import { bindHandlers } from './handlers.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
 const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
@@ -1415,5 +1416,6 @@ export function compose(
 
   diag.throwIfAny()
   manifest.diagnostics = []
+  bindHandlers(manifest, order)
   return manifest
 }

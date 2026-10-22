@@ -4,6 +4,7 @@
 
 import { createHash } from 'node:crypto'
 import { isDefectError, KetError } from '../kernel/errors.ts'
+import { functionHandler, hasBoundHandlers } from '../kernel/handlers.ts'
 import { createContext } from './ctx.ts'
 import { createIdempotency, idempotencyStore } from './idem.ts'
 import { FormActionRefusal } from './form-action.ts'
@@ -24,19 +25,24 @@ export type CallResult = {
   replayed?: boolean
 }
 
-const registry = new Map<string, FnSpec>()
-
 export function defineFn(spec: FnSpec): FnSpec {
   if (typeof spec.handler !== 'function')
     throw new KetError({ code: 'E_FN_NO_HANDLER', message: 'defineFn() requires a handler' })
   return spec
 }
 
+/**
+ * The qualified function handlers declared by `modules`.
+ *
+ * @deprecated `compose()` binds handlers to the manifest it returns, and `callFn`
+ * executes the handler bound to its `manifest` option. This returns a new map and
+ * no longer changes which handler any call executes.
+ */
 export function registerFunctions(modules: KetModule[]): Map<string, FnSpec> {
-  registry.clear()
+  const functions = new Map<string, FnSpec>()
   for (const m of modules)
-    for (const [name, def] of Object.entries(m.functions)) registry.set(`${m.name}.${name}`, def)
-  return registry
+    for (const [name, def] of Object.entries(m.functions)) functions.set(`${m.name}.${name}`, def)
+  return functions
 }
 
 const JS_OF: Record<string, string> = {
@@ -238,12 +244,16 @@ export async function callFn(
 }
 
 async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOptions): Promise<CallResult> {
-  const def = registry.get(fnKey)
+  // The handler comes from the manifest this call names, never from whichever
+  // deployment this process composed last.
+  const def = functionHandler(o.manifest, fnKey)
   if (!def)
     throw new KetError({
       code: 'E_UNKNOWN_FUNCTION',
       message: `no server function "${fnKey}"`,
-      hint: `known: ${[...registry.keys()].join(', ')}`,
+      hint: hasBoundHandlers(o.manifest)
+        ? `known: ${Object.keys(o.manifest.functions).join(', ')}`
+        : 'this manifest has no bound handlers; pass the manifest returned by compose() or the booted runtime',
     })
 
   // Permission is checked before the input is validated, so a caller who may not
