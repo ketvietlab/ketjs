@@ -58,17 +58,19 @@ benchmarkReports:
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 1189.0510966511463, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/point", "minPerSecond": 957.5131470459933, "maxPerSecond": 1234.3628093774446}
       - {"framework": "Fastify", "version": "5.12.5", "medianPerSecond": 952.6672705809858, "engine": "PostgreSQL", "databaseVersion": "17.10", "path": "/db/range", "minPerSecond": 812.5648771794663, "maxPerSecond": 1006.775283037568}
   - kind: ssr
-    date: "2026-10-07T04:48:23.041Z"
-    processes: 4
+    date: "2026-10-07T06:52:33.288Z"
+    processes: 5
     measurements:
-      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 27643.7666172053, "rows": 50}
-      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 27086.61720309974, "rows": 50}
-      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 35569.16509836515, "rows": 50}
-      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 21294.122312380325, "rows": 50}
-      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 1341.046823337843, "rows": 1000}
-      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 1314.0577128105037, "rows": 1000}
-      - {"framework": "Preact", "version": "11.0.0 / renderer 6.8.0", "medianPerSecond": 1685.468854171546, "rows": 1000}
-      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 1195.8892641510906, "rows": 1000}
+      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 11562.452070022904, "rows": 50}
+      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 10602.260338290562, "rows": 50}
+      - {"framework": "Svelte", "version": "5.57.1", "medianPerSecond": 33259.930883202825, "rows": 50}
+      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 7851.045308035457, "rows": 50}
+      - {"framework": "Astro", "version": "7.3.5", "medianPerSecond": 4011.136290965696, "rows": 50}
+      - {"framework": "ketjs-view", "version": "0.2.0", "medianPerSecond": 539.490674773669, "rows": 1000}
+      - {"framework": "React", "version": "19.3.0", "medianPerSecond": 536.4844881368662, "rows": 1000}
+      - {"framework": "Svelte", "version": "5.57.1", "medianPerSecond": 1858.2225199986676, "rows": 1000}
+      - {"framework": "Vue", "version": "3.5.43", "medianPerSecond": 547.1916760676933, "rows": 1000}
+      - {"framework": "Astro", "version": "7.3.5", "medianPerSecond": 826.8693169013461, "rows": 1000}
 ---
 
 ## How to read the comparisons
@@ -93,7 +95,7 @@ Each run uses **16 keep-alive HTTP/1.1 clients**, 160 warm-up requests and 1,600
 
 `bench/ssr-comparison/run.mjs` compares **ketjs-view** **0.2.0**, **React 19.3.0**, **Svelte 5.57.1**, **Vue 3.5.43** and **Astro 7.3.5**. Each renders the same 50-row or 1,000-row product list with text escaping. ketjs-view, React and Vue create elements through their runtime element functions inside the timer. Svelte and Astro compile `components/ProductList.svelte` and `components/ProductList.astro` once before timing, as their builds would, so their template work is partly done ahead of time. The timed loop calls Svelte's `render()` from `svelte/server` and Astro's public Container API, `renderToString()`, which also runs Astro's component-rendering pipeline. The awaited public render API and encoding every result to bytes are included; imports are warm. Encoding keeps a renderer from returning an unflattened string whose cost would land after the timer. Output equivalence ignores hydration comments and the equivalent `>`/`&gt;` text encoding. There is no HTTP, hydration or browser work in this comparison. Five processes each start the sequence at a different framework, on the same machine with Node.js **26.7.0**.
 
-**The SSR chart and the figures in this paragraph predate the Svelte and Astro harness.** They were measured with its previous revision, which compared **Preact 11.0.0** (renderer 6.8.0) instead, across four processes on a development machine; a measurement of the current harness on an isolated server will replace them. The charts report versions and medians. ketjs-view 0.2.0 is level with React and behind Preact in that measurement. Its JSX runtime caches each element shape, its server writer compiles each template once into static markup between holes, and escaping copies clean runs in one pass. The harness calls the runtime `jsx()` for every element, so it measures neither `html` templates nor the opt-in [JSX compiler](/ketjs/view-static-sites/#compile-jsx). Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
+The chart was measured on an isolated Linux server (Intel Xeon E5-2680 v4, 28 logical CPUs) at commit `81850c19`. At 50 rows ketjs-view 0.2.0 renders a little faster than React and Vue, well behind Svelte and ahead of Astro. At 1,000 rows ketjs-view, React and Vue are level, Astro is ahead of them and Svelte is about three times faster. Svelte and Astro gain from compiling the template before timing. Its JSX runtime caches each element shape, its server writer compiles each template once into static markup between holes, and escaping copies clean runs in one pass. The harness calls the runtime `jsx()` for every element, so it measures neither `html` templates nor the opt-in [JSX compiler](/ketjs/view-static-sites/#compile-jsx). Its independent dependency surface and island model are separate properties, not a speed claim inferred from this benchmark.
 
 ## Measurement environment
 
