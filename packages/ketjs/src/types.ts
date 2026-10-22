@@ -187,13 +187,16 @@ export type ComposedModel = {
  *                     dimension, not an isolation boundary: aggregating across the
  *                     branches of one company is ordinary and needs no permission.
  *
- * There is no default. A model that does not say is a build error, because the
- * safe-looking default — 'shared' — is the one that leaks.
+ * Company scoping is opt-in per deployment (`companies: true`). Without it every
+ * model is 'shared', `scope` may be left out, and a company scope is a build error.
+ * With it there is no default: a model that does not say is a build error, because
+ * the safe-looking default — 'shared' — is the one that leaks.
  */
 export type ModelScope = 'shared' | 'company' | 'company+branch'
 
 export type ModelDef = {
-  scope: ModelScope
+  /** Required when the deployment sets `companies: true`; otherwise always 'shared'. */
+  scope?: ModelScope
   /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
   timestamps?: boolean
   /**
@@ -839,6 +842,12 @@ export type Manifest = {
   /** Prefix -> owning module. Longest prefix wins, though overlapping claims are rejected. */
   routePrefixes: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
+  /**
+   * Whether this deployment scopes rows by company (`companies: true`). False
+   * means one global scope: requests and sessions carry no company. Absent on a
+   * manifest built by hand, where it is read from the models' scopes.
+   */
+  companies?: boolean
   /**
    * Contract problems composition reported without failing, such as an effect
    * outside the module's depends (an error from 1.0) or two unrelated modules

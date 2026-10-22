@@ -48,6 +48,7 @@ Deployment and module names use lowercase letters, digits, and underscores and b
 | `datastore` | Logical datastore name. Deployments with the same value share a checked union schema. |
 | `requires` | Region contracts required by the deployment. |
 | `headless` | Disables theme/page rendering. |
+| `companies` | Scopes rows by company. Off by default: one global scope, and a `company` model is refused. See [company scope](/docs/models/#company-scope-is-opt-in). |
 | `serve` | HTTP, sessions, tenants, storage, transport, and datastore configuration. |
 | `worker` | Durable queues consumed by a separate worker process role. |
 

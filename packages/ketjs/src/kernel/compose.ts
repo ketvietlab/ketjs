@@ -90,9 +90,12 @@ export function compose(
     requirePermissionCoverage?: boolean
     roleTemplates?: Record<string, RoleTemplateDef>
     modulePermissionDeclarations?: Record<string, ModulePermissionsDef>
+    /** Scope rows by company. Off: every model is shared and requests carry no company. */
+    companies?: boolean
   } = {},
 ): Manifest {
   const diag = new Diagnostics()
+  const companies = opts.companies === true
   const order = topoSort(modules)
   const canSee = (m: KetModule, other: string) => m.name === other || m.depends.includes(other)
 
@@ -210,6 +213,7 @@ export function compose(
     routePrefixes: {},
     patches: [],
     messages: {},
+    companies,
   }
 
   for (const m of order) {
@@ -427,20 +431,32 @@ export function compose(
         })
         continue
       }
-      if (!def.scope) {
+      // Without companies every model is shared and saying so is optional. With
+      // them there is no default, because the safe-looking one is the one that leaks.
+      if (!def.scope && companies) {
         diag.add({
           code: 'E_MODEL_NO_SCOPE',
           module: m.name,
           message: `model "${key}" does not declare a scope`,
-          hint: "every model must say 'shared', 'company' or 'company+branch' — there is no default, because the safe-looking one is the one that leaks",
+          hint: "this deployment scopes by company, so every model must say 'shared', 'company' or 'company+branch' — there is no default, because the safe-looking one is the one that leaks",
         })
         continue
       }
-      if (!['shared', 'company', 'company+branch'].includes(def.scope)) {
+      const scope = def.scope ?? 'shared'
+      if (!['shared', 'company', 'company+branch'].includes(scope)) {
         diag.add({
           code: 'E_MODEL_BAD_SCOPE',
           module: m.name,
-          message: `model "${key}" has unknown scope "${def.scope}"`,
+          message: `model "${key}" has unknown scope "${scope}"`,
+        })
+        continue
+      }
+      if (scope !== 'shared' && !companies) {
+        diag.add({
+          code: 'E_COMPANIES_DISABLED',
+          module: m.name,
+          message: `model "${key}" is scoped '${scope}', but the deployment does not scope by company`,
+          hint: "set companies: true on the deployment, or make the model 'shared'",
         })
         continue
       }
@@ -449,9 +465,8 @@ export function compose(
       // The scope columns are added by the composer, never by the module: a module
       // that spelled them itself could spell them differently, and the filter would
       // silently stop matching.
-      if (def.scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
-      if (def.scope === 'company+branch')
-        fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (scope !== 'shared') fields['companyId'] = { base: 'text', optional: false, by: '(scope)' }
+      if (scope === 'company+branch') fields['branchId'] = { base: 'text', optional: false, by: '(scope)' }
       if (def.timestamps) {
         fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
         fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
@@ -470,13 +485,13 @@ export function compose(
         // replace the composer's (and could be optional), so the filter's column and
         // the model's could disagree.
         if (
-          (def.scope !== 'shared' && fname === 'companyId') ||
-          (def.scope === 'company+branch' && fname === 'branchId')
+          (scope !== 'shared' && fname === 'companyId') ||
+          (scope === 'company+branch' && fname === 'branchId')
         ) {
           diag.add({
             code: 'E_SCOPE_FIELD_RESERVED',
             module: m.name,
-            message: `${key}.${fname} is supplied by scope: '${def.scope}'`,
+            message: `${key}.${fname} is supplied by scope: '${scope}'`,
             hint: 'remove the field; a scoped model gets its tenant columns from the composer',
           })
           continue
@@ -556,7 +571,7 @@ export function compose(
       }
       manifest.models[key] = {
         owner: m.name,
-        scope: def.scope,
+        scope,
         timestamps: def.timestamps === true,
         append: def.append === true,
         fields,

@@ -9,10 +9,15 @@ Sessions answer who a request represents; scope answers which company and branch
 read and write; tenants answer which database contains that identity and data. KetJS keeps these
 contracts separate because deployments resolve them in different orders.
 
+Companies and tenants are both opt-in. A deployment without `companies: true` has one global scope:
+requests, sessions and jobs carry no company, and the company headers and `KET_COMPANY` below are
+ignored. See [company scope](/docs/models/#company-scope-is-opt-in). A deployment without
+`serve.tenants` uses one datastore.
+
 ## Development identity shim
 
-Without `serve.sessions` or `serve.resolveIdentity`, a development runtime reads company context from
-headers:
+Without `serve.sessions` or `serve.resolveIdentity`, a development runtime allows every function. With
+`companies: true` it also reads company context from headers:
 
 ```text
 # File: packages/docs/content/docs/sessions-tenants.md
@@ -28,8 +33,8 @@ without `--against` set that flag. It is read from the environment only and cann
 `serve.defaults`.
 
 Any other runtime without authentication, including `npm start` and `ket serve`, ignores these headers.
-Every caller is anonymous: it acts in the `KET_COMPANY` company and may call only functions declared
-`anonymous: true`; other functions answer `403 E_FN_NOT_PERMITTED`. Production applications should
+Every caller is anonymous and may call only functions declared `anonymous: true`; other functions
+answer `403 E_FN_NOT_PERMITTED`. With `companies: true` the caller acts in the `KET_COMPANY` company. Production applications should
 configure sessions and resolve current account state.
 
 ## Enable sessions
@@ -66,14 +71,16 @@ and differ between pods. With `KET_DEV=1`, as `ket dev` sets, KetJS generates on
 
 ### Authenticate without a company
 
-Existing deployments require at least one readable company and an active company by default.
-An account-based application can explicitly opt into `sessions.requireCompany: false` and start a
-session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
+A deployment without `companies: true` has no company to require: a session starts with
+`companies: []` and acts in the global scope. With `companies: true`, sessions require at least one
+readable company and an active company by default. An account-based application can then explicitly
+opt into `sessions.requireCompany: false` and start a session with `companies: []`. Its identity remains authenticated with `company: null`; company-scoped
 reads and writes still fail without the scope those operations require. Selected companies must
 still belong to the readable set, and a branch still requires an active company and membership
 in the readable branch set when that set is restricted. One context validator applies at issuance,
 cookie reads, updates and gateway assertions. Invalid stored contexts are destroyed. Gateway
-assertions use the active session manager's policy; a missing policy retains the required-company default.
+assertions use the active session manager's policy; without one, they require a company only when
+the deployment sets `companies: true`.
 
 ```ts
 // File: example-app/ket.workspace.ts
@@ -85,14 +92,13 @@ serve: {
 ```
 
 The same opt-in permits companyless `resolveIdentity` assertions when those session options are
-configured. Gateway-only deployments retain the company-required default. No account model name
+configured. Gateway-only deployments with `companies: true` require a company. No account model name
 is prescribed: the application implements its live-state and permission resolvers. The
 [authentication starter](/docs/auth-starter/) generates a complete working example.
 
 Tenant session facades preserve this policy across pool eviction and reject a replacement manager
 with a different policy. Switching an existing datastore back to company-required sessions rejects
-stored companyless cookies rather than giving them an implicit company. Existing KetSuite models,
-resolvers and configuration do not need changes.
+stored companyless cookies rather than giving them an implicit company.
 
 If the secret is absent, KetJS generates an ephemeral value and reports it in the banner. That is
 acceptable for an isolated test, not a multi-pod deployment or restart-stable login.
