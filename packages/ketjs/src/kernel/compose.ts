@@ -63,6 +63,21 @@ function normalizeField(declared: string | import('../types.ts').FieldDef): Norm
 }
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
+
+// A field name is a property key everywhere a row travels. `__proto__` assigned to
+// a plain object changes its prototype instead of adding a field, so the field
+// silently vanished; the other two shadow what every object already has.
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+const RESERVED_FIELD_NAMES: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype'])
+const fieldNameProblem = (name: string): string | null =>
+  !FIELD_NAME.test(name)
+    ? 'must be letters, digits and underscores, starting with a letter or underscore'
+    : RESERVED_FIELD_NAMES.has(name)
+      ? 'is reserved by JavaScript objects'
+      : null
+// A function name is part of a URL (/_ket/fn/module.name) and of a permission key.
+// Dots and hyphens may separate segments; spaces and other characters may not.
+const FUNCTION_NAME = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*$/
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
 export function compose(
@@ -439,6 +454,30 @@ export function compose(
         fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
       }
       for (const [fname, declared] of Object.entries(def.fields ?? {})) {
+        const problem = fieldNameProblem(fname)
+        if (problem) {
+          diag.add({
+            code: 'E_FIELD_NAME',
+            module: m.name,
+            message: `${key}: field name "${fname}" ${problem}`,
+          })
+          continue
+        }
+        // The scope column is the company boundary. Declared by the module it would
+        // replace the composer's (and could be optional), so the filter's column and
+        // the model's could disagree.
+        if (
+          (def.scope !== 'shared' && fname === 'companyId') ||
+          (def.scope === 'company+branch' && fname === 'branchId')
+        ) {
+          diag.add({
+            code: 'E_SCOPE_FIELD_RESERVED',
+            module: m.name,
+            message: `${key}.${fname} is supplied by scope: '${def.scope}'`,
+            hint: 'remove the field; a scoped model gets its tenant columns from the composer',
+          })
+          continue
+        }
         if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
           diag.add({
             code: 'E_TIMESTAMP_FIELD_RESERVED',
@@ -557,7 +596,16 @@ export function compose(
           })
           continue
         }
-        const existing = model.fields[fname]
+        const problem = fieldNameProblem(fname)
+        if (problem) {
+          diag.add({
+            code: 'E_FIELD_NAME',
+            module: m.name,
+            message: `${target}: field name "${fname}" ${problem}`,
+          })
+          continue
+        }
+        const existing = Object.hasOwn(model.fields, fname) ? model.fields[fname] : undefined
         if (existing) {
           diag.add({
             code: 'E_FIELD_COLLISION',
@@ -728,6 +776,26 @@ export function compose(
       }
     }
   }
+  // A parent chain that returns to where it started has no root, so buildMenu()
+  // would render none of it and nobody would be told why.
+  const inCycle = new Set<string>()
+  for (const id of Object.keys(manifest.menus)) {
+    const path: string[] = []
+    let at: string | undefined = id
+    while (at !== undefined && manifest.menus[at] && !path.includes(at) && !inCycle.has(at)) {
+      path.push(at)
+      at = manifest.menus[at]?.parent
+    }
+    if (at === undefined || !path.includes(at)) continue
+    const cycle = path.slice(path.indexOf(at))
+    for (const member of cycle) inCycle.add(member)
+    diag.add({
+      code: 'E_MENU_CYCLE',
+      module: manifest.menus[at]?.by ?? null,
+      message: `menus hang under each other in a cycle: ${[...cycle, at].join(' -> ')}`,
+      hint: 'one entry of the cycle must hang under a root menu or have no parent',
+    })
+  }
 
   // --- joints (published extension points) and fills -----------------------
   for (const m of order) {
@@ -824,6 +892,15 @@ export function compose(
   // --- server functions ----------------------------------------------------
   for (const m of order) {
     for (const [fname, def] of Object.entries(m.functions)) {
+      if (!FUNCTION_NAME.test(fname)) {
+        diag.add({
+          code: 'E_FUNCTION_NAME',
+          module: m.name,
+          message: `invalid function name ${JSON.stringify(fname)}`,
+          hint: 'use letters, digits, "_" and "-", with "." between segments',
+        })
+        continue
+      }
       if (def.transactional && (def.idempotent !== true || def.dryRun === true)) {
         diag.add({
           code: 'E_FUNCTION_TRANSACTION',

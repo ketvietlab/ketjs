@@ -65,7 +65,9 @@ export const sales = defineModule({
 })
 ```
 
-The composed key is `sales.createOrder`.
+The composed key is `sales.createOrder`. A function name starts with a letter and uses letters, digits,
+`_` and `-`, with `.` between segments (`screen.list`); anything else, a space included, is
+`E_FUNCTION_NAME`, because the name is part of `/_ket/fn/...` and of every permission key.
 
 ## Signatures
 
