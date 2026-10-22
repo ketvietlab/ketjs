@@ -151,7 +151,7 @@ export type { WebSocketMessage, WebSocketPeer, WebSocketSession } from './server
 export { notificationHub, NOTIFY_PAYLOAD_BYTES } from './server/notify.ts'
 export type { NotificationHub } from './server/notify.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
-export type { RuntimeConfig, OpenStore, PublicStorageConfig } from './server/config.ts'
+export type { RuntimeConfig, RuntimeDefaults, OpenStore, PublicStorageConfig } from './server/config.ts'
 export {
   storageFromConfig,
   localStorage,
@@ -281,7 +281,7 @@ export {
   formatFleet,
   ManualMigrationConfirmationError,
 } from './data/fleet.ts'
-export type { MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
+export type { DeploymentMigrationOptions, MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
 export { physicalSchemaIssues } from './data/physical.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type {
@@ -299,6 +299,7 @@ export {
   isTimezone,
   assertTimezone,
   localDateTimeToUtc,
+  parseDateTime,
   localDayRange,
   GROUP_INTERVALS,
   isGroupInterval,

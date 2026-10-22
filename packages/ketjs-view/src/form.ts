@@ -174,6 +174,33 @@ const isDate = (value: unknown): value is string => {
   return held.getUTCFullYear() === year && held.getUTCMonth() === month - 1 && held.getUTCDate() === day
 }
 
+const DATETIME =
+  /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?)?(?:Z|[+-](\d{2})(?::?(\d{2}))?)?$/i
+
+/**
+ * ISO-8601 date-time text, as `<input type="datetime-local">` sends it or with an
+ * offset. `Date.parse` is not the test: it accepts "1" as the year 2001 and reads
+ * text without an offset in the zone of whichever machine runs it, so a browser and
+ * a server could disagree about the same value. The server converts a value without
+ * an offset in the deployment's timezone; this only decides whether it is one.
+ */
+const isDateTime = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false
+  const match = DATETIME.exec(value.trim())
+  if (!match || !isDate(match[1])) return false
+  const [, , hour = '0', minute = '0', second = '0', offsetHours = '0', offsetMinutes = '0'] = match
+  return (
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    Number(second) <= 59 &&
+    Number(offsetHours) <= 14 &&
+    Number(offsetMinutes) <= 59
+  )
+}
+
+/** Decimal digits only: "0x10", "1e3" and " " are not integers a person typed. */
+const INTEGER = /^[+-]?\d+$/
+
 const empty = (value: unknown): boolean => value == null || (typeof value === 'string' && value.trim() === '')
 
 const decimalText = (value: number): string => {
@@ -199,10 +226,9 @@ const cast = (
     return { ok: true, value: trim ? raw.trim() : raw }
   }
   if (type === 'int') {
-    const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw
-    return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value)
-      ? { ok: true, value }
-      : { ok: false }
+    const value = typeof raw === 'string' ? (INTEGER.test(raw.trim()) ? Number(raw.trim()) : Number.NaN) : raw
+    // Safe as well as whole: 9007199254740993 would arrive as a different number.
+    return typeof value === 'number' && Number.isSafeInteger(value) ? { ok: true, value } : { ok: false }
   }
   if (type === 'float') {
     const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw
@@ -220,11 +246,7 @@ const cast = (
     return { ok: false }
   }
   if (type === 'date') return isDate(raw) ? { ok: true, value: raw } : { ok: false }
-  if (type === 'datetime') {
-    return typeof raw === 'string' && !Number.isNaN(Date.parse(raw))
-      ? { ok: true, value: raw }
-      : { ok: false }
-  }
+  if (type === 'datetime') return isDateTime(raw) ? { ok: true, value: raw.trim() } : { ok: false }
   if (typeof raw === 'string') {
     try {
       return { ok: true, value: JSON.parse(raw) }

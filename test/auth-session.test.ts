@@ -73,7 +73,7 @@ test('auth sessions: an evicted tenant facade retains the explicit companyless p
   const tenants = createTenants({
     spec: { resolve: () => null, open: () => sqliteAdapter(), list: async () => ['a', 'b'] },
     pool,
-    manifest: compose([], { headless: true }),
+    manifest: compose([], { headless: true, companies: true }),
     joints: () => ({}) as never,
     sessions: async (_adapter, tenant) => {
       if (!stores.has(tenant)) stores.set(tenant, memorySessionStore())
@@ -123,8 +123,9 @@ test('auth sessions: optional gateway identity does not unlock company-scoped da
     name: 'optional_identity',
     modules: [domain],
     headless: true,
+    companies: true,
     serve: {
-      sessions: { requireCompany: false },
+      sessions: { requireCompany: false, secret: 'local-test-only' },
       resolveIdentity: async () => ({ userId: 'u1', company: null, companies: [] }),
       permissions: async () => ['scope_auth.who', 'scope_auth.read'],
     },
@@ -155,6 +156,7 @@ test('auth sessions: gateway identities keep the company-required default', asyn
       name: 'required_identity',
       modules: [domain],
       headless: true,
+      companies: true,
       serve: {
         resolveIdentity: async () => ({ userId: 'u1', company: null, companies: [] }),
         permissions: async () => ['scope_auth.who'],
@@ -193,8 +195,9 @@ test('auth sessions: persisted and gateway contexts reject branches outside thei
       name: 'branch_identity',
       modules: [domain],
       headless: true,
+      companies: true,
       serve: {
-        sessions: { requireCompany: false },
+        sessions: { requireCompany: false, secret: 'local-test-only' },
         resolveIdentity: async () => ({
           userId: 'u1',
           company: 'c1',

@@ -49,6 +49,11 @@ const pin = (manifest, version) => {
 /** @param {string} version */
 const generatedVersion = (version) =>
   `// Generated from /VERSION by npm run version:sync. Do not edit.\nexport const frameworkVersion = '${version}'\n`
+// The kernel records the release it belongs to as manifest.ket, which agents read
+// and the /_ket/fn build id is derived from.
+/** @param {string} version */
+const kernelVersion = (version) =>
+  `// Generated from /VERSION by npm run version:sync. Do not edit.\n/** The KetJS release this kernel belongs to, recorded as \`manifest.ket\`. */\nexport const KETJS_VERSION = '${version}'\n`
 
 // npm requires versions in manifests and locks. These are checked mirrors, not authoring inputs.
 export function materializeVersion({ root = ROOT, check = false, producersOnly = false } = {}) {
@@ -98,6 +103,7 @@ export function materializeVersion({ root = ROOT, check = false, producersOnly =
       return source.replace(/^const VERSION = '[^']+'$/m, `const VERSION = '${version}'`)
     })
   }
+  update('packages/ketjs/src/kernel/version.generated.ts', () => kernelVersion(version))
   if (!producersOnly) {
     update('packages/docs/site/version.generated.ts', () => generatedVersion(version))
     for (const directory of consumers) {

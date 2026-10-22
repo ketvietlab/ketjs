@@ -178,3 +178,19 @@ test('split storage: both backends retain tenant isolation and declared-effect b
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('namespaced storage: a namespace is one path segment, so one tenant never nests inside another', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ket-storage-namespace-'))
+  try {
+    const root = localStorage({ dir })
+    assert.throws(
+      () => namespacedStorage(root, 'tenant-a/b'),
+      (error: { code?: string }) => error.code === 'E_STORAGE_NAMESPACE',
+    )
+    const a = namespacedStorage(root, 'tenant-a')
+    await a.put('b/x', body('belongs to a'), { type: 'text/plain' })
+    assert.deepEqual((await a.list('')).keys, ['b/x'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

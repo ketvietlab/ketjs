@@ -132,15 +132,19 @@ Routes return branded `RouteResult` values. Create them with public helpers:
 | `fragment(body)` | Escaped HTML fragment | `text/html` |
 | `navigablePage(request, options)` | Full document or named navigation slots | Negotiated |
 | `json(value)` | JSON serialization | `application/json` |
-| `text(value)` | String | `text/plain` |
+| `text(value, { type })` | String | `text/plain`; refuses a markup type |
 | `bytes(value, { type })` | `Uint8Array` | Required non-markup type |
 | `streamed(iterable, { type })` | `AsyncIterable<Uint8Array>` | Required non-markup type |
 | `websocket(session)` | Upgrades the request (RFC 6455) | `426` for a plain request |
 | `raw(value, { type })` | Trusted prebuilt string | `text/html` |
 | `withHeaders(result, headers)` | Existing result plus headers | Preserves the original type/status |
 
-Each helper accepts a status option. `bytes()` and `streamed()` refuse HTML, XHTML, and SVG content
-types so binary APIs cannot accidentally become a markup escape hatch.
+Each helper accepts a status option. A markup type is one a browser renders as an active document:
+`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml` and every other
+`+xml` type. `text()`, `bytes()` and `streamed()` refuse them, and `withHeaders()` refuses a
+`Content-Type` header that would turn a non-markup response into one, so none of them becomes a second
+`raw()`. Every response carries `X-Content-Type-Options: nosniff`, so a browser renders a body as the
+type it was given and never guesses HTML.
 
 ## Safe HTML
 
@@ -266,15 +270,19 @@ Serve large content with backpressure:
 
 ```tsx
 // File: src/modules/order/routes.tsx
-const stored = await ctx.storageOf(url, request).get(key)
+const storage = await ctx.storageOf(url, request)
+const stored = await storage.get(key)
 if (!stored) return text('Not found', { status: 404 })
 
-return streamed(stored.body, {
-  type: stored.meta.type,
+// The stored type is whatever the uploader declared, so the file is served as a download.
+return withHeaders(streamed(stored.body, { type: 'application/octet-stream' }), {
+  'content-disposition': 'attachment',
 })
 ```
 
-The HTTP layer consumes the async iterable chunk by chunk instead of buffering the object.
+The HTTP layer consumes the async iterable chunk by chunk instead of buffering the object. Serve an
+upload inline only for an allow-list of types the application has decided to display, such as
+`image/png` or `application/pdf`, never for the type the uploader supplied.
 
 ## WebSockets
 

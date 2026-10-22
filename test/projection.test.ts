@@ -120,7 +120,7 @@ test('project: a returns the function declared also holds at callFn', async () =
       one: { input: {}, output: { id: 'id' }, returns: 'one', effects: [], handler: () => [{ id: '1' }] },
     },
   })
-  const manifest = compose([counted])
+  const manifest = compose([counted], { companies: true })
   registerFunctions([counted])
   const adapter = sqliteAdapter()
   await adapter.open()
@@ -158,7 +158,7 @@ const shop = defineModule({
 })
 
 test('projection: the cost does not leave, and the scope column does not either', async () => {
-  const manifest = compose([shop])
+  const manifest = compose([shop], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)

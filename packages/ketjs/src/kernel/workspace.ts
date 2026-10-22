@@ -12,7 +12,7 @@
 
 import { compose } from './compose.ts'
 import { Diagnostics } from './errors.ts'
-import { schemaFromManifest } from '../data/migrate.ts'
+import { schemaFromManifest, scopeSignature } from '../data/migrate.ts'
 import type { Column, Index, Schema } from '../data/migrate.ts'
 import type { KetModule, Manifest, ModulePermissionsDef, RoleTemplateDef } from '../types.ts'
 import type { ServeSpec } from '../server/boot.ts'
@@ -100,6 +100,12 @@ export type DeploymentSpec = {
   requires?: string[]
   /** A deployment that exposes functions but renders no pages: no theme, no region contract. */
   headless?: boolean
+  /**
+   * Scope rows by company. Off by default: every model is shared, `scope` may be
+   * left out, and requests and sessions carry no company. On: every model must
+   * declare its scope, and company-scoped rows are filtered by the request's company.
+   */
+  companies?: boolean
   /** Require exact function coverage and compile product-owned managed role templates. */
   permissions?: {
     requireCoverage?: boolean
@@ -204,7 +210,18 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
   const manifests: Record<string, Manifest> = {}
   const usedBy = new Map<string, string[]>()
 
+  const names = new Set<string>()
   for (const deployment of deployments) {
+    if (names.has(deployment.name)) {
+      diag.add({
+        code: 'E_DEPLOYMENT_DUPLICATE',
+        module: deployment.name,
+        message: `two deployments are named "${deployment.name}"; the second would replace the first`,
+        hint: 'give every deployment in a workspace its own name',
+      })
+      continue
+    }
+    names.add(deployment.name)
     const mods = [
       ...deployment.modules,
       ...(deployment.theme ? [deployment.theme] : []),
@@ -214,6 +231,7 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
       manifests[deployment.name] = compose(mods, {
         requiredRegions: deployment.requires ?? [],
         headless: deployment.headless ?? false,
+        companies: deployment.companies === true,
         requirePermissionCoverage: deployment.permissions?.requireCoverage,
         modulePermissionDeclarations: deployment.permissions?.modules,
         roleTemplates: deployment.permissions?.roleTemplates,
@@ -300,6 +318,17 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
           module: deployment.name,
           message: `datastore "${store}": table "${tname}" is "${existing.model}" in another deployment but "${table.model}" in "${deployment.name}"`,
           hint: 'rename one of the models, or bind the deployments to different datastores',
+        })
+        continue
+      }
+      // A shared model in one deployment and a company model in another is one
+      // table read under two isolation rules: the shared side sees every company.
+      if (scopeSignature(existing) !== scopeSignature(table)) {
+        diag.add({
+          code: 'E_DATASTORE_SCOPE_CLASH',
+          module: deployment.name,
+          message: `datastore "${store}": model "${table.model}" is scoped ${scopeSignature(existing)} elsewhere but ${scopeSignature(table)} in "${deployment.name}"`,
+          hint: 'every deployment sharing a datastore must install the same version of the module that owns the model',
         })
         continue
       }

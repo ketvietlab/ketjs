@@ -290,8 +290,9 @@ Every failure uses one envelope:
 ```
 
 `fields` appears on validation failures and is keyed by input name; `""` holds issues about the request as a
-whole, such as a body that is not JSON. Every response carries an `x-request-id` header with the same id. It is
-also the function call's correlation id, so a client report can be joined to the server log.
+whole, such as a body that is not JSON. Every response carries an `x-request-id` header with the same id, and
+the generated document declares `X-Request-Id` on every response, successes included. It is also the
+function call's correlation id, so a client report can be joined to the server log.
 
 | Status | Code | Cause |
 | --- | --- | --- |
@@ -365,7 +366,16 @@ import { defineModule, json } from '@ketvietlab/ketjs'
 export const catalogueApi = defineModule({
   name: 'catalogue_api',
   version: '1.0.0',
+  depends: ['catalogue'],
   reserves: ['/api/catalogue/v1/'],
+  functions: {
+    listPublishedItems: {
+      anonymous: true,
+      returns: 'many',
+      effects: ['read:catalogue.Item'],
+      handler: (ctx) => ctx.db.select('catalogue.Item', { published: true }),
+    },
+  },
   routes: {
     '/api/catalogue/v1/items': {
       anonymous: true,
@@ -379,8 +389,10 @@ export const catalogueApi = defineModule({
           '200': { type: 'object', properties: { data: { type: 'array' } } },
         },
       },
+      // ctx.call applies the function's own checks: it is anonymous, so a caller with
+      // no session may run it, and its effects bound what it reads.
       handler: (ctx) => async (url, request) =>
-        json(await ctx.callUnchecked('catalogue_api.listPublishedItems', {}, url, request)),
+        json({ data: await ctx.call('catalogue_api.listPublishedItems', {}, url, request) }),
     },
   },
 })
@@ -424,6 +436,11 @@ export const extension = defineModule({
 ```
 
 Bindings follow the same rules: an extension passes `through: '<owner>'` in its `httpRoutes()` group.
+
+A `compatible` range is read as npm reads it, against the owner's `x.y.z` version: `1.2.3` exactly, `1.2`
+for any 1.2.x, `^1.2.3` up to the next major (below 1.0, up to the next minor), and `~1.2.3` up to the
+next minor. A later version's prerelease does not satisfy a range. A version outside the range is
+`E_MODULE_VERSION_SKEW`; a range or version that cannot be read is `E_MODULE_COMPATIBILITY_RANGE`.
 
 Composition rejects overlapping reservations, direct route bypasses, and incompatible extension versions. The
 resulting `Manifest.routePrefixes` retains the owner of every namespace.

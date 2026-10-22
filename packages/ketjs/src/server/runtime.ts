@@ -1,12 +1,10 @@
 // The common process role foundation. HTTP and workers load exactly the same
-// configuration, build artifact, module graph and executable registries; only
+// configuration, build artifact, module graph and manifest-bound handlers; only
 // their outer loops differ.
 
 import { fingerprintAssets } from './assets.ts'
 import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
-import { registerFunctions } from './fn.ts'
-import { registerJobs } from './jobs.ts'
 import { consoleLog, createLogger, isolatedLog, leveledLog, logFromConfig, redactLog } from './log/index.ts'
 import type { LogDriver, LogProcess, Logger, OpenLog } from './log/index.ts'
 import type { DeploymentSpec } from '../kernel/workspace.ts'
@@ -64,6 +62,7 @@ export async function bootRuntime(
   const manifest = compose(modules, {
     requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
+    companies: spec.companies === true,
     requirePermissionCoverage: spec.permissions?.requireCoverage,
     modulePermissionDeclarations: spec.permissions?.modules,
     roleTemplates: spec.permissions?.roleTemplates,
@@ -71,8 +70,6 @@ export async function bootRuntime(
   // Asset URLs carry their file's digest from here on, so a browser and
   // anything in front of it may keep them until the bytes change.
   await fingerprintAssets(manifest)
-  registerFunctions(modules)
-  registerJobs(modules)
 
   logger.info('boot', {
     driver: opened.name,
@@ -85,6 +82,15 @@ export async function bootRuntime(
     // cannot derive the same trace for one request.
     traceKeyed: Boolean(config.secret),
   })
+  // Contract problems composition reports without failing. Logged on every boot
+  // rather than once at build time, because some of them become errors in 1.0.
+  for (const warning of manifest.diagnostics ?? [])
+    logger.warn('contract_warning', {
+      code: warning.code,
+      module: warning.module ?? null,
+      message: warning.message,
+      ...(warning.hint ? { hint: warning.hint } : {}),
+    })
 
   return { spec, config, modules, manifest, log, logger }
 }

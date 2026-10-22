@@ -37,3 +37,6 @@ npm-debug.log*
 
 # Successful deterministic task receipts
 .task-cache/
+
+# npm pack output; a release artifact is never committed.
+*.tgz
