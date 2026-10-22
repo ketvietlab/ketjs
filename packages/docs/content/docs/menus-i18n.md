@@ -237,5 +237,5 @@ Server deployments may implement `ServeSpec.onFunctionDenied` to collect bounded
 telemetry from both routed calls and the generic function transport. The callback receives
 only the verified actor, function and scope, after the request's database lease ends.
 It never receives submitted inputs; callback failures preserve the original refusal.
-KetSuite stores the latest refusal per user and exposes it only with authorization-audit
-permission. This is a support signal, not a complete audit export or proof of delivery.
+An application can, for example, keep the latest refusal per user and show it only to someone allowed to
+read authorization audits. This is a support signal, not a complete audit export or proof of delivery.

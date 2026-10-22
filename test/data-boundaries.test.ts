@@ -7,6 +7,9 @@ import {
   defineModule,
   desc,
   from,
+  ilike,
+  like,
+  likeLiteral,
   migrateOne,
   numericCompare,
   parseDateTime,
@@ -71,6 +74,19 @@ const sales = defineModule({
         return (await ctx.db.select('sales.Order', { id: input['id'] }))[0]?.['at']
       },
     },
+    find: {
+      input: { q: 'text', literal: 'bool' },
+      effects: ['read:sales.Order'],
+      handler: async (ctx: Ctx, input) => {
+        const order = ctx.table('sales.Order')
+        const q = String(input['q'])
+        const where = input['literal']
+          ? ilike(order.id, `%${likeLiteral(q)}%`, true)
+          : like(order.id, `%${q}%`)
+        const rows = await ctx.db.all(from(order).where(where).orderBy(desc(order.id)))
+        return rows.map((row) => row['id'])
+      },
+    },
     typed: {
       input: { at: 'datetime?', qty: 'int?' },
       effects: [],
@@ -116,6 +132,17 @@ test('data boundaries: an operator or direction from a request never reaches SQL
     rows.map((row) => row.id),
     ['a1'],
   )
+})
+
+test('data boundaries: like reads % and _ as wildcards unless the text goes through likeLiteral', async (t) => {
+  const { adapter, call } = await setup()
+  t.after(() => adapter.close())
+  for (const id of ['50%off', '500', 'x_1', 'xa1', 'a\\b']) await call('seed', { row: { id, total: '1' } })
+
+  assert.deepEqual(await call('find', { q: '50%', literal: false }), ['500', '50%off'])
+  assert.deepEqual(await call('find', { q: '50%', literal: true }), ['50%off'])
+  assert.deepEqual(await call('find', { q: 'X_', literal: true }), ['x_1'], 'ilike ignores case')
+  assert.deepEqual(await call('find', { q: 'a\\b', literal: true }), ['a\\b'], 'a backslash is literal too')
 })
 
 test('data boundaries: a direct write stores only real dates and ISO instants', async (t) => {

@@ -39,7 +39,7 @@ Import expression helpers from `@ketvietlab/ketjs`:
 | --- | --- |
 | `eq`, `ne` | Equality and inequality. |
 | `gt`, `lt`, `gte`, `lte` | Ordered comparisons. |
-| `like` | Pattern comparison. |
+| `like`, `ilike` | Pattern comparison; `ilike` ignores case. |
 | `inArray` | Membership; an empty array becomes an always-false expression. |
 | `isNull`, `isNotNull` | Null checks. |
 | `and`, `or`, `not` | Boolean composition. |
@@ -54,6 +54,22 @@ outside `=`, `<>`, `>`, `<`, `>=`, `<=` throws `E_INVALID_OPERATOR`, and a direc
 `desc` throws `E_INVALID_ORDER`. When a filter menu or a sort header sends the choice in a request,
 `numericCompare(col, op, value)` and `orderBy({ col, dir })` can take it as it arrives; nothing else
 reaches SQL text.
+
+A `like` value is a pattern, so `%` and `_` in it are wildcards. A search box that passes what a person
+typed straight to `like` matches more than they asked for: `50%` finds every value starting with `50`.
+It stays inside the caller's scope, but the result is wrong. Escape the text with `likeLiteral()`, add
+the wildcards you mean, and pass `true` as the third argument so the statement declares the escape
+character:
+
+```ts
+// File: src/modules/sales/functions/search-orders.ts
+import { from, ilike, likeLiteral } from '@ketvietlab/ketjs'
+
+const orders = ctx.table('sales.Order')
+const rows = await ctx.db.all(
+  from(orders).where(ilike(orders.number, `%${likeLiteral(input.q)}%`, true)),
+)
+```
 
 ## Execute reads and deletes
 
