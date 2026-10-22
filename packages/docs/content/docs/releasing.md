@@ -106,6 +106,11 @@ tenant-isolation and worker checkpoints, the View lab's check/build and the same
 downloads. These consumers use exact candidate tarballs before publishing, so an unpublished version is
 tested without substituting workspace source. The broad framework suite remains at promotion/release.
 
+A pull request that changes only the version tooling runs `version:check` and the tooling contract tests.
+The `CHANGE_LOG` validation and the consumer reruns run when a pull request changes `VERSION` or
+`CHANGE_LOG`: from the first package change after a release, the published version's evidence and the
+consumers' candidate locks are stale until the next version records new ones.
+
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
 embedded by the deterministic PDF renderer. A release that crosses a ceiling must inspect the tarball
 contents before changing the budget.

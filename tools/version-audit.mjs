@@ -129,6 +129,21 @@ export function versionChanged(root, base) {
   return result.status !== 0 || result.stdout.trim() !== readVersion(root)
 }
 
+/**
+ * Whether a pull request from `base` must carry current audit evidence: it changes
+ * VERSION or CHANGE_LOG. A change to the version tooling alone keeps the published
+ * version's evidence, which is stale by design until the next release records it.
+ * An unreadable base requires the audit.
+ * @param {string} root @param {string} base
+ */
+export function auditRequired(root, base) {
+  if (versionChanged(root, base)) return true
+  const recorded = spawnSync('git', ['-C', root, 'show', `${base}:CHANGE_LOG`], { encoding: 'utf8' })
+  const ledger = join(root, 'CHANGE_LOG')
+  const current = existsSync(ledger) ? readFileSync(ledger, 'utf8') : null
+  return (recorded.status === 0 ? recorded.stdout : null) !== current
+}
+
 export async function recordAudit(root = ROOT) {
   materializeVersion({ root, check: true })
   const dirty = git(root, ['status', '--porcelain', '--untracked-files=all'])
@@ -173,7 +188,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(`CHANGE_LOG ${checkAudit().version}: commit, reason and current evidence verified`)
   else if (command === 'gate') {
     const base = process.argv[3]
-    if (!base || versionChanged(ROOT, base)) checkAudit()
-    else console.log('VERSION unchanged: no release audit required for this pull request')
-  } else throw new Error('Use version-audit.mjs check|record|gate [base-commit]')
+    if (!base || auditRequired(ROOT, base)) checkAudit()
+    else console.log('VERSION and CHANGE_LOG unchanged: no release audit required for this pull request')
+  } else if (command === 'required') {
+    const base = process.argv[3]
+    console.log(String(!base || auditRequired(ROOT, base)))
+  } else throw new Error('Use version-audit.mjs check|record|gate|required [base-commit]')
 }
