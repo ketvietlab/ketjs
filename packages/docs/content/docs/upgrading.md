@@ -60,6 +60,7 @@ These changes ship in the next KetJS release.
 | Area | What changes | What to do |
 | --- | --- | --- |
 | `/_ket/fn` | A `KetError` with code `conflict` or `E_CONFLICT` answers HTTP `409` instead of `400`. The body and the transaction rollback are unchanged; other domain codes still answer `400` unless an HTTP binding maps them. | Treat `409` as a state conflict: keep the editable draft and let the user reload or resolve it. |
+| Hydration | SSR writes no markers inside `<noscript>`, and hydration builds the content of `<title>`, `<textarea>`, `<style>`, `<script>` and `<noscript>` instead of walking it. An island with a `<noscript>` notice or a `<textarea>` hole no longer fails hydration and renders again on the client. | Nothing. Deploy the server and client bundles together, as for every view upgrade. |
 
 <span id="changes-in-the-next-release"></span>
 
