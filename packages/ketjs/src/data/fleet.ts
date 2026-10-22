@@ -7,7 +7,13 @@
 // created last year and one created today converge on the same shape.
 
 import { isDeepStrictEqual } from 'node:util'
-import { ManualMigrationRequiredError, schemaFromManifest, planMigration, renderSql } from './migrate.ts'
+import {
+  ManualMigrationRequiredError,
+  datastoreSchema,
+  schemaFromManifest,
+  planMigration,
+  renderSql,
+} from './migrate.ts'
 import type { Schema, MigrationOp } from './migrate.ts'
 import { physicalSchemaIssues } from './physical.ts'
 import type { AdapterPool } from './pool.ts'
@@ -27,6 +33,34 @@ CREATE TABLE IF NOT EXISTS ket_migration (
   applied_at TIMESTAMPTZ NOT NULL
 );
 `
+
+// What each deployment sharing this database needs, so one deployment's migration
+// keeps the tables of another instead of planning to drop them. `ket_migration`
+// still records what the database holds: the union of these.
+export const MIGRATION_DEPLOYMENT_DDL = `
+CREATE TABLE IF NOT EXISTS ket_migration_deployment (
+  deployment TEXT PRIMARY KEY,
+  schema     TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+);
+`
+export const MIGRATION_DEPLOYMENT_DDL_PG = `
+CREATE TABLE IF NOT EXISTS ket_migration_deployment (
+  deployment TEXT        PRIMARY KEY,
+  schema     TEXT        NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL
+);
+`
+
+/** Options naming the deployment a migration or verification is for. */
+export type DeploymentMigrationOptions = {
+  /**
+   * The deployment whose manifest this is. Given, the target is the union of its
+   * schema and the schemas other deployments recorded in this database, and its
+   * own schema is recorded for them. Omitted, the manifest is the whole database.
+   */
+  deployment?: string
+}
 
 export type MigrationResult = { datastore: string; ops: MigrationOp[]; applied: boolean; error?: string }
 
@@ -65,6 +99,37 @@ async function readApplied(adapter: Adapter, ensureTable: boolean): Promise<Sche
   return r ? (JSON.parse(String(r.schema)) as Schema) : null
 }
 
+async function readDeployments(adapter: Adapter, ensureTable: boolean): Promise<Record<string, Schema>> {
+  const pg = adapter.name === 'postgres'
+  if (ensureTable) await adapter.exec(pg ? MIGRATION_DEPLOYMENT_DDL_PG : MIGRATION_DEPLOYMENT_DDL)
+  else if (!Object.hasOwn(await adapter.introspect(), 'ket_migration_deployment')) return {}
+  const rows = await adapter.all('SELECT deployment, schema FROM ket_migration_deployment')
+  return Object.fromEntries(
+    rows.map((row) => [String(row.deployment), JSON.parse(String(row.schema)) as Schema]),
+  )
+}
+
+async function writeDeployment(adapter: Adapter, deployment: string, schema: Schema, now: string) {
+  const p = (n: number) => (adapter.name === 'postgres' ? `$${n}` : '?')
+  await adapter.run(
+    `INSERT INTO ket_migration_deployment (deployment, schema, applied_at) VALUES (${p(1)}, ${p(2)}, ${p(3)})
+     ON CONFLICT (deployment) DO UPDATE SET schema = excluded.schema, applied_at = excluded.applied_at`,
+    [deployment, JSON.stringify(schema), now],
+  )
+}
+
+/** The schema this database must hold for `manifest`, given the deployments that share it. */
+async function targetFor(
+  adapter: Adapter,
+  manifest: Manifest,
+  o: DeploymentMigrationOptions,
+  ensureTable: boolean,
+): Promise<{ own: Schema; target: Schema }> {
+  const own = schemaFromManifest(manifest)
+  if (!o.deployment) return { own, target: own }
+  return { own, target: datastoreSchema(own, await readDeployments(adapter, ensureTable), o.deployment) }
+}
+
 async function writeApplied(adapter: Adapter, schema: Schema, now: string): Promise<void> {
   const pg = adapter.name === 'postgres'
   const p = (n: number) => (pg ? `$${n}` : '?')
@@ -92,8 +157,9 @@ async function writeApplied(adapter: Adapter, schema: Schema, now: string): Prom
 export async function verifyPhysicalSchema(
   adapter: Adapter,
   manifest: Manifest,
+  o: DeploymentMigrationOptions = {},
 ): Promise<PhysicalSchemaVerification> {
-  const target = schemaFromManifest(manifest)
+  const { target } = await targetFor(adapter, manifest, o, false)
   const applied = await readApplied(adapter, false)
   const markerMatchesManifest = applied !== null && isDeepStrictEqual(applied, target)
   const markerIssues = applied
@@ -118,11 +184,11 @@ export const SCHEMA_MIGRATION_LOCK = 1262835800
 export async function migrateOne(
   adapter: Adapter,
   manifest: Manifest,
-  o: { allowDestructive?: boolean; dryRun?: boolean; now?: () => string } = {},
+  o: DeploymentMigrationOptions & { allowDestructive?: boolean; dryRun?: boolean; now?: () => string } = {},
 ): Promise<MigrationOp[]> {
-  const target = schemaFromManifest(manifest)
   if (o.dryRun) {
     const applied = await readApplied(adapter, false)
+    const { target } = await targetFor(adapter, manifest, o, false)
     return planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
   }
 
@@ -133,10 +199,13 @@ export async function migrateOne(
     // replica reads the marker the first one wrote and finds nothing left to do.
     if (tx.name === 'postgres') await tx.all(`SELECT pg_advisory_xact_lock(${SCHEMA_MIGRATION_LOCK})`)
     const applied = await readApplied(tx, true)
+    const { own, target } = await targetFor(tx, manifest, o, true)
     const ops = planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
     const sql = renderSql(ops, tx)
     for (const statement of sql) await tx.exec(statement)
-    await writeApplied(tx, target, (o.now ?? (() => new Date().toISOString()))())
+    const now = (o.now ?? (() => new Date().toISOString()))()
+    await writeApplied(tx, target, now)
+    if (o.deployment) await writeDeployment(tx, o.deployment, own, now)
     return ops
   }
 
@@ -156,12 +225,12 @@ export async function migrateOne(
 export async function confirmManualMigration(
   adapter: Adapter,
   manifest: Manifest,
-  o: { now?: () => string } = {},
+  o: DeploymentMigrationOptions & { now?: () => string } = {},
 ): Promise<MigrationOp[]> {
-  const target = schemaFromManifest(manifest)
   const confirm = async (tx: Adapter): Promise<MigrationOp[]> => {
     if (tx.name === 'postgres') await tx.all(`SELECT pg_advisory_xact_lock(${SCHEMA_MIGRATION_LOCK})`)
     const applied = await readApplied(tx, false)
+    const { own, target } = await targetFor(tx, manifest, o, Boolean(o.deployment))
     if (!applied)
       throw new ManualMigrationConfirmationError(
         'no applied-schema marker exists; run migrateOne before confirming a manual transition',
@@ -192,7 +261,9 @@ export async function confirmManualMigration(
         issues,
       )
 
-    await writeApplied(tx, target, (o.now ?? (() => new Date().toISOString()))())
+    const now = (o.now ?? (() => new Date().toISOString()))()
+    await writeApplied(tx, target, now)
+    if (o.deployment) await writeDeployment(tx, o.deployment, own, now)
     return manual
   }
 
@@ -208,7 +279,7 @@ export async function migrateFleet(
   pool: AdapterPool,
   datastores: string[],
   manifest: Manifest,
-  o: { allowDestructive?: boolean; dryRun?: boolean; now?: () => string } = {},
+  o: DeploymentMigrationOptions & { allowDestructive?: boolean; dryRun?: boolean; now?: () => string } = {},
 ): Promise<MigrationResult[]> {
   const out: MigrationResult[] = []
   for (const datastore of datastores) {

@@ -281,7 +281,7 @@ export {
   formatFleet,
   ManualMigrationConfirmationError,
 } from './data/fleet.ts'
-export type { MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
+export type { DeploymentMigrationOptions, MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
 export { physicalSchemaIssues } from './data/physical.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type {

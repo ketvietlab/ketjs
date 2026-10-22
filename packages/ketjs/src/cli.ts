@@ -610,7 +610,7 @@ try {
       : await (spec.serve.openStore ?? sqliteStore)(runtime.config)
     if (spec.serve.tenants) await adapter.open()
     try {
-      await migrateOne(adapter, runtime.manifest)
+      await migrateOne(adapter, runtime.manifest, { deployment: spec.name })
       const result = await callFn(fnKey, jsonObject('-', '--input'), {
         adapter,
         manifest: runtime.manifest,
@@ -846,7 +846,9 @@ try {
               )
               continue
             }
-            const report = await pool.with(key, (adapter) => verifyPhysicalSchema(adapter, manifest))
+            const report = await pool.with(key, (adapter) =>
+              verifyPhysicalSchema(adapter, manifest, { deployment: spec.name }),
+            )
             lines.push(formatSchemaVerification(key, report))
             failed ||= !report.ok
           } catch (error) {
@@ -900,7 +902,9 @@ try {
         : await (spec.serve.openStore ?? sqliteStore)(config)
       if (spec.serve.tenants) await adapter.open()
       try {
-        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest)
+        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest, {
+          deployment: spec.name,
+        })
         console.log(formatSchemaVerification(tenant ?? spec.name, report))
         process.exitCode = report.ok ? 0 : 1
       } finally {
@@ -921,6 +925,7 @@ try {
         const keys = await tenants.list()
         const m = ws.deployments[spec.name] as Manifest
         const results = await migrateFleet(pool, keys, m, {
+          deployment: spec.name,
           allowDestructive: flag('allow-destructive'),
           dryRun: flag('dry-run'),
         })

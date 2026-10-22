@@ -12,7 +12,7 @@
 
 import { compose } from './compose.ts'
 import { Diagnostics } from './errors.ts'
-import { schemaFromManifest } from '../data/migrate.ts'
+import { schemaFromManifest, scopeSignature } from '../data/migrate.ts'
 import type { Column, Index, Schema } from '../data/migrate.ts'
 import type { KetModule, Manifest, ModulePermissionsDef, RoleTemplateDef } from '../types.ts'
 import type { ServeSpec } from '../server/boot.ts'
@@ -300,6 +300,17 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
           module: deployment.name,
           message: `datastore "${store}": table "${tname}" is "${existing.model}" in another deployment but "${table.model}" in "${deployment.name}"`,
           hint: 'rename one of the models, or bind the deployments to different datastores',
+        })
+        continue
+      }
+      // A shared model in one deployment and a company model in another is one
+      // table read under two isolation rules: the shared side sees every company.
+      if (scopeSignature(existing) !== scopeSignature(table)) {
+        diag.add({
+          code: 'E_DATASTORE_SCOPE_CLASH',
+          module: deployment.name,
+          message: `datastore "${store}": model "${table.model}" is scoped ${scopeSignature(existing)} elsewhere but ${scopeSignature(table)} in "${deployment.name}"`,
+          hint: 'every deployment sharing a datastore must install the same version of the module that owns the model',
         })
         continue
       }

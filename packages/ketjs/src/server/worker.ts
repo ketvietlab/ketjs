@@ -92,7 +92,7 @@ async function tenantSource(
 
   const prepare = async (adapter: Adapter): Promise<Manifest> => {
     if (!prepared.has(adapter)) {
-      if (config.migrateOnBoot) await migrateOne(adapter, manifest)
+      if (config.migrateOnBoot) await migrateOne(adapter, manifest, { deployment: spec.name })
       prepared.add(adapter)
     }
     return manifest

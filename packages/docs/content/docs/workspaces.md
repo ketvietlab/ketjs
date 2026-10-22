@@ -69,10 +69,23 @@ flowchart LR
   analytics --> separate["Separate schema"]
 ```
 
-Deployments sharing a datastore must agree about every common model and column, including nullability and
-reference targets. Indexes contributed by only one deployment join the union schema; indexes with the same
-name must agree about fields, uniqueness, and provenance. KetJS reports `E_DATASTORE_MODEL_CLASH`,
-`E_DATASTORE_COLUMN_CLASH`, or `E_DATASTORE_INDEX_CLASH` during composition.
+Deployments sharing a datastore must agree about every common model and column, including nullability,
+reference targets and scope: a model that is `company` in one deployment and `shared` in another would be
+read without tenant isolation by the second. Indexes contributed by only one deployment join the union
+schema; indexes with the same name must agree about fields, uniqueness, and provenance. KetJS reports
+`E_DATASTORE_MODEL_CLASH`, `E_DATASTORE_SCOPE_CLASH`, `E_DATASTORE_COLUMN_CLASH`, or
+`E_DATASTORE_INDEX_CLASH` during composition.
+
+The same union holds when the deployments migrate. Each records the schema it needs in
+`ket_migration_deployment`, and a migration targets the union of its own schema and the others', so a
+deployment with fewer modules never plans to drop the tables of one with more. `ket_migration` still
+records what the database holds. A model or scope clash between recorded deployments refuses the
+migration with the same codes. A database that predates this record starts with none, and the first
+deployment to migrate it after the upgrade plans against the existing marker alone, as before: a
+deployment with fewer modules would plan drops, which are refused as destructive. Migrate the deployment
+with the most modules first; every deployment after it finds the others recorded. To retire a deployment, delete its row from
+`ket_migration_deployment`; the tables only it needed become a destructive plan that requires
+`--allow-destructive`.
 
 ## HTTP and worker roles
 

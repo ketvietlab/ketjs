@@ -62,3 +62,46 @@ test('migrations: replicas migrating one PostgreSQL database at once all succeed
     await admin.close()
   }
 })
+
+test('migrations: deployments sharing one PostgreSQL database keep each other’s tables', live, async () => {
+  const name = `migrate_shared_${randomUUID().replaceAll('-', '')}`
+  const admin = postgresAdapter(adminUrl.toString())
+  await admin.open()
+  try {
+    await admin.exec(`CREATE DATABASE "${name}"`)
+    const url = new URL(adminUrl)
+    url.pathname = `/${name}`
+    const big = manifestOf(true)
+    const small = compose(
+      [
+        defineModule({
+          name: 'race0',
+          models: {
+            Item: {
+              scope: 'shared',
+              fields: { id: 'id', a: 'text?', b: 'int?' },
+              indexes: { by_a: { fields: ['a'] } },
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+    const migrate = async (manifest: typeof big, deployment: string) => {
+      const adapter = postgresAdapter(url.toString())
+      await adapter.open()
+      try {
+        return await migrateOne(adapter, manifest, { deployment })
+      } finally {
+        await adapter.close()
+      }
+    }
+    assert.ok((await migrate(big, 'backoffice')).length > 0)
+    assert.deepEqual(await migrate(small, 'portal'), [], 'the smaller deployment finds nothing to change')
+    assert.deepEqual(await migrate(big, 'backoffice'), [])
+    assert.deepEqual(await migrate(small, 'portal'), [])
+  } finally {
+    await admin.exec(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
+    await admin.close()
+  }
+})
