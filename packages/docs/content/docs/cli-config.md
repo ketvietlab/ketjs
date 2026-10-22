@@ -40,7 +40,7 @@ before invoking them.
 | `ket manifest --deployment NAME` | Print one composed manifest. |
 | `ket workspace` | Show deployments, datastores, shared modules, and deployment-only modules. |
 | `ket modules` | Show resolved modules and their source paths. |
-| `ket types --deployment NAME` | Generate `.ket/types.d.ts` from the manifest. |
+| `ket types --deployment NAME` | Generate `.ket/types.NAME.d.ts` from the manifest. |
 | `ket agent --deployment NAME` | Print the machine-readable agent capability descriptor. |
 | `ket permissions` | List grantable functions and the data/effect reach of a grant set, module, or stored role. |
 | `ket permissions --json [--all]` | Emit a deterministic module/function inventory for one or every deployment. |
@@ -81,7 +81,7 @@ state belongs to a datastore, not to a JSON snapshot.
 ## Database commands
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket migrate --deployment backoffice --workspace dist/ket.workspace.js
 ket migrate --deployment backoffice --allow-destructive
 ket migrate --deployment erp --all --dry-run

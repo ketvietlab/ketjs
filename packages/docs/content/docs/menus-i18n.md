@@ -210,7 +210,7 @@ language text. Test both left-to-right expansion and your actual longest support
 Runtime defaults come from:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 KET_LOCALE=en
 KET_FALLBACK_LOCALE=en
 ```

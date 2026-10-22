@@ -14,7 +14,7 @@ template structure, so updates touch only changed holes.
 `@ketvietlab/ketjs` already depends on `@ketvietlab/ketjs-view`. Applications may also install and use the view package alone:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 npm install @ketvietlab/ketjs-view
 ```
 

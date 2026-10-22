@@ -214,7 +214,7 @@ ket worker --deployment erp --workspace dist/ket.workspace.js
 In development:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket dev --all --deployment erp --workspace dist/ket.workspace.js
 ```
 
@@ -273,7 +273,7 @@ idempotency keys and provider APIs that accept abort signals.
 ## Operator commands
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket jobs list --state retryable --queue mail --limit 50
 ket jobs retry JOB_ID
 ket jobs cancel JOB_ID
