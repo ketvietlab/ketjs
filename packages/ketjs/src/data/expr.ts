@@ -5,6 +5,7 @@
 // it runs, handed to an agent as data, and rendered for two dialects from one shape.
 
 import { assertGroupInterval } from './time.ts'
+import { KetError } from '../kernel/errors.ts'
 import type { GroupInterval } from './time.ts'
 import type { FieldBase } from '../types.ts'
 
@@ -98,10 +99,29 @@ export const gt = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), c
 export const lt = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<', value })
 export const gte = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '>=', value })
 export const lte = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<=', value })
+/** The comparison operators a query may render. Anything else never reaches SQL text. */
+export const COMPARISONS: ReadonlySet<string> = new Set(['=', '<>', '>', '<', '>=', '<='])
+
+/** Refuse a comparison operator that is not one of six fixed tokens. */
+export const assertComparison = (cmp: unknown): '=' | '<>' | '>' | '<' | '>=' | '<=' => {
+  if (typeof cmp !== 'string' || !COMPARISONS.has(cmp))
+    throw new KetError({
+      code: 'E_INVALID_OPERATOR',
+      message: `comparison operator must be one of =, <>, >, <, >=, <= (received ${JSON.stringify(cmp)})`,
+      hint: 'map a request value onto one of the six operators instead of passing it through',
+    })
+  return cmp as '=' | '<>' | '>' | '<' | '>=' | '<='
+}
+
+/**
+ * Compare a column numerically with an operator chosen at run time. The operator
+ * often comes from a request (a filter menu), so it is checked here and again where
+ * the query is rendered: only the six fixed tokens are ever written into SQL.
+ */
 export const numericCompare = (c: Col, cmp: '=' | '<>' | '>' | '<' | '>=' | '<=', value: unknown): Expr => ({
   op: 'cmp',
   col: col(c),
-  cmp,
+  cmp: assertComparison(cmp),
   value,
   numeric: true,
 })

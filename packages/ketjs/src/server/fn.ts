@@ -4,13 +4,15 @@
 
 import { createHash } from 'node:crypto'
 import { isDefectError, KetError } from '../kernel/errors.ts'
-import { createContext } from './ctx.ts'
+import { functionHandler, hasBoundHandlers } from '../kernel/handlers.ts'
+import { createContext, globalScope, scopesByCompany } from './ctx.ts'
 import { createIdempotency, idempotencyStore } from './idem.ts'
 import { FormActionRefusal } from './form-action.ts'
 import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
+import { parseDateTime } from '../data/time.ts'
 import { queueFor } from './queue.ts'
 import { notificationHub } from './notify.ts'
 import type { Logger } from './log/logger.ts'
@@ -24,19 +26,24 @@ export type CallResult = {
   replayed?: boolean
 }
 
-const registry = new Map<string, FnSpec>()
-
 export function defineFn(spec: FnSpec): FnSpec {
   if (typeof spec.handler !== 'function')
     throw new KetError({ code: 'E_FN_NO_HANDLER', message: 'defineFn() requires a handler' })
   return spec
 }
 
+/**
+ * The qualified function handlers declared by `modules`.
+ *
+ * @deprecated `compose()` binds handlers to the manifest it returns, and `callFn`
+ * executes the handler bound to its `manifest` option. This returns a new map and
+ * no longer changes which handler any call executes.
+ */
 export function registerFunctions(modules: KetModule[]): Map<string, FnSpec> {
-  registry.clear()
+  const functions = new Map<string, FnSpec>()
   for (const m of modules)
-    for (const [name, def] of Object.entries(m.functions)) registry.set(`${m.name}.${name}`, def)
-  return registry
+    for (const [name, def] of Object.entries(m.functions)) functions.set(`${m.name}.${name}`, def)
+  return functions
 }
 
 const JS_OF: Record<string, string> = {
@@ -93,10 +100,14 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
           parsed.reason === 'size' ? { max: DECIMAL_MAX_CHARS } : {},
         )
     }
-    if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
-      add(name, 'integer', `input "${name}" expects an integer`)
+    // Safe, not merely whole: 1e300 is an integer to Number.isInteger and has no
+    // exact value, so it cannot be stored, compared or counted the way it was sent.
+    if (t.base === 'int' && typeof v === 'number' && !Number.isSafeInteger(v))
+      add(name, 'integer', `input "${name}" expects a safe integer`)
     if (t.base === 'date' && !isDateText(v))
       add(name, 'date', `input "${name}" expects a calendar date (YYYY-MM-DD)`)
+    if (t.base === 'datetime' && parseDateTime(v) === null)
+      add(name, 'datetime', `input "${name}" expects an ISO-8601 date-time`)
   }
   for (const k of Object.keys(args ?? {})) {
     if (!Object.hasOwn(sig, k)) {
@@ -127,6 +138,10 @@ const idemFor = (adapter: Adapter): Promise<Idem> => {
   return p
 }
 
+/**
+ * @deprecated Does nothing and is removed in 1.0. Idempotency records are rows in
+ * the deployment's database, so a fresh test database already starts without any.
+ */
 export const _resetIdempotency = (): void => {
   /* records are durable; nothing to clear */
 }
@@ -135,7 +150,7 @@ const canonical = (value: unknown): string => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   return `{${Object.entries(value as Record<string, unknown>)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => a.localeCompare(b, 'en'))
     .map(([key, held]) => `${JSON.stringify(key)}:${canonical(held)}`)
     .join(',')}}`
 }
@@ -191,6 +206,8 @@ export type CallOptions = {
   allow?: readonly string[] | null
   /** Runtime override for the optional queue wake-up signal. */
   queueNotify?: boolean
+  /** IANA timezone a `datetime` without an offset is read in (KET_TIMEZONE). Defaults to UTC. */
+  timezone?: string
   /** Where this call's operational log goes. Absent discards. */
   log?: Logger
 }
@@ -210,8 +227,11 @@ export async function callFn(
   o: CallOptions,
 ): Promise<CallResult> {
   const started = Date.now()
+  // The idempotency key digests the scope, so it is made global here as well as
+  // in the ctx: otherwise a company the caller named would split replays.
+  const call = o.scope && !scopesByCompany(o.manifest) ? { ...o, scope: globalScope() } : o
   try {
-    const result = await runFn(fnKey, args, o)
+    const result = await runFn(fnKey, args, call)
     o.log?.log({
       level: 'info',
       event: 'fn_call',
@@ -238,17 +258,11 @@ export async function callFn(
 }
 
 async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOptions): Promise<CallResult> {
-  const def = registry.get(fnKey)
-  if (!def)
-    throw new KetError({
-      code: 'E_UNKNOWN_FUNCTION',
-      message: `no server function "${fnKey}"`,
-      hint: `known: ${[...registry.keys()].join(', ')}`,
-    })
-
-  // Permission is checked before the input is validated, so a caller who may not
-  // call this at all learns that and nothing else — not which arguments it takes,
-  // and not whether the ones they guessed were right.
+  // The handler comes from the manifest this call names, never from whichever
+  // deployment this process composed last.
+  // Permission is checked before anything else, so a caller who may not call this
+  // at all learns that and nothing else — not whether the function exists, which
+  // arguments it takes, or whether the ones they guessed were right.
   if (o.allow && !o.allow.includes(fnKey)) {
     const owner = fnKey.split('.')[0] ?? fnKey
     throw new KetError({
@@ -258,6 +272,17 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
       hint: 'grant a role that includes it — `ket permissions --grant` shows what any set of functions reaches',
     })
   }
+  const def = functionHandler(o.manifest, fnKey)
+  if (!def)
+    throw new KetError({
+      code: 'E_UNKNOWN_FUNCTION',
+      message: `no server function "${fnKey}"`,
+      // The names of the other functions are not listed: this message reaches
+      // anonymous HTTP callers, and the manifest is not theirs to enumerate.
+      hint: hasBoundHandlers(o.manifest)
+        ? 'call a qualified name (module.function) that the deployment composes; `ket manifest` lists them'
+        : 'this manifest has no bound handlers; pass the manifest returned by compose() or the booted runtime',
+    })
   validateInput(fnKey, o.manifest, args)
 
   const meta = o.manifest.functions[fnKey]!
@@ -319,6 +344,7 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
           correlationId: o.correlationId ?? null,
           scope: o.scope,
           queueNotify: o.queueNotify,
+          timezone: o.timezone,
           ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun: false }) } : {}),
         })
         const value = project(fnKey, meta.output, await def.handler(ctx, args), meta.returns)
@@ -371,6 +397,7 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
     correlationId: o.correlationId ?? null,
     scope: o.scope,
     queueNotify: o.queueNotify,
+    timezone: o.timezone,
     ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun }) } : {}),
   })
 

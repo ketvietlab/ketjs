@@ -147,6 +147,18 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
           `write ${name}=\${...} and build the whole value in the expression, not "text \${...}"`,
         )
       }
+      if (hm && /^srcdoc$/i.test(name)) {
+        throw new TemplateError(
+          'srcdoc cannot be bound: its value is a whole document, rendered with the page origin',
+          `point the iframe at a route with src=\${...} and a sandbox attribute, or write srcdoc out in the template`,
+        )
+      }
+      if (hm && /^on[a-z]/i.test(name)) {
+        throw new TemplateError(
+          `"${name}" cannot be bound: a string inline handler is script`,
+          `bind a function with on:${name.slice(2).toLowerCase()}=\${...} instead`,
+        )
+      }
       if (hm) attrs.push({ name, hole: Number(hm[1]) })
       else attrs.push({ name, value: raw })
       j = k

@@ -64,9 +64,10 @@ For managed, disposable runtime behavior, use a normal module's [islands and bro
 Keep shared views render-pure, attach listeners with a lifetime and clean up enhancements when their
 surface is removed. Browser requests use the application's existing HTTP and permission contracts.
 
-Website Studio is a consumer-specific integration: company themes may carry a stylesheet and a
-browser module served from tenant storage. Its registry, review and loading policy belong to that
-consumer; they are not a universal restriction of the KetJS theme API. The historical context is
+An application may also let each company supply its own stylesheet or browser module, for example from
+tenant storage. Serve that script from an origin other than the one staff screens use: script running on
+the staff origin carries the staff session cookie and can call `/_ket/fn` as that person. The historical
+context is
 [decision D3a](/docs/architecture-decisions/#d3a-a-website-theme-may-run-javascript-in-the-browser-2026-10-05).
 
 ## Template files
@@ -107,11 +108,18 @@ Built-in filters include:
 - `upper`, `lower`;
 - `money`, `number`;
 - `default`, `length`, `truncate`;
-- `json`;
+- `json`, which writes `<`, `>`, `&`, U+2028 and U+2029 as `\u` escapes;
 - `_` when a translator is bound.
 
 `{{ raw value }}` bypasses escaping and must only receive markup already produced by a trusted
-boundary. Ordinary module data should never require it.
+boundary. Ordinary module data should never require it. The one ordinary use is data for a script:
+`json` output cannot close the element, so `{{ raw settings | json }}` inside
+`<script type="application/json">` reads back as the same value.
+
+An output that opens a URL attribute value, as in `href="{{ product.url }}"`, is checked like a bound
+URL attribute in a view: `javascript:`, `vbscript:` and non-media `data:` URLs render as an inert
+`unsafe:` URL. Text before the output, as in `href="/p/{{ product.handle }}"`, already fixes the scheme.
+See [URL attributes and inline script](/ketjs/rendering/#url-attributes-and-inline-script).
 
 ## Conditions and loops
 
@@ -268,9 +276,15 @@ joints: {
 ```
 
 The reader matters. A fill sees the fields declared by the view's owner, plus the fields its own
-module declared in a view over the same model. A module that adds a field with `extend` and then
-publishes a view over it has declared that field theme-visible and may read it back through the
-owner's joint; a field no composed module declared anywhere never crosses.
+module contributed and declared in a view over the same model. A module that adds a field with `extend`
+and then publishes a view over it has declared that field theme-visible and may read it back through the
+owner's joint. Listing someone else's field in its own view does not widen what a joint hands it; only
+the model's owner decides about the model's own fields.
+
+Two rules bound what any view may declare. A view never exposes a field classified `sensitive`
+(`E_VIEW_SENSITIVE_FIELD`), because a sensitive value must never leave the system and a view is what a
+template receives. A module declares views only over models of modules its `depends` reach
+(`E_VIEW_NOT_DEPENDED`), so a theme cannot project `auth.User` by naming it.
 
 `makeDrop()` and `makeDrops()` build the same projection by hand, for scopes an application composes
 itself. `sealScope()` refuses functions anywhere inside a scope value, at any depth, and names the
@@ -284,6 +298,11 @@ Declared `tokens` become CSS without a theme doing anything: the framework serve
 are those of the modules that actually render the page — composed modules plus the selected theme —
 so a deployment shipping several themes gets the palette of the one the site chose rather than the
 one that composed last.
+
+A module layers over the tokens of the modules it depends on, and the selected theme over all of them.
+Two modules that do not depend on each other and give one token different values have no such order:
+the one the dependency sort puts last wins, and composition reports `E_TOKEN_CONFLICT` as a
+`contract_warning` naming both.
 
 `tokensToCss()` performs the conversion to `--ket-*` custom properties and emits the cascade order:
 

@@ -39,12 +39,13 @@ const nightly = defineModule({
 const app = defineDeployment({
   name: 'nightly_app',
   headless: true,
+  companies: true,
   modules: [nightly],
   serve: {},
   worker: { queues: { default: 1 }, scheduleSweepMs: 1_000 },
 })
 
-const manifestOf = (): Manifest => compose([nightly], { headless: true })
+const manifestOf = (): Manifest => compose([nightly], { headless: true, companies: true })
 
 const openDatabase = async (t: TestContext): Promise<{ adapter: Adapter; manifest: Manifest }> => {
   const adapter = sqliteAdapter(':memory:')
@@ -171,7 +172,7 @@ test('a scheduled job that needs arguments is refused at composition', () => {
   })
   // Nobody is there at three in the morning to supply an argument.
   assert.throws(
-    () => compose([needy], { headless: true }),
+    () => compose([needy], { headless: true, companies: true }),
     (error: unknown) => /requires input since/.test(String((error as Error).message)),
   )
 
@@ -182,7 +183,7 @@ test('a scheduled job that needs arguments is refused at composition', () => {
     },
   })
   assert.throws(
-    () => compose([wrong], { headless: true }),
+    () => compose([wrong], { headless: true, companies: true }),
     (error: unknown) => /is not an interval/.test(String((error as Error).message)),
   )
 })
@@ -226,6 +227,7 @@ test('only a cross-company operation may enqueue into another company', async (t
   const spec = defineDeployment({
     name: 'fanout_app',
     headless: true,
+    companies: true,
     modules: [fanout],
     serve: {},
     worker: { queues: { default: 1 } },

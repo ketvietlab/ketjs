@@ -43,7 +43,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 
 | Concern | Module fields |
 | --- | --- |
-| Identity | `name`, `version`, `depends`, `title`, `summary`, `category` |
+| Identity | `name`, `version`, `depends`, `optional`, `compatible`, `title`, `summary`, `category` |
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `permissions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
@@ -132,12 +132,16 @@ export const business = defineDeployment({
 })
 ```
 
+Bundle and role template `labels` require an `en` entry, the framework's fallback; any other locale is
+optional but cannot be empty. A module without `category` is listed under `Other`, and a theme under
+`Theme`; set `category` to the label your tooling should show.
+
 As an alternative to embedding `permissions` in each module object, a package may export exact declarations
 and bind them through `permissions.modules`. This keeps a reviewed product baseline centralized without
 mutating reusable module objects. A deployment cannot supply an overlay for a module that already embeds a
 declaration.
 
-Composition stores the deterministic catalog and digest in `manifest.permissions`. See the
+Composition stores the deterministic catalog and digest in `manifest.permissions`. Every ordering composition uses — module order, the catalog and the digest — compares names with the `en` collation, so `LANG` or `LC_ALL` on the host cannot change them. See the
 [permission and session guide](/docs/sessions-tenants/#resolve-function-permissions) for runtime
 permission resolution.
 
@@ -161,6 +165,9 @@ export const stockForecast = defineModule({
 The extension field must be optional because existing rows predate the extending module. A module may
 extend a model or fill a joint only when it depends on the owner. Duplicate fields, missing
 dependencies, and unpublished joints are composition errors.
+
+A module that only reads or writes another module's models when that module is installed lists it in
+`optional` instead. See [Declared effects](/ketjs/functions/#declared-effects) for what each may reach.
 
 ## Compose the manifest
 
@@ -219,6 +226,13 @@ ket snapshot --deployment business --workspace dist/ket.workspace.js
 ket diff --against .ket/manifest.business.json --workspace dist/ket.workspace.js
 ket types --deployment business --workspace dist/ket.workspace.js
 ```
+
+`ket diff` reports, besides contract breaks, every change that widens access without a grant changing:
+a function that becomes anonymous (`ANONYMOUS_GAINED`), moves from internal to HTTP
+(`FUNCTION_HTTP_EXPOSED`), is offered to agents (`AGENT_GAINED`) or gains a write or enqueue effect
+(`EFFECTS_WIDENED`); a new anonymous function (`FUNCTION_ADDED_ANONYMOUS`); a changed permission risk;
+and a bundle or role template that now grants more functions (`BUNDLE_WIDENED`,
+`ROLE_TEMPLATE_WIDENED`). Each is `risky`, for a reviewer to confirm before deploy.
 
 Continue with [Workspaces and deployments](/ketjs/workspaces/) for HTTP, worker, datastore, and
 multi-deployment composition.

@@ -39,9 +39,9 @@ export function classificationInventory(manifest: Manifest): ClassificationInven
   const unclassified: string[] = []
   let fields = 0
 
-  for (const [model, def] of Object.entries(manifest.models).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [model, def] of Object.entries(manifest.models).sort(([a], [b]) => a.localeCompare(b, 'en'))) {
     let classified = false
-    for (const [field, spec] of Object.entries(def.fields).sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [field, spec] of Object.entries(def.fields).sort(([a], [b]) => a.localeCompare(b, 'en'))) {
       fields += 1
       if (!spec.personal && !spec.sensitive) continue
       classified = true

@@ -12,6 +12,18 @@ These are historical decision records, including earlier consumer integrations a
 Each entry records what was chosen, why, and what it costs. Reversibility is stated
 because two of these cannot be undone later.
 
+An entry without a status line is the rationale for a contract that still exists. A status line marks
+the others:
+
+| Status | Entries | Read it as |
+| --- | --- | --- |
+| Superseded | D13 | History only; the later decision named in the entry is current. |
+| Partly superseded | D28, D50, D57 | D67 replaced the module lifecycle portion; the rest still applies. |
+| Partly superseded | D23 | D78 made company scoping opt-in; D23 applies to a deployment with `companies: true`. |
+| KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
+
+Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
+
 ## D1 — Extension points are published, not discovered
 **Chosen:** a module declares `joints`; other modules may only fill those.
 **Why:** the domain contract composes brilliantly because any module can patch anything, and it
@@ -278,7 +290,7 @@ has to be allowed to ask; nothing else has that excuse.
 
 **What this did not change:** an app that has not turned sessions on is unaffected,
 because there is no login to be outside of — the header shim is still the identity
-there, and the banner still says so.
+there, and the banner still says so. D77 later limited that shim to development processes.
 
 ## D37 — One deployment, many databases, and one door into each
 **Chosen:** the domain contract's model — the code ships with the deployment, the decision about
@@ -441,6 +453,8 @@ spreading would produce a plain object that only looks like a RouteResult, which
 the hole the brand exists to close.
 
 ## D34 — Parties, legal entities and users, with the three things the domain contract folds together kept apart
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
+
 **Parties are shared, and addresses are their own model.** `res.partner` is one
 table for customer, supplier, contact, delivery address, invoice address and legal
 entity, and the cost is visible in the model itself: `is_company` to ask whether
@@ -734,6 +748,8 @@ it is the same defect class as this one: the app assembling by hand what the
 manifest should carry.
 
 ## D28 — The framework boots the app, and a module says whether it may arrive
+**Status:** partly superseded; D67 replaced its module lifecycle portion.
+
 **Chosen:** `ket serve` and `ket dev`, with the boot sequence as a function
 (`bootDeployment`) rather than a script. What moved into the framework is everything that
 was app-agnostic and would have been copied by the second app: opening a datastore,
@@ -812,6 +828,8 @@ a document. Until there is a session, the company comes from a header, which is
 fine for development and not for production.
 
 ## D26 — Units of measure: the domain contract's model, and the rounding it depends on
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
+
 **Chosen:** the domain contract's shape, deliberately. A category groups units that convert between
 one another; exactly one is the reference; every other records `factor` — how many
 of itself make one reference unit — and `rounding`, the precision it is meaningful
@@ -871,6 +889,8 @@ approximation of it.
 category's reference moves. Both wait for a real case.
 
 ## D25 — Product: template and variant, with the stock concern left to stock
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
+
 **Naming follows the domain contract** — `product.Template` and `product.Product`, where Product is
 the variant — so the migration map stays one to one. The name reads oddly and a
 comment says so; a comment costs less than a translation table.
@@ -934,6 +954,9 @@ present only if the query asked for them. The type says so instead of pretending
 every row arrives complete.
 
 ## D23 — Company is a row-level boundary; branch is a dimension
+**Status:** partly superseded; D78 made company scoping opt-in. The rest applies to a deployment that sets
+`companies: true`.
+
 **The situation being replaced:** the domain contract has no branch concept, so a business with
 several branches of one legal entity models each branch as a `res.company`. That
 forces a chart of accounts per branch, turns internal transfers into inter-company
@@ -963,6 +986,14 @@ decision — tightening later is not possible.
 **Writes are stamped from the request.** A module cannot set `companyId` itself;
 attempting it is `E_SCOPE_FIELD_WRITTEN`. Otherwise a write could be aimed at another
 company.
+
+**A company's row cannot point at another company's row.** On every insert, upsert and
+update of a company-scoped model, a `ref:` field whose target is company-scoped is
+checked: when the referenced row exists in another company the write is refused with
+`E_CROSS_COMPANY_REFERENCE`, a dry run included. A scoped lookup usually hides the
+other company's row already; this catches the caller that can read both companies or
+never looked. An id no row holds yet is still the caller's business, and an operation
+that declares `crossCompany: true` may link legal entities.
 
 **A request with no company cannot touch company data at all** — it fails rather than
 falling back to everything, which is the failure mode that would have gone unnoticed.
@@ -1220,6 +1251,9 @@ be the default for the hottest rows, and that when it is used the writes must be
 batched, notified and expired.
 
 ## D13 — Idempotency records live in the log, not in memory
+**Status:** superseded by D14 and D17. Idempotency records have their own `ket_idem` table,
+created on first use; they are not stored in `ket_log`.
+
 A process-local `Map` loses every record on restart and is invisible to a second
 instance, which makes the guarantee false exactly when it matters. Records now sit
 in `ket_log` under `idem:<fn>:<key>` at seq 0, claimed with
@@ -1423,6 +1457,8 @@ it would have had to be anyway. Vietnamese puts the given name last, so that is 
 letter that comes first.
 
 ## D45 — The shell is ported from vidoo_backend_theme, icons included
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
+
 **Why port rather than design.** KétViệt already runs an the domain contract backend with a theme
 the team built and uses daily — `vidoo_backend_theme`, 228px sidebar, no desktop
 application bar, systray at the foot. A framework that ships a *different* good admin
@@ -1580,6 +1616,8 @@ Assets requiring revocation must remain private. Bucket provisioning, access
 policies, and CDN response headers remain deployment responsibilities.
 
 ## D49 — Product and stock follow the domain contract where the subset is real
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
+
 **Names and codes are compatibility boundaries.** UoM is a relative tree with one
 root, product variants have a stable combination key, pricelist applicability keeps
 the domain contract's selection codes, and stock operations keep their warehouse and procurement
@@ -1610,6 +1648,7 @@ depending on a schema or object-store convention. Product and stock still own no
 blob column, resize pipeline, CDN rule or file-processing implementation.
 
 ## D50 — Module paths discover packages; they do not decide the deployment
+**Status:** partly superseded; D67 replaced its module lifecycle portion.
 
 **Chosen:** a workspace may declare several filesystem roots whose direct children
 contain `ket.module.json`. An app selects a module by its declared name; resolution
@@ -1637,6 +1676,7 @@ continue to know only `KetModule[]`. Module location therefore cannot become a
 second registration mechanism or leak into business runtime code.
 
 ## D51 — Hospitality is two business modules, and language is not business data
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The fourteen `vidoo_hospitality*` the domain contract addons are a packaging history, not fourteen
 bounded contexts. KetSuite consolidates property, content, rooms, reservations,
@@ -1665,6 +1705,7 @@ metadata plus the storage backend; hospitality does not invent another binary
 table or object-key convention.
 
 ## D52 — Reservation intent, physical stay and operational folio are separate records
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 A reservation is the commercial promise, a stay is the physical visit, and a
 folio is the operational account for room and service charges. They are created in
@@ -1764,6 +1805,7 @@ diagnostics and expired token digests; processed provider identities remain comp
 dedupe tombstones.
 
 ## D56 — OAuth belongs to KetSuite; provider policy belongs to the deployment
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 KetJS remains an application-neutral framework. Its signed sessions, actor,
 function allow-list, transaction and compare-and-set primitives are enough for an
@@ -1787,6 +1829,7 @@ claims cannot grant function permissions; they resolve one local User, after whi
 the existing live session and Role/Grant rules remain authoritative.
 
 ## D57 — Address catalogs are versioned, lazy reference data
+**Status:** KetSuite domain decision, kept as history; D67 also replaced its module lifecycle portion.
 
 KetSuite owns one `address` module, not one source module per country and not a
 country registry inside KetJS. Bundled data is organized by ISO 3166-1 alpha-2 and
@@ -1811,6 +1854,7 @@ an internal function owned by a trusted administration route and uses unique
 indexes, `insertIfAbsent` and CAS so concurrent pods converge.
 
 ## D58 — Hospitality services are intentions plus immutable occurrences
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 A service intention (`ExtraLine`) attaches one sellable Product variant to exactly
 one reservation or physical stay. It snapshots the description, unit, quantity,
@@ -1833,6 +1877,7 @@ its current payload independently. Storage is not involved: services and fees ar
 structured database records, while Storage continues to own only binary media.
 
 ## D59 — Hospitality closes a business date on its own worker
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 A night audit is an operational close for one Property and one local calendar
 date, not an accounting period close. The web process only validates and enqueues
@@ -1857,6 +1902,7 @@ records; invoices, tax documents and accounting moves consume them in a later
 integration rather than being created by night audit.
 
 ## D60 — Vietnam stay notices are an evidence workflow, not a simulated connector
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The first Vietnam compliance slice follows the current Ministry of Public Security
 [Circular 116/2026/TT-BCA](https://vanban.bocongan.gov.vn/co-so-du-lieu-van-ban/thong-tu-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-cu-tru-1784261073?tab=attributes)
@@ -1891,6 +1937,7 @@ row, queue payload or default logs. Foreign-guest temporary-residence integratio
 and accounting/e-invoice behavior remain later private slices.
 
 ## D61 — Property settings preserve canonical location and publish one content change
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The Property workspace edits the accommodation identity, operating timezone,
 check-in/out clock, long-stay behavior, guest policy and public copy. Timezones must
@@ -1906,6 +1953,7 @@ later. Property charges remain provider content, and invoices or accounting entr
 remain outside this boundary.
 
 ## D62 — Room types are sellable products, while physical rooms remain operational assets
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The Room Type workspace owns the public accommodation product: stable code and
 names, guest limits, room size and view, bathroom mode, fallback rate, identity
@@ -1923,6 +1971,7 @@ archive controls belong to the following Room configuration slice so sellable co
 cannot directly bypass operational room transitions.
 
 ## D63 — Physical room configuration cannot mutate the operational lifecycle
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The Room workspace owns property-scoped buildings, floors and physical room records.
 A building cannot move to another property, and an existing floor cannot move to
@@ -1957,6 +2006,7 @@ requires the property, room type, building and floor to be active and returns th
 to the front-desk candidate set without deleting its assignment, stay or task history.
 
 ## D64 — Accounting core never selects a jurisdiction
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 The public `account` module owns double-entry posting, exact money, reconciliation,
 period controls and jurisdiction-neutral books. Its first initialization freezes the
@@ -1969,6 +2019,7 @@ localization, so direct use of the core close command cannot bypass statutory ch
 Core neither knows the provider's form codes nor stores its filing artifacts.
 
 ## D65 — Front-desk identity intake is stay-scoped and exposes only a safe projection
+**Status:** KetSuite domain decision, kept as history. KetSuite owns and documents these modules.
 
 An identity document entered from a Stay belongs permanently to the selected Contact
 and that Stay. The Contact must already be a registered `StayGuest`; an arbitrary
@@ -2430,3 +2481,59 @@ something changed is a client that then asks for it. That is D75's line, and it 
 
 **Reversible:** yes — `serve.streamStore` still overrides everything with one store, which is what a
 deployment that wants the old shape passes.
+
+## D77 — A header names the company only in development
+
+D27 made the request's identity one function so that replacing headers with a login would be one
+change. Until that change is made, the headers were the identity everywhere: any process without
+`serve.sessions` or `serve.resolveIdentity` let a request choose its company with `X-Ket-Company` and
+call every function, because the allow-list of a deployment with no login was "everything". The
+banner said "NOT for production", and nothing else did. A scaffold started with `npm start` behind a
+proxy served every company's data to anyone who could type a header.
+
+**The shim now needs `KET_DEV=1`.** The tools that are development already set it: `ket dev`,
+`--watch`, the scaffold's dev script, the test harness, and a local `ket call` that boots its own
+loopback server. It is read from the environment only. `serve.defaults` cannot carry it, so a
+deployment cannot ship with development identity switched on in its source.
+
+**Without it, a caller is a stranger.** The same stranger D36 defined for a deployment with sessions:
+only `anonymous: true` functions, and the company is the one the operator configured in
+`KET_COMPANY`, never one the request names. A public, read-only deployment keeps working unchanged
+when its operations are declared anonymous; everything else answers `403 E_FN_NOT_PERMITTED`.
+
+**Not decided by the bind address.** Refusing to listen beyond loopback would miss the commonest
+production shape — a proxy on the same host forwarding to `127.0.0.1` — and would also refuse a
+legitimate public deployment that has nothing to authenticate.
+
+**Cost:** a deployment that relied on the headers outside development stops accepting them on
+upgrade. That is the intended break, but it is a break: such a deployment must configure sessions or
+`resolveIdentity`, or declare its public operations anonymous.
+
+**Reversible:** for one process, by setting `KET_DEV=1` — which is a statement that the process is a
+development process, and the banner repeats it at every boot.
+
+## D78 — Company scope is opt-in per deployment
+
+D23 made every model declare a scope, because the safe-looking default leaked. That is right for a
+deployment with several legal entities, and everyone else paid for it: an internal tool or an API with
+no legal entities said `scope: 'shared'` on every model, and every request still ran in a company called
+`default` that sequences, job keys and sessions then depended on.
+
+**Chosen:** a deployment says `companies: true` when it has companies. Without it there is one global
+scope. Every model is shared and may leave `scope` out, and a `company` or `company+branch` model is a
+composition error (`E_COMPANIES_DISABLED`). No request, session, development header, `KET_COMPANY` or
+scope handed to `callFn` carries a company into a handler, a sequence or a replay key. With it, D23
+applies unchanged, including `E_MODEL_NO_SCOPE` for a model that does not say.
+
+**A switch, not a rule inferred from the models.** Inferring it would make one module's validity depend
+on the other modules in the deployment: composing a company-scoped module would turn another module's
+omitted scope from global into an error. The switch puts the decision where D23's risk lives, in the
+deployment, which says it once.
+
+**Cost:** every deployment with company-scoped models adds `companies: true`. Until it does,
+composition fails rather than silently dropping the company columns. A deployment with only shared
+models that counted sequences or job unique keys under the implicit `default` company sees those keys
+change; setting `companies: true` keeps them.
+
+**Reversible:** per deployment, by setting or removing the flag. Removing it from a deployment that has
+company-scoped models is a composition error, not a migration.

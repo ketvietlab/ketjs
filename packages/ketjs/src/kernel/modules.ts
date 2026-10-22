@@ -138,7 +138,7 @@ async function scanModulePaths(
     roots.push(root)
 
     const children = (await readdir(root, { withFileTypes: true })).sort((a, b) =>
-      a.name.localeCompare(b.name),
+      a.name.localeCompare(b.name, 'en'),
     )
     // Filesystem latency, not graph work, dominates a broad catalogue. Probe the
     // sorted children concurrently, then consume settled results in that same
@@ -416,9 +416,9 @@ export async function resolveWorkspace(
     modulePaths: roots,
     modules: [...inventory.values()].sort(
       (a, b) =>
-        a.name.localeCompare(b.name) ||
-        a.version.localeCompare(b.version) ||
-        a.source.localeCompare(b.source),
+        a.name.localeCompare(b.name, 'en') ||
+        a.version.localeCompare(b.version, 'en') ||
+        a.source.localeCompare(b.source, 'en'),
     ),
   }
 }

@@ -5,6 +5,7 @@
 import { templateFor } from './template.ts'
 import type { TplNode, TplRoot, TplEl } from './template.ts'
 import { SVG_NAMESPACE } from './host.ts'
+import { attributeValue } from './url.ts'
 import type { Host, HostNode } from './host.ts'
 import { HOLE_MARKER, HOLE_OPEN, HydrationMismatch, isMarkup } from './ssr.ts'
 import type { Markup } from './ssr.ts'
@@ -432,7 +433,7 @@ class Instance {
       }
       if (p.attr) {
         if (!Object.is(p.last, v)) {
-          this.host.setAttribute(p.node, p.name, v)
+          this.host.setAttribute(p.node, p.name, attributeValue(p.name, v))
           p.last = v
         }
         continue
