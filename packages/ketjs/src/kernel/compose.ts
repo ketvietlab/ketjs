@@ -79,6 +79,84 @@ export function compose(
   const order = topoSort(modules)
   const canSee = (m: KetModule, other: string) => m.name === other || m.depends.includes(other)
 
+  // What an effect may name: the module itself, everything its depends reach
+  // transitively, and the modules it declares optional. An effect is what the
+  // runtime lets a handler touch, so it is held to the same graph a migration and
+  // a permission inventory read, not only to the direct depends list.
+  const present = new Map(order.map((m) => [m.name, m]))
+  const closures = new Map<string, ReadonlySet<string>>()
+  const closureOf = (m: KetModule): ReadonlySet<string> => {
+    const known = closures.get(m.name)
+    if (known) return known
+    const seen = new Set([m.name])
+    const pending = [...m.depends]
+    while (pending.length) {
+      const next = pending.pop() as string
+      if (seen.has(next)) continue
+      seen.add(next)
+      pending.push(...(present.get(next)?.depends ?? []))
+    }
+    closures.set(m.name, seen)
+    return seen
+  }
+  // A module object built without defineModule() has no optional list.
+  const optionalOf = (m: KetModule): readonly string[] => m.optional ?? []
+  const reaches = (m: KetModule, other: string) => closureOf(m).has(other) || optionalOf(m).includes(other)
+  for (const m of order) {
+    for (const name of optionalOf(m)) {
+      if (typeof name === 'string' && name !== m.name && name.length) continue
+      diag.add({
+        code: 'E_OPTIONAL_MODULE',
+        module: m.name,
+        message: `module "${m.name}" declares optional ${JSON.stringify(name)}`,
+        hint: 'name another module whose models or jobs this one uses when it is present',
+      })
+    }
+  }
+
+  /**
+   * One read or write effect of a function or job. A model in a module that this
+   * deployment includes must exist, so a misspelt effect fails. A module outside
+   * the depends closure must be declared optional: for a job that was always an
+   * error; for a function it was never checked, so it is a warning until 1.0.
+   */
+  const checkModelEffect = (m: KetModule, kind: 'function' | 'job', key: string, effect: string): void => {
+    const match = /^(read|write):(.+)$/.exec(effect)
+    const target = match?.[2] ?? ''
+    const model = match ? manifest.models[target] : undefined
+    const owner = model?.owner ?? target.slice(0, Math.max(0, target.indexOf('.')))
+    const code = kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT'
+    const outside = (message: string) => {
+      const finding = {
+        code: `${code}_NOT_DEPENDED`,
+        module: m.name,
+        message,
+        hint: `add "${owner}" to depends, or to optional when the integration is soft`,
+      }
+      // A job was refused before the closure rule and still is. A function's model
+      // effects were never checked, so it is told now and refused from 1.0.
+      if (kind === 'job') diag.add(finding)
+      else diag.warn({ ...finding, hint: `${finding.hint}; this becomes an error in KetJS 1.0` })
+    }
+    if (model) {
+      if (!reaches(m, owner))
+        outside(`${kind} "${key}" touches ${target} but neither depends on nor declares optional "${owner}"`)
+      return
+    }
+    // An optional module this deployment does not include: nothing to reach.
+    if (owner && !present.has(owner) && optionalOf(m).includes(owner)) return
+    if (kind === 'function' && owner && !present.has(owner)) {
+      outside(`function "${key}" touches ${target} in "${owner}", which this deployment does not include`)
+      return
+    }
+    diag.add({
+      code,
+      module: m.name,
+      message: `${kind} "${key}" declares unknown effect "${effect}"`,
+      ...(present.has(owner) ? { hint: `"${owner}" has no model "${target}"` } : {}),
+    })
+  }
+
   const manifest: Manifest = {
     ket: '0.0.0',
     order: order.map((m) => m.name),
@@ -784,6 +862,9 @@ export function compose(
           hint: 'drop the output fields, or say how many rows it returns',
         })
       }
+      for (const effect of def.effects ?? [])
+        if (effect.startsWith('read:') || effect.startsWith('write:'))
+          checkModelEffect(m, 'function', qualify(m.name, fname), effect)
       manifest.functions[qualify(m.name, fname)] = {
         by: m.name,
         input: def.input ?? {},
@@ -941,23 +1022,7 @@ export function compose(
           effect === 'transport:send'
         )
           continue
-        const match = /^(read|write):(.+)$/.exec(effect)
-        const model = match ? manifest.models[match[2] as string] : null
-        if (!match || !model) {
-          diag.add({
-            code: 'E_JOB_EFFECT',
-            module: m.name,
-            message: `job "${key}" declares unknown effect "${effect}"`,
-          })
-          continue
-        }
-        if (!canSee(m, model.owner)) {
-          diag.add({
-            code: 'E_JOB_EFFECT_NOT_DEPENDED',
-            module: m.name,
-            message: `job "${key}" touches ${match[2]} but does not depend on "${model.owner}"`,
-          })
-        }
+        checkModelEffect(m, 'job', key, effect)
       }
       manifest.jobs[key] = {
         by: m.name,
@@ -994,6 +1059,9 @@ export function compose(
         if (!effect.startsWith('enqueue')) continue
         const match = /^enqueue:(.+)$/.exec(effect)
         const target = match ? manifest.jobs[match[1] as string] : null
+        const owner = (match?.[1] ?? '').slice(0, (match?.[1] ?? '').indexOf('.'))
+        // A job of an optional module this deployment does not include.
+        if (match && !target && !present.has(owner) && optionalOf(m).includes(owner)) continue
         if (!match || !target) {
           diag.add({
             code: producer.kind === 'job' ? 'E_JOB_EFFECT' : 'E_FN_EFFECT',
@@ -1002,7 +1070,7 @@ export function compose(
           })
           continue
         }
-        if (!canSee(m, target.by)) {
+        if (!reaches(m, target.by)) {
           diag.add({
             code: producer.kind === 'job' ? 'E_JOB_EFFECT_NOT_DEPENDED' : 'E_FN_EFFECT_NOT_DEPENDED',
             module: m.name,
@@ -1415,7 +1483,7 @@ export function compose(
   composeHttpBindings(order, manifest, diag)
 
   diag.throwIfAny()
-  manifest.diagnostics = []
+  manifest.diagnostics = diag.warnings
   bindHandlers(manifest, order)
   return manifest
 }

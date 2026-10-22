@@ -43,7 +43,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 
 | Concern | Module fields |
 | --- | --- |
-| Identity | `name`, `version`, `depends`, `title`, `summary`, `category` |
+| Identity | `name`, `version`, `depends`, `optional`, `title`, `summary`, `category` |
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `permissions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
@@ -161,6 +161,9 @@ export const stockForecast = defineModule({
 The extension field must be optional because existing rows predate the extending module. A module may
 extend a model or fill a joint only when it depends on the owner. Duplicate fields, missing
 dependencies, and unpublished joints are composition errors.
+
+A module that only reads or writes another module's models when that module is installed lists it in
+`optional` instead. See [Declared effects](/ketjs/functions/#declared-effects) for what each may reach.
 
 ## Compose the manifest
 

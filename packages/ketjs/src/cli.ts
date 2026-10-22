@@ -710,6 +710,11 @@ try {
     }
   } else if (cmd === 'check') {
     console.log(explainWorkspace(ws))
+    const warnings = Object.entries(ws.deployments).flatMap(([name, manifest]) =>
+      (manifest.diagnostics ?? []).map((warning) => `  [${warning.code}] ${name}: ${warning.message}`),
+    )
+    if (warnings.length)
+      console.log(`\n${warnings.length} contract warning(s), errors from KetJS 1.0:\n${warnings.join('\n')}`)
     console.log('\nall contracts hold')
   } else if (cmd === 'workspace') {
     console.log(explainWorkspace(ws))

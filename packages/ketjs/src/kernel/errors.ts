@@ -25,8 +25,14 @@ export class KetError extends Error {
 
 export class Diagnostics {
   items: Diagnostic[] = []
+  /** Contract problems that do not stop composition yet; they are kept on the manifest. */
+  warnings: Diagnostic[] = []
   add(d: Diagnostic): this {
     this.items.push(d)
+    return this
+  }
+  warn(d: Diagnostic): this {
+    this.warnings.push(d)
     return this
   }
   get ok(): boolean {
