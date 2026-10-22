@@ -50,17 +50,19 @@ npm run preview
 Preview: **http://127.0.0.1:3700/**. Publish the contents of `dist/` on a static host serving directory
 indexes and `404/index.html` for missing routes.
 
-## Cloudflare Pages
+## Cloudflare deployment
 
-Production at **ketjs.dev** deploys automatically when changes reach `master`. A documentation update
-does not require a framework version bump, npm publication or GitHub release. Keep normal PR checks
-and branch promotion gates before merging to `master`.
+Production at **ketjs.dev** is the Cloudflare Worker `ketjs-docs`, built by Workers Builds from this
+repository with `master` as its production branch, so the site follows released code. A documentation
+update does not require a framework version bump, npm publication or GitHub release. Keep normal PR
+checks and branch promotion gates before merging to `master`.
 
-For an independent Pages build, use root directory `packages/docs`, build command
-`npm ci --ignore-scripts && npm run build`, and output directory `dist`. The build needs Node.js 24
-or newer (set `NODE_VERSION` in Pages when the image's default is older). All dependencies are public;
-the site build needs no `NPM_TOKEN`. The existing project's settings are managed in Cloudflare.
-See [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/).
+Every build reports a `Workers Builds: ketjs-docs` check on the commit it built; to see what the site
+serves, look for that check rather than at a branch. The build uses root directory `packages/docs`,
+build command `npm ci --ignore-scripts && npm run build`, and serves `dist`. It needs Node.js 24 or
+newer (set `NODE_VERSION` when the build image's default is older). All dependencies are public; the
+site build needs no `NPM_TOKEN`. The Worker's settings are managed in Cloudflare. See
+[Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
 ## Content and rendering
 
