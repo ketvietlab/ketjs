@@ -1137,6 +1137,27 @@ export function compose(
         })
         continue
       }
+      // A view is what a theme receives. A sensitive field must never leave the
+      // system, and a view is the one declaration that would hand it to a template.
+      const sensitive = (def.fields ?? []).filter((f) => model.fields[f]?.sensitive)
+      if (sensitive.length) {
+        diag.add({
+          code: 'E_VIEW_SENSITIVE_FIELD',
+          module: m.name,
+          message: `view "${key}" exposes sensitive field(s) of ${def.of}: ${sensitive.join(', ')}`,
+          hint: 'a sensitive field never reaches presentation; derive a non-sensitive field if a template needs one',
+        })
+        continue
+      }
+      if (!closureOf(m).has(model.owner)) {
+        diag.add({
+          code: 'E_VIEW_NOT_DEPENDED',
+          module: m.name,
+          message: `view "${key}" projects ${def.of} but "${m.name}" does not depend on "${model.owner}"`,
+          hint: `add "${model.owner}" to depends; a module publishes views only over models it builds on`,
+        })
+        continue
+      }
       manifest.views[key] = { of: def.of, fields: [...(def.fields ?? [])], by: m.name }
     }
   }

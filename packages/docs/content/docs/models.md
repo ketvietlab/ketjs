@@ -348,7 +348,9 @@ views: {
 ```
 
 `makeDrop()` and `makeDrops()` build null-prototype, immutable view models from these declarations.
-They prevent a theme from reaching fields the owning module did not expose.
+They prevent a theme from reaching fields the owning module did not expose. A view cannot list a
+`sensitive` field, and a module declares views only over models its `depends` reach; see
+[Themes](/ketjs/themes/) for which fields a fill may read.
 
 ## Generated types
 

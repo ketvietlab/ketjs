@@ -275,9 +275,15 @@ joints: {
 ```
 
 The reader matters. A fill sees the fields declared by the view's owner, plus the fields its own
-module declared in a view over the same model. A module that adds a field with `extend` and then
-publishes a view over it has declared that field theme-visible and may read it back through the
-owner's joint; a field no composed module declared anywhere never crosses.
+module contributed and declared in a view over the same model. A module that adds a field with `extend`
+and then publishes a view over it has declared that field theme-visible and may read it back through the
+owner's joint. Listing someone else's field in its own view does not widen what a joint hands it; only
+the model's owner decides about the model's own fields.
+
+Two rules bound what any view may declare. A view never exposes a field classified `sensitive`
+(`E_VIEW_SENSITIVE_FIELD`), because a sensitive value must never leave the system and a view is what a
+template receives. A module declares views only over models of modules its `depends` reach
+(`E_VIEW_NOT_DEPENDED`), so a theme cannot project `auth.User` by naming it.
 
 `makeDrop()` and `makeDrops()` build the same projection by hand, for scopes an application composes
 itself. `sealScope()` refuses functions anywhere inside a scope value, at any depth, and names the
