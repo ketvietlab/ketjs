@@ -169,7 +169,66 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         'the company filter no longer applies to it — confirm that is intended',
       )
     }
+    // Who may call it, and what a call may do. Each widens access without a single
+    // role or grant changing, so an upgrade review has to see it here.
+    if (!bfn.anonymous && afn.anonymous)
+      push('risky', 'ANONYMOUS_GAINED', `"${fkey}" can now be called without signing in`)
+    if (bfn.exposure === 'internal' && afn.exposure === 'http')
+      push('risky', 'FUNCTION_HTTP_EXPOSED', `server function "${fkey}" is now exposed over generic HTTP`)
+    if (!bfn.agent && afn.agent) push('risky', 'AGENT_GAINED', `"${fkey}" is now offered to agents as a tool`)
+    const gained = afn.effects.filter(
+      (effect) =>
+        (effect.startsWith('write:') || effect.startsWith('enqueue:')) && !bfn.effects.includes(effect),
+    )
+    if (gained.length)
+      push(
+        'risky',
+        'EFFECTS_WIDENED',
+        `"${fkey}" can now ${gained.join(', ')}`,
+        'everyone already granted this function gains these writes',
+      )
+    const brisk = before.permissions?.functions[fkey]?.risk
+    const arisk = after.permissions?.functions[fkey]?.risk
+    if (brisk && arisk && brisk !== arisk)
+      push('risky', 'PERMISSION_RISK_CHANGED', `"${fkey}" is now classified ${arisk} risk, was ${brisk}`)
   }
+  for (const [fkey, afn] of Object.entries(after.functions)) {
+    if (before.functions[fkey] || !afn.anonymous) continue
+    push(
+      'risky',
+      'FUNCTION_ADDED_ANONYMOUS',
+      `new server function "${fkey}" can be called without signing in`,
+    )
+  }
+
+  // A bundle or role template that grants more than it did: every role already
+  // holding it gains the difference at deploy, with no grant changing.
+  const widened = (
+    code: string,
+    kind: string,
+    beforeSet: Record<string, { functions: string[] }> | undefined,
+    afterSet: Record<string, { functions: string[] }> | undefined,
+  ) => {
+    for (const [key, next] of Object.entries(afterSet ?? {})) {
+      const previous = beforeSet?.[key]
+      if (!previous) continue
+      const added = next.functions.filter((fn) => !previous.functions.includes(fn))
+      if (added.length)
+        push(
+          'risky',
+          code,
+          `${kind} "${key}" now grants ${added.join(', ')}`,
+          'every role holding it gains these',
+        )
+    }
+  }
+  widened('BUNDLE_WIDENED', 'permission bundle', before.permissions?.bundles, after.permissions?.bundles)
+  widened(
+    'ROLE_TEMPLATE_WIDENED',
+    'role template',
+    before.permissions?.roleTemplates,
+    after.permissions?.roleTemplates,
+  )
 
   for (const [key, job] of Object.entries(before.jobs ?? {})) {
     const next = after.jobs?.[key]

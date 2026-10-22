@@ -227,5 +227,12 @@ ket diff --against .ket/manifest.business.json --workspace dist/ket.workspace.js
 ket types --deployment business --workspace dist/ket.workspace.js
 ```
 
+`ket diff` reports, besides contract breaks, every change that widens access without a grant changing:
+a function that becomes anonymous (`ANONYMOUS_GAINED`), moves from internal to HTTP
+(`FUNCTION_HTTP_EXPOSED`), is offered to agents (`AGENT_GAINED`) or gains a write or enqueue effect
+(`EFFECTS_WIDENED`); a new anonymous function (`FUNCTION_ADDED_ANONYMOUS`); a changed permission risk;
+and a bundle or role template that now grants more functions (`BUNDLE_WIDENED`,
+`ROLE_TEMPLATE_WIDENED`). Each is `risky`, for a reviewer to confirm before deploy.
+
 Continue with [Workspaces and deployments](/ketjs/workspaces/) for HTTP, worker, datastore, and
 multi-deployment composition.
