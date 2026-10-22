@@ -150,7 +150,7 @@ export function parseTemplate(strings: readonly string[]): TplRoot {
       if (hm && /^srcdoc$/i.test(name)) {
         throw new TemplateError(
           'srcdoc cannot be bound: its value is a whole document, rendered with the page origin',
-          'point the iframe at a route with src=${...} and a sandbox attribute, or write srcdoc out in the template',
+          `point the iframe at a route with src=\${...} and a sandbox attribute, or write srcdoc out in the template`,
         )
       }
       if (hm && /^on[a-z]/i.test(name)) {
