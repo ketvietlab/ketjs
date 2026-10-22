@@ -14,6 +14,10 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
+The 0.6.1 patch answers a `/_ket/fn` conflict with HTTP `409` and hydrates text-only elements such as
+`<noscript>` and `<textarea>`. Application data schemas are unchanged. Deploy matching server and client
+bundles together and read [Changes in 0.6.1](#changes-in-0-6-1).
+
 The 0.6.0 line closes defaults that failed open before 1.0, so most applications need changes. Work
 through [Changes in 0.6.0](#changes-in-0-6-0) on a staging copy first.
 
@@ -53,9 +57,12 @@ Server-rendered islands must be hydrated by the same ketjs-view version and JSX 
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
 
-## Changes after 0.6.0
+<span id="changes-after-0-6-0"></span>
 
-These changes ship in the next KetJS release.
+## Changes in 0.6.1
+
+This patch changes one HTTP status and how text-only elements hydrate. Application data schemas are
+unchanged.
 
 | Area | What changes | What to do |
 | --- | --- | --- |
