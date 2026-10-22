@@ -107,11 +107,18 @@ Built-in filters include:
 - `upper`, `lower`;
 - `money`, `number`;
 - `default`, `length`, `truncate`;
-- `json`;
+- `json`, which writes `<`, `>`, `&`, U+2028 and U+2029 as `\u` escapes;
 - `_` when a translator is bound.
 
 `{{ raw value }}` bypasses escaping and must only receive markup already produced by a trusted
-boundary. Ordinary module data should never require it.
+boundary. Ordinary module data should never require it. The one ordinary use is data for a script:
+`json` output cannot close the element, so `{{ raw settings | json }}` inside
+`<script type="application/json">` reads back as the same value.
+
+An output that opens a URL attribute value, as in `href="{{ product.url }}"`, is checked like a bound
+URL attribute in a view: `javascript:`, `vbscript:` and non-media `data:` URLs render as an inert
+`unsafe:` URL. Text before the output, as in `href="/p/{{ product.handle }}"`, already fixes the scheme.
+See [URL attributes and inline script](/ketjs/rendering/#url-attributes-and-inline-script).
 
 ## Conditions and loops
 

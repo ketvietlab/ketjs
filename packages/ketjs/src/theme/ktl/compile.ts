@@ -7,7 +7,7 @@
 
 import { parse } from './parser.ts'
 import type { Expr, Node } from './parser.ts'
-import { escapeHtml } from '@ketvietlab/ketjs-view'
+import { escapeHtml, isUrlAttribute, safeUrl } from '@ketvietlab/ketjs-view'
 import { KetError } from '../../kernel/errors.ts'
 
 export type Filter = (value: unknown, arg?: unknown) => unknown
@@ -68,7 +68,24 @@ const BASE_FILTERS: Record<string, Filter> = {
     const s = String(v ?? '')
     return s.length > n ? s.slice(0, n) + '…' : s
   },
-  json: (v) => JSON.stringify(v),
+  // The text may be written raw into a <script>, so it must not be able to close the
+  // element or start a comment there: <, > and & become \u escapes, which JSON and
+  // JavaScript read back as the same characters. U+2028/2029 end a line in older
+  // JavaScript parsers, so they are escaped too.
+  json: (v) =>
+    JSON.stringify(v)?.replace(
+      /[<>&\u2028\u2029]/g,
+      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    ),
+}
+
+// An output that opens an attribute value, as in `href="{{ product.url }}"`. Text before
+// the output fixes the scheme otherwise (`href="/p/{{ id }}"`), so only this position
+// can choose one.
+const ATTRIBUTE_OPENING = /\s([a-z][a-z0-9:-]*)\s*=\s*["']?$/i
+const opensUrlAttribute = (text: string): boolean => {
+  const match = ATTRIBUTE_OPENING.exec(text)
+  return match !== null && isUrlAttribute(match[1] as string)
 }
 
 // Reads one own-property at a time. A drop is a null-prototype object, so there is
@@ -172,7 +189,7 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
   let iterations = 0
   const maxIterations = opts.maxIterations ?? (restricted ? 10_000 : Number.MAX_SAFE_INTEGER)
   const compileNodes = (nodes: Node[]): Array<(s: Scope, out: string[]) => void> =>
-    nodes.map((n) => {
+    nodes.map((n, index) => {
       if (n.k === 'text') {
         const v = n.value
         return (_s, out) => {
@@ -189,8 +206,10 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
         }
         const t = compileExpr(n.expr, { filters, name, line: n.line })
         const raw = n.raw
+        const previous = nodes[index - 1]
+        const url = previous?.k === 'text' && opensUrlAttribute(previous.value)
         return (s, out) => {
-          const v = t(s)
+          const v = url ? safeUrl(t(s)) : t(s)
           out.push(v == null ? '' : raw ? String(v) : escapeHtml(v))
         }
       }
