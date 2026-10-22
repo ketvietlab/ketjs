@@ -507,9 +507,20 @@ export async function bootDeployment(
   const configuredSessionSecret = serve.sessions?.secret || config.secret
   const generatedTenantSecret =
     serve.sessions && serve.tenants && !configuredSessionSecret ? randomBytes(32).toString('base64url') : null
+  // Outside development a session secret must be stable: a generated one signs out
+  // every user on restart and differs on every pod, which looks like random logouts.
+  if (serve.sessions && !configuredSessionSecret && !config.developmentIdentity)
+    throw new KetError({
+      code: 'E_SESSION_SECRET_REQUIRED',
+      module: 'server',
+      message: `deployment "${spec.name}" has sessions but no KET_SECRET or sessions.secret`,
+      hint: 'set KET_SECRET to one stable random value shared by every replica; KET_DEV=1 generates one for local development',
+    })
   const sessionOpts = serve.sessions
     ? {
-        secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
+        // The cookie is Secure unless this is local development. The bind address says
+        // nothing about the scheme: a server on 127.0.0.1 behind a TLS proxy is public.
+        secure: !config.developmentIdentity,
         ...serve.sessions,
         ...(configuredSessionSecret ? { secret: configuredSessionSecret } : {}),
         ...(generatedTenantSecret ? { secret: generatedTenantSecret, ephemeralSecret: true } : {}),
@@ -597,6 +608,15 @@ export async function bootDeployment(
   // One cookie lookup per request even though scope, permissions and actor all
   // depend on it. With tenant databases this also avoids three separate leases.
   const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
+  // A login without a permission policy used to let every signed-in user call every
+  // function. Forgetting the callback must close the deployment, not open it.
+  if (authenticationEnabled && !serve.permissions)
+    throw new KetError({
+      code: 'E_PERMISSIONS_REQUIRED',
+      module: 'server',
+      message: `deployment "${spec.name}" authenticates users but declares no serve.permissions`,
+      hint: 'return the functions a user may call from serve.permissions; return null there to let every signed-in user call every http function',
+    })
   /**
    * Without authentication, request headers may name the company only in
    * development. Anywhere else a header is something any client can send, so the
@@ -652,7 +672,10 @@ export async function bootDeployment(
           url,
           req,
         })
-        if (!resolved) {
+        // A different security version is a revocation: the account changed its password,
+        // lost a role or was signed out everywhere. The session is not re-stamped with
+        // the new version, which would keep a stolen cookie alive.
+        if (!resolved || resolved.securityVersion !== raw.securityVersion) {
           await manager.store.destroy(raw.id)
           return null
         }
@@ -1075,8 +1098,8 @@ export async function bootDeployment(
     // A custom bearer audience is fail-closed unless the deployment explicitly
     // maps it to exact functions. This lets Channel routes call their domain
     // functions without turning a POS/customer token into a staff session.
-    if (!serve.permissions) return customAudience ? [] : null
-    const granted = await serve.permissions(ctx, record.userId, url, req)
+    // Boot refuses authentication without serve.permissions, so this is never absent here.
+    const granted = await serve.permissions!(ctx, record.userId, url, req)
     return granted === null ? (customAudience ? [] : null) : [...new Set([...anonymousFns, ...granted])]
   }
 

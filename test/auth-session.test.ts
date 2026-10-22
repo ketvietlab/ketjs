@@ -124,7 +124,7 @@ test('auth sessions: optional gateway identity does not unlock company-scoped da
     modules: [domain],
     headless: true,
     serve: {
-      sessions: { requireCompany: false },
+      sessions: { requireCompany: false, secret: 'local-test-only' },
       resolveIdentity: async () => ({ userId: 'u1', company: null, companies: [] }),
       permissions: async () => ['scope_auth.who', 'scope_auth.read'],
     },
@@ -194,7 +194,7 @@ test('auth sessions: persisted and gateway contexts reject branches outside thei
       modules: [domain],
       headless: true,
       serve: {
-        sessions: { requireCompany: false },
+        sessions: { requireCompany: false, secret: 'local-test-only' },
         resolveIdentity: async () => ({
           userId: 'u1',
           company: 'c1',

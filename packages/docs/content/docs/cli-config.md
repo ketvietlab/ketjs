@@ -172,8 +172,9 @@ KetJS ships `sqliteStore`. An app using `DATABASE_URL` must provide `serve.openS
 | `KET_FALLBACK_LOCALE` | default locale | Translation fallback locale. |
 | `KET_TIMEZONE` | `UTC` | IANA timezone used when an application or viewer has no timezone. |
 | `KET_COMPANY` | `default` | Company for requests when no authentication is configured. Development headers may override it only when `KET_DEV=1`. |
-| `KET_DEV` | unset | `1` enables the development header identity for a deployment without authentication. Set by `ket dev`, `--watch`, the scaffold dev script and the test harness; never set it in production. |
-| `KET_SECRET` | ephemeral | Session-cookie signing key. Must be stable and shared across pods. |
+| `KET_DEV` | unset | `1` marks local development: it enables the development header identity for a deployment without authentication, allows a generated session secret, drops `Secure` from the session cookie and keeps `hint` in error bodies. Set by `ket dev`, `--watch`, the scaffold dev script and the test harness; never set it in production. |
+| `KET_DEV_SOURCE` | unset | `1` lets `ket` load a TypeScript workspace or module entry through a source loader. Set by the scaffold dev script; production loads emitted JavaScript. |
+| `KET_SECRET` | unset | Session-cookie signing key. Must be stable and shared across pods. Boot refuses sessions without it (or `sessions.secret`) unless `KET_DEV=1`. |
 | `KET_WEBHOOK_SECRET` | unset | Dedicated HMAC secret for anonymous provider callbacks. |
 
 Never reuse `KET_SECRET` as a webhook or provider secret.
@@ -183,6 +184,7 @@ Never reuse `KET_SECRET` as a webhook or provider secret.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `KET_QUEUE_NOTIFY` | enabled | PostgreSQL notification accelerator; polling remains the guarantee. |
+| `KET_WORKER_QUEUES` | `worker.queues` | Replaces the worker's queues for this process, as `name:concurrency` pairs separated by commas (`mail:2,default:4`). Use it to run a dedicated worker per queue; a queue left out is not claimed by this process. |
 | `KET_STORAGE` | `local` | `local` or `s3`. |
 | `KET_STORAGE_DIR` | `.ket/storage` | Local storage directory. |
 | `KET_UPLOAD_MAX` | `26214400` | Maximum upload size in bytes. |

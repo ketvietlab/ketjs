@@ -98,6 +98,7 @@ test('identity engine: live session resolution updates context and rejects a rev
     serve: {
       sessions: { secret: 'test' },
       resolveSession: async () => live,
+      permissions: async () => null,
     },
   })
   const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
@@ -229,7 +230,11 @@ const startParallelSession = async (live: () => SessionContext) => {
     name: 'parallel_identity_http',
     modules: [parallelSessionModule],
     headless: true,
-    serve: { sessions: { secret: 'test' }, resolveSession: async () => live() },
+    serve: {
+      sessions: { secret: 'test' },
+      resolveSession: async () => live(),
+      permissions: async () => null,
+    },
   })
   const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${booted.port}`
