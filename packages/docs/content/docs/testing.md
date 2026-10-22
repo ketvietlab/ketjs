@@ -56,6 +56,10 @@ each HTTP runtime, worker and direct `callFn()` executes the handler of the mani
 manifest read back from JSON describes functions but carries no handlers, so `callFn()` refuses it with
 `E_UNKNOWN_FUNCTION`.
 
+The harness sets `KET_DEV=1` unless `env` supplies another value, so test clients may choose companies
+with the development identity headers. Pass `env: { KET_DEV: '0' }` to test how a deployment without
+authentication treats callers outside development.
+
 The harness does not inherit the host process environment by default. A developer's `DATABASE_URL` cannot
 silently redirect an isolated test to a real database.
 

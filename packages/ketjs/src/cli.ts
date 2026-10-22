@@ -570,7 +570,14 @@ try {
         await testDeployment.close()
       }
     } else {
-      const env = { ...process.env, ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}) }
+      // A short-lived local server for this one command: it is reached only over
+      // loopback, and the --company family of options is the development identity.
+      const env = {
+        ...process.env,
+        HOST: '127.0.0.1',
+        KET_DEV: '1',
+        ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}),
+      }
       const deployment = await bootDeployment(spec, {
         env,
         port: 0,

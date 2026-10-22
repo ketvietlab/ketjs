@@ -43,7 +43,10 @@ test('identity engine: an internal function has no generic HTTP or agent surface
     headless: true,
     serve: {},
   })
-  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_DEV: '1' },
+    port: 0,
+  })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     const hidden = await fetch(`${at}/_ket/fn/identity_engine.inspectCredential`, {

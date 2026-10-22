@@ -11,7 +11,8 @@ contracts separate because deployments resolve them in different orders.
 
 ## Development identity shim
 
-Without `serve.sessions`, the runtime reads company context from headers:
+Without `serve.sessions` or `serve.resolveIdentity`, a development runtime reads company context from
+headers:
 
 ```text
 # File: packages/docs/content/docs/sessions-tenants.md
@@ -21,7 +22,14 @@ X-Ket-Current-Branch
 X-Ket-Branch
 ```
 
-This allows early development and tests but is not authentication. Production applications should
+This allows early development and tests but is not authentication. Only `KET_DEV=1` enables it.
+`ket dev`, `ket serve --watch`, the scaffold's `npm run dev`, the test harness and a local `ket call`
+without `--against` set that flag. It is read from the environment only and cannot be declared in
+`serve.defaults`.
+
+Any other runtime without authentication, including `npm start` and `ket serve`, ignores these headers.
+Every caller is anonymous: it acts in the `KET_COMPANY` company and may call only functions declared
+`anonymous: true`; other functions answer `403 E_FN_NOT_PERMITTED`. Production applications should
 configure sessions and resolve current account state.
 
 ## Enable sessions

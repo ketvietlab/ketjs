@@ -37,7 +37,7 @@ import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
 import type { RatePolicy } from './ratelimit.ts'
 import type { Logger, OpenLog } from './log/index.ts'
-import type { RuntimeConfig, OpenStore } from './config.ts'
+import type { RuntimeConfig, RuntimeDefaults, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
 import type { OpenTransport } from './transport/index.ts'
@@ -408,7 +408,7 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => Promise<void>
-  defaults?: Partial<RuntimeConfig>
+  defaults?: RuntimeDefaults
 }
 
 export type ClientCompatibilityPolicy = {
@@ -597,6 +597,12 @@ export async function bootDeployment(
   // One cookie lookup per request even though scope, permissions and actor all
   // depend on it. With tenant databases this also avoids three separate leases.
   const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
+  /**
+   * Without authentication, request headers may name the company only in
+   * development. Anywhere else a header is something any client can send, so the
+   * caller is a stranger acting in the configured default company.
+   */
+  const developmentIdentity = !authenticationEnabled && config.developmentIdentity
   const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
   // Records built from `resolveIdentity`, so `requestIdentityOf` can say where an identity came from
   // without reading meaning into an id.
@@ -697,6 +703,8 @@ export async function bootDeployment(
    * a session id issued by one tenant is not a row in another's table at all.
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
+    if (!authenticationEnabled && !developmentIdentity)
+      return { company: config.defaultCompany, companies: null, branch: null, branches: null }
     if (!authenticationEnabled) {
       const list = (h: string) =>
         ((req.headers[h] as string | undefined) ?? '')
@@ -1055,7 +1063,9 @@ export async function bootDeployment(
     .map(([k]) => k)
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!authenticationEnabled) return null // no login exists yet; the shim is the identity
+    // No login exists. In development the header shim is the identity; anywhere
+    // else nobody has proven anything, so every caller is a stranger.
+    if (!authenticationEnabled) return developmentIdentity ? null : anonymousFns
     const audience = await serve.resolveAudience?.(url, req)
     const customAudience = Boolean(audience && audience !== 'anonymous' && audience !== 'staff')
     const record = await sessionRecordOf(url, req)
@@ -1540,7 +1550,11 @@ export async function bootDeployment(
         'identity',
         makeSessions
           ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})`
-          : 'X-Ket-Company header',
+          : authenticationEnabled
+            ? 'resolveIdentity'
+            : developmentIdentity
+              ? 'X-Ket-Company header (development)'
+              : 'anonymous',
       ],
     ]
     const w = Math.max(...rows.map((r) => (r[0] as string).length))
@@ -1549,8 +1563,13 @@ export async function bootDeployment(
         ? `\n  KET_SECRET is not set, so a signing key was generated for this process.` +
           `\n  Sessions will not survive a restart and will not work across pods.`
         : ''
-      : `\n  No authentication yet: the company comes from the X-Ket-Company header,` +
-        `\n  defaulting to "${config.defaultCompany}". Fine for development, NOT for production.`
+      : authenticationEnabled
+        ? ''
+        : developmentIdentity
+          ? `\n  Development identity: the company comes from the X-Ket-Company header,` +
+            `\n  defaulting to "${config.defaultCompany}". KET_DEV=1 enables this; never set it in production.`
+          : `\n  No authentication: every caller is anonymous in company "${config.defaultCompany}"` +
+            `\n  and may call only functions declared anonymous: true.`
     return (
       `\n  ${spec.name} is running\n\n` +
       rows.map(([k, v]) => (k ? `    ${(k as string).padEnd(w)}  ${v as string}` : '')).join('\n') +
