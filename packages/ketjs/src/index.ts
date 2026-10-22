@@ -299,6 +299,7 @@ export {
   isTimezone,
   assertTimezone,
   localDateTimeToUtc,
+  parseDateTime,
   localDayRange,
   GROUP_INTERVALS,
   isGroupInterval,

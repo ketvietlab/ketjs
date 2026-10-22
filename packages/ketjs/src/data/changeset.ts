@@ -12,6 +12,7 @@
 
 import { KetError } from '../kernel/errors.ts'
 import { isDateText } from '../kernel/types.ts'
+import { parseDateTime } from './time.ts'
 import type { Manifest, Row, FieldBase } from '../types.ts'
 
 export type FieldError = { field: string; message: string }
@@ -93,9 +94,19 @@ export const canonicalDecimal = (value: unknown): string | null => {
   return `${sign}${digits.slice(0, exponent)}.${digits.slice(exponent)}`
 }
 
+/** A whole number written in decimal digits, and nothing a number literal also accepts. */
+const INTEGER_TEXT = /^[+-]?\d+$/
+
+/** The one reading of an `int`: a safe integer, or decimal digits that spell one. */
+export const parseInteger = (v: unknown): number | null => {
+  const n = typeof v === 'string' ? (INTEGER_TEXT.test(v.trim()) ? Number(v.trim()) : Number.NaN) : v
+  return typeof n === 'number' && Number.isSafeInteger(n) ? n : null
+}
+
 const castValue = (
   base: FieldBase,
   v: unknown,
+  timezone: string,
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
   if (v === null) return { ok: true, value: null }
   switch (base) {
@@ -108,10 +119,10 @@ const castValue = (
           ? { ok: true, value: String(v) }
           : { ok: false, message: `expected text, got ${typeof v}` }
     case 'int': {
-      const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
-      if (typeof n !== 'number' || !Number.isFinite(n))
-        return { ok: false, message: `expected an integer, got ${JSON.stringify(v)}` }
-      if (!Number.isInteger(n)) return { ok: false, message: `expected an integer, got ${n}` }
+      // "0x10", "1e3" and "9007199254740993" are numbers to Number(), not integers a
+      // person typed: the first two change meaning, the last one loses a digit.
+      const n = parseInteger(v)
+      if (n === null) return { ok: false, message: `expected a safe integer, got ${JSON.stringify(v)}` }
       return { ok: true, value: n }
     }
     case 'decimal': {
@@ -132,16 +143,19 @@ const castValue = (
       if (v === 1 || v === 0) return { ok: true, value: v === 1 }
       if (v === 'true' || v === 'false') return { ok: true, value: v === 'true' }
       return { ok: false, message: `expected a boolean, got ${JSON.stringify(v)}` }
-    case 'datetime':
-      // Always ISO-8601 UTC, whatever offset it arrived in. Postgres normalises a
+    case 'datetime': // Always ISO-8601 UTC, whatever offset it arrived in. Postgres normalises a
       // TIMESTAMPTZ on the way in whether or not we ask, so storing "+07:00"
       // verbatim would put a different string in SQLite than in Postgres for the
       // same instant. It also makes the text sort chronologically, which is what
       // a range query on SQLite compares.
-      if (v instanceof Date) return { ok: true, value: v.toISOString() }
-      if (typeof v === 'string' && !Number.isNaN(Date.parse(v)))
-        return { ok: true, value: new Date(v).toISOString() }
-      return { ok: false, message: `expected a date, got ${JSON.stringify(v)}` }
+      // Text without an offset is a wall time in the deployment's timezone
+      // (KET_TIMEZONE), never in whatever zone the server process happens to run.
+      {
+        const instant = parseDateTime(v, timezone)
+        return instant === null
+          ? { ok: false, message: `expected an ISO-8601 date-time, got ${JSON.stringify(v)}` }
+          : { ok: true, value: instant }
+      }
     case 'date':
       return isDateText(v)
         ? { ok: true, value: v }
@@ -161,6 +175,8 @@ export class Changeset {
   readonly changes: Row
   readonly errors: FieldError[]
   readonly casted: string[]
+  /** The IANA timezone a `datetime` without an offset is read in. */
+  readonly timezone: string
 
   constructor(
     manifest: Manifest,
@@ -170,6 +186,7 @@ export class Changeset {
     changes: Row = {},
     errors: FieldError[] = [],
     casted: string[] = [],
+    timezone = 'UTC',
   ) {
     if (!manifest.models[model]) {
       throw new KetError({
@@ -185,6 +202,7 @@ export class Changeset {
     this.changes = changes
     this.errors = errors
     this.casted = casted
+    this.timezone = timezone
     Object.freeze(this)
   }
 
@@ -197,6 +215,7 @@ export class Changeset {
       patch.changes ?? this.changes,
       patch.errors ?? this.errors,
       patch.casted ?? this.casted,
+      this.timezone,
     )
   }
 
@@ -220,7 +239,7 @@ export class Changeset {
         continue
       }
       if (!(f in this.params)) continue
-      const cast = castValue(def.base, this.params[f])
+      const cast = castValue(def.base, this.params[f], this.timezone)
       if (!cast.ok) {
         errors.push({ field: f, message: cast.message })
         continue
@@ -252,7 +271,7 @@ export class Changeset {
     const def = this.manifest.models[this.model]!.fields[field]
     if (!def)
       return this.next({ errors: [...this.errors, { field, message: `no such field on ${this.model}` }] })
-    const cast = castValue(def.base, value)
+    const cast = castValue(def.base, value, this.timezone)
     if (!cast.ok) return this.next({ errors: [...this.errors, { field, message: cast.message }] })
     return this.next({ changes: { ...this.changes, [field]: cast.value } })
   }
@@ -285,4 +304,5 @@ export const changeset = (
   model: string,
   params: Row,
   base: Row | null = null,
-): Changeset => new Changeset(manifest, model, params, base)
+  options: { timezone?: string } = {},
+): Changeset => new Changeset(manifest, model, params, base, {}, [], [], options.timezone ?? 'UTC')

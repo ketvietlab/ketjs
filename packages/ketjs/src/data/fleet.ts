@@ -112,6 +112,9 @@ export async function verifyPhysicalSchema(
   }
 }
 
+/** PostgreSQL advisory lock key that serializes schema migrations of one database. */
+export const SCHEMA_MIGRATION_LOCK = 1262835800
+
 export async function migrateOne(
   adapter: Adapter,
   manifest: Manifest,
@@ -124,6 +127,11 @@ export async function migrateOne(
   }
 
   const apply = async (tx: Adapter): Promise<MigrationOp[]> => {
+    // Replicas that boot together all migrate on boot. Without a lock each one read
+    // the same old marker, planned the same DDL and all but one failed on a duplicate
+    // table or column. The lock is held until this transaction commits, so the next
+    // replica reads the marker the first one wrote and finds nothing left to do.
+    if (tx.name === 'postgres') await tx.all(`SELECT pg_advisory_xact_lock(${SCHEMA_MIGRATION_LOCK})`)
     const applied = await readApplied(tx, true)
     const ops = planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
     const sql = renderSql(ops, tx)
@@ -152,6 +160,7 @@ export async function confirmManualMigration(
 ): Promise<MigrationOp[]> {
   const target = schemaFromManifest(manifest)
   const confirm = async (tx: Adapter): Promise<MigrationOp[]> => {
+    if (tx.name === 'postgres') await tx.all(`SELECT pg_advisory_xact_lock(${SCHEMA_MIGRATION_LOCK})`)
     const applied = await readApplied(tx, false)
     if (!applied)
       throw new ManualMigrationConfirmationError(

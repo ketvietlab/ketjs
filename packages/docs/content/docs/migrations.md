@@ -139,6 +139,9 @@ development boot applies migrations by default; production should run an explici
 set `KET_MIGRATE=0` for application pods after the fleet is current.
 
 Programmatic code can apply one manifest with `migrateOne(adapter, manifest)`.
+On PostgreSQL, the apply step and a manual confirmation each take the transaction-scoped advisory lock
+`SCHEMA_MIGRATION_LOCK` before reading the marker, so processes migrating one database at the same moment
+apply the plan once. SQLite has one writer per file and needs no lock.
 
 ## SQLite
 

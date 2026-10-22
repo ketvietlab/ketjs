@@ -48,6 +48,13 @@ Import expression helpers from `@ketvietlab/ketjs`:
 Column handles must come from `ctx.table()` or `table(manifest, model)`. Plain strings are rejected.
 Values are always parameterized rather than interpolated into SQL.
 
+A comparison operator and a sort direction are SQL tokens rather than values, so they cannot be bound
+as parameters. Both are checked where the query is built and again where it is rendered: an operator
+outside `=`, `<>`, `>`, `<`, `>=`, `<=` throws `E_INVALID_OPERATOR`, and a direction other than `asc` or
+`desc` throws `E_INVALID_ORDER`. When a filter menu or a sort header sends the choice in a request,
+`numericCompare(col, op, value)` and `orderBy({ col, dir })` can take it as it arrives; nothing else
+reaches SQL text.
+
 ## Execute reads and deletes
 
 ```ts
@@ -200,7 +207,9 @@ with a base row, its action is `update`. Committing an invalid changeset throws
 
 Changesets derive casts from the manifest:
 
-- `int` and `float` accept finite numeric strings when conversion is unambiguous.
+- `int` accepts a safe integer or a plain decimal integer string such as `-12`; hexadecimal, exponent
+  and fractional spellings (`0x10`, `1e3`, `1.0`) and values past `Number.MAX_SAFE_INTEGER` are invalid.
+  `float` accepts finite numeric strings when conversion is unambiguous.
 - `decimal` accepts finite numbers or plain decimal strings and normalizes exponent notation for
   storage. It always reads back as the exact string the column holds, so `12.50` stays `12.50` and a
   value past the range of a JS number keeps every digit. Coerce where you compute — `Number(row.total)`
@@ -208,13 +217,24 @@ Changesets derive casts from the manifest:
   rounds, which is what makes `{ ...row, note }` safe on a table that holds money.
 - `bool` accepts booleans, `0`/`1`, and the strings `"false"`/`"true"`.
 - `date` requires a valid `YYYY-MM-DD` calendar date.
-- `datetime` accepts a `Date` or a parseable date-time string, and stores it as ISO-8601 UTC. An offset
-  is normalised on the way in, so the same instant is the same text in SQLite and in Postgres — and so
-  the stored text sorts chronologically, which is what a range query compares. It reads back as that
-  text, never as a `Date`; `date` likewise stays `YYYY-MM-DD` on both.
+- `datetime` accepts a `Date` or ISO-8601 text — `YYYY-MM-DD`, optionally followed by a `T` or a space and
+  `HH:MM` with optional seconds and fraction, then an optional `Z` or `±HH:MM` offset — and stores it as ISO-8601 UTC. Text the engine
+  would merely guess at, such as `1`, `yesterday` or `Oct 21 2026`, is invalid, as is an impossible
+  date or hour. An offset is normalised on the way in, so the same instant is the same text in SQLite
+  and in Postgres — and so the stored text sorts chronologically, which is what a range query compares.
+  Text without an offset, which is what a `datetime-local` input sends, is read as wall-clock time in the
+  deployment timezone (`KET_TIMEZONE`, UTC when unset), never in the timezone of the server process. It
+  reads back as the UTC text, never as a `Date`; `date` likewise stays `YYYY-MM-DD` on both.
 - `json` accepts objects, including arrays; scalar strings are rejected.
 
 Inspect `changeset.toJSON()` when returning validation data to a UI or agent.
+
+The same readings hold on every path that writes. Function input declared as `int` must be a safe
+integer and input declared as `datetime` must be date-time text as above, or the call fails with
+`E_INVALID_INPUT`. A direct `ctx.db.insert()` or `ctx.db.update()` that skips the changeset refuses an
+impossible `date` with `E_INVALID_DATE` and a `datetime` it cannot read with `E_INVALID_DATETIME`, and
+normalises an accepted instant to UTC text exactly as a changeset does. `parseDateTime(value, timezone)`
+exposes that parser for code that needs the instant before writing.
 
 ## Atomic operations
 

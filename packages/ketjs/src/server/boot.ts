@@ -933,6 +933,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              timezone: config.defaultTimezone,
               log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
@@ -964,6 +965,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              timezone: config.defaultTimezone,
               log: callLog(t.key, verifiedScope, actor, options?.correlationId),
             })
           ).value,
@@ -992,6 +994,7 @@ export async function bootDeployment(
                 idempotencyDigest: options?.idempotencyDigest,
                 correlationId: options?.correlationId,
                 queueNotify: config.queueNotify,
+                timezone: config.defaultTimezone,
                 log: callLog(t.key, scope, actor, options?.correlationId),
               })
             ).value,
@@ -1365,6 +1368,7 @@ export async function bootDeployment(
     resolveActor: actorOf,
     resolveIdentityOrigin: async (url, req) => (await requestIdentityOf(url, req))?.origin ?? null,
     functionLog: callLog,
+    timezone: config.defaultTimezone,
     errorDetail: config.developmentIdentity,
     onFunctionDenied: serve.onFunctionDenied
       ? (event, url, req) => serve.onFunctionDenied!(ctx, event, url, req)

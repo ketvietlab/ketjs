@@ -538,6 +538,7 @@ export async function createTestDeployment(
             idempotencyKey: callOptions.idempotencyKey,
             correlationId: callOptions.correlationId,
             queueNotify: false,
+            timezone: booted.config.defaultTimezone,
             // A fixture call is not HTTP traffic and says so, but it is still a
             // call: it goes through the same pipeline rather than around it.
             log: booted.logger.child({

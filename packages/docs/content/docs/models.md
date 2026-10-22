@@ -70,7 +70,7 @@ Append `?` to make a field optional.
 | --- | --- | --- |
 | `id` | `string` | Primary identifier. |
 | `text` | `string` | General text. |
-| `int` | `number` | Finite integer. |
+| `int` | `number` | Safe integer (within `Number.MAX_SAFE_INTEGER`). |
 | `float` | `number` | Binary floating-point value. |
 | `decimal` | `string` | Exact decimal, unchanged across the round trip; use for money and quantities. |
 | `bool` | `boolean` | Boolean value. |
@@ -93,7 +93,9 @@ Ascending order puts nulls last and descending order puts them first. SQLite dec
 caller choice.
 
 `date` rejects impossible dates such as `2025-02-30`. Use `datetime` when an instant and timezone are
-part of the domain value.
+part of the domain value. A `datetime` written without an offset is wall-clock time in the deployment
+timezone set by `KET_TIMEZONE` (UTC when unset); [Casting behavior](./data.md#casting-behavior) lists the
+accepted spellings.
 
 ## Classify what the field holds
 

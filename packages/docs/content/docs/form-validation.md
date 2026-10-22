@@ -63,6 +63,10 @@ export const signupForm = defineFormSchema<Signup>({
 
 Field types are `text`, `id`, `ref`, `int`, `float`, `decimal`, `bool`, `date`, `datetime`, `json`,
 `object`, `array`, and `record`.
+An `int` value must be a plain decimal integer within the safe integer range, so `0x10`, `1e3` and `1.0`
+are issues rather than numbers. A `datetime` value must be ISO-8601 date-time text such as
+`2026-10-21T10:00`, with an optional offset; the browser's own date parser is never consulted, so the form
+accepts what the server changeset accepts.
 Constraints include `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`, and `oneOf`. Set
 `multiple: true` for repeated controls such as a multi-select. Optional empty values are omitted from the
 normalized result.

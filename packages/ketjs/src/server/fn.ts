@@ -12,6 +12,7 @@ import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
+import { parseDateTime } from '../data/time.ts'
 import { queueFor } from './queue.ts'
 import { notificationHub } from './notify.ts'
 import type { Logger } from './log/logger.ts'
@@ -99,10 +100,14 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
           parsed.reason === 'size' ? { max: DECIMAL_MAX_CHARS } : {},
         )
     }
-    if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
-      add(name, 'integer', `input "${name}" expects an integer`)
+    // Safe, not merely whole: 1e300 is an integer to Number.isInteger and has no
+    // exact value, so it cannot be stored, compared or counted the way it was sent.
+    if (t.base === 'int' && typeof v === 'number' && !Number.isSafeInteger(v))
+      add(name, 'integer', `input "${name}" expects a safe integer`)
     if (t.base === 'date' && !isDateText(v))
       add(name, 'date', `input "${name}" expects a calendar date (YYYY-MM-DD)`)
+    if (t.base === 'datetime' && parseDateTime(v) === null)
+      add(name, 'datetime', `input "${name}" expects an ISO-8601 date-time`)
   }
   for (const k of Object.keys(args ?? {})) {
     if (!Object.hasOwn(sig, k)) {
@@ -197,6 +202,8 @@ export type CallOptions = {
   allow?: readonly string[] | null
   /** Runtime override for the optional queue wake-up signal. */
   queueNotify?: boolean
+  /** IANA timezone a `datetime` without an offset is read in (KET_TIMEZONE). Defaults to UTC. */
+  timezone?: string
   /** Where this call's operational log goes. Absent discards. */
   log?: Logger
 }
@@ -330,6 +337,7 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
           correlationId: o.correlationId ?? null,
           scope: o.scope,
           queueNotify: o.queueNotify,
+          timezone: o.timezone,
           ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun: false }) } : {}),
         })
         const value = project(fnKey, meta.output, await def.handler(ctx, args), meta.returns)
@@ -382,6 +390,7 @@ async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOption
     correlationId: o.correlationId ?? null,
     scope: o.scope,
     queueNotify: o.queueNotify,
+    timezone: o.timezone,
     ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun }) } : {}),
   })
 

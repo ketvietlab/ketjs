@@ -1,5 +1,6 @@
 import { KetError } from '../kernel/errors.ts'
 import { dateTimeFormatter } from '../kernel/i18n.ts'
+import { isDateText } from '../kernel/types.ts'
 
 export type GroupInterval = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -157,4 +158,50 @@ export function localDayRange(value: string, timezone = 'UTC'): [string, string]
   const next = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1))
   const nextText = ymd(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate())
   return [localDateTimeToUtc(value, timezone), localDateTimeToUtc(nextText, timezone)]
+}
+
+const DATETIME_TEXT =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(\.\d{1,9})?)?)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i
+
+/**
+ * The one reading of a `datetime` value, as an ISO-8601 UTC instant, or null.
+ *
+ * Only ISO-8601 text or a Date is a datetime. `Date.parse` accepts "1" (the year
+ * 2001), "yesterday" in some engines, and reads text without an offset in the
+ * process timezone, so the same request stored different instants on servers in
+ * different zones. Text with an offset is that instant; text without one, such as
+ * the value of `<input type="datetime-local">`, is a wall time in `timezone`.
+ */
+export function parseDateTime(value: unknown, timezone = 'UTC'): string | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  if (typeof value !== 'string') return null
+  const match = DATETIME_TEXT.exec(value.trim())
+  if (!match) return null
+  const [, year, month, day, hourText, minuteText, secondText, fraction, offset] = match
+  if (!isDateText(`${year}-${month}-${day}`)) return null
+  const hour = Number(hourText ?? 0)
+  const minute = Number(minuteText ?? 0)
+  const second = Number(secondText ?? 0)
+  if (hour > 23 || minute > 59 || second > 59) return null
+  const milliseconds = fraction ? Number(fraction.slice(1, 4).padEnd(3, '0')) : 0
+  if (offset) {
+    let shift = 0
+    if (offset.toUpperCase() !== 'Z') {
+      const digits = offset.slice(1).replace(':', '')
+      const hours = Number(digits.slice(0, 2))
+      const minutes = Number(digits.slice(2) || 0)
+      if (hours > 14 || minutes > 59) return null
+      shift = (offset[0] === '-' ? -1 : 1) * (hours * 60 + minutes)
+    }
+    const instant =
+      Date.UTC(Number(year), Number(month) - 1, Number(day), hour, minute, second, milliseconds) -
+      shift * 60_000
+    return new Date(instant).toISOString()
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const wall = localDateTimeToUtc(
+    `${year}-${month}-${day}T${pad(hour)}:${pad(minute)}:${pad(second)}`,
+    timezone,
+  )
+  return milliseconds ? new Date(Date.parse(wall) + milliseconds).toISOString() : wall
 }

@@ -20,6 +20,8 @@ import { KetError } from '../kernel/errors.ts'
 import { createLogger } from './log/logger.ts'
 import type { Logger } from './log/logger.ts'
 import { nullLog } from './log/types.ts'
+import { parseDateTime } from '../data/time.ts'
+import { isDateText } from '../kernel/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import { nextSequenceNumber } from './sequence.ts'
 import { streamsOf } from './stream.ts'
@@ -49,6 +51,8 @@ export function createContext(o: {
   manifest: Manifest
   fnKey: string
   dryRun?: boolean
+  /** IANA timezone a `datetime` written without an offset is read in. Defaults to UTC. */
+  timezone?: string
   actor?: string | null
   correlationId?: string | null
   scope?: Scope
@@ -73,6 +77,7 @@ export function createContext(o: {
   const root = o.root ?? adapter
   const scope: Scope = o.scope ?? { company: null, branches: null }
   const dryRun = o.dryRun ?? false
+  const timezone = o.timezone ?? 'UTC'
   const operation = o.kind === 'job' ? manifest.jobs[fnKey] : manifest.functions[fnKey]
   if (!operation)
     throw new KetError({
@@ -273,6 +278,11 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'json')
       .map(([n]) => n)
 
+  const datesOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'date')
+      .map(([n]) => n)
+
   const intsOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'int')
@@ -281,7 +291,7 @@ export function createContext(o: {
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
     const stamps = datetimesOf(model)
-    if (!cols.length && !stamps.length) return row
+    if (!cols.length && !stamps.length && !datesOf(model).length) return row
     const out: Row = { ...row }
     // A raw db.insert/update never passes through a changeset. Validate as well as
     // render here so it cannot store exponent syntax or bypass the public budget.
@@ -298,8 +308,25 @@ export function createContext(o: {
     for (const c of stamps) {
       const held = out[c]
       if (held == null) continue
-      const at = held instanceof Date ? held : new Date(String(held))
-      if (!Number.isNaN(at.getTime())) out[c] = at.toISOString()
+      const instant = parseDateTime(held, timezone)
+      if (instant === null)
+        throw new KetError({
+          code: 'E_INVALID_DATETIME',
+          module: operation.by,
+          message: `"${fnKey}" wrote ${JSON.stringify(held)} to ${model}.${c}, which is not an ISO-8601 date-time`,
+          hint: 'write an ISO-8601 instant such as 2026-10-21T03:00:00Z, or a Date',
+        })
+      out[c] = instant
+    }
+    for (const c of datesOf(model)) {
+      const held = out[c]
+      if (held == null || isDateText(held)) continue
+      throw new KetError({
+        code: 'E_INVALID_DATE',
+        module: operation.by,
+        message: `"${fnKey}" wrote ${JSON.stringify(held)} to ${model}.${c}, which is not a calendar date`,
+        hint: 'write YYYY-MM-DD for a day that exists',
+      })
     }
     return out
   }
@@ -849,7 +876,7 @@ export function createContext(o: {
       nextSequenceNumber(adapter, name, { ...options, scope, dryRun }),
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
-      changeset(manifest, model, params, base),
+      changeset(manifest, model, params, base, { timezone }),
   }
   return ctx
 }
