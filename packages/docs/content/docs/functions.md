@@ -225,6 +225,12 @@ and `x-ket-build`, and the call is logged as `fn_call`, `fn_error` or `fn_denied
 Outside development (`KET_DEV` unset), error bodies carry `hint: null` and `at: null`; the code and
 message remain.
 
+A domain handler may throw `KetError` with code `E_CONFLICT` (or the existing `conflict` spelling)
+when current state prevents an operation. The generic function transport returns HTTP `409` and keeps
+the error code and message. Throw inside `ctx.tx` to roll back earlier writes in the same operation.
+Other domain error codes still default to `400`; use an HTTP binding's explicit error map for a
+domain-specific status. Permission, missing-function, payload-size and defect responses are unchanged.
+
 ## Provisioning functions
 
 One-shot bootstrap operations must be explicitly internal and opt in with `provision: true`:

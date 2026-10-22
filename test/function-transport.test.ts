@@ -9,6 +9,8 @@ import {
   httpRoutes,
   json,
   memoryLog,
+  KetError,
+  statusForError,
   text,
   withHeaders,
 } from '@ketvietlab/ketjs'
@@ -30,6 +32,19 @@ const notes = defineModule({
     send: defineJob({ idempotent: true, input: { id: 'text' }, effects: [], handler: async () => {} }),
   },
   functions: {
+    refuse: {
+      input: { id: 'id', code: 'text' },
+      effects: ['write:notes.Note'],
+      handler: async (ctx: Ctx, input) =>
+        ctx.tx(async (tx) => {
+          await tx.db.insert('notes.Note', { id: input['id'], title: 'Must roll back', cost: null })
+          throw new KetError({
+            code: String(input['code']),
+            message: 'The SKU still has stock.',
+            hint: 'private hint',
+          })
+        }),
+    },
     create: {
       input: { id: 'id', title: 'text' },
       output: { id: 'id' },
@@ -94,7 +109,13 @@ const boot = async (env: Record<string, string> = {}) => {
       worker: { queues: { default: 1 } },
       serve: {
         sessions: { secret: 'transport-secret-0123456789abcdef', secure: false },
-        permissions: async () => ['notes.create', 'notes.publish', 'notes.charge', 'notes.mine'],
+        permissions: async () => [
+          'notes.create',
+          'notes.publish',
+          'notes.charge',
+          'notes.mine',
+          'notes.refuse',
+        ],
       },
     }),
     { env: { KET_SQLITE: ':memory:', ...env }, port: 0, log: () => {}, openLog: () => sink },
@@ -110,6 +131,30 @@ const boot = async (env: Record<string, string> = {}) => {
     })
   return { booted, base, cookie, call, sink }
 }
+
+test('function transport: domain conflicts return 409 and retain transaction rollback', async (t) => {
+  const { booted, call } = await boot()
+  t.after(() => booted.close())
+  for (const code of ['conflict', 'E_CONFLICT']) {
+    const response = await call('notes.refuse', { id: code, code })
+    assert.equal(response.status, 409)
+    const body = (await response.json()) as { code: string; message: string; hint: unknown }
+    assert.equal(body.code, code)
+    assert.equal(body.message, 'The SKU still has stock.')
+    assert.equal(body.hint, null)
+    assert.equal((await call('notes.create', { id: code, title: 'After refusal' })).status, 200)
+  }
+  assert.equal(statusForError('E_FN_NOT_PERMITTED'), 403)
+  assert.equal(statusForError('E_NOT_FOUND'), 404)
+  assert.equal(statusForError('E_PAYLOAD_TOO_LARGE'), 413)
+  assert.equal(statusForError('E_OUTPUT_NOT_SHAPED'), 500)
+  assert.equal(statusForError('E_OTHER_DOMAIN_ERROR'), 400)
+  assert.equal(
+    statusForError('E_CUSTOM_CONFLICT'),
+    400,
+    'domain-specific codes still need an explicit binding',
+  )
+})
 
 test('function transport: a session call must be same-origin JSON', async (t) => {
   const { booted, call } = await boot()
