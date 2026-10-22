@@ -1,7 +1,7 @@
 {
   "name": "learn-view",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -13,10 +13,10 @@
     "check": "tsc --noEmit && ket-view check"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.6.0"
+    "@ketvietlab/ketjs-view": "0.6.1"
   },
   "devDependencies": {
-    "@ketvietlab/ketjs-view-tools": "0.6.0",
+    "@ketvietlab/ketjs-view-tools": "0.6.1",
     "typescript": "^7.0.2"
   }
 }
