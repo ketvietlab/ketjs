@@ -69,7 +69,9 @@ A framework change a consumer needs is released from this repository and then ad
 - `npm run version:audit` rejects a missing entry, wrong commit/reason, incomplete checks or changed source.
   CI independently reruns the consumers and uploads the report and logs. A subsequent source change in a
   version pull request requires a new audit record. Ordinary changes at the same version keep their scoped
-  local checks; release preparation always requires fresh audit evidence.
+  local checks; release preparation always requires fresh audit evidence. Pull request CI validates
+  `CHANGE_LOG` and reruns the consumers only when the pull request changes `VERSION` or `CHANGE_LOG`
+  (`version-audit.mjs gate` and `required`).
 - An already published version and tag remain immutable. Audit adoption at the existing VERSION does not
   permit overwriting its packages; future package changes require a new version and the release gates.
 
