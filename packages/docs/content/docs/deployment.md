@@ -54,13 +54,15 @@ controlled boot migrate before normal replicas start.
 For a tenant fleet, the CLI opens each database and owns the apply step:
 
 ```bash
-# Run from: /path/to/ketjs
+# Run from: /path/to/example-app
 ket migrate --deployment erp --workspace dist/ket.workspace.js --all --dry-run
 ket migrate --deployment erp --workspace dist/ket.workspace.js --all
 ```
 
-Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order. This prevents
-many replicas from racing to alter the same schema during rollout. Destructive plans require an explicit
+Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order, so that
+schema changes happen at one reviewed point in the rollout. On PostgreSQL, replicas that do migrate on boot
+at the same time are serialised by a transaction-scoped advisory lock: the first applies the plan, and the
+others wait, read the advanced marker and find nothing left to do. Destructive plans require an explicit
 `--allow-destructive` decision and should include a restore plan.
 
 ## Run separate roles
@@ -135,13 +137,11 @@ data between environments.
 persistent volume, local storage loses every upload when the pod restarts. Set `KET_STORAGE=s3` for
 containerised deployments, or mount a durable volume at `KET_STORAGE_DIR` for a single host.
 
-With object storage, an upload is durable once `POST /files` answers `201`. The request spools the
-body to a temporary directory only to compute its checksum, writes the object to storage, and then
-commits the attachment row together with its follow-up jobs (publication copy, image renditions).
-The temporary directory is removed before the response. Those jobs read the original back from
-storage, so any worker pod can run them. If a pod stops mid-request, the client sees a failed upload.
-An object written before the row was committed has no attachment row, and the storage sweep removes
-it once it is old enough.
+KetJS provides storage, not an upload route. When an application accepts uploads, write the object to
+storage before committing the database row that refers to it, and enqueue any follow-up work in that same
+transaction; a job reading the object back from storage can then run on any worker pod. If a pod stops
+between the two writes, the object has no row, so pair uploads with a sweep that removes unreferenced
+objects once they are older than any request could take.
 
 ## Health and graceful shutdown
 
@@ -167,7 +167,14 @@ On shutdown:
 4. close sessions, storage/provider resources, adapters, and sockets;
 5. let expired job leases become retryable if a worker cannot finish.
 
-Configure the platform termination grace period longer than the deployment worker's `shutdownGraceMs`.
+An HTTP process stops accepting connections, asks WebSocket peers to leave with 1001, ends every open
+`/_ket/stream` response (the reader resumes from its cursor on another instance), closes idle keep-alive
+connections, and gives requests still running `serve.shutdownGraceMs` (10 seconds by default) before
+dropping their connections. Only then are adapters, tenants and the log sink closed.
+
+Configure the platform termination grace period longer than both `serve.shutdownGraceMs` and the
+deployment worker's `shutdownGraceMs`, or the process is killed before its records of the shutdown are
+written.
 
 ## Rollback strategy
 

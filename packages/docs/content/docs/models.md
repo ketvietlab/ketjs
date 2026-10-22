@@ -70,7 +70,7 @@ Append `?` to make a field optional.
 | --- | --- | --- |
 | `id` | `string` | Primary identifier. |
 | `text` | `string` | General text. |
-| `int` | `number` | Finite integer. |
+| `int` | `number` | Safe integer (within `Number.MAX_SAFE_INTEGER`). |
 | `float` | `number` | Binary floating-point value. |
 | `decimal` | `string` | Exact decimal, unchanged across the round trip; use for money and quantities. |
 | `bool` | `boolean` | Boolean value. |
@@ -93,7 +93,10 @@ Ascending order puts nulls last and descending order puts them first. SQLite dec
 caller choice.
 
 `date` rejects impossible dates such as `2025-02-30`. Use `datetime` when an instant and timezone are
-part of the domain value.
+part of the domain value. A `datetime` written as a date and time without an offset is wall-clock time in
+the deployment timezone set by `KET_TIMEZONE` (UTC when unset), and a date alone is UTC midnight;
+[Casting behavior](/ketjs/data/#casting-behavior) lists the
+accepted spellings.
 
 ## Classify what the field holds
 
@@ -210,9 +213,23 @@ run the same hash. It keeps a value out of a row, not out of reach.
 What an event *means* — its subject, action, and which configuration or session it happened in —
 stays the module's. A framework that modelled that would be modelling somebody's compliance regime.
 
-## Scope is mandatory
+## Company scope is opt-in
 
-Every model selects one isolation scope:
+A deployment scopes rows by company only when it sets `companies: true`:
+
+```ts
+// File: ket.workspace.ts
+import { defineDeployment } from '@ketvietlab/ketjs'
+import { sales } from './src/modules/sales/index.ts'
+
+export const deployment = defineDeployment({ name: 'erp', modules: [sales], companies: true })
+```
+
+Without it there is one global scope. Every model is `shared`, `scope` may be left out, and requests,
+sessions, sequences and jobs carry no company. A `company` or `company+branch` model is then a
+composition error (`E_COMPANIES_DISABLED`).
+
+With it, every model selects one isolation scope:
 
 | Scope | Meaning | Typical data |
 | --- | --- | --- |
@@ -220,10 +237,14 @@ Every model selects one isolation scope:
 | `company` | Each row belongs to one legal entity. | Orders, invoices, ledgers. |
 | `company+branch` | Rows belong to one company and operational branch. | Stock moves, branch-specific sessions. |
 
-There is no default. Accidentally treating company data as shared is a silent data leak, so omission
-is a composition error.
+In such a deployment there is no default. Accidentally treating company data as shared is a silent
+data leak, so omission is a composition error (`E_MODEL_NO_SCOPE`).
 
-KetJS adds and enforces scope columns centrally. A request scope separates reads from writes:
+KetJS adds and enforces scope columns centrally, so a `company` or `company+branch` model cannot declare
+`companyId` or `branchId` itself (`E_SCOPE_FIELD_RESERVED`); a `shared` model may still name a company in
+an ordinary field. A field name is letters, digits and underscores, starting with a letter or underscore,
+and cannot be `__proto__`, `constructor` or `prototype` (`E_FIELD_NAME`). A request scope separates reads
+from writes:
 
 ```ts
 // File: src/modules/order/models.ts
@@ -346,7 +367,9 @@ views: {
 ```
 
 `makeDrop()` and `makeDrops()` build null-prototype, immutable view models from these declarations.
-They prevent a theme from reaching fields the owning module did not expose.
+They prevent a theme from reaching fields the owning module did not expose. A view cannot list a
+`sensitive` field, and a module declares views only over models its `depends` reach; see
+[Themes](/ketjs/themes/) for which fields a fill may read.
 
 ## Generated types
 
@@ -357,5 +380,5 @@ Generate app-specific declarations from the composed manifest:
 ket types --deployment backoffice --workspace dist/ket.workspace.js
 ```
 
-The output under `.ket/types.<app>.d.ts` includes the composed fields and contribution provenance.
+The output under `.ket/types.<deployment>.d.ts` includes the composed fields and contribution provenance.
 Run it after composition changes; do not maintain a parallel handwritten model registry.

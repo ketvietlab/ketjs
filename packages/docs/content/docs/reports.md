@@ -88,9 +88,10 @@ margins. Network resources, scripts, CSS, declarations, and unknown tags or attr
 
 ### Printing numbers and dates
 
-KetSuite's print route supplies two filters bound to the locale the document is
-being rendered in, because a report is compiled, translated and cached per locale
-and its amounts should follow the same locale its labels do:
+KetJS does not ship locale-aware amount or date filters for reports. A print route passes its own
+through `compileReportTemplate(source, { filters })`, bound to the locale the document is rendered
+in, because a report is compiled, translated and cached per locale and its amounts should follow the
+same locale its labels do. A typical pair:
 
 - `{{ amountTotal | amount: currency }}` — a business amount in major units, with
   the currency passed as the argument. VND prints without decimals, USD with two.
@@ -121,11 +122,11 @@ const [font, semiboldFont, boldFont] = await Promise.all([
 const pdf = renderPdf(document, { font, semiboldFont, boldFont })
 ```
 
-The framework ships the same Inter family used by KetSuite: Regular, SemiBold, and Bold, under the SIL Open Font
+The framework ships the Inter family in Regular, SemiBold, and Bold, under the SIL Open Font
 License. Pass all three files to preserve the application typography in titles, metadata, table headings, and
 totals; callers that pass only `font` retain Regular as a backwards-compatible fallback. The renderer embeds the
 supplied TrueType files and writes Unicode maps, so Vietnamese output does not depend on fonts installed on the
-host. `tone="accent"` and `tone="muted"` use fixed KetSuite document roles, while table headings receive the
+host. `tone="accent"` and `tone="muted"` use fixed document colour roles, while table headings receive the
 accent-soft surface automatically. Current text shaping covers Latin scripts; complex-script shaping, RTL, and
 emoji are outside the contract.
 

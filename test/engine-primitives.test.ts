@@ -62,7 +62,7 @@ const ledger = defineModule({
 })
 
 async function boot() {
-  const manifest = compose([ledger], { headless: true })
+  const manifest = compose([ledger], { headless: true, companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
@@ -72,7 +72,7 @@ async function boot() {
 }
 
 test('engine: named unique indexes are part of the schema and migration SQL', () => {
-  const manifest = compose([ledger], { headless: true })
+  const manifest = compose([ledger], { headless: true, companies: true })
   const schema = schemaFromManifest(manifest)
   assert.deepEqual(schema.tables.ledger_balance!.indexes.account_unique, {
     fields: ['account'],
@@ -89,7 +89,7 @@ test('engine: scoped models receive a framework index when no authored index cov
     models: { Entry: { scope: 'company+branch', fields: { id: 'id', value: 'text' } } },
   })
   const indexes = Object.values(
-    schemaFromManifest(compose([scoped], { headless: true })).tables.scoped_entry!.indexes,
+    schemaFromManifest(compose([scoped], { headless: true, companies: true })).tables.scoped_entry!.indexes,
   )
   assert.ok(
     indexes.some((index) => index.fields.join(',') === 'companyId,branchId' && index.by === '(framework)'),

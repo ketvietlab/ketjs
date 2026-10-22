@@ -25,8 +25,14 @@ export class KetError extends Error {
 
 export class Diagnostics {
   items: Diagnostic[] = []
+  /** Contract problems that do not stop composition yet; they are kept on the manifest. */
+  warnings: Diagnostic[] = []
   add(d: Diagnostic): this {
     this.items.push(d)
+    return this
+  }
+  warn(d: Diagnostic): this {
+    this.warnings.push(d)
     return this
   }
   get ok(): boolean {
@@ -58,6 +64,7 @@ export class Diagnostics {
 const DEFECT_CODES: ReadonlySet<string> = new Set([
   'E_EFFECT_NOT_DECLARED',
   'E_SCOPE_FIELD_WRITTEN',
+  'E_CROSS_COMPANY_REFERENCE',
   'E_UPDATE_NEEDS_WHERE',
   'E_UNKNOWN_MODEL',
   'E_UNKNOWN_RELATION',

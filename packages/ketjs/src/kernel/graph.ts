@@ -52,6 +52,6 @@ export function topoSort(modules: KetModule[]): KetModule[] {
     out.push(mod)
   }
 
-  for (const m of [...modules].sort((a, b) => a.name.localeCompare(b.name))) visit(m.name)
+  for (const m of [...modules].sort((a, b) => a.name.localeCompare(b.name, 'en'))) visit(m.name)
   return out
 }

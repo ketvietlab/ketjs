@@ -135,6 +135,12 @@ CREATE TABLE IF NOT EXISTS ket_job (
 // gives claim a single ordering path across states and releases a unique key as
 // soon as its job reaches a terminal state. Business idempotency remains the
 // handler's responsibility; queue uniqueness only coalesces active delivery.
+//
+// A key is unique within one company. Companies pooled in one database used to
+// share it, so a second company's job with the same key was dropped and the
+// caller handed the first company's job id. Jobs with no company (schedules,
+// fleet work) still share one space. The new index is created before the old
+// one is dropped, so an upgraded database is never without the constraint.
 const INDEX_DDL = `
 DROP INDEX IF EXISTS ket_job_fetch;
 DROP INDEX IF EXISTS ket_job_unique;
@@ -143,9 +149,10 @@ CREATE INDEX IF NOT EXISTS ket_job_fetch_active
   WHERE state IN ('available', 'scheduled', 'retryable');
 CREATE INDEX IF NOT EXISTS ket_job_rescue
   ON ket_job (state, lease_until);
-CREATE UNIQUE INDEX IF NOT EXISTS ket_job_unique_active
-  ON ket_job (job, unique_key)
+CREATE UNIQUE INDEX IF NOT EXISTS ket_job_unique_company
+  ON ket_job (job, unique_key, COALESCE(company_id, ''))
   WHERE unique_key IS NOT NULL AND state IN ('available', 'scheduled', 'executing', 'retryable');
+DROP INDEX IF EXISTS ket_job_unique_active;
 `
 
 const encode = (value: unknown): string => JSON.stringify(value ?? null)
@@ -423,10 +430,10 @@ export async function createQueue(
         for (let attempt = 0; inserted.changes === 0 && attempt < 3; attempt++) {
           const rows = await adapter.all(
             `SELECT id FROM ket_job
-             WHERE job = ${p(1)} AND unique_key = ${p(2)}
+             WHERE job = ${p(1)} AND unique_key = ${p(2)} AND COALESCE(company_id, '') = ${p(3)}
                AND state IN ('available', 'scheduled', 'executing', 'retryable')
              LIMIT 1`,
-            [job, o.uniqueKey],
+            [job, o.uniqueKey, scope.company ?? ''],
           )
           if (rows[0]) {
             existing = true
