@@ -665,6 +665,14 @@ export type ModuleSpec = ModuleMeta & {
   name: string
   version?: string
   depends?: string[]
+  /**
+   * Modules this one integrates with when a deployment includes them, without
+   * requiring them. A read, write or enqueue effect may name a model or job in one
+   * of these modules; when the module is absent the effect simply has nothing to
+   * reach, and when it is present the model or job must exist. The handler decides
+   * at run time whether the integration is there, for example with `can()`.
+   */
+  optional?: string[]
   /** Version ranges required at compose time for published extension contracts. */
   compatible?: Record<string, string>
   models?: Record<string, ModelDef>
@@ -744,6 +752,7 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly name: string
   readonly version: string
   readonly depends: readonly string[]
+  readonly optional: readonly string[]
   readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string | FieldDef>>
@@ -821,6 +830,10 @@ export type Manifest = {
   /** Prefix -> owning module. Longest prefix wins, though overlapping claims are rejected. */
   routePrefixes: Record<string, string>
   patches: Array<{ by: string; target: string; reason: string }>
+  /**
+   * Contract problems composition reported without failing, such as an effect
+   * outside the module's depends. Each is expected to become an error in 1.0.
+   */
   diagnostics?: Diagnostic[]
 }
 

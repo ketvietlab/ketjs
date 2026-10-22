@@ -119,6 +119,42 @@ and every relation preload therefore require their own read effects.
 Moving work into a job does not widen authority: the producer needs `enqueue:*`, and the job declares
 the exact effects its handler uses.
 
+An effect may name a model or job of the declaring module, of any module its `depends` reach
+transitively, or of a module it lists in `optional`. Composition checks this for functions and jobs:
+
+| The effect names | Result |
+| --- | --- |
+| A model or job of a reachable module | Allowed |
+| A model or job of an `optional` module the deployment does not include | Allowed; there is nothing to reach |
+| A model or job that does not exist in a module the deployment includes | Error: `E_FN_EFFECT` or `E_JOB_EFFECT` |
+| A module that is neither reachable nor `optional` | Error for a job and for any enqueue; a function's `read:` or `write:` is a `contract_warning` until 1.0, then an error |
+
+Use `optional` for a soft integration — a CRM screen that also shows sales orders when the sales module
+is installed — and decide at run time whether to use it:
+
+```ts
+// File: src/modules/crm/index.ts
+export const crm = defineModule({
+  name: 'crm',
+  depends: ['party'],
+  optional: ['sale'],
+  functions: {
+    caseContext: {
+      input: { partyId: 'id' },
+      effects: ['read:party.Party', 'read:sale.Order'],
+      handler: async (ctx, input) => {
+        const orders = ctx.manifest.models['sale.Order'] ? await ctx.db.select('sale.Order', { partyId: input.partyId }) : []
+        return { orders }
+      },
+    },
+  },
+})
+```
+
+`optional` does not order composition and cannot replace `depends` for a module whose models this one
+extends or whose joints it fills. Warnings are kept on `manifest.diagnostics`, printed by `ket check`
+and logged as `contract_warning` on every boot.
+
 ## Function context
 
 The handler receives a `Ctx` containing:
