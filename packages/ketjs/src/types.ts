@@ -510,6 +510,10 @@ export type JobMeta = {
 
 export type JobEnqueueOptions = {
   runAt?: Date
+  /**
+   * Coalesce with an active job of the same name and key in the same company.
+   * Another company's job never shares the key; jobs without a company share one space.
+   */
   uniqueKey?: string
   /** Zero is highest priority. */
   priority?: number
