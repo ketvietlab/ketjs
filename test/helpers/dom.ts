@@ -157,6 +157,12 @@ const VOID = new Set([
   'wbr',
 ])
 
+// Where scripts run, a parser reads these elements' content as text up to the end
+// tag: a comment or a tag inside one is characters, not a node. Only textarea and
+// title decode character references.
+const RAW_TEXT = new Set(['script', 'style', 'noscript'])
+const RCDATA = new Set(['textarea', 'title'])
+
 /** Parse an HTML fragment into the tree above. Handles what renderToString emits. */
 export function parseFragment(html: string): TNode {
   const root = makeNode(ELEMENT, 'DIV')
@@ -194,8 +200,16 @@ export function parseFragment(html: string): TNode {
     for (const m of attrSrc.matchAll(/([^\s=]+)="([^"]*)"/g))
       el.setAttribute(m[1] as string, UNESC(m[2] as string))
     top().insertBefore(el, null)
-    if (!VOID.has(tag) && !attrSrc.trimEnd().endsWith('/')) stack.push(el)
     i = gt + 1
+    const name = tag.toLowerCase()
+    if (RAW_TEXT.has(name) || RCDATA.has(name)) {
+      const close = html.toLowerCase().indexOf(`</${name}`, i)
+      const content = html.slice(i, close)
+      if (content) el.insertBefore(makeNode(TEXT, '#text', RCDATA.has(name) ? UNESC(content) : content), null)
+      i = html.indexOf('>', close) + 1
+      continue
+    }
+    if (!VOID.has(tag) && !attrSrc.trimEnd().endsWith('/')) stack.push(el)
   }
   return root
 }

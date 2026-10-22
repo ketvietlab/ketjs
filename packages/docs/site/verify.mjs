@@ -40,6 +40,16 @@ for (const file of files) {
     )
   for (const [, key] of page.matchAll(/data-key="([^"]*)"/g))
     assert.equal(key, '[]', `${file}: singleton island keys must not contain content`)
+  // With scripting on, a browser reads noscript content as text, so a hydration marker in
+  // it never matches and the whole island renders again on the client.
+  for (const [, content] of page.matchAll(/<noscript>([\s\S]*?)<\/noscript>/g))
+    assert.ok(!content.includes('<!--k['), `${file}: hydration marker inside noscript`)
+  if (route === '/playground/')
+    assert.equal(
+      page.match(/<iframe id="playground-preview"[^>]*\ssandbox="([^"]*)"/)?.[1],
+      'allow-scripts allow-forms',
+      'the playground preview must let forms submit and keep an opaque origin',
+    )
   if (route.startsWith('/docs/')) {
     const slug = route === '/docs/' ? 'index' : route.split('/').filter(Boolean).at(-1)
     const data = JSON.parse(readFileSync(`dist/content/docs/${slug}.json`, 'utf8'))
