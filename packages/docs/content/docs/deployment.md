@@ -169,7 +169,14 @@ On shutdown:
 4. close sessions, storage/provider resources, adapters, and sockets;
 5. let expired job leases become retryable if a worker cannot finish.
 
-Configure the platform termination grace period longer than the deployment worker's `shutdownGraceMs`.
+An HTTP process stops accepting connections, asks WebSocket peers to leave with 1001, ends every open
+`/_ket/stream` response (the reader resumes from its cursor on another instance), closes idle keep-alive
+connections, and gives requests still running `serve.shutdownGraceMs` (10 seconds by default) before
+dropping their connections. Only then are adapters, tenants and the log sink closed.
+
+Configure the platform termination grace period longer than both `serve.shutdownGraceMs` and the
+deployment worker's `shutdownGraceMs`, or the process is killed before its records of the shutdown are
+written.
 
 ## Rollback strategy
 

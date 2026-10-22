@@ -65,6 +65,12 @@ export const wantsHtml = (req: IncomingMessage): boolean => {
 }
 
 export type ServeOpts = {
+  /**
+   * How long close() lets in-flight requests finish before it drops their
+   * connections. Defaults to 10 seconds; keep it below the platform's termination
+   * grace, so the adapter and log sink still close before the process is killed.
+   */
+  shutdownGraceMs?: number
   manifest: Manifest
   /** A single database. Use `pool` + `resolveDatastore` for one database per tenant. */
   adapter?: Adapter | null
@@ -925,6 +931,8 @@ export async function createKetServer(o: ServeOpts) {
   // Only a WebSocket handshake leaves the HTTP path. Any other Upgrade header —
   // h2c from a curious client — is still an ordinary request, as it was before
   // a listener for 'upgrade' existed.
+  // Open /_ket/stream responses: how to end each one, called by close().
+  const liveStreams = new Set<() => void>()
   const server = createServer({ shouldUpgradeCallback: isWebSocketUpgrade }, async (req, res) => {
     const started = Date.now()
     // Every response states its type and asks the browser not to guess another:
@@ -1078,6 +1086,9 @@ export async function createKetServer(o: ServeOpts) {
           'cache-control': 'no-cache',
           connection: 'keep-alive',
         })
+        // Sent now rather than with the first chunk, so a reader of a quiet stream
+        // learns it is connected instead of waiting on headers until data arrives.
+        res.flushHeaders()
         // A client that reloads mid-stream simply disappears. Stop tailing the
         // moment that happens: the durable log keeps the chunks, and the next
         // connection resumes from its cursor.
@@ -1093,6 +1104,14 @@ export async function createKetServer(o: ServeOpts) {
         }
         req.on('close', stop)
         res.on('close', stop)
+        // A stream never finishes on its own, so shutdown ends it; the reader
+        // reconnects with its cursor to an instance that is still running.
+        const end = () => {
+          stop()
+          res.end()
+        }
+        liveStreams.add(end)
+        res.on('close', () => liveStreams.delete(end))
         // The lease is held for as long as the tail, which is what keeps this
         // tenant's adapter from being evicted out from under a reader. It leases
         // the datastore, not a connection: the reads inside take one and give it
@@ -1436,10 +1455,18 @@ export async function createKetServer(o: ServeOpts) {
     },
     close(): Promise<void> {
       // An open socket keeps server.close() waiting, so each is asked to leave:
-      // 1001, "going away", which a client reads as reconnect-elsewhere.
+      // 1001, "going away", which a client reads as reconnect-elsewhere. Idle
+      // keep-alive connections and event streams would never leave on their own;
+      // a request still running gets the grace period, and then its connection is
+      // dropped, because a platform that kills the process first skips everything
+      // after this — the adapter, the log sink and the records of the shutdown.
       const closed = new Promise<void>((r) => server.close(() => r()))
       for (const peer of peers) peer.close(1001, 'server shutting down')
-      return closed
+      for (const end of liveStreams) end()
+      server.closeIdleConnections()
+      const grace = setTimeout(() => server.closeAllConnections(), o.shutdownGraceMs ?? 10_000)
+      grace.unref()
+      return closed.finally(() => clearTimeout(grace))
     },
   }
 }
