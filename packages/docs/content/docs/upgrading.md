@@ -14,6 +14,10 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
+The 0.6.1 patch answers a `/_ket/fn` conflict with HTTP `409` and hydrates text-only elements such as
+`<noscript>` and `<textarea>`. Application data schemas are unchanged. Deploy matching server and client
+bundles together and read [Changes in 0.6.1](#changes-in-0-6-1).
+
 The 0.6.0 line closes defaults that failed open before 1.0, so most applications need changes. Work
 through [Changes in 0.6.0](#changes-in-0-6-0) on a staging copy first.
 
@@ -52,6 +56,18 @@ projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
+
+<span id="changes-after-0-6-0"></span>
+
+## Changes in 0.6.1
+
+This patch changes one HTTP status and how text-only elements hydrate. Application data schemas are
+unchanged.
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| `/_ket/fn` | A `KetError` with code `conflict` or `E_CONFLICT` answers HTTP `409` instead of `400`. The body and the transaction rollback are unchanged; other domain codes still answer `400` unless an HTTP binding maps them. | Treat `409` as a state conflict: keep the editable draft and let the user reload or resolve it. |
+| Hydration | SSR writes no markers inside `<noscript>`, and hydration builds the content of `<title>`, `<textarea>`, `<style>`, `<script>` and `<noscript>` instead of walking it. An island with a `<noscript>` notice or a `<textarea>` hole no longer fails hydration and renders again on the client. | Nothing. Deploy the server and client bundles together, as for every view upgrade. |
 
 <span id="changes-in-the-next-release"></span>
 

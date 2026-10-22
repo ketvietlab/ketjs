@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} release, fail-closed defaults, opt-in company scope and stricter contracts.
+description: The coordinated KetJS {{VERSION}} patch release, conflict status for function calls and hydration of text-only elements.
 group: Project evolution
 order: 1
 ---
@@ -15,9 +15,22 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} changes
+## What {{VERSION}} fixes
 
-This release closes defaults that failed open before 1.0, so most applications need changes. Work through [Changes in 0.6.0](/docs/upgrading/#changes-in-0-6-0) on a staging copy first and read every `contract_warning` that `ket check` prints.
+- **Conflict status.** A `/_ket/fn` call whose handler throws `KetError` with code `conflict` or `E_CONFLICT` answers HTTP `409` instead of `400`. The body and the transaction rollback are unchanged, and other domain codes still answer `400`. See [the generic transport](/docs/functions/#the-generic-transport).
+- **Text-only elements hydrate.** SSR writes no hydration markers inside `<noscript>`, and hydration builds the content of `<title>`, `<textarea>`, `<style>`, `<script>` and `<noscript>` instead of walking it. An island with a `<noscript>` notice no longer fails hydration and renders again, and a hole in a `<textarea>` keeps updating. See [Server rendering](/docs/rendering/#server-rendering).
+- **Working playground.** The [playground](/playground/) preview runs `onSubmit` handlers again and still cannot send a form anywhere.
+
+This patch keeps application data schemas unchanged. Deploy matching server and client bundles together, and check clients that expect `400` for a conflict; see [Changes in 0.6.1](/docs/upgrading/#changes-in-0-6-1).
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-6-0"></span>
+<span id="what-0-6-0-changes"></span>
+
+## Previous release: 0.6.0
+
+The 0.6.0 release closes defaults that failed open before 1.0, so most applications need changes. Work through [Changes in 0.6.0](/docs/upgrading/#changes-in-0-6-0) on a staging copy first and read every `contract_warning` that `ket check` prints.
 
 - **Company scope is opt-in.** A deployment sets `companies: true` to scope rows by company. Without it, models need no `scope`, and requests, sessions and jobs carry no company. See [Models and scopes](/docs/models/#company-scope-is-opt-in).
 - **Fail-closed identity.** Signing users in requires `serve.permissions`. The development identity needs `KET_DEV=1`. Outside development, sessions need a stable secret and the cookie is always `Secure`. A `/_ket/fn` call with a session must be same-origin JSON.
@@ -25,8 +38,6 @@ This release closes defaults that failed open before 1.0, so most applications n
 - **Stricter contracts.** Effects are held to the transitive `depends` and the new `optional` key. Views cannot expose sensitive fields. Names and `compatible` ranges are validated. A company's row cannot reference another company's row (`E_CROSS_COMPANY_REFERENCE`).
 - **Safer values and rendering.** `datetime` accepts ISO-8601, read in `KET_TIMEZONE` when it has no offset, and `int` must be a safe integer. A bound scripting URL renders as `unsafe:`. `text()`, `bytes()` and `streamed()` refuse markup types.
 - **Operations.** Migrations take a PostgreSQL advisory lock. Deployments sharing a datastore migrate to the union of their schemas. Schema verification finds PostgreSQL indexes whose names exceed 63 bytes. HTTP shutdown is bounded by `serve.shutdownGraceMs`.
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-5-1"></span>
 <span id="what-0-5-1-fixes"></span>
