@@ -1577,7 +1577,27 @@ export function compose(
   }
 
   // --- tokens: later modules layer over earlier ones ------------------------
-  for (const m of order) Object.assign(manifest.tokens, m.tokens)
+  //
+  // Layering is the point when one module builds on another, and a theme overriding
+  // modules is what a theme is for. Two unrelated modules giving one token different
+  // values is neither: the winner is whichever the dependency sort put last.
+  const tokenSetBy: Record<string, KetModule> = {}
+  for (const m of order) {
+    if (m.kind !== 'theme') {
+      for (const [name, value] of Object.entries(m.tokens ?? {})) {
+        const previous = tokenSetBy[name]
+        if (previous && previous.tokens[name] !== value && !closureOf(m).has(previous.name))
+          diag.warn({
+            code: 'E_TOKEN_CONFLICT',
+            module: m.name,
+            message: `"${previous.name}" and "${m.name}" both set token "${name}" (${String(previous.tokens[name])} and ${String(value)}) and neither depends on the other; "${m.name}" wins by composition order only`,
+            hint: 'leave the token to one module or to the theme, or make one module depend on the other',
+          })
+        tokenSetBy[name] = m
+      }
+    }
+    Object.assign(manifest.tokens, m.tokens)
+  }
 
   // --- HTTP bindings: last, because they read functions, routes and messages ---
   composeHttpBindings(order, manifest, diag)

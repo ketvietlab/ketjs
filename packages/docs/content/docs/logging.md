@@ -116,7 +116,7 @@ silently — the same care applies as to renaming a permission.
 | Event | Level | Meaning |
 | --- | --- | --- |
 | `boot` | info | A process composed its manifest and opened its sink |
-| `contract_warning` | warn | Composition found a contract problem that becomes an error in 1.0, such as an effect outside `depends`; one per finding on every boot |
+| `contract_warning` | warn | Composition found a contract problem it does not fail on, such as an effect outside `depends` (an error from 1.0) or two unrelated modules setting one token; one per finding on every boot |
 | `shutdown` | info | A process finished closing |
 | `http_request` | info | One served request, with its route pattern and status |
 | `unhandled` | error | An exception escaped the request handler, with its stack |
