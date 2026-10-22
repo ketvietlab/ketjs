@@ -477,6 +477,22 @@ const ThemeRegion = () => <section>{trustedMarkup(compiledThemeOutput)}</section
 Never wrap request or database text merely to make HTML render. The trust decision must belong to the
 producer, not the final template call.
 
+A hole inside `<style>` or `<script>` is the same rule applied to code. A plain string there is escaped
+text, so it can never close the element, and CSS such as `a > b` or script such as `a && b` arrives as
+`a &gt; b` and `a &amp;&amp; b` and does not work. Write fixed CSS and script in the template itself,
+serve them as an asset, or pass trusted code through `trustedMarkup()`. Trusted code must not contain
+`</style` or `</script`, and data for a script belongs in a `<script type="application/json">`
+element whose JSON has `<` escaped. A browser reads these elements as one text node, so the server writes
+no hydration markers inside them and hydration cannot claim a hole there: render them in the page
+document, outside any island or other hydrated root:
+
+```tsx
+// File: src/ui/order-page.tsx
+import { trustedMarkup } from '@ketvietlab/ketjs-view'
+
+const PrintStyles = () => <style>{trustedMarkup(compiledPrintCss)}</style>
+```
+
 ## URL attributes and inline script
 
 Escaping protects the characters of an attribute value, not what the browser does with it. A link
