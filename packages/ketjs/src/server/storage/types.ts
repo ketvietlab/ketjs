@@ -92,6 +92,14 @@ export const storageKey = (key: string): string => {
 }
 
 export function namespacedStorage(storage: Storage, namespace: string): Storage {
+  // One path segment. Tenant "a" writing "b/x" would otherwise be tenant "a/b"
+  // writing "x", and listing "a/" would return every object of "a/b".
+  if (namespace.includes('/'))
+    throw new KetError({
+      code: 'E_STORAGE_NAMESPACE',
+      message: `storage namespace "${namespace}" contains "/"`,
+      hint: 'a tenant key used as a storage namespace must be a single path segment',
+    })
   const safe = storageKey(namespace)
   const prefix = `${safe}/`
   const keyOf = (key: string) => prefix + storageKey(key)
