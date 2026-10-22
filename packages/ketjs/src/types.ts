@@ -756,7 +756,12 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly name: string
   readonly version: string
   readonly depends: readonly string[]
-  readonly optional: readonly string[]
+  /**
+   * Modules this one integrates with without requiring them. `defineModule` always
+   * fills it; it is optional so a module object built before the key existed, or
+   * typed from such a build, is still a module.
+   */
+  readonly optional?: readonly string[]
   readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
   readonly extend: Record<string, Record<string, string | FieldDef>>
