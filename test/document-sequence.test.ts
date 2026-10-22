@@ -55,7 +55,7 @@ const numbered = defineModule({
   },
 })
 
-const manifestOf = (): Manifest => compose([numbered], { headless: true })
+const manifestOf = (): Manifest => compose([numbered], { headless: true, companies: true })
 
 test('numbers come out consecutively, from where the sequence was told to start', async (t) => {
   const adapter = await open(t)

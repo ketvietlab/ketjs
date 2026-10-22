@@ -159,8 +159,8 @@ npm run dev
 
 The generated application owns its User, Role, Grant and Assignment models. Provisioning prompts
 for credentials, then cookie-authenticated login/logout/me routes protect an owner-filtered notes
-API. It uses no KetSuite models. The default company-required policy remains unchanged for existing
-deployments; this starter explicitly opts into companyless sessions. Follow the generated README or
+API. It uses no KetSuite models. The deployment does not set `companies: true`, so its sessions carry
+no company. Follow the generated README or
 the [authentication starter guide](https://ketjs.dev/docs/auth-starter/) for the HTTP flow.
 
 ### Static site

@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto'
 import { isDefectError, KetError } from '../kernel/errors.ts'
 import { functionHandler, hasBoundHandlers } from '../kernel/handlers.ts'
-import { createContext } from './ctx.ts'
+import { createContext, globalScope, scopesByCompany } from './ctx.ts'
 import { createIdempotency, idempotencyStore } from './idem.ts'
 import { FormActionRefusal } from './form-action.ts'
 import { FormValidationError } from './form.ts'
@@ -227,8 +227,11 @@ export async function callFn(
   o: CallOptions,
 ): Promise<CallResult> {
   const started = Date.now()
+  // The idempotency key digests the scope, so it is made global here as well as
+  // in the ctx: otherwise a company the caller named would split replays.
+  const call = o.scope && !scopesByCompany(o.manifest) ? { ...o, scope: globalScope() } : o
   try {
-    const result = await runFn(fnKey, args, o)
+    const result = await runFn(fnKey, args, call)
     o.log?.log({
       level: 'info',
       event: 'fn_call',

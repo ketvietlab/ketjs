@@ -116,6 +116,7 @@ test('boot: one declaration produces a running server, framework routes included
     name: 'notesapp',
     modules: [notes],
     headless: true,
+    companies: true,
     serve: {
       routes: (ctx) => ({ '/notes': async (url, req) => json(await ctx.call('notes.list', {}, url, req)) }),
     },
@@ -161,7 +162,7 @@ test('boot: an absent development branch header keeps branch reads unrestricted'
       },
     },
   })
-  const app = defineDeployment({ name: 'branches', modules: [branchNotes], headless: true })
+  const app = defineDeployment({ name: 'branches', modules: [branchNotes], headless: true, companies: true })
   const booted = await bootDeployment(app, { env: memory, port: 0 })
   try {
     await booted.adapter!.run(
@@ -207,7 +208,7 @@ test('boot: without authentication, request headers choose the company only in d
       },
     },
   })
-  const app = defineDeployment({ name: 'open_ledger', modules: [ledger], headless: true })
+  const app = defineDeployment({ name: 'open_ledger', modules: [ledger], headless: true, companies: true })
   // Every request claims another company, as any client on the network could.
   const call = (port: number, fn: string, body: Record<string, unknown> = {}) =>
     fetch(`http://127.0.0.1:${port}/_ket/fn/open_ledger.${fn}`, {
@@ -269,6 +270,7 @@ test('boot: a page resolver naming a function nobody declares is refused at boot
   const app = defineDeployment({
     name: 'broken',
     modules: [notes],
+    companies: true,
     theme: undefined,
     serve: { pages: { resolve: 'website.getPageByPath' } },
   })
@@ -288,6 +290,7 @@ test('boot: a headless deployment cannot claim to resolve pages', () => {
         name: 'contradiction',
         modules: [notes],
         headless: true,
+        companies: true,
         serve: { pages: { resolve: 'notes.byPath' } },
       }),
     /headless but resolves pages/,
@@ -303,6 +306,7 @@ test('boot: a deployment route cannot silently shadow a module route', async () 
     name: 'route_clash',
     modules: [routed],
     headless: true,
+    companies: true,
     serve: { routes: () => ({ '/things/{slug}': async () => json({ owner: 'deployment' }) }) },
   })
   await assert.rejects(
@@ -335,7 +339,7 @@ test('ket new: writes a deployment whose workspace composes', async () => {
   assert.match(readFileSync(join(dir, 'modules/shop.ts'), 'utf8'), /'GET \/notes': \{ call: 'shop\.list'/)
   assert.match(
     readFileSync(join(dir, 'tools/openapi.ts'), 'utf8'),
-    /httpOpenApiDocument\(compose\(deployment\.modules/,
+    /compose\(deployment\.modules, \{ headless: true, companies: deployment\.companies \}\)/,
   )
   assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),
@@ -385,6 +389,7 @@ test('function refusal telemetry covers HTTP and route calls without exposing in
     name: 'denial_telemetry',
     modules: [probe],
     headless: true,
+    companies: true,
     serve: {
       resolveIdentity: async () => ({ userId: 'staff', company: 'acme', companies: ['acme'] }),
       permissions: async () => [],

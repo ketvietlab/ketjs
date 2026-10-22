@@ -17,7 +17,7 @@ import type { DeploymentSpec } from './kernel/workspace.ts'
 import type { Adapter, Manifest, Scope } from './types.ts'
 
 export type TestIdentity = {
-  /** The company new rows are written to. Ignored by apps using sessions. */
+  /** The company new rows are written to. Ignored by apps using sessions or without companies. */
   company?: string | null
   /** Other companies a read may include. The write company is included automatically. */
   companies?: readonly string[] | null

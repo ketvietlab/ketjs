@@ -96,7 +96,7 @@ const sales = defineModule({
 })
 
 const setup = async () => {
-  const manifest = compose([sales], { headless: true })
+  const manifest = compose([sales], { headless: true, companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)

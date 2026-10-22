@@ -90,6 +90,7 @@ const boot = async (env: Record<string, string> = {}) => {
       name: 'transport',
       modules: [notes, api],
       headless: true,
+      companies: true,
       worker: { queues: { default: 1 } },
       serve: {
         sessions: { secret: 'transport-secret-0123456789abcdef', secure: false },

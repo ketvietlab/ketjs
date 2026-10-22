@@ -46,7 +46,7 @@ const books = defineModule({
 })
 
 const boot = async (): Promise<{ adapter: Adapter; manifest: Manifest }> => {
-  const manifest = compose([books])
+  const manifest = compose([books], { companies: true })
   const adapter = sqliteAdapter()
   await adapter.open()
   await migrateOne(adapter, manifest)
@@ -167,6 +167,7 @@ const app = defineDeployment({
   name: 'booksapp',
   modules: [books],
   headless: true,
+  companies: true,
   serve: {
     routes: (ctx) => ({
       '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)),
