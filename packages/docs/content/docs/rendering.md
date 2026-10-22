@@ -150,6 +150,11 @@ creates its later content in the SVG namespace and a hole inside `<foreignObject
 as the parser did on the server. Each adopted list entry keeps its position, so the first reorder
 moves only the entries that changed place.
 
+A browser that runs scripts reads the content of `<title>`, `<textarea>`, `<style>`, `<script>` and
+`<noscript>` as text, so SSR writes no markers inside them. Hydration adopts the element itself and
+builds its content again: a hole in a `<textarea>` keeps updating, and a `<noscript>` notice inside an
+island is not a mismatch.
+
 The first hydrated render is also the first reactive dependency-collection pass. The browser calls
 the view once, adopts the existing nodes during that call, and subscribes to every signal it reads.
 Later signal changes re-run the view normally. If that first pass fails, KetJS rolls back its partial
