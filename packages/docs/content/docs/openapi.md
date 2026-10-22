@@ -425,6 +425,11 @@ export const extension = defineModule({
 
 Bindings follow the same rules: an extension passes `through: '<owner>'` in its `httpRoutes()` group.
 
+A `compatible` range is read as npm reads it, against the owner's `x.y.z` version: `1.2.3` exactly, `1.2`
+for any 1.2.x, `^1.2.3` up to the next major (below 1.0, up to the next minor), and `~1.2.3` up to the
+next minor. A later version's prerelease does not satisfy a range. A version outside the range is
+`E_MODULE_VERSION_SKEW`; a range or version that cannot be read is `E_MODULE_COMPATIBILITY_RANGE`.
+
 Composition rejects overlapping reservations, direct route bypasses, and incompatible extension versions. The
 resulting `Manifest.routePrefixes` retains the owner of every namespace.
 

@@ -43,7 +43,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 
 | Concern | Module fields |
 | --- | --- |
-| Identity | `name`, `version`, `depends`, `optional`, `title`, `summary`, `category` |
+| Identity | `name`, `version`, `depends`, `optional`, `compatible`, `title`, `summary`, `category` |
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `permissions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
