@@ -53,7 +53,7 @@ const crm = (spec: { depends?: string[]; optional?: string[]; effects: string[];
       : {}),
   })
 
-const composed = (modules: KetModule[]) => compose(modules, { headless: true })
+const composed = (modules: KetModule[]) => compose(modules, { headless: true, companies: true })
 const codes = (run: () => unknown): string[] => {
   try {
     run()
@@ -136,6 +136,7 @@ test('effect reach: every boot logs the warnings it composed', async () => {
       name: 'reach',
       modules: [vault, party, sale, crm({ effects: ['write:sale.Order'] })],
       headless: true,
+      companies: true,
     }),
     { env: { KET_SQLITE: ':memory:' }, port: 0, log: () => {}, openLog: () => sink },
   )

@@ -30,7 +30,7 @@ test('identity engine: an internal function has no generic HTTP or agent surface
         json(await ctx.call('identity_engine.inspectCredential', {}, url, req)),
     },
   })
-  const manifest = compose([identity], { headless: true })
+  const manifest = compose([identity], { headless: true, companies: true })
   assert.equal(manifest.functions['identity_engine.inspectCredential']?.exposure, 'internal')
   assert.equal(
     agentTools(manifest).some((tool) => tool.name === 'identity_engine__inspectCredential'),
@@ -41,6 +41,7 @@ test('identity engine: an internal function has no generic HTTP or agent surface
     name: 'identity_engine_http',
     modules: [identity],
     headless: true,
+    companies: true,
     serve: {},
   })
   const booted = await bootDeployment(app, {
@@ -95,6 +96,7 @@ test('identity engine: live session resolution updates context and rejects a rev
     name: 'live_identity_http',
     modules: [identity],
     headless: true,
+    companies: true,
     serve: {
       sessions: { secret: 'test' },
       resolveSession: async () => live,
@@ -152,6 +154,7 @@ test('identity engine: a trusted request identity uses the normal actor, scope a
     name: 'trusted_request_identity',
     modules: [identity],
     headless: true,
+    companies: true,
     serve: {
       resolveIdentity: async ({ req }) =>
         req.headers['x-signed-identity'] === 'valid'
@@ -230,6 +233,7 @@ const startParallelSession = async (live: () => SessionContext) => {
     name: 'parallel_identity_http',
     modules: [parallelSessionModule],
     headless: true,
+    companies: true,
     serve: {
       sessions: { secret: 'test' },
       resolveSession: async () => live(),

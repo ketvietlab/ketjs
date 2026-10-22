@@ -34,7 +34,7 @@ const tags = defineModule({
 })
 
 const deployment = (name: string, modules: KetModule[]): DeploymentSpec =>
-  defineDeployment({ name, modules, headless: true, datastore: 'main' })
+  defineDeployment({ name, modules, headless: true, companies: true, datastore: 'main' })
 
 test('shared datastore: the smaller deployment boots after the larger one', async (t) => {
   const directory = mkdtempSync(join(tmpdir(), 'ket-shared-store-'))
@@ -65,7 +65,7 @@ test('shared datastore: the smaller deployment boots after the larger one', asyn
     ['backoffice', 'portal'],
   )
 
-  const portal = compose([notes('company')], { headless: true })
+  const portal = compose([notes('company')], { headless: true, companies: true })
   assert.equal((await verifyPhysicalSchema(adapter, portal, { deployment: 'portal' })).ok, true)
   assert.equal(
     (await verifyPhysicalSchema(adapter, portal)).ok,
@@ -89,9 +89,14 @@ test('shared datastore: a model scoped differently by two deployments is refused
   const adapter = sqliteAdapter()
   await adapter.open()
   t.after(() => adapter.close())
-  await migrateOne(adapter, compose([notes('company')], { headless: true }), { deployment: 'backoffice' })
+  await migrateOne(adapter, compose([notes('company')], { headless: true, companies: true }), {
+    deployment: 'backoffice',
+  })
   await assert.rejects(
-    () => migrateOne(adapter, compose([notes('shared')], { headless: true }), { deployment: 'portal' }),
+    () =>
+      migrateOne(adapter, compose([notes('shared')], { headless: true, companies: true }), {
+        deployment: 'portal',
+      }),
     (error: { code?: string }) => error.code === 'E_DATASTORE_SCOPE_CLASH',
   )
 })
@@ -100,11 +105,15 @@ test('shared datastore: one deployment alone still drops what it removed, when a
   const adapter = sqliteAdapter()
   await adapter.open()
   t.after(() => adapter.close())
-  await migrateOne(adapter, compose([notes('company'), tags], { headless: true }), { deployment: 'solo' })
+  await migrateOne(adapter, compose([notes('company'), tags], { headless: true, companies: true }), {
+    deployment: 'solo',
+  })
   await assert.rejects(() =>
-    migrateOne(adapter, compose([notes('company')], { headless: true }), { deployment: 'solo' }),
+    migrateOne(adapter, compose([notes('company')], { headless: true, companies: true }), {
+      deployment: 'solo',
+    }),
   )
-  const ops = await migrateOne(adapter, compose([notes('company')], { headless: true }), {
+  const ops = await migrateOne(adapter, compose([notes('company')], { headless: true, companies: true }), {
     deployment: 'solo',
     allowDestructive: true,
   })

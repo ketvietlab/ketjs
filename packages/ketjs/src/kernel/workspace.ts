@@ -100,6 +100,12 @@ export type DeploymentSpec = {
   requires?: string[]
   /** A deployment that exposes functions but renders no pages: no theme, no region contract. */
   headless?: boolean
+  /**
+   * Scope rows by company. Off by default: every model is shared, `scope` may be
+   * left out, and requests and sessions carry no company. On: every model must
+   * declare its scope, and company-scoped rows are filtered by the request's company.
+   */
+  companies?: boolean
   /** Require exact function coverage and compile product-owned managed role templates. */
   permissions?: {
     requireCoverage?: boolean
@@ -225,6 +231,7 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
       manifests[deployment.name] = compose(mods, {
         requiredRegions: deployment.requires ?? [],
         headless: deployment.headless ?? false,
+        companies: deployment.companies === true,
         requirePermissionCoverage: deployment.permissions?.requireCoverage,
         modulePermissionDeclarations: deployment.permissions?.modules,
         roleTemplates: deployment.permissions?.roleTemplates,

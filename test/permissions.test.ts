@@ -49,7 +49,7 @@ const shop = defineModule({
   },
 })
 
-const manifest = compose([shop])
+const manifest = compose([shop], { companies: true })
 
 test('reach: granting the order list reaches product, and says which function did it', () => {
   const r = reachOf(manifest, ['shop.listOrders'])
@@ -142,7 +142,9 @@ test('inventory: machine-readable output includes zero-function modules and ever
     },
   })
   const empty = defineModule({ name: 'empty' })
-  const inventory = permissionInventory(compose([shop, operations, empty], { headless: true }))
+  const inventory = permissionInventory(
+    compose([shop, operations, empty], { headless: true, companies: true }),
+  )
 
   assert.deepEqual(
     inventory.modules.map((module) => [module.name, module.functions.length]),
@@ -209,7 +211,9 @@ test('inventory: machine-readable output includes zero-function modules and ever
     },
   ])
   assert.equal(
-    JSON.stringify(permissionInventory(compose([shop, operations, empty], { headless: true }))),
+    JSON.stringify(
+      permissionInventory(compose([shop, operations, empty], { headless: true, companies: true })),
+    ),
     JSON.stringify(inventory),
   )
 })

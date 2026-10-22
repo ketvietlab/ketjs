@@ -6,8 +6,9 @@ export default defineModule({
   name: '__NAME__',
   title: '__NAME__',
   models: {
+    // One global table. For rows per company, set `companies: true` on the
+    // deployment and `scope: 'company'` here.
     Note: {
-      scope: 'company',
       fields: { id: 'id', title: 'text', body: 'text?' },
     },
   },
