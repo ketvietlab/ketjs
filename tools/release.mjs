@@ -214,7 +214,8 @@ const smoke = (tarballs, version, parent) => {
     generated,
   ])
   const generatedPackage = readJson(join(generated, 'package.json'))
-  if (generatedPackage.dependencies?.['@ketvietlab/ketjs'] !== `^${version}`)
+  // `ket new` pins the exact framework version, so a new project cannot drift to a later release.
+  if (generatedPackage.dependencies?.['@ketvietlab/ketjs'] !== version)
     fail(
       `ket new generated @ketvietlab/ketjs dependency ${generatedPackage.dependencies?.['@ketvietlab/ketjs']}`,
     )
