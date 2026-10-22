@@ -480,7 +480,7 @@ export async function bootDeployment(
   const adapter: Adapter | null = serve.tenants ? null : await (serve.openStore ?? sqliteStore)(config)
   if (adapter) {
     if (config.migrateOnBoot) {
-      const ops = await migrateOne(adapter, manifest)
+      const ops = await migrateOne(adapter, manifest, { deployment: spec.name })
       if (ops.length) log(`  migrate: ${ops.length} operation(s)`)
     }
   }
@@ -579,7 +579,7 @@ export async function bootDeployment(
         ...(config.migrateOnBoot
           ? {
               prepare: async (key, a) => {
-                const ops = await migrateOne(a, manifest)
+                const ops = await migrateOne(a, manifest, { deployment: spec.name })
                 if (ops.length) log(`  migrate [${key}]: ${ops.length} operation(s)`)
               },
             }
