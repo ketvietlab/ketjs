@@ -72,7 +72,9 @@ const playground: IslandFactory<Record<string, never>> = () => ({
                   <iframe
                     id="playground-preview"
                     title="Isolated ketjs-view preview"
-                    sandbox="allow-scripts"
+                    // Without allow-forms the browser drops a submission before its submit event, so
+                    // onSubmit handlers never run; form-action 'none' in the preview still blocks sending.
+                    sandbox="allow-scripts allow-forms"
                     referrerpolicy="no-referrer"
                   />
                 }
@@ -86,10 +88,6 @@ const playground: IslandFactory<Record<string, never>> = () => ({
                 Loading the compiler…
               </p>
             </div>
-            <noscript>
-              The interactive editor needs JavaScript. Every lesson also includes a local project you can run
-              with Node 24.
-            </noscript>
           </>
         }
       />
