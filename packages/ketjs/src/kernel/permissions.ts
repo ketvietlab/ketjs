@@ -9,6 +9,7 @@ import type {
   PermissionCatalogue,
   PermissionExemptionReason,
   PermissionFunctionDef,
+  PermissionLabels,
   PermissionPosture,
   PermissionRisk,
   RoleTemplateDef,
@@ -31,6 +32,16 @@ const EXEMPTION_REASONS = new Set<PermissionExemptionReason>([
   'projection-only',
   'non-grantable',
 ])
+
+/** English is the one required label; any other locale given must say something. */
+const labelsValid = (labels: unknown): boolean => {
+  if (!labels || typeof labels !== 'object') return false
+  const entries = Object.entries(labels as Record<string, unknown>)
+  return (
+    typeof (labels as { en?: unknown }).en === 'string' &&
+    entries.every(([, label]) => typeof label === 'string' && label.trim() !== '')
+  )
+}
 
 const sorted = <T>(values: Iterable<T>): T[] =>
   [...values].sort((left, right) => String(left).localeCompare(String(right), 'en'))
@@ -90,8 +101,8 @@ export function compilePermissionBundles(
     {
       module: KetModule
       includes: string[]
-      labels: { en: string; vi: string }
-      summary?: { en: string; vi: string }
+      labels: PermissionLabels
+      summary?: PermissionLabels
     }
   >()
   const classifications: Record<string, PermissionFunctionDef> = {}
@@ -132,11 +143,11 @@ export function compilePermissionBundles(
           module: module.name,
           message: `duplicate permission bundle "${key}"`,
         })
-      if (!bundle.labels?.en?.trim() || !bundle.labels?.vi?.trim())
+      if (!labelsValid(bundle.labels))
         diag.add({
           code: 'E_PERMISSION_CATALOG_INVALID',
           module: module.name,
-          message: `bundle "${key}" requires non-empty en/vi labels`,
+          message: `bundle "${key}" requires a non-empty en label, and no empty label in another locale`,
         })
       const includes = [...(bundle.includes ?? [])]
       if (new Set(includes).size !== includes.length)
@@ -358,11 +369,11 @@ export function compilePermissionBundles(
         module: key.split('.')[0],
         message: `invalid role template "${key}" or version`,
       })
-    if (!template.labels?.en?.trim() || !template.labels?.vi?.trim())
+    if (!labelsValid(template.labels))
       diag.add({
         code: 'E_PERMISSION_CATALOG_INVALID',
         module: key.split('.')[0],
-        message: `role template "${key}" requires non-empty en/vi labels`,
+        message: `role template "${key}" requires a non-empty en label, and no empty label in another locale`,
       })
     const bundles = sorted(new Set(template.bundles))
     if (!bundles.length || bundles.length !== template.bundles.length)

@@ -172,8 +172,9 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
     (a[1].sequence ?? 100) - (b[1].sequence ?? 100) || label(a[1]).localeCompare(label(b[1]), o.locale)
 
-  const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
-  const matches = (text: string): boolean => !needle || text.toLocaleLowerCase('vi').includes(needle)
+  // Case folding follows the viewer's locale, the same one labels are sorted in.
+  const needle = o.q?.trim().toLocaleLowerCase(o.locale) ?? ''
+  const matches = (text: string): boolean => !needle || text.toLocaleLowerCase(o.locale).includes(needle)
   const activePath = o.active
     ? entries
         .map(([, def]) => def.path)

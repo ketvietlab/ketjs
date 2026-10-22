@@ -132,6 +132,10 @@ export const business = defineDeployment({
 })
 ```
 
+Bundle and role template `labels` require an `en` entry, the framework's fallback; any other locale is
+optional but cannot be empty. A module without `category` is listed under `Other`, and a theme under
+`Theme`; set `category` to the label your tooling should show.
+
 As an alternative to embedding `permissions` in each module object, a package may export exact declarations
 and bind them through `permissions.modules`. This keeps a reviewed product baseline centralized without
 mutating reusable module objects. A deployment cannot supply an overlay for a module that already embeds a
