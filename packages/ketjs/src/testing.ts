@@ -85,7 +85,7 @@ export class CookieJar {
   }
 
   toJSON(): Record<string, string> {
-    return Object.fromEntries([...this.#cookies].sort(([a], [b]) => a.localeCompare(b)))
+    return Object.fromEntries([...this.#cookies].sort(([a], [b]) => a.localeCompare(b, 'en')))
   }
 
   clone(): CookieJar {

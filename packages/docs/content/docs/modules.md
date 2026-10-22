@@ -137,7 +137,7 @@ and bind them through `permissions.modules`. This keeps a reviewed product basel
 mutating reusable module objects. A deployment cannot supply an overlay for a module that already embeds a
 declaration.
 
-Composition stores the deterministic catalog and digest in `manifest.permissions`. See the
+Composition stores the deterministic catalog and digest in `manifest.permissions`. Every ordering composition uses — module order, the catalog and the digest — compares names with the `en` collation, so `LANG` or `LC_ALL` on the host cannot change them. See the
 [permission and session guide](/docs/sessions-tenants/#resolve-function-permissions) for runtime
 permission resolution.
 
