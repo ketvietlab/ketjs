@@ -55,7 +55,22 @@ These existing decisions and behaviors shape the design and are not reopened by 
 
 ## Contracts to settle before P1
 
-P1 starts only after these five contracts are recorded in an architecture decision.
+P1 starts only after these five contracts are recorded in an architecture decision. A plan touches the
+project only through a staging copy:
+
+```mermaid
+%% File: packages/docs/content/docs/module-installation-plan.md
+flowchart TD
+  command["ket install --plan"] --> staging["In a staging copy: install without lifecycle scripts, then build"]
+  staging --> wired{"Selected modules composed?"}
+  wired -- no --> unwired["Stop and print the wiring"]
+  wired -- yes --> guards{"Package checks pass?"}
+  guards -- no --> refused["Refuse and name the check"]
+  guards -- yes --> report["Report contract, schema and access changes"]
+  unwired --> untouched["Project files unchanged"]
+  refused --> untouched
+  report --> untouched
+```
 
 ### C1: package and deployment selection
 
@@ -85,6 +100,17 @@ P1 starts only after these five contracts are recorded in an architecture decisi
 - Package roots are found by Node resolution of `<package>/package.json`, never by relative paths, so the
   same workspace resolves them from source and from `dist`.
 
+```mermaid
+%% File: packages/docs/content/docs/module-installation-plan.md
+flowchart TD
+  selection["ket.install.json"] -->|"JSON import"| workspace["ket.workspace.ts"]
+  workspace -->|"tsc"| artifact["dist/ket.workspace.js and its copy of the selection"]
+  artifact -->|"Node resolution"| manifestFile["The package's package.json"]
+  manifestFile -->|"ket.modules"| descriptors["One ket.module.json per module"]
+  descriptors --> closure["Selected modules and their depends"]
+  closure --> deployment["Deployment manifest"]
+```
+
 ### C3: what the report compares
 
 The report has three separate parts, each with a stated baseline:
@@ -106,6 +132,17 @@ Removing a module removes its models from the manifest, so the next migration co
 Because that plan is refused as a whole, every later migration of the deployment, every tenant included,
 stops, and so do servers and workers that migrate on boot. Keeping the tables while migrations continue
 is not possible with the current schema planner.
+
+```mermaid
+%% File: packages/docs/content/docs/module-installation-plan.md
+flowchart TD
+  remove["ket uninstall crm"] --> plan["List every table and index to drop"]
+  plan --> ack{"Drops acknowledged?"}
+  ack -- no --> refused["Refuse and change nothing"]
+  ack -- yes --> release["Release migrates with --allow-destructive"]
+  release --> dropped["Tables and rows deleted"]
+  release -. "without the flag" .-> blocked["Plan refused; later migrations and boots stop"]
+```
 
 Until a separate decision says otherwise, `ket uninstall` therefore means export and then drop:
 
@@ -133,6 +170,22 @@ change D7 and `ket schema verify`. It needs its own decision record and is not p
   `ket install` finds an unfinished journal and restores the backups before doing anything else.
 - **Limits.** Effects of lifecycle scripts outside `node_modules`, such as files written elsewhere or
   network calls, cannot be undone. The report names every package that runs an install script.
+
+```mermaid
+%% File: packages/docs/content/docs/module-installation-plan.md
+flowchart TD
+  apply["ket install crm"] --> journal{"Unfinished journal?"}
+  journal -- yes --> recover["Restore its backups"]
+  journal -- no --> pinned{"Lockfile matches the plan?"}
+  recover --> pinned
+  pinned -- no --> replan["Refuse; plan again"]
+  pinned -- yes --> staged{"Staging build and ket check pass?"}
+  staged -- no --> unchanged["Stop; project unchanged"]
+  staged -- yes --> promote["Journal backups, then promote the three files"]
+  promote --> clean{"Clean install succeeds?"}
+  clean -- yes --> applied["Applied"]
+  clean -- no --> restore["Restore the files and reinstall from the old lockfile"]
+```
 
 ## Selection file
 
@@ -320,6 +373,20 @@ P2 acceptance cases:
 3. P1 and P2 in KetJS, released together in the next minor.
 4. KetSuite widens its peer range to that release.
 5. P3, each item with its own decision record.
+
+The dependencies between these steps:
+
+```mermaid
+%% File: packages/docs/content/docs/module-installation-plan.md
+flowchart TD
+  current["KetSuite on the current KetJS line"] --> p0["P0: KetSuite packaging"]
+  adr["C1 to C5 decision record"] --> p1["P1: read-only plan"]
+  p1 --> p2["P2: apply, remove, upgrade"]
+  p2 --> minor["Next KetJS minor release"]
+  minor --> widen["KetSuite widens its peer range"]
+  p0 --> widen
+  widen --> p3["P3: one decision record per item"]
+```
 
 ## Prior art
 
