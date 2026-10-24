@@ -12,6 +12,9 @@ Known gaps in the current framework and its extension boundaries. Static asset a
 ## Not built
 - **Image processing.** Storage keeps the bytes it is given. Resizing, transforms, focal points and
   document previews are not framework features; an application that needs them runs them as jobs.
+- **Installing packaged modules.** Using modules from an npm package means installing it, then importing
+  its modules or adding its root to `modulePaths`, and listing them in `modules` by hand.
+  [Plan: installing modules](/docs/module-installation-plan/) proposes `ket install`.
 
 ## Not settled
 - **Does a theme get its own routes?** Currently regions only; Shopify-style JSON
