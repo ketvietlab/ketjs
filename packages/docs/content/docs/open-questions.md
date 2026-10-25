@@ -14,7 +14,8 @@ Known gaps in the current framework and its extension boundaries. Static asset a
   document previews are not framework features; an application that needs them runs them as jobs.
 - **Installing packaged modules.** Using modules from an npm package means installing it, then importing
   its modules or adding its root to `modulePaths`, and listing them in `modules` by hand.
-  [Plan: installing modules](/docs/module-installation-plan/) proposes `ket install`.
+  [D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source) accepts `ket install` as a development
+  command, and [Plan: installing modules](/docs/module-installation-plan/) tracks its phases.
 
 ## Not settled
 - **Does a theme get its own routes?** Currently regions only; Shopify-style JSON
