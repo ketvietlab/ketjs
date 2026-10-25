@@ -5,8 +5,8 @@ group: Project evolution
 order: 7
 ---
 
-**Status: proposal, not built.** This page records the plan for `ket install` and the contracts it must
-settle first. Nothing described here exists in the current release.
+**Status: accepted in [D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source), not built.** This page records the plan for `ket install` and the
+contracts D79 settles. Nothing described here exists in the current release.
 
 ## Goal
 
@@ -15,7 +15,7 @@ Let an application add modules published as npm packages, starting with KetSuite
 
 ```bash
 # Run from: /path/to/example-app
-ket install product stock --from @ketvietlab/ketsuite@0.1.42
+ket install product stock --from @ketvietlab/ketsuite@<version>
 ```
 
 The command must keep every guarantee the framework already makes about composition, migrations and
@@ -53,10 +53,10 @@ These existing decisions and behaviors shape the design and are not reopened by 
 | Where the selection lives | A data file owned by the CLI, `ket.install.json` | Rewriting TypeScript reliably needs a parser; the name stays distinct from the `ket.module.json` descriptor |
 | Command names | `ket install` and `ket uninstall` | The verb developers already use for packages; neither command runs in production |
 
-## Contracts to settle before P1
+## Contracts
 
-P1 starts only after these five contracts are recorded in an architecture decision. A plan touches the
-project only through a staging copy:
+[D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source) records these five contracts, and P1 and P2 implement them. A plan touches the project only
+through a staging copy:
 
 ```mermaid
 %% File: packages/docs/content/docs/module-installation-plan.md
@@ -139,17 +139,35 @@ flowchart TD
   remove["ket uninstall crm"] --> plan["List every table and index to drop"]
   plan --> ack{"Drops acknowledged?"}
   ack -- no --> refused["Refuse and change nothing"]
-  ack -- yes --> release["Release migrates with --allow-destructive"]
-  release --> dropped["Tables and rows deleted"]
-  release -. "without the flag" .-> blocked["Plan refused; later migrations and boots stop"]
+  ack -- yes --> release["Release migrates with --allow-destructive and --export-dropped"]
+  release --> exported{"Every row exported?"}
+  exported -- no --> stopped["Stop with nothing dropped"]
+  exported -- yes --> dropped["Tables and rows deleted"]
+  release -. "flags missing" .-> blocked["Plan refused; later migrations and boots stop"]
 ```
 
-Until a separate decision says otherwise, `ket uninstall` therefore means export and then drop:
+`ket uninstall` therefore means export and then drop:
 
-- the plan lists every table and index that will be dropped;
-- applying requires an explicit acknowledgement of those drops, and the release that ships the removal
-  must run its migration with `--allow-destructive`;
+- the plan lists every table, column and index that will be dropped;
+- applying requires an explicit acknowledgement of those drops;
+- the release that ships the removal runs `ket migrate --allow-destructive --export-dropped <directory>`;
 - the page that documents the command says plainly that the data is deleted.
+
+`--export-dropped` is a new `ket migrate` option. `ket uninstall` cannot export the data: it runs in the
+developer's project, while the rows live in each deployed datastore, and the migration that drops them is
+the only step that reads them.
+
+- It writes every row of each table about to be dropped, and the key and value of each column about to be
+  dropped, as one JSON Lines file per table in the directory the operator names.
+- It finishes the export and compares the written row counts with the tables before the first `DROP`. A
+  failed or incomplete export stops the migration with nothing dropped.
+- With `--all`, each datastore writes its own files, so one datastore's rows never share a file with
+  another's.
+- When a plan drops the tables or columns of a module that is no longer composed, `--allow-destructive`
+  alone is refused. The operator passes `--export-dropped <directory>`, or states `--no-export` to drop
+  without a copy. Other destructive operations keep today's behavior.
+- The files hold production data, often personal data. Where they are stored and when they are deleted is
+  the operator's responsibility, and the documentation of the option says so.
 
 Retaining detached tables, so that the schema comparison skips them and migrations continue, would
 change D7 and `ket schema verify`. It needs its own decision record and is not part of P2.
@@ -195,7 +213,7 @@ dependencies, so `ket uninstall` can tell which modules were pulled in only by t
 ```jsonc
 // File: example-app/ket.install.json
 {
-  "packages": { "@ketvietlab/ketsuite": "0.1.42" },
+  "packages": { "@ketvietlab/ketsuite": "<version>" },
   "deployments": {
     "app": ["crm", "product"]
   }
@@ -211,6 +229,15 @@ The workspace combines it with its own declarations:
 - Package roots are appended after the workspace's `modulePaths`. A module name provided by two roots fails
   as it does today.
 - A deployment named in the file but absent from the workspace is refused.
+
+Presets and bridges come from the package's data and never appear in the file as such:
+
+- A preset, such as `crm` with its screens, is expanded into explicit module names when it is installed.
+  A later package version that adds a module to the preset does not add it to the file; the upgrade report
+  names it.
+- A bridge is a module the package declares as joining two or more modules. When every module it joins is
+  selected for a deployment, `ket install` adds the bridge to that deployment's list and the report says
+  why. Uninstalling any module it joins removes the bridge as well, and the bridge's tables follow C4.
 
 ## Spike results
 
@@ -268,7 +295,7 @@ Large workspaces were not measured.
 
 ### P0: KetSuite can be installed as a package
 
-KetSuite work, independent of the framework phases, done after KetSuite moves to the current KetJS line.
+KetSuite work, independent of the framework phases, done after KetSuite moves to KetJS 0.6.1.
 
 1. Declare `@ketvietlab/ketjs` and `@ketvietlab/ketjs-view` as `peerDependencies` with the same range.
    Before 1.0 a minor release is breaking, so the range covers one minor, for example `>=0.7.0 <0.8.0`; a
@@ -317,18 +344,19 @@ P1 acceptance cases:
 - a package that brings its own framework copy is refused even though its composition passes;
 - a package whose `exports` omit `./package.json` is refused with a message that names the missing export.
 
-### P2: apply, remove and upgrade
+### P2: apply, uninstall and upgrade
 
 1. Apply as C5 describes, wire `ket.install.json` into workspaces generated by `ket new`, and print the
    wiring for existing workspaces instead of editing them. The generated `tools/openapi.ts` and deployment
    test resolve the workspace before composing, so they keep working when modules are selected by name.
 2. When an installed module needs `companies: true`, the plan lists the application's models that must
    declare a scope and stops; it never edits them.
-3. `ket uninstall` as C4 describes.
+3. `ket uninstall` as C4 describes, together with `ket migrate --export-dropped` and `--no-export`.
 4. `ket install --upgrade` plans a newer package version across every deployment that uses it and links
    the source's release notes. Automatic code migrations are out of scope.
-5. Ship in the next minor release through the VERSION and CHANGE_LOG gates, with an install smoke test in
-   the release check that uses the fixture package and calls one installed function at runtime.
+5. Ship together with P1 in the first minor release after both are done, through the VERSION and
+   CHANGE_LOG gates; other releases do not wait for them. The release check gains an install smoke test that
+   uses the fixture package and calls one installed function at runtime.
 
 P2 acceptance cases:
 
@@ -337,14 +365,35 @@ P2 acceptance cases:
 - an apply interrupted during promotion is restored by the next run;
 - an apply after a saved plan is refused when a newer version would resolve;
 - uninstalling from a database with rows lists the tables, refuses without the acknowledgement, and drops
-  them only through a migration run with `--allow-destructive`;
+  them only through a migration run with `--allow-destructive` and `--export-dropped`, after the files hold
+  every row;
+- an export that fails or writes fewer rows than the table holds stops the migration with every table
+  intact;
+- `--allow-destructive` alone is refused for a removed module's tables, and `--no-export` drops them
+  without a copy;
+- with `--all`, each datastore's rows are written to its own files;
 - a package used by two deployments: an upgrade reports both, and uninstalling from one keeps the package.
 
-### P3: extensions that need their own decisions
+### P3: extensions
 
-1. **Presets and bridges.** KetSuite ships presets, such as CRM with its screens and mail bridges, as data
-   in its package. `ket install` expands a preset into explicit module names in `ket.install.json`. No
-   module installs itself, and nothing is resolved at runtime.
+1. **Presets and bridges, decided in [D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source).** KetSuite declares presets, such as CRM with its
+   screens, and bridges, such as a module that joins CRM and mail, as data in its package manifest.
+   `ket install` expands presets and adds bridges as the selection file rules describe. No module installs
+   itself, and nothing is resolved at runtime.
+
+   ```jsonc
+   // File: example-package/package.json
+   {
+     "name": "@example/suite",
+     "ket": {
+       "modules": "./dist/modules",
+       "presets": { "crm": ["crm", "crm_backend"] },
+       "bridges": { "crm_mail": ["crm", "mail"] }
+     }
+   }
+   ```
+
+   The remaining items each need their own decision record.
 2. **Server wiring.** KetSuite exports a helper for the `serve` configuration its modules need, and the
    plan shows what to add. The framework does not edit `serve`.
 3. **One identity source per deployment.** Reject a composition that contains two user models used for
@@ -360,7 +409,9 @@ P2 acceptance cases:
 | Disabled install scripts break a native dependency during planning | `sharp` and `esbuild` loaded without scripts on macOS; P0 still makes native dependencies lazy, and the plan reports an import failure instead of guessing |
 | A package brings its own framework copy, composes, and fails at runtime | The singleton check refuses it before anything is written; the release smoke test calls an installed function |
 | KetSuite and KetJS versions drift | Peer ranges checked before anything is written; KetSuite releases against each KetJS minor |
-| A removal blocks every later migration | C4 makes removal an explicit drop instead of a silent block |
+| A removal blocks every later migration | C4 makes removal an explicit, exported drop instead of a silent block |
+| Export files hold production data | Written only to the directory the operator names; the option's documentation states the retention duty |
+| Bridges grow a deployment's composition | Each addition is written to `ket.install.json` and shown in the plan before it applies |
 | Script effects outside the dependency tree | Reported per package; not undone |
 | Enabling `companies: true` on a datastore with rows | The plan reports the requirement and never changes it |
 | The KetSuite tarball is large (8.9 MB packed) | Accepted in P0; split packages only when measurements justify the release cost |
@@ -368,24 +419,25 @@ P2 acceptance cases:
 
 ## Order
 
-1. P0 in KetSuite, after it moves to the current KetJS line.
-2. The C1 to C5 decision record, including the wiring chosen by the spike.
-3. P1 and P2 in KetJS, released together in the next minor.
+1. P0 in KetSuite, after it moves to KetJS 0.6.1. KetSuite 0.1.42 makes that move without P0, so P0
+   ships in a later KetSuite version.
+2. The decision record for C1 to C5, export-and-drop, presets and bridges: [D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source), recorded.
+3. P1 and P2 in KetJS, released together in the first minor release after both are done.
 4. KetSuite widens its peer range to that release.
-5. P3, each item with its own decision record.
+5. P3: presets and bridges as D79 decides; every other item with its own decision record.
 
 The dependencies between these steps:
 
 ```mermaid
 %% File: packages/docs/content/docs/module-installation-plan.md
 flowchart TD
-  current["KetSuite on the current KetJS line"] --> p0["P0: KetSuite packaging"]
-  adr["C1 to C5 decision record"] --> p1["P1: read-only plan"]
-  p1 --> p2["P2: apply, remove, upgrade"]
-  p2 --> minor["Next KetJS minor release"]
+  current["KetSuite on KetJS 0.6.1"] --> p0["P0: KetSuite packaging"]
+  adr["D79 recorded"] --> p1["P1: read-only plan"]
+  p1 --> p2["P2: apply, uninstall, upgrade"]
+  p2 --> minor["First KetJS minor with P1 and P2"]
   minor --> widen["KetSuite widens its peer range"]
   p0 --> widen
-  widen --> p3["P3: one decision record per item"]
+  widen --> p3["P3: presets, bridges, further items"]
 ```
 
 ## Prior art
@@ -406,13 +458,17 @@ flowchart TD
 | [Shai-Hulud](https://www.invicti.com/blog/web-security/shai-hulud-2-worm-supply-chain-attack-on-npm-dependencies) | An install script spread a credential-stealing worm across hundreds of packages | Require provenance and a trusted scope |
 | [Two copies of React](https://dev.to/r9v/the-two-reacts-bug-when-packages-arent-singletons-492h) | A library that bundles its framework breaks the application silently | Framework packages as peers, checked as singletons |
 
-## Open decisions
+## Decisions
 
-1. Confirm the defaults above, including the name `ket.install.json`.
-2. Record C1 to C5, and accept export-and-drop as the meaning of `ket uninstall` for P2.
-3. Confirm the next minor release as the target for P1 and P2.
-4. Confirm presets as package data for P3, which needs a decision record alongside D67.
-5. Decide when KetSuite starts P0.
+Maintainers settled the open decisions on 2026-10-25:
+
+1. The defaults above stand, including `ket.install.json` and the names `ket install` and `ket uninstall`.
+2. C1 to C5 are recorded as [D79](/docs/architecture-decisions/#d79-packaged-modules-enter-a-deployment-through-its-source). `ket uninstall` means export and then drop, and
+   `ket migrate --export-dropped` performs the export.
+3. P1 and P2 ship together in the first minor release after both are done; other releases do not wait.
+4. Presets are package data that the CLI expands. Bridges are added to a deployment's selection when every
+   module they join is selected.
+5. KetSuite starts P0 after it moves to KetJS 0.6.1.
 
 ## Basis and limits
 
