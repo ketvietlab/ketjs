@@ -438,6 +438,11 @@ an unknown island in strict mode, still throw.
 
 ## Fragment navigation and persistent islands
 
+Fetch response URLs omit fragments. A requested anchor is retained when the response still names
+the same origin, path and query and was not redirected. History, anchor focus and the navigation
+completion event use the complete destination. Redirects and changed destinations do not inherit
+the original anchor; an explicit destination anchor remains authoritative.
+
 A document opts into enhanced navigation by exposing named elements such as
 `data-ket-slot="backend.content"`. Same-origin GET links and GET forms then request server-rendered slot
 fragments. The manager moves matching old island nodes into the new fragment before inserting it, so

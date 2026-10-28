@@ -6,6 +6,10 @@ required application-server dependency.
 
 > KetJS 0.x is preview software. APIs and deployment contracts may change before 1.0.
 
+Fragment navigation preserves a requested URL anchor when Fetch returns the same destination
+without its fragment. History, anchor focus and `ket:navigation-complete` use that complete URL.
+Redirected or changed destinations keep their own URL and never inherit the original record anchor.
+
 ## Requirements
 
 - Node.js 24 or newer
