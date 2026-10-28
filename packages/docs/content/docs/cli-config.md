@@ -36,7 +36,7 @@ before invoking them.
 
 | Command | Purpose |
 | --- | --- |
-| `ket check` | Resolve and compose every app; report contract violations. |
+| `ket check [--strict]` | Resolve and compose every app; report contract violations and warnings. `--strict` also fails on warnings. |
 | `ket manifest --deployment NAME` | Print one composed manifest. |
 | `ket workspace` | Show deployments, datastores, shared modules, and deployment-only modules. |
 | `ket modules` | Show resolved modules and their source paths. |
@@ -47,11 +47,14 @@ before invoking them.
 | `ket classification [--json]` | List fields declared personal or sensitive, and the models that classify nothing. |
 
 Run `ket check` in CI before migrations or deployment. It catches dependency, extension, layout, route,
-queue, theme, model, and function-contract conflicts without starting a server.
+queue, theme, model, and function-contract conflicts without starting a server. A contract warning is a
+composition the framework still accepts, such as a function effect on a model the module does not
+depend on, which becomes an error in 1.0. `ket check` lists the warnings and exits zero; add `--strict`
+in CI to fail on them before the release that enforces them.
 
 ```bash
 # Run from: /path/to/example-app
-ket check --workspace dist/ket.workspace.js
+ket check --strict --workspace dist/ket.workspace.js
 ket workspace --workspace dist/ket.workspace.js
 ket permissions --deployment backoffice --grant order.list,order.create
 ket permissions --json --all --workspace dist/ket.workspace.js
