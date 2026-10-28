@@ -20,6 +20,7 @@ the others:
 | Superseded | D13 | History only; the later decision named in the entry is current. |
 | Partly superseded | D28, D50, D57 | D67 replaced the module lifecycle portion; the rest still applies. |
 | Partly superseded | D23 | D78 made company scoping opt-in; D23 applies to a deployment with `companies: true`. |
+| Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
 | KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
@@ -2537,3 +2538,53 @@ change; setting `companies: true` keeps them.
 
 **Reversible:** per deployment, by setting or removing the flag. Removing it from a deployment that has
 company-scoped models is a composition error, not a migration.
+
+## D80 — Architecture rules run as lint, and `ket lint` reads the composition
+
+Composition already refuses what it can see: a relation, extension, effect, view, fill or menu that
+reaches a module outside the declaring module's `depends` fails with an `E_*_NOT_DEPENDED` code. It cannot
+see source. In KetSuite, 35 of the 246 runtime import edges between its 110 modules lead outside the
+importer's `depends` closure, three of them against a declared dependency. Consumers held their
+source-side rules with regular-expression audits that needed a build, ran late in CI and once read a
+`<br>` inside a string as markup.
+
+**Chosen:** a rule that the syntax of one file decides runs in Biome, which KetJS and its consumers already
+pin for formatting and linting: Biome's own rules first, GritQL plugins for the rest. One configuration
+then serves the editor, the pre-commit hook and CI. `@ketvietlab/ketjs` ships the framework's plugins in
+`lint/`; the first is `raw-no-interpolation`, because an interpolated `raw()` body is an injection path
+that escaping cannot reach. A rule that needs the composition runs in `ket lint`, which loads the built
+workspace like every other command, with a Node module-resolution hook that records each import edge.
+An edge from one module's files into another module outside its `depends` closure is
+`E_IMPORT_NOT_DEPENDED`. `optional` does not cover it: a static import loads the other module whether or
+not the deployment has it. `ket lint` reports these as warnings until 1.0, and `--strict` fails on them,
+as `ket check --strict` does for contract warnings.
+
+**Composition stays location-free.** The declaration surface in `kernel/define.ts` holds nothing that
+depends on a file's name or location, and module objects carry no import graph, so this cannot be a
+composition check. `ket lint` maps files to modules from where it found them: a module discovered on a
+module path owns its descriptor directory, and a module passed as an object is matched by name under a
+root given with `--modules DIR`, one directory per module named as the module. All 110 KetSuite modules
+already follow that layout.
+
+**The runtime graph, not a parser.** KetJS has no dependencies, and a hand-written import scanner is the
+regular-expression audit this replaces. The resolver records the edges the deployment actually loads,
+resolved the way Node resolves them; for KetSuite that takes about two seconds. Type-only imports do not
+survive the build, so they are not edges: a type is not runtime coupling.
+
+**Not chosen:** an ESLint plugin, which adds a second toolchain beside Biome. A location field on
+`defineModule`, which changes the declaration surface for a lint concern. Biome `noRestrictedImports`
+generated from the manifest, which matches the import string rather than the resolved file, so
+`../account/x` means different modules at different depths. A path-scoped rule against browser globals in
+server views, until server and client files can be told apart: KetSuite has browser globals in 80 files,
+most of them legitimate client code beside server views, and a name-matching pattern also flags a local
+`const document`.
+
+**Cost:** architecture rules live in two places, Biome for syntax and `ket lint` for composition. A
+module passed as an object needs `--modules`. Only code the workspace loads is seen: an `import()` that
+runs when a handler is called, or a file no deployment imports, is not checked. Biome resolves a plugin
+path from the consuming project's root rather than from the shared configuration that names it, so
+`ket lint init` writes the paths and `ket lint` reports when they no longer match the installed version.
+The GritQL plugin API is young: Biome stays pinned and every rule has fixture tests.
+
+**Reversible:** yes. Lint changes no runtime behaviour, and a rule can be demoted or removed without
+migrating anything.
