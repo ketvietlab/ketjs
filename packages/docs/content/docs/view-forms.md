@@ -2,7 +2,7 @@
 title: Forms and edit sessions
 description: Manage browser drafts, submission outcomes, native controls, island lifecycles, and form render subscriptions with ketjs-view.
 group: ketjs-view and KTL
-order: 3
+order: 4
 ---
 
 A browser form needs a draft, validation feedback, submission state and a clear owner for DOM effects.

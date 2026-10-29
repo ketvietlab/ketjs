@@ -114,7 +114,7 @@ has no runtime dependencies.
 | Package | Use it for |
 | --- | --- |
 | [`@ketvietlab/ketjs`](packages/ketjs) | Fullstack applications, module composition, data, HTTP, jobs, and CLI |
-| [`@ketvietlab/ketjs-view`](packages/ketjs-view) | Signals, templates, DOM updates, server rendering, and islands |
+| [`@ketvietlab/ketjs-view`](packages/ketjs-view) | Signals, templates, DOM updates, server rendering, islands, and the Mirror server-state cache |
 | [`@ketvietlab/ketjs-postgres`](packages/ketjs-postgres) | PostgreSQL support |
 | [`@ketvietlab/ketjs-view-tools`](packages/ketjs-view-tools) | Static page building, asset bundling, and development tools |
 | [`@ketvietlab/create-view`](packages/create-view) | Static-site scaffolding |
