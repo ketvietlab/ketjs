@@ -151,6 +151,7 @@ Check the current package boundaries and upgrade requirements. Review design dec
 4. [Open questions](/docs/open-questions/)
 5. [Contributing](/docs/contributing/)
 6. [Publishing packages](/docs/releasing/)
+7. [Plan: installing modules](/docs/module-installation-plan/)
 
 </section>
 
