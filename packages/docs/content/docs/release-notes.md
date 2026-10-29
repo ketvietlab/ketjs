@@ -17,13 +17,22 @@ KetSuite, its design system, Flow and website clients are maintained and release
 
 ## What {{VERSION}} fixes
 
+- **Return anchors survive fragment navigation.** Fetch drops the fragment from a response URL, so a fragment navigation to a link such as a native Back link with `#row=…` lost the row it should return to. The runtime keeps the requested anchor when the response names the same origin, path and query and was not redirected, and uses that complete URL for history, anchor focus and `ket:navigation-complete`. A redirected or changed destination keeps its own URL and never inherits the anchor. See [Fragment navigation and persistent islands](/docs/rendering/#fragment-navigation-and-persistent-islands).
+
+This patch changes no public API or application data schema, and applications need no change. Deploy matching server and client bundles together.
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-6-1"></span>
+<span id="what-0-6-1-fixes"></span>
+
+## Previous release: 0.6.1
+
 - **Conflict status.** A `/_ket/fn` call whose handler throws `KetError` with code `conflict` or `E_CONFLICT` answers HTTP `409` instead of `400`. The body and the transaction rollback are unchanged, and other domain codes still answer `400`. See [the generic transport](/docs/functions/#the-generic-transport).
 - **Text-only elements hydrate.** SSR writes no hydration markers inside `<noscript>`, and hydration builds the content of `<title>`, `<textarea>`, `<style>`, `<script>` and `<noscript>` instead of walking it. An island with a `<noscript>` notice no longer fails hydration and renders again, and a hole in a `<textarea>` keeps updating. See [Server rendering](/docs/rendering/#server-rendering).
 - **Working playground.** The [playground](/playground/) preview runs `onSubmit` handlers again and still cannot send a form anywhere.
 
 This patch keeps application data schemas unchanged. Deploy matching server and client bundles together, and check clients that expect `400` for a conflict; see [Changes in 0.6.1](/docs/upgrading/#changes-in-0-6-1).
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-6-0"></span>
 <span id="what-0-6-0-changes"></span>
