@@ -526,6 +526,14 @@ const applyResponse = async (response, signal) => {
 }
 
 let active = null
+// Fetch response URLs omit fragments. Keep an anchor only for the destination
+// actually requested; a redirect must never inherit a record's return anchor.
+const navigationUrl = (response, target) => {
+  const result = new URL(response.url || target.href)
+  if (!result.hash && !response.redirected && result.origin === target.origin &&
+      result.pathname === target.pathname && result.search === target.search) result.hash = target.hash
+  return result
+}
 // Store only positions and element identities, never field values or record data.
 const contextPath = (element) => {
   if (!element) return null
@@ -607,10 +615,10 @@ const navigate = async (asked, mode = 'push', scroll = null, options = {}) => {
     }) } catch (cause) {
       throw Object.assign(new Error('navigation request failed', { cause }), { retryable: true })
     }
-    fallback = response.url || fallback
+    const finalUrl = navigationUrl(response, target)
+    fallback = finalUrl.href
     if (!response.ok) throw Object.assign(new Error('server refused the navigation request'), { status: response.status, retryable: response.status >= 500 })
     const changed = await applyResponse(response, controller.signal)
-    const finalUrl = new URL(response.url || target.href)
     if (mode === 'push') history.pushState({ __ketScroll: [0, 0] }, '', finalUrl.href)
     if (mode === 'replace') history.replaceState({ ...(history.state ?? {}), __ketScroll: [0, 0] }, '', finalUrl.href)
     focusAfterNavigation(finalUrl, changed, scroll, context)
