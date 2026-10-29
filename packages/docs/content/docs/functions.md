@@ -153,7 +153,7 @@ export const crm = defineModule({
 
 `optional` does not order composition and cannot replace `depends` for a module whose models this one
 extends or whose joints it fills. Warnings are kept on `manifest.diagnostics`, printed by `ket check`
-and logged as `contract_warning` on every boot.
+(which fails on them with `--strict`) and logged as `contract_warning` on every boot.
 
 ## Function context
 
