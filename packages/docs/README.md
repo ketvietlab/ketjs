@@ -64,6 +64,12 @@ newer (set `NODE_VERSION` when the build image's default is older). All dependen
 site build needs no `NPM_TOKEN`. The Worker's settings are managed in Cloudflare. See
 [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
+A release merge into `master` changes the lockfile to a version that npm does not have yet, so the build
+it starts fails at `npm ci`. After publishing, `release.yml` rebuilds `master` by posting to the Worker's
+[Deploy Hook](https://developers.cloudflare.com/workers/ci-cd/builds/deploy-hooks/), stored as the
+`KETJS_DOCS_DEPLOY_HOOK` secret of the GitHub `npm` environment. The hook URL needs no other credential,
+so keep it secret and recreate it if it leaks.
+
 ## Content and rendering
 
 - `content/home.md` supplies homepage copy and feature data. Other Markdown collections supply
