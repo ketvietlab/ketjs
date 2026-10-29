@@ -34,6 +34,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./mirror": {
+      "types": "./dist/mirror.d.ts",
+      "default": "./dist/mirror.js"
+    },
     "./jsx-runtime": {
       "types": "./dist/jsx-runtime.d.ts",
       "default": "./dist/jsx-runtime.js"
