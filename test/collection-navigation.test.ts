@@ -12,6 +12,7 @@ const runtime = (source: string) => {
   const location = new URL('http://example.test/orders?q=old')
   const calls: string[] = []
   const events: string[] = []
+  const completions: Array<{ url: string; mode: string }> = []
   const attributes = new Set<string>()
   const viewport = { id: 'table', scrollLeft: 140, scrollTop: 60 }
   const document = {
@@ -23,7 +24,18 @@ const runtime = (source: string) => {
     },
     querySelectorAll: () => [viewport],
     querySelector: (path: string) => (path === '#sort' ? sort : path === '#table' ? viewport : null),
-    getElementById: () => null,
+    getElementById: (id: string) => (id === 'row=service-1' ? row : null),
+  }
+  const row = {
+    focused: false,
+    scrolled: false,
+    focus: () => {
+      row.focused = true
+      document.activeElement = row
+    },
+    scrollIntoView: () => {
+      row.scrolled = true
+    },
   }
   const sort = {
     id: 'sort',
@@ -94,7 +106,10 @@ const runtime = (source: string) => {
     (url: URL, init: RequestInit) => fetcher(url, init),
     applyResponse,
     requireActive,
-    (name: string) => events.push(name),
+    (name: string, detail: { url: string; mode: string }) => {
+      events.push(name)
+      if (name === 'ket:navigation-complete') completions.push(detail)
+    },
     (url: string) => calls.push(url),
     'text/vnd.ket.fragments+html',
     'test-build',
@@ -107,6 +122,8 @@ const runtime = (source: string) => {
     states,
     calls,
     events,
+    completions,
+    row,
     attributes,
     document,
     sort,
@@ -195,6 +212,57 @@ test('collection navigation uses the shared bootstrap for every route', async (t
         assert.equal(app.window.scrollY, 200)
         assert.equal(app.attributes.size, 0)
       }
+    })
+    await t.test(
+      'Hospitality return anchors survive a fragmentless Fetch response in history, focus and completion',
+      async () => {
+        for (const mode of ['push', 'replace', 'pop']) {
+          const app = runtime(source)
+          const target = 'http://example.test/admin/hospitality/services?state=charged#row=service-1'
+          app.fetch(async () =>
+            Object.defineProperties(new Response('rows'), {
+              url: { value: target.split('#')[0] },
+            }),
+          )
+          await app.navigate(target, mode, null, { fallback: 'error' })
+          if (mode !== 'pop') assert.equal(app.location.href, target)
+          assert.deepEqual(app.completions, [{ url: target, mode }])
+          assert.equal(app.document.activeElement, app.row)
+          assert.equal(app.row.scrolled, true)
+          assert.equal(app.states.length, mode === 'push' ? 1 : 0)
+        }
+      },
+    )
+    await t.test('redirects and changed destinations never inherit a requested record anchor', async () => {
+      for (const [destination, redirected] of [
+        ['http://example.test/login', true],
+        ['http://example.test/orders?q=canonical', false],
+        ['http://example.test/orders?q=new', true],
+        ['http://example.test/orders?q=new#explicit', true],
+      ] as const) {
+        const app = runtime(source)
+        app.fetch(async () =>
+          Object.defineProperties(new Response('rows'), {
+            url: { value: destination },
+            redirected: { value: redirected },
+          }),
+        )
+        await app.navigate('/orders?q=new#row=service-1', 'push', null, { fallback: 'error' })
+        assert.equal(app.location.href, destination)
+        assert.equal(app.completions[0]?.url, destination)
+        assert.equal(app.row.focused, false)
+      }
+    })
+    await t.test('a native fallback retains the anchor only for the same requested destination', async () => {
+      const app = runtime(source)
+      app.fetch(async () =>
+        Object.defineProperties(new Response('', { status: 503 }), {
+          url: { value: 'http://example.test/orders?q=new' },
+        }),
+      )
+      await app.navigate('/orders?q=new#row=service-1')
+      assert.deepEqual(app.calls, ['http://example.test/orders?q=new#row=service-1'])
+      assert.equal(app.applications(), 0)
     })
     await t.test(
       'network and 5xx failures are retryable; 403 is not; old content and URL survive',
