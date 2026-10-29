@@ -181,6 +181,7 @@ const pickDeployment = (ws: { deployments: Record<string, Manifest> }): [string,
 const HELP = `ket — zero-dependency fullstack framework
 
   ket check                 compose every deployment and report contract violations
+    --strict                exit non-zero on contract warnings too
   ket manifest [--deployment X]    print the composed manifest
   ket openapi [--deployment X]     print the deployment's OpenAPI 3.1 document
     --profile NAME          contract profile (default: deployment name)
@@ -713,8 +714,16 @@ try {
     const warnings = Object.entries(ws.deployments).flatMap(([name, manifest]) =>
       (manifest.diagnostics ?? []).map((warning) => `  [${warning.code}] ${name}: ${warning.message}`),
     )
-    if (warnings.length) console.log(`\n${warnings.length} contract warning(s):\n${warnings.join('\n')}`)
-    console.log('\nall contracts hold')
+    if (!warnings.length) console.log('\nall contracts hold')
+    else {
+      console.log(`\n${warnings.length} contract warning(s):\n${warnings.join('\n')}`)
+      // A warning is a composition the framework still accepts, and some of them
+      // become errors by 1.0. --strict refuses them now, so CI can hold that line.
+      if (flag('strict')) {
+        console.log('\n--strict: contract warnings fail the check')
+        process.exitCode = 1
+      } else console.log('\nno contract errors; pass --strict to fail on the warnings above')
+    }
   } else if (cmd === 'workspace') {
     console.log(explainWorkspace(ws))
   } else if (cmd === 'modules') {
