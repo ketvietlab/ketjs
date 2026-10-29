@@ -23,6 +23,7 @@ the others:
 | KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
 | Accepted, not built | D79 | The contracts are decided and no code exists yet. [Plan: installing modules](/docs/module-installation-plan/) tracks the phases. |
 | Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
+| Accepted, unreleased | D81 | `@ketvietlab/ketjs-view/mirror` is built and first ships in 0.8.0. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
 
@@ -2644,3 +2645,67 @@ The GritQL plugin API is young: Biome stays pinned and every rule has fixture te
 
 **Reversible:** yes. Lint changes no runtime behaviour, and a rule can be demoted or removed without
 migrating anything.
+
+## D81 — Mirror: server state is a cache on signals, with no transport of its own
+
+ketjs-view had signals, effects and form sessions, but nothing for API answers shared across a page.
+`view-effects-data.md` told applications to write their own cache, deduplication, retry and rollback, or
+to bring a data library. A browser runtime that reads an API, whether a client-rendered app or an island
+that loads after hydration, then repeats the same hand-written reader. KetSuite's Flow workspace has 11
+such loading/error signals in one 6,500-line island.
+
+**Chosen:** `@ketvietlab/ketjs-view/mirror`, a subpath of the existing browser-safe package. `createMirror`
+holds entries by JSON key. A reading observes one key through signals; readers of a key share one entry
+and one request; the latest load wins; an answer is shown while a background refetch runs. `write()`
+runs a mutation and resolves to an outcome instead of throwing. It sends a stable idempotency key across
+retries, patches optimistically, rolls back unless something newer replaced the patch, and invalidates
+by tag. `pages()` follows a cursor. `snapshot()`/`restore()` hand answers from a server render to the
+browser.
+
+**Rules that keep it inside KetJS's boundaries:**
+
+- **No I/O of its own.** Every load and write is an application function, so the transport may be any
+  HTTP, GraphQL or SDK client, and the server need not be KetJS.
+- **Render-pure until attached.** Nothing loads, polls or listens before `attach(lifetime)`; only an
+  explicit `prefetch()` or `refetch()` does. Reads can be created during a server render.
+- **`parse` is required.** A response is untrusted input. Restored server data passes the same `parse`,
+  and a payload that fails it is a failed load, never a cached value.
+- **Scope is the isolation boundary.** A different `scope()` drops every entry and aborts its loads;
+  `keepPrevious` never crosses scopes, and a snapshot from another scope is refused.
+
+**Evidence:** `bench/mirror-comparison` compares Mirror with hand-written readers and TanStack Query core
+in Node with `countingHost`.
+
+- **Correctness and requests:** a naive reader renders the older response when answers arrive out of
+  order, and two views of one key fetch twice without a shared entry.
+- **DOM:** operations are the same for every correct variant with the same markup, because the keyed
+  renderer already writes only what changed.
+- **Structural sharing:** it removes renders rather than CPU. An unchanged refetch runs a separately
+  mounted list zero times. Applying a 10,000-row answer with one changed row costs 2.8 to 4.9 ms in every
+  variant measured, about 1.3 ms of it `JSON.parse`.
+
+Sharing is therefore on by default, for stable identity, and can be switched off for answers that change
+wholesale.
+
+**Defaults:**
+
+- **Off by default:** refetch on focus or reconnect, and retries. Both are explicit options, because a
+  surprise request is a cost and retrying every error is wrong for a validation failure.
+- **`staleMs` is 0 and `gcMs` five minutes**, the common defaults for this kind of cache.
+
+**Not chosen:**
+
+- **An adapter over TanStack Query core.** It would add the package's first runtime dependency and a
+  second reactivity model under the signals.
+- **A cache inside a store abstraction.** A store for island state is a separate question and is not
+  decided here.
+- **A normalised entity cache or persistence.** Tags invalidate across keys without a schema, and
+  persisting answers outlives the scope that made them safe to show.
+- **A KetJS-specific client.** Generating a typed client from the OpenAPI document can build on Mirror
+  later without changing it.
+
+**Cost:** a second data path beside server-rendered pages and native forms, which remain the default.
+Applications must dispose readings with the view that owns them, and must set `scope` when answers
+depend on the user.
+
+**Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.
