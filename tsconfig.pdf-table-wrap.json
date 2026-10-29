@@ -1,1 +1,0 @@
-{ "extends": "./tsconfig.json", "include": ["test/pdf-table-wrap.test.ts"], "exclude": [] }
