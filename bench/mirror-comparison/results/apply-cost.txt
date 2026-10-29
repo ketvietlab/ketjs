@@ -1,0 +1,42 @@
+
+1000 rows, 300 responses per cell (median / p90 ms, rows rebuilt per response)
+case                strategy                    view     median     p90    rows
+nothing changed     replace                     plain      0.19    0.21    1000
+nothing changed     replace                     memo       0.31    0.61    1000
+nothing changed     mirror share                plain      0.20    0.20       0
+nothing changed     mirror share                memo       0.19    0.20       0
+nothing changed     tanstack replaceEqualDeep   plain      0.30    0.31       0
+nothing changed     tanstack replaceEqualDeep   memo       0.30    0.30       0
+1 row changed       replace                     plain      0.18    0.20    1000
+1 row changed       replace                     memo       0.28    0.31    1000
+1 row changed       mirror share                plain      0.32    0.64    1000
+1 row changed       mirror share                memo       0.32    0.38       1
+1 row changed       tanstack replaceEqualDeep   plain      0.40    0.74    1000
+1 row changed       tanstack replaceEqualDeep   memo       0.38    0.40       1
+every row changed   replace                     plain      0.22    0.23    1000
+every row changed   replace                     memo       0.29    0.32    1000
+every row changed   mirror share                plain      0.38    0.39    1000
+every row changed   mirror share                memo       0.47    0.50    1000
+every row changed   tanstack replaceEqualDeep   plain      0.39    0.41    1000
+every row changed   tanstack replaceEqualDeep   memo       0.48    0.55    1000
+
+10000 rows, 60 responses per cell (median / p90 ms, rows rebuilt per response)
+case                strategy                    view     median     p90    rows
+nothing changed     replace                     plain      2.91    4.44   10000
+nothing changed     replace                     memo       4.32   20.19   10000
+nothing changed     mirror share                plain      2.32    2.48       0
+nothing changed     mirror share                memo       2.33    2.45       0
+nothing changed     tanstack replaceEqualDeep   plain      3.22    3.51       0
+nothing changed     tanstack replaceEqualDeep   memo       3.21    3.49       0
+1 row changed       replace                     plain      2.80    3.41   10000
+1 row changed       replace                     memo       4.48   26.03   10000
+1 row changed       mirror share                plain      4.28    4.91   10000
+1 row changed       mirror share                memo       3.70    3.84       1
+1 row changed       tanstack replaceEqualDeep   plain      4.92    5.49   10000
+1 row changed       tanstack replaceEqualDeep   memo       4.63    5.13       1
+every row changed   replace                     plain      3.18    3.74   10000
+every row changed   replace                     memo       4.40   19.25   10000
+every row changed   mirror share                plain      4.89    5.75   10000
+every row changed   mirror share                memo       6.41   18.40   10000
+every row changed   tanstack replaceEqualDeep   plain      5.15    5.85   10000
+every row changed   tanstack replaceEqualDeep   memo       6.32   17.13   10000

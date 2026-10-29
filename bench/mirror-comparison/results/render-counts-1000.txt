@@ -1,0 +1,98 @@
+
+initial load (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     3      3    2000    15020        1      7.9  yes
+careful                   2      2    1000    15020        1      8.5  yes
+careful + memo            2      2    1000    15020        1      1.9  yes
+mirror, no sharing        2      2    1000    15020        1      1.5  yes
+mirror                    2      2    1000    15020        1      1.4  yes
+mirror + memo             2      2    1000    15020        1      1.5  yes
+tanstack                  2      2    1000    15020        1      2.3  yes
+tanstack + memo           2      2    1000    15020        1      1.4  yes
+careful+memo+split        4      2    1000    15016        1      1.4  yes
+mirror+memo+split         4      2    1000    15016        1      1.6  yes
+tanstack+memo+split       4      2    1000    15016        1      1.6  yes
+
+refetch x10, unchanged (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                    30     30   30000       20       10     11.6  yes
+careful                  20     20   20000       20       10     20.1  yes
+careful + memo           20     20   10000       20       10     18.8  yes
+mirror, no sharing       20     20   20000       20       10     16.9  yes
+mirror                   20     20   20000       20       10     17.6  yes
+mirror + memo            20     20       0       20       10     18.6  yes
+tanstack                 20     20   20000       20       10     25.2  yes
+tanstack + memo          20     20       0       20       10     26.1  yes
+careful+memo+split       30     10   10000       20       10     17.6  yes
+mirror+memo+split        20      0       0       20       10     10.7  yes
+tanstack+memo+split      20      0       0       20       10      6.8  yes
+
+refetch, 1 row changed (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     3      3    3000        3        1      2.2  yes
+careful                   2      2    2000        3        1      1.8  yes
+careful + memo            2      2    1000        3        1      1.2  yes
+mirror, no sharing        2      2    2000        3        1      0.5  yes
+mirror                    2      2    2000        3        1      1.6  yes
+mirror + memo             2      2       1        3        1      0.8  yes
+tanstack                  2      2    2000        3        1      1.3  yes
+tanstack + memo           2      2       1        3        1      0.9  yes
+careful+memo+split        3      1    1000        3        1      0.6  yes
+mirror+memo+split         3      1       1        3        1      0.6  yes
+tanstack+memo+split       3      1       1        3        1      0.9  yes
+
+filter all > even > all (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     6      6    4500     9004        2      4.3  yes
+careful                   4      4    3000     9004        2      3.2  yes
+careful + memo            4      4    1500     9004        2      2.2  yes
+mirror, no sharing        4      4    3500     9004        2      2.1  yes
+mirror                    4      4    3500     9004        2      2.3  yes
+mirror + memo             4      4     500     9004        2      2.5  yes
+tanstack                  4      4    3500     9004        2      2.5  yes
+tanstack + memo           4      4     500     9004        2      2.9  yes
+careful+memo+split        6      2    1500     9004        2      2.0  yes
+mirror+memo+split         6      2     500     9004        2      2.1  yes
+tanstack+memo+split       6      2     500     9004        2      1.5  yes
+
+rename 1 row (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     3      3    3000        3        1      0.6  yes
+careful                   3      3    3000        3        1      0.7  yes
+careful + memo            3      3    1001        3        1      1.3  yes
+mirror, no sharing        3      3    3000        3        1      1.0  yes
+mirror                    3      3    3000        3        1      1.0  yes
+mirror + memo             3      3       1        3        1      1.1  yes
+tanstack                  3      3    3000        3        1      1.4  yes
+tanstack + memo           3      3       1        3        1      1.4  yes
+careful+memo+split        4      2    1001        3        1      1.0  yes
+mirror+memo+split         3      1       1        3        1      0.6  yes
+tanstack+memo+split       3      1       1        3        1      0.7  yes
+
+two views, same key (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     6      6    4000    30040        2      2.9  yes
+careful                   4      4    2000    30040        2      2.3  yes
+careful + memo            4      4    2000    30040        2      1.9  yes
+mirror, no sharing        4      4    2000    30040        1      1.5  yes
+mirror                    4      4    2000    30040        1      2.0  yes
+mirror + memo             4      4    2000    30040        1      2.3  yes
+tanstack                  4      4    2000    30039        1      1.8  yes
+tanstack + memo           4      4    2000    30039        1      2.1  yes
+careful+memo+split        8      4    2000    30032        2      2.3  yes
+mirror+memo+split         8      4    2000    30032        1      1.9  yes
+tanstack+memo+split       8      4    2000    30031        1      2.1  yes
+
+race: even answers last (1000 rows)
+variant               views  lists    rows  dom ops  fetches   cpu ms  correct
+naive                     4      4    3500     1502        2      1.1  NO
+careful                   2      2    2000        2        2      0.8  yes
+careful + memo            2      2    1000        2        2      0.8  yes
+mirror, no sharing        3      3    3000        2        2      0.8  yes
+mirror                    3      3    3000        2        2      1.0  yes
+mirror + memo             3      3       0        2        2      1.2  yes
+tanstack                  2      2    2000        2        2      1.2  yes
+tanstack + memo           2      2       0        2        2      1.1  yes
+careful+memo+split        3      1    1000        2        2      0.7  yes
+mirror+memo+split         3      0       0        2        2      0.7  yes
+tanstack+memo+split       2      0       0        2        2      0.7  yes
