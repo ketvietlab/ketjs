@@ -78,6 +78,20 @@ jobs:
 
       - name: verify documentation and labs with the published npm packages
         run: npm run version:consumers -- --published
+
+      # ketjs.dev installs the published packages, so the Workers Build that the release
+      # merge started on master ran before they existed. The Deploy Hook rebuilds master.
+      - name: rebuild ketjs.dev with the published packages
+        env:
+          DOCS_DEPLOY_HOOK: ${{ secrets.KETJS_DOCS_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DOCS_DEPLOY_HOOK" ]; then
+            echo "::error::KETJS_DOCS_DEPLOY_HOOK is not set; ketjs.dev still serves the previous release"
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 3 --request POST "$DOCS_DEPLOY_HOOK"
+          echo
+
       - name: retain release consumer evidence
         if: always()
         uses: actions/upload-artifact@v4
