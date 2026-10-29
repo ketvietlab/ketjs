@@ -120,8 +120,10 @@ differences separately. For the built-in SQLite store, verification refuses to c
 file. `physicalSchemaIssues()` is also exported for operational tooling that already owns explicit
 `Schema` values.
 
-Installing or removing a module at runtime is not a destructive migration. Disabled module data stays
-in place for a later reinstall.
+Removing a module from a deployment's `modules` removes its models and the fields it added to other
+models, so the next plan drops those tables and columns and is refused without `--allow-destructive`.
+There is no runtime install state that keeps a removed module's data; see
+[D67](/docs/architecture-decisions/#d67-deployment-composition-replaces-the-module-application-lifecycle).
 
 ## CLI planning
 

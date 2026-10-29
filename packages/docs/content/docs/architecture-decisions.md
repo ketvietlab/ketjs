@@ -20,8 +20,9 @@ the others:
 | Superseded | D13 | History only; the later decision named in the entry is current. |
 | Partly superseded | D28, D50, D57 | D67 replaced the module lifecycle portion; the rest still applies. |
 | Partly superseded | D23 | D78 made company scoping opt-in; D23 applies to a deployment with `companies: true`. |
-| Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
 | KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
+| Accepted, not built | D79 | The contracts are decided and no code exists yet. [Plan: installing modules](/docs/module-installation-plan/) tracks the phases. |
+| Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
 
@@ -2538,6 +2539,61 @@ change; setting `companies: true` keeps them.
 
 **Reversible:** per deployment, by setting or removing the flag. Removing it from a deployment that has
 company-scoped models is a composition error, not a migration.
+
+## D79 — Packaged modules enter a deployment through its source
+
+Using modules from an npm package means installing the package, adding its root to `modulePaths` and listing
+the modules in `DeploymentSpec.modules` by hand. `ket install` does those steps. D67 removed runtime install
+state and self-installing bridges, so the command has to stay on the source side of that line: it edits files
+in the developer's project and changes nothing until the project is built and released.
+
+**Chosen:** `ket install` and `ket uninstall` are development commands that edit `package.json`, the lockfile
+and `ket.install.json`. The workspace imports `ket.install.json` as JSON, so `tsc` copies the selection into
+the build artifact and D67's single composition list stays inside it. Package roots are found by Node
+resolution of `<package>/package.json` and its `ket.modules` field, never by a relative path. Until a source
+allowlist exists, only the `@ketvietlab` scope with npm provenance is accepted.
+
+**Five contracts come with it.**
+
+1. *Selection.* The first install from a package names it with an exact version (`--from <package>@<version>`).
+   A bare module name resolves only against packages already recorded, and a name two recorded packages
+   provide is refused. A workspace holds one version of each package, so every command reports every
+   deployment that selects a module from it.
+2. *Candidate.* Plans never read existing build output. They copy the project to staging, apply the
+   selection, run the project's build and load the workspace it produced. A workspace that does not consume
+   `ket.install.json` stops the command before anything changes.
+3. *Report.* Three parts with stated baselines: contract changes as `ket diff` compares them, the migration
+   as `ket migrate --dry-run` plans it, and access that widens without a grant — new anonymous functions and
+   bundles or role templates a package upgrade widens.
+4. *Removal.* Removing a module drops its tables and the columns it added, and D7 refuses that plan as a
+   whole, which stops every later migration and every boot that migrates. `ket uninstall` therefore means
+   export and then drop. The plan lists the drops and applying requires an acknowledgement. The release then
+   runs `ket migrate --allow-destructive --export-dropped <directory>`, which writes the affected rows and
+   columns as JSON Lines, one file per table and per datastore, and checks the row counts before the first
+   `DROP`. A failed export drops nothing. For a module that is no longer composed, `--allow-destructive`
+   alone is refused, and `--no-export` is the explicit way to drop without a copy.
+5. *Apply.* One resolution in staging, reused when applying. Only files that passed `ket check` in staging are
+   promoted, followed by a clean install from the promoted lockfile. A failure restores the files and
+   reinstalls from the old lockfile, and a journal under `.ket/install/` lets the next run finish an
+   interrupted restore.
+
+**Presets and bridges are package data, read only by the command.** A preset names several modules, and
+`ket install` writes those names into the selection. A bridge is a module the package declares as joining
+others. When every module it joins is selected, the command adds the bridge to that deployment's list and
+says so in its report. Uninstalling any module it joins removes the bridge too, under the same
+export-and-drop rule. This is not D67's self-installing bridge: the decision is written into source and
+shown before it applies, and the runtime never reads presets or bridge declarations.
+
+**Retaining a removed module's tables was rejected for now.** It would need the schema comparison and
+`ket schema verify` to skip detached tables, which changes D7. It can return as its own decision.
+
+**Cost:** planning builds a copy of the project, which takes seconds for a small project and has not been
+measured for a large one. Export files hold production data, often personal data, and their retention is the
+operator's duty. Bridges grow a deployment's composition without the developer naming each one. Third-party
+packages wait for an allowlist.
+
+**Reversible:** yes. `ket.install.json` is plain data imported by the workspace. Without the commands, a
+developer edits it by hand and the workspace composes the same deployment.
 
 ## D80 — Architecture rules run as lint, and `ket lint` reads the composition
 

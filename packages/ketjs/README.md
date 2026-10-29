@@ -6,6 +6,10 @@ required application-server dependency.
 
 > KetJS 0.x is preview software. APIs and deployment contracts may change before 1.0.
 
+Fragment navigation preserves a requested URL anchor when Fetch returns the same destination
+without its fragment. History, anchor focus and `ket:navigation-complete` use that complete URL.
+Redirected or changed destinations keep their own URL and never inherit the original record anchor.
+
 ## Requirements
 
 - Node.js 24 or newer
@@ -122,3 +126,11 @@ real execution with a key. Existing functions keep their execution semantics. Re
 revision-guarded save example. Shared schemas and keyed rows are covered by
 [Form validation](../docs/content/docs/form-validation.md); browser sessions and retry behavior are
 covered by [Forms and edit sessions](../docs/content/docs/view-forms.md).
+
+## PDF table layout
+
+The `@ketvietlab/ketjs/pdf` renderer wraps table cells using embedded font metrics,
+keeps ordinary rows together when possible and repeats wrapped column headings
+within page bounds. Long identifiers and oversized rows preserve their text while
+continuing across lines/pages. See [Reports and PDF](../docs/content/docs/reports.md)
+for the supported markup and renderer limits.
