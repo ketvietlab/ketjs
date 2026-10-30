@@ -91,7 +91,7 @@ The setup declares members with `use`, and the store exposes what the setup retu
 
 Plain objects and arrays are frozen in place when they are written to `state`. To change one, write a new value.
 
-Freezing skips subtrees that are already frozen. A new list that reuses the old rows therefore costs only its new nodes, and the rows keep their identity, which keyed rendering and Mirror's structural sharing rely on. Class instances, `Map`, `Date` and DOM objects are held as they are.
+Freezing skips subtrees it has already frozen all the way down. A value frozen only at its top, such as `Object.freeze({ nested })`, is still frozen through `nested`. A new list that reuses the old rows therefore costs only its new nodes, and the rows keep their identity, which keyed rendering and Mirror's structural sharing rely on. Class instances, `Map`, `Date` and DOM objects are held as they are.
 
 ### Tasks
 
@@ -104,6 +104,10 @@ Freezing skips subtrees that are already frozen. A new list that reuses the old 
 - `aborted` when the lifetime ended or the store was disposed.
 
 `pending()` is true while a run is in flight. Pass the `AbortSignal` to the request, so an abort actually stops it.
+
+When the lifetime ends, a running task is freed at once: the next lifetime can start it again right away, and the old run still resolves to `aborted`.
+
+An effect that throws while it watches `pending()` or `error()` does not change the outcome. Its error goes to `reportError()`, or to an uncaught microtask where `reportError()` does not exist.
 
 Server answers belong in Mirror, not in a task: a task has no cache, no deduplication and no invalidation.
 
@@ -142,7 +146,7 @@ This mirror lives and dies with the island. To share answers between islands, pa
 | Store member | Meaning |
 | --- | --- |
 | `id` | The name given to `defineStore`, for diagnostics. |
-| `attach(lifetime)` | Run `connect()` wiring until the lifetime aborts. A store can be attached again after that. It throws while attached or after dispose. |
+| `attach(lifetime)` | Run `connect()` wiring until the lifetime aborts. A store can be attached again after that. It throws while attached or after dispose. If the lifetime ends inside a `connect()`, its cleanup runs at once and the remaining connectors do not start. |
 | `dispose()` | Ends the wiring, aborts tasks, then disposes derived values and owned children in reverse order. |
 | `snapshot()` | A JSON copy of the top-level state members, for tests and diagnostics. |
 
