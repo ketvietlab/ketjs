@@ -195,6 +195,8 @@ type Entry = {
   inflight: { promise: Promise<void>; controller: AbortController } | null
   staleTimer: Timer | null
   gcTimer: Timer | null
+  /** Changes on every write to data, even one that keeps the same reference. */
+  revision: number
 }
 
 const isPlain = (value: unknown): value is Record<string, unknown> =>
@@ -259,7 +261,11 @@ function newIdempotencyKey(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-type Undo = { entry: Entry; before: { data: unknown; status: MirrorStatus }; after: unknown }
+type Undo = {
+  entry: Entry
+  before: { data: unknown; status: MirrorStatus; revision: number }
+  revision: number
+}
 
 export function createMirror(options: MirrorOptions = {}): Mirror {
   const defaultStaleMs = options.staleMs ?? 0
@@ -272,6 +278,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
   let listeners: AbortController | null = null
   let activeScope: string | null = null
   let disposed = false
+  let revisions = 0
 
   const clearTimers = (entry: Entry) => {
     if (entry.staleTimer) clearTimeout(entry.staleTimer)
@@ -320,6 +327,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
         inflight: null,
         staleTimer: null,
         gcTimer: null,
+        revision: 0,
       }
       entries.set(hash, entry)
     }
@@ -352,6 +360,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
     if (entry.gcTimer) clearTimeout(entry.gcTimer)
     entry.gcTimer = null
     if (!attached.peek() || entry.observers > 0 || !Number.isFinite(gcMs)) return
+    if (entries.get(entry.hash) !== entry) return
     entry.gcTimer = later(() => {
       entry.gcTimer = null
       if (entry.observers > 0 || entries.get(entry.hash) !== entry) return
@@ -372,6 +381,8 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
   }
 
   const commit = (entry: Entry, value: unknown, updatedAt = Date.now()) => {
+    // A confirmed answer is a new revision even when sharing keeps the same reference.
+    entry.revision = ++revisions
     batch(() => {
       entry.data.set(entry.sharing ? share(entry.data.peek(), value) : value)
       entry.error.set(null)
@@ -547,6 +558,8 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
         const scopeChanged = boundScope !== null && boundScope !== scope
         boundScope = scope
         if (scopeChanged) previousEntry.set(null)
+        // Before the key: signing out can turn the key null in the same write that changes the scope.
+        enterScope(scope)
         const next = key ? entryFor(key, scope) : null
         if (next !== bound) {
           if (bound) {
@@ -622,9 +635,10 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
       // A load in flight would land on top of the optimistic value.
       entry.inflight?.controller.abort()
       entry.inflight = null
-      const before = { data: entry.data.peek(), status: entry.status.peek() }
+      const before = { data: entry.data.peek(), status: entry.status.peek(), revision: entry.revision }
       const after = fn(before.data as never)
-      undo.push({ entry, before, after })
+      entry.revision = ++revisions
+      undo.push({ entry, before, revision: entry.revision })
       entry.data.set(after)
       entry.fetching.set(false)
       entry.stale.set(true)
@@ -632,14 +646,16 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
     },
   })
 
-  // Restore what this write patched, unless something newer already replaced it.
+  // Restore what this write patched, unless something newer already replaced it. The
+  // revision, not the reference, decides: an answer equal to the patch shares its reference.
   const rollback = (undo: Undo[]): boolean => {
     let rolledBack = false
     batch(() => {
       for (const step of [...undo].reverse()) {
-        if (step.entry.data.peek() !== step.after) continue
+        if (step.entry.revision !== step.revision) continue
         step.entry.data.set(step.before.data)
         step.entry.status.set(step.before.status)
+        step.entry.revision = step.before.revision
         rolledBack = true
       }
     })
@@ -723,11 +739,15 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
       const loadMore = async (): Promise<void> => {
         const entry = observer.bound()
         if (!entry?.pages || disposed) return
-        if (entry.inflight) await entry.inflight.promise
-        if (observer.bound() !== entry || disposed) return
+        // A refetch can start while this call waits; append only to the pages it lands.
+        while (entry.inflight) {
+          await entry.inflight.promise
+          if (observer.bound() !== entry || disposed) return
+        }
         const state = entry.pages
         const loaded = entry.data.peek() as unknown[] | undefined
         if (!loaded?.length || !state) return
+        const revision = entry.revision
         const cursor = state.next(loaded[loaded.length - 1], loaded)
         if (cursor === null || cursor === undefined) return
         const controller = new AbortController()
@@ -743,6 +763,12 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
               try {
                 const page = state.parsePage(await state.loadPage(cursor, controller.signal))
                 if (controller.signal.aborted) return
+                // Pages written meanwhile (a seed, a restore) are newer than the ones this extends.
+                if (entry.revision !== revision) {
+                  entry.fetching.set(false)
+                  return
+                }
+                entry.revision = ++revisions
                 batch(() => {
                   entry.data.set([...loaded, page])
                   entry.error.set(null)
@@ -817,6 +843,11 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
           for (let n = 0; ; n++) {
             try {
               const value = await opts.run(input, { signal: controller.signal, idempotencyKey })
+              // A transport that ignores the signal may still answer; the write was abandoned.
+              if (controller.signal.aborted) {
+                reloadPatched(undo)
+                return { status: 'aborted' }
+              }
               error.set(null)
               let tags: readonly string[] = []
               try {
@@ -902,6 +933,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
       entry.restored = null
       if (seedOptions.tags) entry.tags = seedOptions.tags
       commit(entry, value, seedOptions.updatedAt ?? Date.now())
+      scheduleGc(entry)
     },
 
     snapshot(): MirrorSnapshot {
@@ -942,6 +974,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
         }
         entry.tags = Array.isArray(item.tags) ? item.tags : []
         untracked(() => applyRestored(entry))
+        scheduleGc(entry)
         restored++
       }
       return restored

@@ -144,8 +144,9 @@ export const cancelOrder = mirror.write({
   Send it so the server can recognise a repeated request.
 - **`optimistic`** patches cached entries before the request and aborts their loads in flight, so an
   older answer cannot land on top. A failure rolls each patch back, unless something newer has already
-  replaced it. An aborted write has an unknown outcome, so the entries it patched are loaded again
-  instead.
+  replaced it, including a server answer equal to the patch. An aborted write has an unknown outcome,
+  even when the transport answers after the abort, so it resolves to `aborted` and the entries it
+  patched are loaded again instead.
 - **`invalidates`** returns tags after success. Observed entries with those tags reload, and the others
   become stale.
 

@@ -635,3 +635,189 @@ test('seed stores a trusted value that a reader shows without loading while fres
   reading.dispose()
   mirror.dispose()
 })
+
+test('structural sharing visits each changed node once, however deep the answer is', () => {
+  const { mirror } = attached()
+  const nest = (depth: number, leaf: object): object =>
+    depth === 0 ? leaf : { level: depth, child: nest(depth - 1, leaf) }
+  mirror.seed(['deep'], nest(16, { value: 1 }))
+  let reads = 0
+  const leaf = {}
+  Object.defineProperty(leaf, 'value', {
+    enumerable: true,
+    get: () => {
+      reads++
+      return 2
+    },
+  })
+  mirror.seed(['deep'], nest(16, leaf))
+  assert.equal(reads, 1, 'the changed leaf is compared once, not once per path through the tree')
+  let node = mirror.peek<{ child?: unknown; value?: number }>(['deep'])
+  while (node?.child) node = node.child as typeof node
+  assert.equal(node?.value, 2)
+  mirror.dispose()
+})
+
+test('signing out drops the cache even when the key turns null at the same time', async () => {
+  const api = server()
+  const user = signal<string | null>('a')
+  const { mirror } = attached({ scope: () => user() ?? '', staleMs: 60_000 })
+  const reading = mirror.read({
+    key: () => (user() ? (['me'] as const) : null),
+    load: api.load,
+    parse: parseRows,
+  })
+  await tick()
+  api.calls[0]?.resolve(rows('session one'))
+  await reading.settled()
+  void reading.refetch()
+  await tick()
+  user.set(null)
+  assert.equal(api.calls[1]?.signal.aborted, true, 'the load in flight at sign-out is aborted')
+  user.set('a')
+  assert.equal(reading.data(), undefined, 'signing in again never shows the previous session')
+  await tick()
+  assert.equal(api.calls.length, 3)
+  api.calls[2]?.resolve(rows('session two'))
+  await reading.settled()
+  assert.deepEqual(reading.data(), rows('session two'))
+  reading.dispose()
+  mirror.dispose()
+})
+
+test('a failed write keeps an answer the server confirmed after the patch', async () => {
+  const api = server()
+  const { mirror } = attached()
+  const reading = mirror.read({ key: () => ['rows'] as const, load: api.load, parse: parseRows })
+  await tick()
+  api.calls[0]?.resolve(rows('a'))
+  await reading.settled()
+  let fail: (e: unknown) => void = () => {}
+  const write = mirror.write({
+    run: () => new Promise((_resolve, reject) => (fail = reject)),
+    optimistic: (cache) => cache.update<Row[]>(['rows'], () => rows('b')),
+  })
+  const outcome = write.run(undefined)
+  const refetched = reading.refetch()
+  await tick()
+  api.calls[1]?.resolve(rows('b'))
+  await refetched
+  fail(new Error('timeout'))
+  const result = await outcome
+  assert.equal(result.status === 'failed' && result.rolledBack, false)
+  assert.deepEqual(reading.data(), rows('b'), 'the confirmed answer is not rolled back to the old one')
+  reading.dispose()
+  mirror.dispose()
+})
+
+test('a waiting loadMore never writes older pages over a newer refetch', async () => {
+  type Page = { items: string[]; next: number | null }
+  const calls: Array<{
+    cursor: number | null
+    signal: AbortSignal
+    done: boolean
+    resolve(page: Page): void
+  }> = []
+  const { mirror } = attached()
+  const paging = mirror.pages({
+    key: () => ['feed'] as const,
+    load: (_key, cursor: number | null, { signal }) =>
+      new Promise<Page>((resolve) => {
+        const call = {
+          cursor,
+          signal,
+          done: false,
+          resolve: (page: Page) => {
+            call.done = true
+            resolve(page)
+          },
+        }
+        calls.push(call)
+      }),
+    parse: (raw) => raw as Page,
+    next: (last) => last.next,
+  })
+  const open = (cursor: number | null) =>
+    calls.find((c) => c.cursor === cursor && !c.done && !c.signal.aborted)
+  await tick()
+  open(null)?.resolve({ items: ['first'], next: 1 })
+  await paging.settled()
+  const more = [paging.loadMore(), paging.loadMore()]
+  await tick()
+  const refetched = paging.refetch()
+  await tick()
+  calls.find((c) => c.cursor === 1 && c.signal.aborted)?.resolve({ items: ['ignored'], next: 2 })
+  await tick()
+  open(null)?.resolve({ items: ['first, refreshed'], next: 1 })
+  await refetched
+  await tick()
+  open(1)?.resolve({ items: ['second'], next: null })
+  await Promise.all(more)
+  await paging.settled()
+  assert.deepEqual(
+    paging.data()?.map((page) => page.items[0]),
+    ['first, refreshed', 'second'],
+  )
+  paging.dispose()
+  mirror.dispose()
+})
+
+test('a disposed writer reports aborted even when the transport answers anyway', async () => {
+  const { mirror } = attached()
+  let answer: (value: string) => void = () => {}
+  let invalidated = 0
+  const write = mirror.write({
+    run: () => new Promise<string>((resolve) => (answer = resolve)),
+    invalidates: () => {
+      invalidated++
+      return ['rows']
+    },
+  })
+  const outcome = write.run(undefined)
+  write.dispose()
+  answer('saved')
+  assert.deepEqual(await outcome, { status: 'aborted' })
+  assert.equal(invalidated, 0, 'an aborted write invalidates nothing')
+  mirror.dispose()
+})
+
+test('entries seeded or restored after attach are collected after gcMs', async () => {
+  const { mirror } = attached({ gcMs: 5 })
+  mirror.seed(['seeded'], rows('a'))
+  const source = createMirror()
+  source.seed(['restored'], rows('b'))
+  assert.equal(mirror.restore(source.snapshot()), 1)
+  source.dispose()
+  assert.equal(mirror.snapshot().entries.length, 2)
+  await wait(20)
+  assert.deepEqual(mirror.snapshot().entries, [])
+  mirror.dispose()
+})
+
+test('a page that lands after the pages were seeded is not appended to the older ones', async () => {
+  type Page = { items: string[]; next: number | null }
+  let answer: (page: Page) => void = () => {}
+  const { mirror } = attached()
+  const paging = mirror.pages({
+    key: () => ['feed'] as const,
+    load: (_key, cursor: number | null) =>
+      cursor === null
+        ? Promise.resolve({ items: ['first'], next: 1 })
+        : new Promise<Page>((resolve) => (answer = resolve)),
+    parse: (raw) => raw as Page,
+    next: (last) => last.next,
+  })
+  await paging.settled()
+  const more = paging.loadMore()
+  await tick()
+  mirror.seed(['feed'], [{ items: ['seeded'], next: null }])
+  answer({ items: ['second'], next: null })
+  await more
+  assert.deepEqual(
+    paging.data()?.map((page) => page.items[0]),
+    ['seeded'],
+  )
+  assert.equal(paging.fetching(), false)
+  paging.dispose()
+  mirror.dispose()
+})
