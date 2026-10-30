@@ -2745,8 +2745,9 @@ also runs during a server render, where module-level state would be shared betwe
 - **Why form sessions clone and a store does not.** A form session clones because it holds a user's draft
   against a baseline. A store often holds Mirror answers. Cloning those would cost O(n) per write and break
   the identity that structural sharing and keyed rendering keep.
-- **What freezing costs.** It skips subtrees that are already frozen, so a new list that reuses rows costs
-  only its new nodes.
+- **What freezing costs.** It skips subtrees it has already frozen all the way down, so a new list that
+  reuses rows costs only its new nodes. `Object.isFrozen()` alone is not trusted: a value frozen only at
+  its top is still frozen through its children.
 - **What stays mutable.** Class instances, `Map`, `Date` and DOM objects are held as they are.
 
 **Evidence:** `test/view-store.test.ts` covers:
@@ -2754,13 +2755,22 @@ also runs during a server render, where module-level state would be shared betwe
 - batching, and actions that are not tracked by the effect calling them;
 - read-only exposure;
 - freezing in place, and the identity of reused rows;
-- the `connect()` lifecycle;
-- `exclusive` and `latest` tasks, and aborts when the lifetime ends;
+- the `connect()` lifecycle, including a lifetime that ends inside a `connect()`;
+- `exclusive` and `latest` tasks, aborts when the lifetime ends, and a task started again by the next
+  lifetime;
+- tasks that keep their outcome when an effect watching them throws;
 - dispose order;
 - Mirror readings owned by a store.
 
-Removing any one of batching, read-only exposure, freezing, the `latest` abort, or the abort at the end
-of a lifetime fails at least one of those tests.
+Each of these fails at least one of those tests when it is removed:
+
+- batching;
+- read-only exposure;
+- freezing, including values frozen only at the top;
+- the `latest` abort, and the abort at the end of a lifetime;
+- freeing a task when its lifetime ends;
+- the cleanup of a `connect()` during which the lifetime ended;
+- reporting an effect's error instead of throwing it from a task.
 
 **Not chosen:**
 
