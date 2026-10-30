@@ -2681,8 +2681,8 @@ in Node with `countingHost`.
 - **DOM:** operations are the same for every correct variant with the same markup, because the keyed
   renderer already writes only what changed.
 - **Structural sharing:** it removes renders rather than CPU. An unchanged refetch runs a separately
-  mounted list zero times. Applying a 10,000-row answer with one changed row costs 2.8 to 4.9 ms in every
-  variant measured, about 1.3 ms of it `JSON.parse`.
+  mounted list zero times. Applying a 10,000-row answer with one changed row costs 2.3 to 4.6 ms in every
+  variant measured, about 1.25 ms of it `JSON.parse`.
 
 Sharing is therefore on by default, for stable identity, and can be switched off for answers that change
 wholesale.

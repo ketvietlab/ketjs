@@ -65,13 +65,13 @@ Within each scenario, every correct variant performs the same DOM operations, gi
 The keyed renderer already writes only what changed.
 
 `cost.ts` times one response applied synchronously: `JSON.parse`, optional sharing, a signal write and
-the render it triggers (median ms). `JSON.parse` alone takes 1.28 ms for 10000 rows.
+the render it triggers (median ms). `JSON.parse` alone takes 1.25 ms for 10000 rows.
 
 | 10000 rows | replace, plain | mirror share, plain | mirror share, memo | TanStack `replaceEqualDeep`, memo |
 | --- | --- | --- | --- | --- |
-| Nothing changed | 2.91 | 2.32 | 2.33 | 3.21 |
-| 1 row changed | 2.80 | 4.28 | 3.70 | 4.63 |
-| Every row changed | 3.18 | 4.89 | 6.41 | 6.32 |
+| Nothing changed | 2.57 | 2.36 | 2.42 | 3.26 |
+| 1 row changed | 2.27 | 3.59 | 3.47 | 4.62 |
+| Every row changed | 2.67 | 4.46 | 5.96 | 7.27 |
 
 At 1000 rows every cell is between 0.18 and 0.48 ms.
 
@@ -82,15 +82,17 @@ At 1000 rows every cell is between 0.18 and 0.48 ms.
    - two views of one key fetch twice without a shared entry;
    - optimistic writes need a rollback path;
    - returning to a cached filter shows it at once and revalidates in the background.
-2. ketjs-view re-renders cheaply. Re-running the unchanged 10000-row list costs about 1.6 ms on top of
+2. ketjs-view re-renders cheaply. Re-running the unchanged 10000-row list costs about 1.3 ms on top of
    `JSON.parse`. `each()` calls the row renderer for every item on every run, but the per-value
    `Object.is` check makes that cheap.
 3. Structural sharing removes renders but saves little CPU.
    - When nothing changed, comparing costs about 1 ms instead of the render it replaces, and the list
      effect does not run.
-   - When rows do change, sharing adds about 1 to 1.7 ms per 10000-row response.
-   - Its lasting value is stable identity. Mirror's sharing is faster than `replaceEqualDeep` in most
-     cells.
+   - When rows do change, sharing adds about 1.3 to 1.8 ms per 10000-row response.
+   - Its lasting value is stable identity. Mirror's sharing is faster than `replaceEqualDeep` in every
+     cell measured.
+   - Each node is compared once, so the cost follows the size of the answer, not its depth.
+     `test/view-mirror.test.ts` checks this on a deeply nested answer.
 4. Row memo by identity only pays off together with sharing. Without sharing it adds `WeakMap` churn
    and a worse p90.
 5. Splitting a frequently toggled flag (`fetching`) into its own effect keeps the list effect from
