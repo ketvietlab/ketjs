@@ -28,23 +28,33 @@ export function share<T>(prev: unknown, next: T): T {
     return (out ?? prev) as T
   }
   if (isPlain(prev) && isPlain(next)) {
+    // One pass, and each child is shared exactly once. Comparing first and building
+    // second would share a changed child twice, which doubles at every level.
+    let out: Record<string, unknown> | null = null
     let count = 0
-    let changed = false
     for (const key in next) {
-      count++
-      if (!Object.hasOwn(prev, key) || share(prev[key], next[key]) !== prev[key]) {
-        changed = true
-        break
+      const kept = share(prev[key], next[key])
+      if (out) out[key] = kept
+      else if (kept !== prev[key] || !Object.hasOwn(prev, key)) {
+        // Every key before this one kept prev's value: copy those without comparing again.
+        out = {}
+        let copied = 0
+        for (const earlier in next) {
+          if (copied++ === count) break
+          out[earlier] = prev[earlier]
+        }
+        out[key] = kept
       }
+      count++
     }
-    if (!changed) {
-      let prevCount = 0
-      for (const _ in prev) prevCount++
-      if (prevCount === count) return prev as T
-    }
-    const out: Record<string, unknown> = {}
-    for (const key in next) out[key] = share(prev[key], next[key])
-    return out as T
+    if (out) return out as T
+    let prevCount = 0
+    for (const _ in prev) prevCount++
+    if (prevCount === count) return prev as T
+    // prev has keys next dropped; every remaining value is prev's own.
+    const kept: Record<string, unknown> = {}
+    for (const key in next) kept[key] = prev[key]
+    return kept as T
   }
   return next
 }
