@@ -24,6 +24,7 @@ the others:
 | Accepted, not built | D79 | The contracts are decided and no code exists yet. [Plan: installing modules](/docs/module-installation-plan/) tracks the phases. |
 | Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
 | Accepted, unreleased | D81 | `@ketvietlab/ketjs-view/mirror` is built and first ships in 0.8.0. |
+| Accepted, unreleased | D82 | `@ketvietlab/ketjs-view/store` is built and first ships in 0.8.0. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
 
@@ -2697,8 +2698,8 @@ wholesale.
 
 - **An adapter over TanStack Query core.** It would add the package's first runtime dependency and a
   second reactivity model under the signals.
-- **A cache inside a store abstraction.** A store for island state is a separate question and is not
-  decided here.
+- **A cache inside a store abstraction.** A store for island state is a separate decision, D82, and
+  Mirror does not depend on it.
 - **A normalised entity cache or persistence.** Tags invalidate across keys without a schema, and
   persisting answers outlives the scope that made them safe to show.
 - **A KetJS-specific client.** Generating a typed client from the OpenAPI document can build on Mirror
@@ -2707,5 +2708,74 @@ wholesale.
 **Cost:** a second data path beside server-rendered pages and native forms, which remain the default.
 Applications must dispose readings with the view that owns them, and must set `scope` when answers
 depend on the user.
+
+**Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.
+
+## D82 — Island stores: one pure factory per island instance, read-only from outside
+
+An island's state lives in signals inside its factory closure. For a few values that is still the
+simplest choice. A large island, though, grows dozens of signals that any handler may write, plus
+hand-written loading/error pairs and `AbortController`s, and cleanup that someone has to remember. KetSuite's
+Flow workspace writes one shared data signal from 41 places in a 6,500-line island.
+
+A global store in the Redux style does not fit KetJS. Islands are isolated instances, and an island factory
+also runs during a server render, where module-level state would be shared between requests.
+
+**Chosen:** `@ketvietlab/ketjs-view/store`, a subpath of the browser-safe package.
+
+- `defineStore(id, setup)` returns a factory that is called once per island instance. It receives
+  serializable `input` and services as `deps`.
+- The setup declares state, derived values, actions, tasks, browser wiring (`connect`) and owned children.
+- The store exposes what the setup returns. Its top-level state is read-only.
+
+**Rules that keep it inside KetJS's boundaries:**
+
+- **No global store.** A store belongs to one island instance. Islands share state through the URL, events or
+  a browser Mirror passed in `deps`.
+- **Render-pure until attached.** The setup runs on the server and in the browser. `connect()` runs only
+  after `attach(lifetime)`, and the end of the lifetime aborts its wiring and the tasks in flight.
+- **Writes go through actions.** Outside the store, state is read-only both at runtime and in its type.
+  An action is one batch and does not subscribe the effect that calls it.
+- **Async results are outcomes.** `task.run()` never throws. It resolves to `done`, `failed`, `superseded`,
+  `rejected` or `aborted`, like `FormOutcome` and Mirror writes.
+- **Server answers belong in Mirror.** A store owns Mirror readings and has no cache of its own.
+
+**Freeze, not clone:** plain objects and arrays are frozen in place when they are written.
+
+- **Why form sessions clone and a store does not.** A form session clones because it holds a user's draft
+  against a baseline. A store often holds Mirror answers. Cloning those would cost O(n) per write and break
+  the identity that structural sharing and keyed rendering keep.
+- **What freezing costs.** It skips subtrees that are already frozen, so a new list that reuses rows costs
+  only its new nodes.
+- **What stays mutable.** Class instances, `Map`, `Date` and DOM objects are held as they are.
+
+**Evidence:** `test/view-store.test.ts` covers:
+
+- batching, and actions that are not tracked by the effect calling them;
+- read-only exposure;
+- freezing in place, and the identity of reused rows;
+- the `connect()` lifecycle;
+- `exclusive` and `latest` tasks, and aborts when the lifetime ends;
+- dispose order;
+- Mirror readings owned by a store.
+
+Removing any one of batching, read-only exposure, freezing, the `latest` abort, or the abort at the end
+of a lifetime fails at least one of those tests.
+
+**Not chosen:**
+
+- **A global or page-level store.** It shares state between server-rendered requests and couples islands
+  that are meant to be isolated.
+- **A `resource()` primitive inside the store.** Mirror already covers keyed reads, deduplication and
+  invalidation. A second read primitive would split those rules.
+- **Clone on write, like form sessions.** See the freeze decision above.
+- **URL state (`use.url`).** It touches history indexing and fragment navigation and needs its own design.
+- **Sharing one store between islands, middleware, and time-travel devtools.**
+
+**Cost:**
+
+- **Another way to hold island state.** Plain signals sit beside it and remain valid for small islands.
+- **Written values become immutable.** A value written to state is frozen, so code that mutates it
+  afterwards fails with a `TypeError`.
 
 **Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.

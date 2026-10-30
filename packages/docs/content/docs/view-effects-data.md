@@ -7,7 +7,7 @@ order: 2
 
 ## State, derived values, views and effects
 
-Use `signal` for mutable state, `computed` for synchronous derived values, a pure view for markup, and `effect` to synchronize tracked state with an external resource. The renderer already reacts to signals read by a mounted view; do not wrap a view in a second effect just to make it reactive.
+Use `signal` for mutable state, `computed` for synchronous derived values, a pure view for markup, and `effect` to synchronize tracked state with an external resource. The renderer already reacts to signals read by a mounted view; do not wrap a view in a second effect just to make it reactive. When one island grows many signals written from many handlers, [Island state with stores](/docs/view-stores/) groups them behind batched actions.
 
 `effect()` from `@ketvietlab/ketjs-view` is a browser/reactive primitive. The server framework's function `effects` declarations describe reads, writes and other capabilities; they are a different contract. See [Functions and effects](/docs/functions/) for that backend concept.
 
