@@ -394,3 +394,120 @@ test('a store owns Mirror readings that follow its state', async () => {
   lifetime.abort()
   mirror.dispose()
 })
+
+/** Collect what the store reports through globalThis.reportError while fn runs. */
+async function reporting(fn: () => Promise<void>): Promise<unknown[]> {
+  const reported: unknown[] = []
+  const host = globalThis as { reportError?: (error: unknown) => void }
+  const original = host.reportError
+  host.reportError = (error) => reported.push(error)
+  try {
+    await fn()
+  } finally {
+    if (original) host.reportError = original
+    else delete host.reportError
+  }
+  return reported
+}
+
+test('a task never throws and frees its slot when an effect watching it fails', async () => {
+  const create = defineStore('test.task-effects', (_input: object, _deps, use) => ({
+    work: use.task((n: number) => (n === 2 ? Promise.reject(new Error('refused')) : Promise.resolve(n))),
+  }))
+  const store = create({})
+  const outcomes: unknown[] = []
+  const reported = await reporting(async () => {
+    const stopPending = effect(() => {
+      if (store.work.pending()) throw new Error('pending effect failed')
+    })
+    outcomes.push(await store.work.run(1))
+    stopPending()
+    const stopError = effect(() => {
+      if (store.work.error()) throw new Error('error effect failed')
+    })
+    outcomes.push(await store.work.run(2))
+    stopError()
+    outcomes.push(await store.work.run(3))
+  })
+  assert.deepEqual(outcomes[0], { status: 'done', value: 1 })
+  assert.equal((outcomes[1] as { status: string }).status, 'failed')
+  assert.deepEqual(
+    outcomes[2],
+    { status: 'done', value: 3 },
+    'the slot was freed, so the next run is not rejected',
+  )
+  assert.deepEqual(
+    reported.map((error) => (error as Error).message),
+    ['pending effect failed', 'error effect failed'],
+  )
+  assert.equal(store.work.pending(), false)
+})
+
+test('a cleanup is not lost when the lifetime ends inside connect()', () => {
+  const log: string[] = []
+  const lifetime = new AbortController()
+  const create = defineStore('test.connect-abort', (_input: object, _deps, use) => {
+    use.connect(() => {
+      log.push('first')
+      return () => log.push('first cleanup')
+    })
+    use.connect(() => {
+      log.push('second')
+      lifetime.abort()
+      return () => log.push('second cleanup')
+    })
+    use.connect(() => {
+      log.push('third')
+      return () => log.push('third cleanup')
+    })
+    return {}
+  })
+  const store = create({})
+  store.attach(lifetime.signal)
+  assert.deepEqual(
+    log,
+    ['first', 'second', 'first cleanup', 'second cleanup'],
+    'nothing connects after the end',
+  )
+  store.dispose()
+  assert.equal(log.length, 4, 'dispose does not run a cleanup twice')
+})
+
+test('attaching again right after an abort lets an exclusive task start in the new lifetime', async () => {
+  const api = deferred<string>()
+  const outcomes: Array<Promise<unknown>> = []
+  const create = defineStore('test.reattach', (_input: object, _deps, use) => {
+    const work = use.task((n: number, signal) => api.run(n, signal))
+    use.connect(() => {
+      outcomes.push(work.run(outcomes.length + 1))
+    })
+    return { work }
+  })
+  const store = create({})
+  const first = new AbortController()
+  store.attach(first.signal)
+  first.abort()
+  store.attach(new AbortController().signal)
+  assert.equal(api.calls.length, 2, 'the new lifetime runs its task')
+  assert.equal(store.work.pending(), true)
+  api.calls[0]?.resolve('late')
+  api.calls[1]?.resolve('second')
+  assert.deepEqual(await outcomes[0], { status: 'aborted' })
+  assert.deepEqual(await outcomes[1], { status: 'done', value: 'second' })
+  assert.equal(store.work.pending(), false)
+  store.dispose()
+})
+
+test('a value frozen only at its top is still frozen all the way down', () => {
+  const create = defineStore('test.shallow', (_input: object, _deps, use) => {
+    const value = use.state(Object.freeze({ nested: { count: 0 } }))
+    return { value, count: use.derived(() => value().nested.count) }
+  })
+  const store = create({})
+  const nested = store.value().nested
+  assert.ok(Object.isFrozen(nested))
+  assert.throws(() => {
+    ;(nested as { count: number }).count = 1
+  }, TypeError)
+  assert.equal(store.count(), 0)
+})

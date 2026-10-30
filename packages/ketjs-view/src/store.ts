@@ -92,15 +92,43 @@ const isPlain = (value: object): boolean => {
   return proto === Object.prototype || proto === null
 }
 
+// Subtrees this helper froze all the way down. Object.isFrozen() is not enough to skip
+// one: a value frozen only at its top still has mutable children.
+const deepFrozen = new WeakSet<object>()
+
 /**
- * Freeze plain objects and arrays in place. A frozen subtree is skipped, so writing a
- * new list that reuses frozen rows costs only the new nodes, and identity is kept.
+ * Freeze plain objects and arrays in place. A subtree frozen here before is skipped, so
+ * writing a new list that reuses frozen rows costs only the new nodes, and identity is kept.
  */
 function freeze<T>(value: T): T {
-  if (!value || typeof value !== 'object' || Object.isFrozen(value) || !isPlain(value)) return value
+  if (!value || typeof value !== 'object' || deepFrozen.has(value) || !isPlain(value)) return value
+  // Marked first, so a cycle ends here.
+  deepFrozen.add(value)
   Object.freeze(value)
   for (const child of Object.values(value)) freeze(child)
   return value
+}
+
+/**
+ * Report an error that has no caller to receive it: an effect that failed while a task
+ * published its state. The task's own bookkeeping and outcome are unaffected.
+ */
+function report(error: unknown): void {
+  const host = globalThis as { reportError?: (error: unknown) => void }
+  if (typeof host.reportError === 'function') host.reportError(error)
+  else
+    queueMicrotask(() => {
+      throw error
+    })
+}
+
+/** Write signals in one batch; an effect that throws while they settle is reported. */
+function publish(fn: () => void): void {
+  try {
+    batch(fn)
+  } catch (error) {
+    report(error)
+  }
 }
 
 function readonly<T>(source: { (): T; peek(): T }): ReadonlySignal<T> {
@@ -147,7 +175,8 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
   const derivedValues: Computed<unknown>[] = []
   const owned: Array<{ dispose(): void }> = []
   const connectors: Array<(lifetime: AbortSignal) => unknown> = []
-  const running = new Set<AbortController>()
+  // Runs in flight. Aborting one frees its task at once, so a new lifetime can start it again.
+  const running = new Set<{ abort(): void }>()
   let attachment: { controller: AbortController; cleanups: Array<() => void> } | null = null
 
   const duringSetup = (name: string): void => {
@@ -160,7 +189,7 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
     if (!current) return
     attachment = null
     current.controller.abort()
-    for (const controller of running) controller.abort()
+    for (const run of [...running]) run.abort()
     settleAll(current.cleanups.reverse(), `store "${id}": ${current.cleanups.length} cleanups failed`)
   }
 
@@ -201,10 +230,18 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
         throw new TypeError(`store "${id}": task concurrency must be "exclusive" or "latest"`)
       const pending = signal(false)
       const error = signal<unknown>(undefined)
-      let current: { controller: AbortController; superseded: boolean } | null = null
+      type Run = { controller: AbortController; superseded: boolean; abort(): void }
+      let current: Run | null = null
 
-      const settle = (mine: NonNullable<typeof current>, outcome: TaskOutcome<R>): TaskOutcome<R> => {
-        running.delete(mine.controller)
+      // Free the slot now; the run's promise resolves to `aborted` when its work settles.
+      const release = (mine: Run): void => {
+        if (current !== mine) return
+        current = null
+        if (!disposed) publish(() => pending.set(false))
+      }
+
+      const settle = (mine: Run, outcome: TaskOutcome<R>): TaskOutcome<R> => {
+        running.delete(mine)
         const result: TaskOutcome<R> = mine.superseded
           ? { status: 'superseded' }
           : mine.controller.signal.aborted
@@ -213,7 +250,7 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
         if (current === mine) {
           current = null
           if (!disposed)
-            batch(() => {
+            publish(() => {
               pending.set(false)
               if (result.status === 'failed') error.set(result.error)
             })
@@ -232,10 +269,17 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
             current.superseded = true
             current.controller.abort()
           }
-          const mine = { controller: new AbortController(), superseded: false }
+          const mine: Run = {
+            controller: new AbortController(),
+            superseded: false,
+            abort: () => {
+              mine.controller.abort()
+              release(mine)
+            },
+          }
           current = mine
-          running.add(mine.controller)
-          batch(() => {
+          running.add(mine)
+          publish(() => {
             pending.set(true)
             error.set(undefined)
           })
@@ -275,7 +319,7 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
       [
         detach,
         () => {
-          for (const controller of running) controller.abort()
+          for (const run of [...running]) run.abort()
         },
         ...derivedValues.map((value) => () => value.dispose()),
         ...owned.reverse().map((child) => () => child.dispose()),
@@ -326,7 +370,14 @@ function createStore<Input, Deps, S extends Record<string, unknown>>(
       try {
         for (const connect of connectors) {
           const cleanup = untracked(() => connect(controller.signal))
-          if (typeof cleanup === 'function') current.cleanups.push(cleanup as () => void)
+          if (attachment === current) {
+            if (typeof cleanup === 'function') current.cleanups.push(cleanup as () => void)
+            continue
+          }
+          // The lifetime ended inside this connect(): nothing will call its cleanup later,
+          // and the connectors after it must not start.
+          if (typeof cleanup === 'function') (cleanup as () => void)()
+          return
         }
       } catch (error) {
         try {
