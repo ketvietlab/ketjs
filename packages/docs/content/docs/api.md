@@ -19,6 +19,7 @@ from documented package entrypoints; deep imports into `dist/` or `src/` are imp
 | `@ketvietlab/ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
 | `@ketvietlab/ketjs-view/mirror` | Server-state cache for API answers: shared reads, invalidation, optimistic writes, pages and snapshots. |
+| `@ketvietlab/ketjs-view/store` | Island stores: state that is read-only from outside, batched actions, async tasks and browser wiring after mount. |
 | `@ketvietlab/ketjs-view/jsx-runtime` | Automatic JSX runtime. |
 | `@ketvietlab/ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
 | `@ketvietlab/ketjs-view-tools` | Static page rendering, asset bundling, local development, preview, and project validation. |
@@ -272,6 +273,21 @@ The entrypoint also exports `Mirror`, `MirrorKey`, `MirrorStatus`, `MirrorOption
 `MirrorWriting`, `MirrorWriteOutcome`, `MirrorPatch`, `MirrorRetry`, `MirrorSnapshot` and their
 related types. `@ketvietlab/ketjs` does not re-export it. See
 [Server state with Mirror](/docs/view-mirror/).
+
+## `@ketvietlab/ketjs-view/store`
+
+| API | Purpose |
+| --- | --- |
+| `defineStore(id, setup)` | Define a factory that creates one store per island instance from `input` and `deps`. |
+| `use.state`, `use.derived` | Declare state the store writes and values computed from it; both are read-only outside the store. |
+| `use.action(fn)` | Declare a write that runs in one batch, without tracking, and does nothing after dispose. |
+| `use.task(run, options)` | Declare async work with `exclusive` or `latest` concurrency; `run()` resolves to an outcome. |
+| `use.connect(fn)`, `use.own(child)` | Declare browser wiring that runs only while attached; dispose a child with the store. |
+| `store.attach(lifetime)`, `dispose`, `snapshot` | Start wiring for one lifetime; end everything; copy top-level state as JSON. |
+
+The entrypoint also exports `Store`, `StoreFactory`, `StoreMembers`, `StoreScope`, `Task`,
+`TaskOptions`, `TaskOutcome` and `TaskConcurrency`. `@ketvietlab/ketjs` does not re-export it. See
+[Island state with stores](/docs/view-stores/).
 
 TypeScript projects using automatic JSX can configure:
 

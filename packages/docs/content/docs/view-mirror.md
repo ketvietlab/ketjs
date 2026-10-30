@@ -85,6 +85,7 @@ export const orders = mirror.read({
 | `refetch()`, `settled()`, `dispose()` | Load again, wait for the load in flight, stop observing. |
 
 Dispose a reading with the island or view that owns it. An entry nobody observes is dropped after `gcMs`.
+An [island store](/docs/view-stores/) can own readings, so they are disposed with it.
 
 ## Render a reading
 
