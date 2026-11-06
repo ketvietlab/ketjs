@@ -277,6 +277,7 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
   const writeControllers = new Set<AbortController>()
   let listeners: AbortController | null = null
   let activeScope: string | null = null
+  let scopeEpoch = 0
   let disposed = false
   let revisions = 0
 
@@ -295,8 +296,11 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
   // A different scope never sees the previous one's data: drop it all, loads included.
   const enterScope = (scope: string) => {
     if (activeScope !== null && activeScope !== scope) {
+      activeScope = scope
+      scopeEpoch++
       for (const entry of entries.values()) forget(entry)
       entries.clear()
+      for (const controller of [...writeControllers]) controller.abort()
     }
     activeScope = scope
   }
@@ -664,7 +668,9 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
 
   // An aborted write has an unknown outcome: ask the server instead of guessing.
   const reloadPatched = (undo: Undo[]) => {
-    for (const { entry } of undo) if (entry.observers > 0 && attached.peek()) void loadEntry(entry, true)
+    for (const { entry } of undo)
+      if (entries.get(entry.hash) === entry && entry.observers > 0 && attached.peek())
+        void loadEntry(entry, true)
   }
 
   const invalidate = (match: MirrorMatch): Promise<void> => {
@@ -821,11 +827,15 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
       let tail: Promise<unknown> = Promise.resolve()
       let closed = false
 
-      const execute = async (input: I): Promise<MirrorWriteOutcome<R>> => {
+      const execute = async (input: I, scope: string, epoch: number): Promise<MirrorWriteOutcome<R>> => {
         const controller = new AbortController()
         const undo: Undo[] = []
+        const sameScope = () => {
+          enterScope(untracked(scopeOf))
+          return activeScope === scope && scopeEpoch === epoch
+        }
         try {
-          if (disposed || closed) return { status: 'aborted' }
+          if (disposed || closed || !sameScope()) return { status: 'aborted' }
           controllers.add(controller)
           writeControllers.add(controller)
           if (opts.optimistic) {
@@ -842,9 +852,12 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
           const idempotencyKey = newIdempotencyKey()
           for (let n = 0; ; n++) {
             try {
-              const value = await opts.run(input, { signal: controller.signal, idempotencyKey })
+              if (!sameScope() || controller.signal.aborted) return { status: 'aborted' }
+              const value = await untracked(() =>
+                opts.run(input, { signal: controller.signal, idempotencyKey }),
+              )
               // A transport that ignores the signal may still answer; the write was abandoned.
-              if (controller.signal.aborted) {
+              if (!sameScope() || controller.signal.aborted) {
                 reloadPatched(undo)
                 return { status: 'aborted' }
               }
@@ -861,13 +874,13 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
               for (const tag of tags) void invalidate(tag)
               return { status: 'done', value }
             } catch (cause) {
-              if (controller.signal.aborted) {
+              if (!sameScope() || controller.signal.aborted) {
                 reloadPatched(undo)
                 return { status: 'aborted' }
               }
               if (shouldRetry(opts.retry, cause, n)) {
                 await pause(retryDelay(opts.retry, n), controller.signal)
-                if (controller.signal.aborted) {
+                if (!sameScope() || controller.signal.aborted) {
                   reloadPatched(undo)
                   return { status: 'aborted' }
                 }
@@ -891,11 +904,14 @@ export function createMirror(options: MirrorOptions = {}): Mirror {
         error,
         run(input: I): Promise<MirrorWriteOutcome<R>> {
           if (disposed || closed) return Promise.resolve({ status: 'aborted' })
+          const scope = untracked(scopeOf)
+          enterScope(scope)
+          const epoch = scopeEpoch
           if (concurrency === 'exclusive' && running > 0) return Promise.resolve({ status: 'rejected' })
           running++
           pending.set(true)
-          if (concurrency === 'exclusive') return execute(input)
-          const result = tail.then(() => execute(input))
+          if (concurrency === 'exclusive') return execute(input, scope, epoch)
+          const result = tail.then(() => execute(input, scope, epoch))
           tail = result.catch(() => undefined)
           return result
         },
