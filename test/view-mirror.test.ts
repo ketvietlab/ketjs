@@ -4,6 +4,58 @@ import { countingHost, each, html, mount, signal } from '@ketvietlab/ketjs-view'
 import { createMirror } from '@ketvietlab/ketjs-view/mirror'
 import type { Mirror, MirrorKey, MirrorOptions } from '@ketvietlab/ketjs-view/mirror'
 
+test('queued writes never cross accounts, including a switch back to the original account', async () => {
+  const scope = signal('account-a')
+  const mirror = createMirror({ scope })
+  const reading = mirror.read({ key: () => ['items'], load: async () => [], parse: (raw) => raw })
+  const sent: Array<{ input: number; scope: string }> = []
+  let release!: () => void
+  let activeSignal!: AbortSignal
+  const writing = mirror.write<number, number>({
+    concurrency: 'queue',
+    run: async (input, { signal }) => {
+      sent.push({ input, scope: scope() })
+      activeSignal = signal
+      if (input === 1)
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      return input
+    },
+  })
+  const first = writing.run(1)
+  const queued = writing.run(2)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  scope.set('account-b')
+  assert.equal(activeSignal.aborted, true)
+  scope.set('account-a')
+  release()
+  assert.deepEqual(await Promise.all([first, queued]), [{ status: 'aborted' }, { status: 'aborted' }])
+  assert.deepEqual(sent, [{ input: 1, scope: 'account-a' }])
+  assert.deepEqual(await writing.run(3), { status: 'done', value: 3 })
+  reading.dispose()
+  mirror.dispose()
+})
+
+test('a queued write checks its scope before sending even with no readings', async () => {
+  let scope = 'account-a'
+  const mirror = createMirror({ scope: () => scope })
+  let calls = 0
+  const writing = mirror.write({
+    concurrency: 'queue',
+    run: async () => {
+      calls++
+      return true
+    },
+  })
+  const result = writing.run(undefined)
+  scope = 'account-b'
+  assert.deepEqual(await result, { status: 'aborted' })
+  assert.equal(calls, 0)
+  assert.equal(writing.pending(), false)
+  mirror.dispose()
+})
+
 type Row = { id: number; name: string }
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve))

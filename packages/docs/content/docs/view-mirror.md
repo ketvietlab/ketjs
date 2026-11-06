@@ -37,9 +37,12 @@ export function startMirror(lifetime: AbortSignal): void {
 }
 ```
 
-`scope` is the isolation boundary. When it changes, every entry is dropped and loads in flight are
-aborted. `keepPrevious` never shows another scope's data, and `restore()` refuses a snapshot taken
-in another scope. Set it whenever answers depend on who is asking.
+`scope` is the isolation boundary. When it changes, every entry is dropped and reads and writes in
+flight are aborted. Queued writes belong to the scope in which `run()` was called and are discarded
+after a scope change, even if the account switches back before the queue drains. A write checks the
+scope again before sending or retrying and after its response; cancellation cannot undo a request
+the server already received. `keepPrevious` never shows another scope's data, and `restore()` refuses
+a snapshot taken in another scope. Set it whenever answers depend on who is asking.
 
 ## Read
 
