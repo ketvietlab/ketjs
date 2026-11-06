@@ -18,6 +18,7 @@ from documented package entrypoints; deep imports into `dist/` or `src/` are imp
 | `@ketvietlab/ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
 | `@ketvietlab/ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
+| `@ketvietlab/ketjs-view/mirror` | Server-state cache for API answers: shared reads, invalidation, optimistic writes, pages and snapshots. |
 | `@ketvietlab/ketjs-view/jsx-runtime` | Automatic JSX runtime. |
 | `@ketvietlab/ketjs-view/jsx-dev-runtime` | Automatic JSX development runtime. |
 | `@ketvietlab/ketjs-view-tools` | Static page rendering, asset bundling, local development, preview, and project validation. |
@@ -253,6 +254,24 @@ The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactor
 
 `@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
 may import any of these names from either one.
+
+## `@ketvietlab/ketjs-view/mirror`
+
+| API | Purpose |
+| --- | --- |
+| `createMirror(options)` | Create a cache with a `scope`, `staleMs`, `gcMs`, `retry`, `refetchOn` and `structuralSharing`. |
+| `mirror.read(options)` | Observe one keyed answer: `data`, `status`, `fetching`, `stale`, `previous`, `error`, `updatedAt`, `refetch`, `settled`, `dispose`. |
+| `mirror.pages(options)` | Observe a cursor-paged answer with `more`, `loadingMore` and `loadMore`. |
+| `mirror.write(options)` | Run a write with an idempotency key, optional optimistic patch and tag invalidation; resolves to an outcome. |
+| `mirror.invalidate`, `prefetch`, `seed`, `peek` | Mark entries stale, load a key now, store a held answer, read without observing. |
+| `mirror.snapshot`, `restore` | Hand cached answers from a server render to the browser within one scope. |
+| `mirror.attach(lifetime)`, `attached`, `dispose` | Start loading, polling, refetch listeners and collection until the lifetime aborts. |
+
+The entrypoint also exports `Mirror`, `MirrorKey`, `MirrorStatus`, `MirrorOptions`,
+`MirrorReadOptions`, `MirrorReading`, `MirrorPagesOptions`, `MirrorPaging`, `MirrorWriteOptions`,
+`MirrorWriting`, `MirrorWriteOutcome`, `MirrorPatch`, `MirrorRetry`, `MirrorSnapshot` and their
+related types. `@ketvietlab/ketjs` does not re-export it. See
+[Server state with Mirror](/docs/view-mirror/).
 
 TypeScript projects using automatic JSX can configure:
 

@@ -92,15 +92,16 @@ Start an independent account application or resolve sessions and tenant context 
 
 ### ketjs-view and KTL
 
-Understand pure rendering and island lifecycles, then add browser data loading and form sessions, or choose a static site or server theme templates. Menus, localization and reports build on those output contracts.
+Understand pure rendering and island lifecycles, then add browser data loading, cached server state and form sessions, or choose a static site or server theme templates. Menus, localization and reports build on those output contracts.
 
 1. [Rendering and islands](/docs/rendering/)
 2. [Effects and data fetching](/docs/view-effects-data/)
-3. [Forms and edit sessions](/docs/view-forms/)
-4. [Static sites with ketjs-view](/docs/view-static-sites/)
-5. [Themes and KTL](/docs/themes/)
-6. [Menus and localization](/docs/menus-i18n/)
-7. [Reports and PDF](/docs/reports/)
+3. [Server state with Mirror](/docs/view-mirror/)
+4. [Forms and edit sessions](/docs/view-forms/)
+5. [Static sites with ketjs-view](/docs/view-static-sites/)
+6. [Themes and KTL](/docs/themes/)
+7. [Menus and localization](/docs/menus-i18n/)
+8. [Reports and PDF](/docs/reports/)
 
 </section>
 

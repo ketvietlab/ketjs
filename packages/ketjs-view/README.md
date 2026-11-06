@@ -31,6 +31,20 @@ npm run build --workspace @ketvietlab/ketjs-view
 
 This build compiles the view package independently, without the application server or adapters.
 
+## Server state
+
+`@ketvietlab/ketjs-view/mirror` caches API answers on signals:
+
+- keyed reads shared between readers;
+- stale-while-revalidate and `keepPrevious`;
+- structural sharing and tag invalidation;
+- optimistic writes with rollback and idempotency keys;
+- cursor pages and a scope-bound snapshot for a server-render handoff.
+
+It performs no I/O of its own, so any HTTP, GraphQL or SDK transport works. Nothing loads before
+`attach(lifetime)`, so a server render stays pure. A change of `scope` drops every cached answer.
+Read [Server state with Mirror](../docs/content/docs/view-mirror.md).
+
 ## Form contracts and sessions
 
 `defineFormContract(id, schema)` shares validation with the server, including nested `object.fields`,
