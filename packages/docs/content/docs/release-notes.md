@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} patch release, conflict status for function calls and hydration of text-only elements.
+description: The coordinated KetJS {{VERSION}} release adds Mirror server-state caching, island stores, strict contract checks and measured PDF table wrapping.
 group: Project evolution
 order: 1
 ---
@@ -15,13 +15,26 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} fixes
+## What {{VERSION}} adds
+
+- **Mirror server state.** `@ketvietlab/ketjs-view/mirror` provides keyed reads, shared requests, parsing, invalidation, optimistic writes and rollback. Scope changes isolate cached answers and queued writes; consumers own transport and explicitly start browser wiring. See [Server state with Mirror](/docs/view-mirror/).
+- **Island stores.** `@ketvietlab/ketjs-view/store` groups read-only state, derived values, batched actions and cancellable tasks for one island instance. Connections start after mount and owned resources are disposed with the store. See [Island state with stores](/docs/view-stores/).
+- **Strict composition checks.** `ket check --strict` fails on contract warnings as well as errors, allowing applications to enforce the upcoming contract boundaries before 1.0. Plain `ket check` keeps its existing warning behavior. See [CLI and configuration](/docs/cli-config/).
+- **PDF table wrapping.** Table cells wrap within measured column bounds, and row height accommodates the wrapped content. See [Reports](/docs/reports/).
+- **Release verification.** Historical audits survive metadata-only Git rewrites through verifiable original commit objects. Current release evidence still requires the exact source and executable docs/lab checks. The release workflow rebuilds the documentation site after npm publication. See [Publishing packages](/docs/releasing/).
+
+Mirror and stores are opt-in additions. This release changes no application data schema; deploy matching server and client bundles together and review [Upgrading KetJS](/docs/upgrading/). The documented `ket install` and architecture-lint designs remain plans, not shipped CLI commands.
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-6-2"></span>
+<span id="what-0-6-2-fixes"></span>
+
+## Previous release: 0.6.2
 
 - **Return anchors survive fragment navigation.** Fetch drops the fragment from a response URL, so a fragment navigation to a link such as a native Back link with `#row=…` lost the row it should return to. The runtime keeps the requested anchor when the response names the same origin, path and query and was not redirected, and uses that complete URL for history, anchor focus and `ket:navigation-complete`. A redirected or changed destination keeps its own URL and never inherits the anchor. See [Fragment navigation and persistent islands](/docs/rendering/#fragment-navigation-and-persistent-islands).
 
 This patch changes no public API or application data schema, and applications need no change. Deploy matching server and client bundles together.
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-6-1"></span>
 <span id="what-0-6-1-fixes"></span>

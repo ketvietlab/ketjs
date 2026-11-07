@@ -6,5 +6,5 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": ["packages/*/src/**/*", "test/**/*", "tools/**/*", "bench/**/*"],
-  "exclude": ["node_modules", "packages/*/dist", "bench/form-comparison"]
+  "exclude": ["node_modules", "packages/*/dist", "bench/form-comparison", "bench/mirror-comparison"]
 }

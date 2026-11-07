@@ -29,6 +29,14 @@ The workflow requests an OIDC token and publishes with npm provenance. After the
 packages, configure npm trusted publishing for this repository and remove the long-lived token when the npm
 account supports that transition.
 
+## One-time documentation deploy setup
+
+ketjs.dev is built by Cloudflare Workers Builds from `master` and installs the published packages. The build
+that a release merge starts runs before npm has the new version, so `release.yml` rebuilds the site after
+publishing. In the `ketjs-docs` Worker, open Settings > Builds > Deploy Hooks, create a hook for `master`, and
+store its URL as the `KETJS_DOCS_DEPLOY_HOOK` secret of the GitHub `npm` environment. Anyone with the URL can
+start a build, so keep it out of source and recreate the hook if it leaks.
+
 ## Prepare a version
 
 Edit the root `VERSION` file only. It is the authoritative version for the five framework packages,
@@ -79,6 +87,16 @@ failed documentation/lab checks and stale source evidence. CI also reruns the ca
 hand-written passing flag does not substitute for execution. Audit coverage includes rendered local links,
 metadata, located examples, version expansion and downloadable projects; maintainers still review prose
 and whether release notes describe the actual changes.
+
+Historical entries remain immutable when a Git history rewrite changes commit metadata but preserves
+the complete source tree. `tools/version-history.json` retains the raw original Git commit objects for
+the affected releases. The audit hashes each object using Git's commit-object encoding and requires
+that hash to match the ledger's original VERSION commit, its tree to match the rewritten commit's tree,
+and its reason to match both the ledger and rewritten commit. This works in a fresh clone without the
+unreachable original objects. Missing proofs, changed source trees and changed reasons still fail.
+These proofs establish historical source identity only; they do not assert that tests ran again or
+change published packages or tags. The current version always needs an exact VERSION commit match
+and fresh source, document and consumer evidence, even when a historical proof exists for its version.
 
 Only the scoped `@ketvietlab` packages are part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
@@ -136,10 +154,15 @@ No publish command is part of either local script.
 4. Create and publish GitHub release `v{{VERSION}}` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
-   The workflow repeats docs/lab/download verification against the public registry after publishing.
-7. Update each downstream repository to the released npm version, then run that repository's release
+   The workflow repeats docs/lab/download verification against the public registry after publishing, then
+   rebuilds ketjs.dev through the documentation Deploy Hook. The build of the merge commit fails because it
+   ran before publishing; confirm that the rebuilt site shows `{{VERSION}}`.
+7. Merge `fix/release-<version>` back into `integration` with a pull request, then promote `integration` to
+   `develop`. Until then those branches keep the previous `VERSION`, so new work and its documentation still
+   describe the previous release.
+8. Update each downstream repository to the released npm version, then run that repository's release
    process.
-8. Run the public smoke path without local tarballs:
+9. Run the public smoke path without local tarballs:
 
 ```bash
 # Run from: /path/to/projects
