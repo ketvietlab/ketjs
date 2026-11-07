@@ -14,6 +14,16 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
+The {{VERSION}} release adds opt-in Mirror and island stores without changing application data schemas.
+Use the dedicated `/mirror` and `/store` entry points. Mirror scope must follow the authenticated user
+and tenant context, and its browser listeners belong to an explicit lifetime. Create stores per island
+instance and dispose them when the island ends. See [Server state with Mirror](/docs/view-mirror/) and
+[Island state with stores](/docs/view-stores/) for the ownership and cancellation contracts.
+
+`ket check --strict` now fails on contract warnings. Existing `ket check` behavior is unchanged;
+resolve reported warnings before enabling strict mode in an application's CI. PDF tables now wrap
+within measured column widths, so review representative multi-line reports before deployment.
+
 The 0.6.1 patch answers a `/_ket/fn` conflict with HTTP `409` and hydrates text-only elements such as
 `<noscript>` and `<textarea>`. Application data schemas are unchanged. Deploy matching server and client
 bundles together and read [Changes in 0.6.1](#changes-in-0-6-1).
