@@ -17,6 +17,7 @@ import {
 } from './version-audit.mjs'
 import { auditDocuments } from './version-documents.mjs'
 import { stagePackage } from './release-files.mjs'
+import { matchesHistoricalCommit } from './version-history.mjs'
 
 /** @param {string} root @param {string} path @param {unknown} value */
 const put = (root, path, value) => {
@@ -289,6 +290,68 @@ test('a new version retains the commit and reason of every earlier VERSION chang
   current.releases.unshift(previous.releases[0])
   put(root, 'CHANGE_LOG', current)
   assert.equal(checkAudit(root).version, '0.5.0')
+})
+
+test('historical metadata rewrites require authentic commit objects with identical source and reasons', (t) => {
+  const root = fixture(t)
+  const previous = ledger(root)
+  const original = previous.releases[0]
+  const raw = spawnSync('git', ['cat-file', 'commit', original.versionCommit], {
+    cwd: root,
+    encoding: 'utf8',
+  }).stdout
+  execute(root, 'git', [
+    '-c',
+    'core.hooksPath=/dev/null',
+    'commit',
+    '--amend',
+    '-q',
+    '-m',
+    'Rewrite commit metadata without changing the source',
+    '-m',
+    `Version-Reason: ${original.reason}`,
+  ])
+  const rewritten = versionCommit(root).commit
+  assert.notEqual(rewritten, original.versionCommit)
+  assert.equal(matchesHistoricalCommit(root, original, rewritten), false)
+  const proofs = { schema: 1, commits: { [original.versionCommit]: raw } }
+  put(root, 'tools/version-history.json', proofs)
+  assert.equal(matchesHistoricalCommit(root, original, rewritten), true)
+  // A proof cannot replace a fresh audit of the current version.
+  put(root, 'CHANGE_LOG', previous)
+  assert.throws(() => checkAudit(root), /commit\/reason does not match/)
+
+  put(root, 'VERSION', '0.5.0\n')
+  materializeVersion({ root })
+  execute(root, 'git', ['add', '.'])
+  execute(root, 'git', [
+    '-c',
+    'core.hooksPath=/dev/null',
+    'commit',
+    '-q',
+    '-m',
+    'Ship a new version after the metadata rewrite',
+    '-m',
+    'Version-Reason: Verify fresh source and consumers after reconciling historical metadata.',
+  ])
+  const current = ledger(root)
+  current.releases.unshift(original)
+  put(root, 'CHANGE_LOG', current)
+  assert.equal(checkAudit(root).version, '0.5.0')
+  assert.deepEqual(current.releases[0], original)
+
+  put(root, 'tools/version-history.json', { schema: 1, commits: {} })
+  assert.throws(() => checkAudit(root), /Missing historical VERSION/)
+  put(root, 'tools/version-history.json', { schema: 1, commits: { [original.versionCommit]: raw + '\n' } })
+  assert.throws(() => checkAudit(root), /commit object hash mismatch/)
+  put(root, 'tools/version-history.json', { schema: 2, commits: proofs.commits })
+  assert.throws(() => checkAudit(root), /Invalid VERSION history proof schema/)
+  put(root, 'tools/version-history.json', proofs)
+  assert.equal(matchesHistoricalCommit(root, { ...original, reason: 'A different reason' }, rewritten), false)
+  assert.equal(matchesHistoricalCommit(root, original, versionCommit(root).commit), false)
+
+  put(root, 'README.md', '# Changed after the current audit\n')
+  assert.throws(() => checkAudit(root), /Stale CHANGE_LOG evidence/)
 })
 
 test('unpublished versions install entirely offline through the exact candidate dependency closure', (t) => {

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROOT, materializeVersion, producers, readJson, readVersion } from './version.mjs'
 import { auditDocuments } from './version-documents.mjs'
+import { matchesHistoricalCommit } from './version-history.mjs'
 
 export const requiredChecks = [
   'producer-build',
@@ -82,13 +83,15 @@ export function checkAudit(root = ROOT) {
     throw new Error('CHANGE_LOG commit/reason does not match the VERSION commit')
   for (const commit of git(root, ['log', '--no-merges', '--format=%H', '--', 'VERSION']).split('\n')) {
     const previousVersion = git(root, ['show', `${commit}:VERSION`])
-    const recorded = ledger.releases.find(
-      (item) => item.version === previousVersion && item.versionCommit === commit,
-    )
+    const recorded = ledger.releases.find((item) => item.version === previousVersion)
     const reason = git(root, ['show', '-s', '--format=%B', commit])
       .match(/^Version-Reason: (.+)$/m)?.[1]
       ?.trim()
-    if (!recorded || recorded.reason !== reason)
+    if (
+      !recorded ||
+      recorded.reason !== reason ||
+      (recorded.versionCommit !== commit && !matchesHistoricalCommit(root, recorded, commit))
+    )
       throw new Error(`Missing historical VERSION commit/reason in CHANGE_LOG: ${previousVersion} ${commit}`)
   }
   if (git(root, ['show', `${entry.versionCommit}:VERSION`]) !== version)

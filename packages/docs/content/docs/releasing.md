@@ -88,6 +88,16 @@ hand-written passing flag does not substitute for execution. Audit coverage incl
 metadata, located examples, version expansion and downloadable projects; maintainers still review prose
 and whether release notes describe the actual changes.
 
+Historical entries remain immutable when a Git history rewrite changes commit metadata but preserves
+the complete source tree. `tools/version-history.json` retains the raw original Git commit objects for
+the affected releases. The audit hashes each object using Git's commit-object encoding and requires
+that hash to match the ledger's original VERSION commit, its tree to match the rewritten commit's tree,
+and its reason to match both the ledger and rewritten commit. This works in a fresh clone without the
+unreachable original objects. Missing proofs, changed source trees and changed reasons still fail.
+These proofs establish historical source identity only; they do not assert that tests ran again or
+change published packages or tags. The current version always needs an exact VERSION commit match
+and fresh source, document and consumer evidence, even when a historical proof exists for its version.
+
 Only the scoped `@ketvietlab` packages are part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
 
