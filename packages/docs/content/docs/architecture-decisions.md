@@ -21,6 +21,10 @@ the others:
 | Partly superseded | D28, D50, D57 | D67 replaced the module lifecycle portion; the rest still applies. |
 | Partly superseded | D23 | D78 made company scoping opt-in; D23 applies to a deployment with `companies: true`. |
 | KetSuite domain | D25, D26, D34, D45, D49, D51, D52, D56–D65 | A decision about KetSuite modules, kept as history. KetSuite owns and documents those modules; none of it is a KetJS contract. |
+| Accepted, not built | D79 | The contracts are decided and no code exists yet. [Plan: installing modules](/docs/module-installation-plan/) tracks the phases. |
+| Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
+| Accepted, unreleased | D81 | `@ketvietlab/ketjs-view/mirror` is built and first ships in 0.8.0. |
+| Accepted, unreleased | D82 | `@ketvietlab/ketjs-view/store` is built and first ships in 0.8.0. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
 
@@ -2537,3 +2541,251 @@ change; setting `companies: true` keeps them.
 
 **Reversible:** per deployment, by setting or removing the flag. Removing it from a deployment that has
 company-scoped models is a composition error, not a migration.
+
+## D79 — Packaged modules enter a deployment through its source
+
+Using modules from an npm package means installing the package, adding its root to `modulePaths` and listing
+the modules in `DeploymentSpec.modules` by hand. `ket install` does those steps. D67 removed runtime install
+state and self-installing bridges, so the command has to stay on the source side of that line: it edits files
+in the developer's project and changes nothing until the project is built and released.
+
+**Chosen:** `ket install` and `ket uninstall` are development commands that edit `package.json`, the lockfile
+and `ket.install.json`. The workspace imports `ket.install.json` as JSON, so `tsc` copies the selection into
+the build artifact and D67's single composition list stays inside it. Package roots are found by Node
+resolution of `<package>/package.json` and its `ket.modules` field, never by a relative path. Until a source
+allowlist exists, only the `@ketvietlab` scope with npm provenance is accepted.
+
+**Five contracts come with it.**
+
+1. *Selection.* The first install from a package names it with an exact version (`--from <package>@<version>`).
+   A bare module name resolves only against packages already recorded, and a name two recorded packages
+   provide is refused. A workspace holds one version of each package, so every command reports every
+   deployment that selects a module from it.
+2. *Candidate.* Plans never read existing build output. They copy the project to staging, apply the
+   selection, run the project's build and load the workspace it produced. A workspace that does not consume
+   `ket.install.json` stops the command before anything changes.
+3. *Report.* Three parts with stated baselines: contract changes as `ket diff` compares them, the migration
+   as `ket migrate --dry-run` plans it, and access that widens without a grant — new anonymous functions and
+   bundles or role templates a package upgrade widens.
+4. *Removal.* Removing a module drops its tables and the columns it added, and D7 refuses that plan as a
+   whole, which stops every later migration and every boot that migrates. `ket uninstall` therefore means
+   export and then drop. The plan lists the drops and applying requires an acknowledgement. The release then
+   runs `ket migrate --allow-destructive --export-dropped <directory>`, which writes the affected rows and
+   columns as JSON Lines, one file per table and per datastore, and checks the row counts before the first
+   `DROP`. A failed export drops nothing. For a module that is no longer composed, `--allow-destructive`
+   alone is refused, and `--no-export` is the explicit way to drop without a copy.
+5. *Apply.* One resolution in staging, reused when applying. Only files that passed `ket check` in staging are
+   promoted, followed by a clean install from the promoted lockfile. A failure restores the files and
+   reinstalls from the old lockfile, and a journal under `.ket/install/` lets the next run finish an
+   interrupted restore.
+
+**Presets and bridges are package data, read only by the command.** A preset names several modules, and
+`ket install` writes those names into the selection. A bridge is a module the package declares as joining
+others. When every module it joins is selected, the command adds the bridge to that deployment's list and
+says so in its report. Uninstalling any module it joins removes the bridge too, under the same
+export-and-drop rule. This is not D67's self-installing bridge: the decision is written into source and
+shown before it applies, and the runtime never reads presets or bridge declarations.
+
+**Retaining a removed module's tables was rejected for now.** It would need the schema comparison and
+`ket schema verify` to skip detached tables, which changes D7. It can return as its own decision.
+
+**Cost:** planning builds a copy of the project, which takes seconds for a small project and has not been
+measured for a large one. Export files hold production data, often personal data, and their retention is the
+operator's duty. Bridges grow a deployment's composition without the developer naming each one. Third-party
+packages wait for an allowlist.
+
+**Reversible:** yes. `ket.install.json` is plain data imported by the workspace. Without the commands, a
+developer edits it by hand and the workspace composes the same deployment.
+
+## D80 — Architecture rules run as lint, and `ket lint` reads the composition
+
+Composition already refuses what it can see: a relation, extension, effect, view, fill or menu that
+reaches a module outside the declaring module's `depends` fails with an `E_*_NOT_DEPENDED` code. It cannot
+see source. In KetSuite, 35 of the 246 runtime import edges between its 110 modules lead outside the
+importer's `depends` closure, three of them against a declared dependency. Consumers held their
+source-side rules with regular-expression audits that needed a build, ran late in CI and once read a
+`<br>` inside a string as markup.
+
+**Chosen:** a rule that the syntax of one file decides runs in Biome, which KetJS and its consumers already
+pin for formatting and linting: Biome's own rules first, GritQL plugins for the rest. One configuration
+then serves the editor, the pre-commit hook and CI. `@ketvietlab/ketjs` ships the framework's plugins in
+`lint/`; the first is `raw-no-interpolation`, because an interpolated `raw()` body is an injection path
+that escaping cannot reach. A rule that needs the composition runs in `ket lint`, which loads the built
+workspace like every other command, with a Node module-resolution hook that records each import edge.
+An edge from one module's files into another module outside its `depends` closure is
+`E_IMPORT_NOT_DEPENDED`. `optional` does not cover it: a static import loads the other module whether or
+not the deployment has it. `ket lint` reports these as warnings until 1.0, and `--strict` fails on them,
+as `ket check --strict` does for contract warnings.
+
+**Composition stays location-free.** The declaration surface in `kernel/define.ts` holds nothing that
+depends on a file's name or location, and module objects carry no import graph, so this cannot be a
+composition check. `ket lint` maps files to modules from where it found them: a module discovered on a
+module path owns its descriptor directory, and a module passed as an object is matched by name under a
+root given with `--modules DIR`, one directory per module named as the module. All 110 KetSuite modules
+already follow that layout.
+
+**The runtime graph, not a parser.** KetJS has no dependencies, and a hand-written import scanner is the
+regular-expression audit this replaces. The resolver records the edges the deployment actually loads,
+resolved the way Node resolves them; for KetSuite that takes about two seconds. Type-only imports do not
+survive the build, so they are not edges: a type is not runtime coupling.
+
+**Not chosen:** an ESLint plugin, which adds a second toolchain beside Biome. A location field on
+`defineModule`, which changes the declaration surface for a lint concern. Biome `noRestrictedImports`
+generated from the manifest, which matches the import string rather than the resolved file, so
+`../account/x` means different modules at different depths. A path-scoped rule against browser globals in
+server views, until server and client files can be told apart: KetSuite has browser globals in 80 files,
+most of them legitimate client code beside server views, and a name-matching pattern also flags a local
+`const document`.
+
+**Cost:** architecture rules live in two places, Biome for syntax and `ket lint` for composition. A
+module passed as an object needs `--modules`. Only code the workspace loads is seen: an `import()` that
+runs when a handler is called, or a file no deployment imports, is not checked. Biome resolves a plugin
+path from the consuming project's root rather than from the shared configuration that names it, so
+`ket lint init` writes the paths and `ket lint` reports when they no longer match the installed version.
+The GritQL plugin API is young: Biome stays pinned and every rule has fixture tests.
+
+**Reversible:** yes. Lint changes no runtime behaviour, and a rule can be demoted or removed without
+migrating anything.
+
+## D81 — Mirror: server state is a cache on signals, with no transport of its own
+
+ketjs-view had signals, effects and form sessions, but nothing for API answers shared across a page.
+`view-effects-data.md` told applications to write their own cache, deduplication, retry and rollback, or
+to bring a data library. A browser runtime that reads an API, whether a client-rendered app or an island
+that loads after hydration, then repeats the same hand-written reader. KetSuite's Flow workspace has 11
+such loading/error signals in one 6,500-line island.
+
+**Chosen:** `@ketvietlab/ketjs-view/mirror`, a subpath of the existing browser-safe package. `createMirror`
+holds entries by JSON key. A reading observes one key through signals; readers of a key share one entry
+and one request; the latest load wins; an answer is shown while a background refetch runs. `write()`
+runs a mutation and resolves to an outcome instead of throwing. It sends a stable idempotency key across
+retries, patches optimistically, rolls back unless something newer replaced the patch, and invalidates
+by tag. `pages()` follows a cursor. `snapshot()`/`restore()` hand answers from a server render to the
+browser.
+
+**Rules that keep it inside KetJS's boundaries:**
+
+- **No I/O of its own.** Every load and write is an application function, so the transport may be any
+  HTTP, GraphQL or SDK client, and the server need not be KetJS.
+- **Render-pure until attached.** Nothing loads, polls or listens before `attach(lifetime)`; only an
+  explicit `prefetch()` or `refetch()` does. Reads can be created during a server render.
+- **`parse` is required.** A response is untrusted input. Restored server data passes the same `parse`,
+  and a payload that fails it is a failed load, never a cached value.
+- **Scope is the isolation boundary.** A different `scope()` drops every entry and aborts its loads;
+  `keepPrevious` never crosses scopes, and a snapshot from another scope is refused.
+
+**Evidence:** `bench/mirror-comparison` compares Mirror with hand-written readers and TanStack Query core
+in Node with `countingHost`.
+
+- **Correctness and requests:** a naive reader renders the older response when answers arrive out of
+  order, and two views of one key fetch twice without a shared entry.
+- **DOM:** operations are the same for every correct variant with the same markup, because the keyed
+  renderer already writes only what changed.
+- **Structural sharing:** it removes renders rather than CPU. An unchanged refetch runs a separately
+  mounted list zero times. Applying a 10,000-row answer with one changed row costs 2.3 to 4.6 ms in every
+  variant measured, about 1.25 ms of it `JSON.parse`.
+
+Sharing is therefore on by default, for stable identity, and can be switched off for answers that change
+wholesale.
+
+**Defaults:**
+
+- **Off by default:** refetch on focus or reconnect, and retries. Both are explicit options, because a
+  surprise request is a cost and retrying every error is wrong for a validation failure.
+- **`staleMs` is 0 and `gcMs` five minutes**, the common defaults for this kind of cache.
+
+**Not chosen:**
+
+- **An adapter over TanStack Query core.** It would add the package's first runtime dependency and a
+  second reactivity model under the signals.
+- **A cache inside a store abstraction.** A store for island state is a separate decision, D82, and
+  Mirror does not depend on it.
+- **A normalised entity cache or persistence.** Tags invalidate across keys without a schema, and
+  persisting answers outlives the scope that made them safe to show.
+- **A KetJS-specific client.** Generating a typed client from the OpenAPI document can build on Mirror
+  later without changing it.
+
+**Cost:** a second data path beside server-rendered pages and native forms, which remain the default.
+Applications must dispose readings with the view that owns them, and must set `scope` when answers
+depend on the user.
+
+**Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.
+
+## D82 — Island stores: one pure factory per island instance, read-only from outside
+
+An island's state lives in signals inside its factory closure. For a few values that is still the
+simplest choice. A large island, though, grows dozens of signals that any handler may write, plus
+hand-written loading/error pairs and `AbortController`s, and cleanup that someone has to remember. KetSuite's
+Flow workspace writes one shared data signal from 41 places in a 6,500-line island.
+
+A global store in the Redux style does not fit KetJS. Islands are isolated instances, and an island factory
+also runs during a server render, where module-level state would be shared between requests.
+
+**Chosen:** `@ketvietlab/ketjs-view/store`, a subpath of the browser-safe package.
+
+- `defineStore(id, setup)` returns a factory that is called once per island instance. It receives
+  serializable `input` and services as `deps`.
+- The setup declares state, derived values, actions, tasks, browser wiring (`connect`) and owned children.
+- The store exposes what the setup returns. Its top-level state is read-only.
+
+**Rules that keep it inside KetJS's boundaries:**
+
+- **No global store.** A store belongs to one island instance. Islands share state through the URL, events or
+  a browser Mirror passed in `deps`.
+- **Render-pure until attached.** The setup runs on the server and in the browser. `connect()` runs only
+  after `attach(lifetime)`, and the end of the lifetime aborts its wiring and the tasks in flight.
+- **Writes go through actions.** Outside the store, state is read-only both at runtime and in its type.
+  An action is one batch and does not subscribe the effect that calls it.
+- **Async results are outcomes.** `task.run()` never throws. It resolves to `done`, `failed`, `superseded`,
+  `rejected` or `aborted`, like `FormOutcome` and Mirror writes.
+- **Server answers belong in Mirror.** A store owns Mirror readings and has no cache of its own.
+
+**Freeze, not clone:** plain objects and arrays are frozen in place when they are written.
+
+- **Why form sessions clone and a store does not.** A form session clones because it holds a user's draft
+  against a baseline. A store often holds Mirror answers. Cloning those would cost O(n) per write and break
+  the identity that structural sharing and keyed rendering keep.
+- **What freezing costs.** It skips subtrees it has already frozen all the way down, so a new list that
+  reuses rows costs only its new nodes. `Object.isFrozen()` alone is not trusted: a value frozen only at
+  its top is still frozen through its children.
+- **What stays mutable.** Class instances, `Map`, `Date` and DOM objects are held as they are.
+
+**Evidence:** `test/view-store.test.ts` covers:
+
+- batching, and actions that are not tracked by the effect calling them;
+- read-only exposure;
+- freezing in place, and the identity of reused rows;
+- the `connect()` lifecycle, including a lifetime that ends inside a `connect()`;
+- `exclusive` and `latest` tasks, aborts when the lifetime ends, and a task started again by the next
+  lifetime;
+- tasks that keep their outcome when an effect watching them throws;
+- dispose order;
+- Mirror readings owned by a store.
+
+Each of these fails at least one of those tests when it is removed:
+
+- batching;
+- read-only exposure;
+- freezing, including values frozen only at the top;
+- the `latest` abort, and the abort at the end of a lifetime;
+- freeing a task when its lifetime ends;
+- the cleanup of a `connect()` during which the lifetime ended;
+- reporting an effect's error instead of throwing it from a task.
+
+**Not chosen:**
+
+- **A global or page-level store.** It shares state between server-rendered requests and couples islands
+  that are meant to be isolated.
+- **A `resource()` primitive inside the store.** Mirror already covers keyed reads, deduplication and
+  invalidation. A second read primitive would split those rules.
+- **Clone on write, like form sessions.** See the freeze decision above.
+- **URL state (`use.url`).** It touches history indexing and fragment navigation and needs its own design.
+- **Sharing one store between islands, middleware, and time-travel devtools.**
+
+**Cost:**
+
+- **Another way to hold island state.** Plain signals sit beside it and remain valid for small islands.
+- **Written values become immutable.** A value written to state is frozen, so code that mutates it
+  afterwards fails with a `TypeError`.
+
+**Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.

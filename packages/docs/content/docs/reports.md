@@ -2,7 +2,7 @@
 title: Reports and PDF
 description: Declare business-owned reports and render constrained KTL as deterministic PDF documents.
 group: ketjs-view and KTL
-order: 7
+order: 9
 ---
 
 KetJS treats a printable document as a manifest capability. The business module owns the data projection,
@@ -129,6 +129,14 @@ supplied TrueType files and writes Unicode maps, so Vietnamese output does not d
 host. `tone="accent"` and `tone="muted"` use fixed document colour roles, while table headings receive the
 accent-soft surface automatically. Current text shaping covers Latin scripts; complex-script shaping, RTL, and
 emoji are outside the contract.
+
+Table cells and body rows wrap against their equal-width column using the embedded
+font's measured glyph widths. Long identifiers split at grapheme boundaries instead
+of overflowing. Ordinary rows stay together when they fit on a fresh page; a row
+taller than a page continues without repeating its quantities or amounts. Wrapped
+column headings repeat at page breaks and count toward the available page height.
+A repeatable heading that leaves no content space is rejected. This is PDF layout;
+HTML previews retain semantic table markup and use the host's stylesheet.
 
 ## Request integration
 

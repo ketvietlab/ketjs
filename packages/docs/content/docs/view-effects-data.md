@@ -7,7 +7,7 @@ order: 2
 
 ## State, derived values, views and effects
 
-Use `signal` for mutable state, `computed` for synchronous derived values, a pure view for markup, and `effect` to synchronize tracked state with an external resource. The renderer already reacts to signals read by a mounted view; do not wrap a view in a second effect just to make it reactive.
+Use `signal` for mutable state, `computed` for synchronous derived values, a pure view for markup, and `effect` to synchronize tracked state with an external resource. The renderer already reacts to signals read by a mounted view; do not wrap a view in a second effect just to make it reactive. When one island grows many signals written from many handlers, [Island state with stores](/docs/view-stores/) groups them behind batched actions.
 
 `effect()` from `@ketvietlab/ketjs-view` is a browser/reactive primitive. The server framework's function `effects` declarations describe reads, writes and other capabilities; they are a different contract. See [Functions and effects](/docs/functions/) for that backend concept.
 
@@ -180,7 +180,7 @@ Prefer a same-origin API. A different port or hostname is a different origin and
 
 Use exactly the server-provided projection for the first client view. An empty array is still a valid initial result. The example skips a duplicate initial request and exposes explicit Refresh. If the product needs revalidation immediately after hydration, make that a deliberate policy and keep the initial markup consistent.
 
-Signals and effects do not provide a shared request cache, deduplication, pagination, retry policy, optimistic rollback or Suspense. Own those policies explicitly or use a compatible data library at the runtime boundary. Dispose subscriptions and pending requests when the owning island ends.
+Signals and effects alone do not provide a shared request cache, deduplication, pagination, retry policy or optimistic rollback. [Server state with Mirror](/docs/view-mirror/) provides them on the same signals; otherwise own those policies explicitly or use a compatible data library at the runtime boundary. Neither provides Suspense. Dispose subscriptions and pending requests when the owning island ends.
 
 ## Test the ownership boundary
 

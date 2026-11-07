@@ -1,0 +1,12 @@
+{
+  "name": "ketjs-mirror-comparison",
+  "private": true,
+  "type": "module",
+  "description": "Render counts and response cost of @ketvietlab/ketjs-view/mirror against hand-written readers and TanStack Query core.",
+  "scripts": {
+    "bench": "node run.ts"
+  },
+  "dependencies": {
+    "@tanstack/query-core": "^5.0.0"
+  }
+}

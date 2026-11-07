@@ -271,20 +271,48 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
       (size / font.unitsPerEm)
     )
   }
-  const wrap = (line: Line): Line[] => {
-    if (line.cells || line.image) return [line]
-    const words = line.text.split(/\s+/).filter(Boolean)
+  const wrapText = (text: string, size: number, weight: FontWeight, width: number): string[] => {
+    const words = text.split(/\s+/).filter(Boolean)
     const rows: string[] = []
     let current = ''
     for (const word of words) {
       const next = current ? `${current} ${word}` : word
-      if (current && measure(next, line.size, line.weight) > usable) {
+      if (current && measure(next, size, weight) > width) {
         rows.push(current)
-        current = word
-      } else current = next
+        current = ''
+      }
+      if (measure(word, size, weight) <= width) {
+        current = current ? `${current} ${word}` : word
+      } else {
+        // A catalogue code or URL has no spaces; preserve every glyph without
+        // allowing it to escape its cell. Grapheme clusters stay together.
+        for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(word)) {
+          if (measure(segment, size, weight) > width) throw new Error('report glyph exceeds column width')
+          if (current && measure(current + segment, size, weight) > width) {
+            rows.push(current)
+            current = ''
+          }
+          current += segment
+        }
+      }
     }
     if (current || !rows.length) rows.push(current)
-    return rows.map((text) => ({ ...line, text }))
+    return rows
+  }
+  const wrap = (line: Line): Line[] => {
+    if (line.image) return [line]
+    if (line.cells?.length) {
+      const width = usable / line.cells.length - 8
+      const wrapped = line.cells.map((cell) => wrapText(cell.text, cell.size, cell.weight, width))
+      const count = Math.max(...wrapped.map((rows) => rows.length))
+      return Array.from({ length: count }, (_, index) => ({
+        ...line,
+        cells: line.cells!.map((cell, column) => ({ ...cell, text: wrapped[column]![index] ?? '' })),
+        gap: index === count - 1 ? line.gap : 0,
+        rule: index === count - 1 && line.rule,
+      }))
+    }
+    return wrapText(line.text, line.size, line.weight, usable).map((text) => ({ ...line, text }))
   }
   const headerHeight =
     source.header.reduce((sum, line) => sum + line.size * 1.3 + line.gap, 0) + (source.header.length ? 12 : 0)
@@ -292,20 +320,39 @@ export function renderPdf(document: ReportDocument, options: PdfRenderOptions): 
   const pages: Line[][] = [[]]
   let usedHeight = 0
   const capacity = paper[1]! - margins.top - margins.bottom - headerHeight - footerHeight
-  const repeated = source.body.filter(
-    (block): block is Line => !('pageBreak' in block) && block.repeat === true,
-  )
+  const repeated = source.body
+    .filter((block): block is Line => !('pageBreak' in block) && block.repeat === true)
+    .flatMap(wrap)
+  const lineHeight = (line: Line) =>
+    line.image ? (line.imageHeight ?? 48) + line.gap : line.size * 1.3 + line.gap
+  const repeatedHeight = repeated.reduce((sum, line) => sum + lineHeight(line), 0)
+  if (repeatedHeight >= capacity) throw new Error('report table headers exceed page height')
+  const nextPage = () => {
+    pages.push([...repeated])
+    usedHeight = repeatedHeight
+  }
   for (const block of source.body) {
     if ('pageBreak' in block) {
       if (pages.at(-1)!.length) pages.push([])
       usedHeight = 0
       continue
     }
-    for (const line of wrap(block)) {
-      const height = line.image ? (line.imageHeight ?? 48) + line.gap : line.size * 1.3 + line.gap
+    const wrapped = wrap(block)
+    const blockHeight = wrapped.reduce((sum, line) => sum + lineHeight(line), 0)
+    // Keep an ordinary row together when it can fit on a fresh page. Oversize
+    // descriptions can continue across pages without repeating quantities.
+    if (
+      block.cells &&
+      !block.repeat &&
+      blockHeight <= capacity - repeatedHeight &&
+      usedHeight + blockHeight > capacity &&
+      pages.at(-1)!.length
+    )
+      nextPage()
+    for (const line of wrapped) {
+      const height = lineHeight(line)
       if (usedHeight + height > capacity && pages.at(-1)!.length) {
-        pages.push([...repeated])
-        usedHeight = repeated.reduce((sum, held) => sum + held.size * 1.3 + held.gap, 0)
+        nextPage()
       }
       pages.at(-1)!.push(line)
       usedHeight += height

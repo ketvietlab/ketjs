@@ -183,3 +183,18 @@ export function batch<T>(fn: () => T): T {
     }
   }
 }
+
+/**
+ * Run fn without subscribing the current effect to the signals it reads. Internal:
+ * the Mirror cache calls application callbacks from inside its binding effects, and
+ * a signal read there must not turn into a reason to rebind.
+ */
+export function untracked<T>(fn: () => T): T {
+  const prev = active
+  active = null
+  try {
+    return fn()
+  } finally {
+    active = prev
+  }
+}
