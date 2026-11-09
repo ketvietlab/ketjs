@@ -10,6 +10,9 @@ in the KetSuite source and consume KetJS from npm; do not add them back here.
 The framework marketing and documentation site lives in `packages/docs`; it is a private,
 independently installed ketjs-view consumer for `ketjs.dev`, not a published framework package.
 A framework change a consumer needs is released from this repository and then adopted by version.
+`skills/ketjs` is the agent skill for consumers writing code on KetJS. It summarizes the documentation
+and links to it rather than restating every contract. A change to a contract it summarizes updates the skill
+in the same change.
 
 ## Language and branches
 
