@@ -1,6 +1,6 @@
 ---
 name: ketjs
-description: How to write application code on KetJS one way — functions (defineFn, effects, returns, idempotency, dry-run, company reach), results and errors, transactions, company and branch scope, permissions, decimals, time, jobs, HTTP responses, views, module composition and tests. Use before writing or reviewing KetJS functions, jobs, routes, models or module wrappers in any KetJS consumer, including KetSuite.
+description: How to write application code on KetJS one way — functions (defineFn, effects, returns, idempotency, dry-run, company reach), results and errors, transactions, company and branch scope, permissions, decimals, time, jobs, HTTP responses, browser state (islands, stores, Mirror, form sessions, behaviors), module composition and tests. Use before writing or reviewing KetJS functions, jobs, routes, models or module wrappers in any KetJS consumer, including KetSuite.
 ---
 
 # Writing code on KetJS
@@ -17,33 +17,46 @@ The code around you is the weakest guide. A large consumer accumulates one local
 for the same need: refusal results, rollback errors, company filters, clocks. Copying the nearest file
 multiplies those variants. Follow the sections below instead.
 
-## 0. Read the documentation for the version you run
+## 0. Read the documentation before you write — this is not optional
 
-- The version is the `@ketvietlab/ketjs` version installed in the consumer
+The sections below summarize; they do not replace the documentation. Before you write or review code,
+**read in full** every page that the task touches, for the version the consumer runs. Name the pages
+you read in the pull request description. A change whose author cannot name the pages is not ready.
+
+- The version is the `@ketvietlab/ketjs` and `@ketvietlab/ketjs-view` versions installed in the consumer
   (`node_modules/@ketvietlab/ketjs/package.json`). Do not use an API that only exists in a newer release.
-- Every release's documentation is in this repository at the release tag:
+- The npm packages ship `dist` only, not the documentation. Read each release's pages from this
+  repository at the release tag, cloning it if the consumer machine has no checkout:
 
   ```bash
   # Run from: /path/to/ketjs
+  git fetch --tags origin
   git show v0.6.2:packages/docs/content/docs/functions.md
   ```
 
   https://ketjs.dev serves the latest published release, which may be ahead of the consumer.
-- Find the page by task:
+- **Always read** for any change that writes data: `functions.md`, `data.md`, `models.md`, `authorization.md`.
+- **Always read** for any change to browser code (islands, client scripts, forms, behaviors):
+  `rendering.md`, `view-effects-data.md`, `view-forms.md`, `form-actions.md`, `form-validation.md`,
+  and, where the installed ketjs-view has them, `view-stores.md` and `view-mirror.md`.
+- **When the KetJS version changes:** read `upgrading.md` and `release-notes.md` for every version
+  between the old and the new one.
+- If the task matches no row below, read `index.md` and `api.md` to find the page. Do not guess.
 
-| Task | Page |
+| Area | Pages |
 | --- | --- |
-| Functions, effects, `returns`, idempotency, dry-run, company reach | `functions.md` |
-| Queries, changesets, transactions, document numbers | `data.md` |
-| Models, field types, scope, indexes, relations | `models.md` |
-| Permissions | `authorization.md` |
-| Jobs, schedules, uniqueness | `jobs.md` |
-| Routes, response helpers, safe HTML, fragments | `http.md`, `rendering.md` |
-| Forms and validation | `form-actions.md`, `form-validation.md` |
-| Islands, stores, mirrors | `view-stores.md`, `view-mirror.md`, `view-effects-data.md` |
-| Migrations | `migrations.md` |
-| Tests | `testing.md` |
-| Why the framework is shaped this way | `architecture-decisions.md` |
+| Setup and layout | `index.md`, `quick-start.md`, `project-structure.md`, `configuration.md`, `cli-config.md` |
+| Composition | `modules.md`, `module-discovery.md`, `workspaces.md` |
+| Functions and requests | `functions.md`, `request-lifecycle.md`, `http.md`, `openapi.md` |
+| Forms | `form-actions.md`, `form-validation.md`, `view-forms.md` |
+| Data | `data.md`, `models.md`, `migrations.md` |
+| Identity and access | `authorization.md`, `sessions-tenants.md`, `auth-starter.md` |
+| Rendering and browser state | `rendering.md`, `view-effects-data.md`, `view-stores.md`, `view-mirror.md`, `view-static-sites.md` |
+| Presentation | `themes.md`, `menus-i18n.md`, `reports.md` |
+| Runtime services | `jobs.md`, `integrations.md`, `logging.md` |
+| Verify and deploy | `testing.md`, `deployment.md`, `benchmarks.md` |
+| Reference and evolution | `api.md`, `architecture-decisions.md`, `upgrading.md`, `release-notes.md`, `open-questions.md` |
+| Working on KetJS itself, not a consumer | `contributing.md`, `releasing.md`, `module-installation-plan.md` |
 
 ## 1. One helper per need, per consumer
 
@@ -180,16 +193,57 @@ For a domain refusal that is not a conflict (a rule says no), write it one way:
 - A sweep job states which records it covers. When you add a new kind of record, check that the sweep
   sees it.
 
-## 10. HTTP and views
+## 10. HTTP responses
 
 - Answer with the response helpers. `text()`, `bytes()` and `streamed()` refuse markup types (HTML, SVG,
   XML, every `+xml`). Markup goes through `raw(value, { type })`, and you escape every value yourself.
 - Build HTML through safe HTML. Never concatenate user data into markup.
-- Server and shared views stay render-pure. Browser state and effects live in the client runtime.
-  State that must survive an island remount belongs in a store.
-- A record command sent with an idempotency key needs an `idempotent: true` function (section 2).
 
-## 11. Modules and composition
+## 11. Browser state: every piece of state has one owner
+
+Browser code does not manage state freely. Every value the browser holds belongs to exactly one of the
+owners below. If you cannot name its owner, stop and redesign before writing code.
+
+| The state is | Its owner | Never |
+| --- | --- | --- |
+| Authorized data the first paint needs | The server handler, passed as plain-JSON island props | Fetching the same data again on mount |
+| Server answers the browser reads or refreshes (lists, lookups, search results, details) | **Mirror** (`mirror.read`), keyed, with `parse` validating the payload | A hand-written `fetch` + signals cache, a module-level `Map`, a store task |
+| A write to the server after a user action | **`mirror.write`** with `invalidates`/`optimistic`, or the form session for an edit | A bare `fetch` POST that forgets pending state, duplicate submits or refresh |
+| A record or row set being edited until it is saved | **Form session** (`createFormSession` + `defineFormAction`, mounted with `attachForm`) | Hand-made dirty flags, a custom submit, closing on "the promise resolved" |
+| A simple non-transactional form | `createForm` with one schema (`defineFormSchema`) | Re-implementing validation in the island |
+| UI state of one island (selection, open panel, typed query) | Signals in the island closure; a **store** (`defineStore`) once there are many signals, many handlers or async work | Module-level variables, DOM attributes as the source of truth |
+| State several islands share | The URL (server state through navigation), DOM events, or one browser Mirror passed in with a `scope` | A module singleton, a `window` global, a shared store |
+| URL and history | The navigation runtime (`navigation.navigate`, `replace`, `reload`) | `history.pushState`, `history.replaceState`, `location.href =` |
+| Document-wide wiring that spans several server-rendered regions | A **behavior** (`behaviors` in `defineModule`, with `when`) bound to its `lifetime` | Global listeners added from an island or at module top level |
+
+Rules that hold in every case:
+
+- **No module-level mutable state in browser code.** No top-level `let`, no top-level `Map`/`Set` cache,
+  no top-level signal or store. A module can run for many server renders, and a store is never global.
+  Create state per island instance in its factory, or per browser runtime for a shared Mirror.
+- **The factory and `view` are render-pure.** They run on the server, during static generation and
+  during hydration. Do not create effects, read `window`, the URL, storage or the document, start timers
+  or fetch there. Browser work starts in `mount({ root, lifetime })`.
+- **Everything started in `mount` ends with the lifetime.** Pass `{ signal: lifetime }` to
+  `addEventListener`, pass the lifetime's signal to requests, and release anything else in `dispose()`.
+  Scope DOM queries to `root`, never `document`.
+- **The DOM is output, not state.** Render from signals. Do not store state in `dataset`, attributes or
+  classes and read it back. An island owns its root descendants; nothing outside it may replace them.
+- **`effect` only synchronizes with something outside.** Derived values are `computed`. An effect is
+  never `async`. Do not unconditionally read and write the same signal in one effect.
+- **Stores write only through actions.** Their async work is a task; a server answer is never a task
+  result, because a task has no cache, deduplication or invalidation.
+- **Responses are validated.** Check `response.ok`, then run `parse` on the payload. A TypeScript
+  assertion is not validation. Separate loading, a valid empty result and an error.
+- **Version gate.** Stores and Mirror need ketjs-view 0.8.0 or later. Form sessions need 0.4.0 or later.
+  If the consumer runs an older ketjs-view, do **not** build a substitute (a cache, a store-like
+  object, a draft manager). Use the documented pattern for that version, such as the cancellable
+  reactive request in `view-effects-data.md`, and note in the pull request that the feature waits for
+  an upgrade.
+- **Existing hand-written state is not a precedent.** When you change an island, move the state you
+  touch to its owner in the table. Leave untouched code to an agreed migration plan.
+
+## 12. Modules and composition
 
 - `defineModule` with `depends` for hard requirements and `optional` for soft integrations. Decide at
   run time whether an optional module is present (`ctx.manifest.models[...]`).
@@ -199,7 +253,7 @@ For a domain refusal that is not a conflict (a rule says no), write it one way:
 - Integration between modules (for example, a sale that raises an invoice) is a named wrapper exported
   by a bridge module and composed in the deployment. A reusable module does not import a private one.
 
-## 12. Tests
+## 13. Tests
 
 - Use `callFn()` for operation logic and real HTTP for request behavior. Give each test or suite its
   own isolated app, and close every harness, even after a failed assertion.
@@ -208,7 +262,7 @@ For a domain refusal that is not a conflict (a rule says no), write it one way:
 - For an invariant that matters (balances, stock, numbering, scope), break the code once and confirm
   the test fails. A test that stays green under the mutation is not testing the invariant.
 
-## 13. Before opening a pull request
+## 14. Before opening a pull request
 
 - [ ] New functions use `defineFn` and declare `output`, `returns` and complete `effects`.
 - [ ] Every write reachable by retry, record command or agent is `idempotent: true` and has a stable key.
@@ -218,6 +272,10 @@ For a domain refusal that is not a conflict (a rule says no), write it one way:
 - [ ] Commands are shown with `ctx.allows`, not with `live` alone.
 - [ ] No new local `invalid`, `refused`, `now` or company-filter helper was added to a module.
 - [ ] `ket check --strict` passes, and date tests pass with `TZ=UTC`.
+- [ ] The pull request names the documentation pages read for this change.
+- [ ] Every piece of browser state has its owner from section 11; no module-level mutable state.
+- [ ] Browser work starts in `mount` and ends with `lifetime`; no `history.pushState` or `location.href =`.
+- [ ] Server reads go through Mirror and edits through a form session, or the pull request names the version gate.
 
 A quick scan of the files you changed:
 
@@ -225,5 +283,5 @@ A quick scan of the files you changed:
 # Run from: /path/to/consumer
 # BASE is the branch the pull request targets.
 git diff --name-only "${BASE:-origin/integration}" -- '*.ts' '*.tsx' | grep -vE '__test__|\.test\.' | xargs grep -nE \
-  "(const|function) (invalid|fail|refuse|refused|failure|now|ours) |class \w+ extends Error|Number\([^)]*(amount|price|total|qty|quantity)|\.toFixed\(|catch( \(\w+\))? \{ *\}|live\[" || true
+  "(const|function) (invalid|fail|refuse|refused|failure|now|ours) |class \w+ extends Error|Number\([^)]*(amount|price|total|qty|quantity)|\.toFixed\(|catch( \(\w+\))? \{ *\}|live\[|^let |^(export )?const \w+ = new (Map|Set|WeakMap)|history\.(push|replace)State|location\.href ?=|document\.(querySelector|getElementById)|dataset\.\w+ ?=|(inner|outer)HTML ?=" || true
 ```
