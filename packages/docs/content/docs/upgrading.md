@@ -14,7 +14,11 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The {{VERSION}} release adds opt-in Mirror and island stores without changing application data schemas.
+The {{VERSION}} patch requires Node.js 24.22.1 or later on 24.x, or 26.12.1 or later, the releases with the
+current Node.js security fixes; Node.js 25 is no longer admitted. Update development, CI and production
+images before upgrading, and read [Changes in 0.8.1](#changes-in-0-8-1).
+
+The 0.8.0 release added opt-in Mirror and island stores without changing application data schemas.
 Use the dedicated `/mirror` and `/store` entry points. Mirror scope must follow the authenticated user
 and tenant context, and its browser listeners belong to an explicit lifetime. Create stores per island
 instance and dispose them when the island ends. See [Server state with Mirror](/docs/view-mirror/) and
@@ -66,6 +70,16 @@ projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
+
+## Changes in 0.8.1
+
+This patch raises the supported Node.js floor to releases that carry the current Node.js security
+fixes. Application code and data schemas are unchanged.
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| Node.js | Every package declares `engines.node` `^24.22.1 \|\| >=26.12.1`. Node.js 25, whose support ended on 2026-06-01, is no longer admitted, and neither are 24.x releases before 24.22.1 or 26.x releases before 26.12.1. | Run 24.22.1 or later on 24.x, or 26.12.1 or later, in development, CI and production images. npm warns about an unsupported Node.js version and refuses it with `engine-strict`. |
+| New projects | `create-view` writes the same `engines.node` into a new project. | Raise the floor in projects created earlier if they should refuse unpatched runtimes. |
 
 <span id="changes-after-0-6-0"></span>
 
