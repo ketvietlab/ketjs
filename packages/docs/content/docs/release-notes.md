@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} release adds Mirror server-state caching, island stores, strict contract checks and measured PDF table wrapping.
+description: The coordinated KetJS {{VERSION}} patch raises the supported Node.js floor to releases with the current security fixes and checks it in CI.
 group: Project evolution
 order: 1
 ---
@@ -15,7 +15,19 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} adds
+## What {{VERSION}} fixes
+
+- **Node.js security floor.** Every package declares `engines.node` `^24.22.1 || >=26.12.1`. These are the latest Node.js security releases of the supported lines (2026-10-20 and 2026-10-21); they fix four high-severity issues, including a Brotli decoder out-of-bounds write that `fetch()` reaches through automatic `br` decoding. Node.js 25, whose support ended on 2026-06-01, is no longer admitted. `create-view` writes the same floor into new projects. See [Upgrading KetJS](/docs/upgrading/).
+- **The floor is checked.** A daily workflow compares `.nvmrc` and `engines.node` with the Node.js security releases and release schedule, and keeps one issue open while a newer security release is not adopted. The release checker refuses a package with any other floor.
+
+This patch changes no public API or application data schema. Run 24.22.1 or later on 24.x, or 26.12.1 or later, in development, CI and production images; npm warns about an older Node.js and refuses it with `engine-strict`.
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-8-0"></span>
+<span id="what-0-8-0-adds"></span>
+
+## Previous release: 0.8.0
 
 - **Mirror server state.** `@ketvietlab/ketjs-view/mirror` provides keyed reads, shared requests, parsing, invalidation, optimistic writes and rollback. Scope changes isolate cached answers and queued writes; consumers own transport and explicitly start browser wiring. See [Server state with Mirror](/docs/view-mirror/).
 - **Island stores.** `@ketvietlab/ketjs-view/store` groups read-only state, derived values, batched actions and cancellable tasks for one island instance. Connections start after mount and owned resources are disposed with the store. See [Island state with stores](/docs/view-stores/).
@@ -25,7 +37,7 @@ KetSuite, its design system, Flow and website clients are maintained and release
 
 Mirror and stores are opt-in additions. This release changes no application data schema; deploy matching server and client bundles together and review [Upgrading KetJS](/docs/upgrading/). The documented `ket install` and architecture-lint designs remain plans, not shipped CLI commands.
 
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [0.8.0 GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v0.8.0) for the coordinated packages and release status.
 
 <span id="current-release-0-6-2"></span>
 <span id="what-0-6-2-fixes"></span>
