@@ -44,6 +44,13 @@ A framework change a consumer needs is released from this repository and then ad
 - Feature pull requests carry no broad CI; VERSION/CHANGE_LOG and their tooling have the dedicated
   `version-consumers.yml` gate. Before pushing, run the focused checks for the changed behavior
   and directly affected dependencies, including live-Postgres tests when they belong to that scope.
+- `node-security.yml` checks `.nvmrc` against the Node.js security releases and release schedule
+  daily and on pull requests that touch `.nvmrc`, a `package.json` or the checker. It fails when
+  `.nvmrc` misses a security release of its line or names an unsupported line, or when
+  `engines.node` admits one, and keeps one open issue while the scheduled run fails. The engines
+  floor follows security releases: raising it changes `NODE_ENGINES` in `tools/node-security.mjs`,
+  every manifest and the documented requirement in one release. Run
+  `node tools/node-security.mjs --strict-engines` after changing either.
 - Apply the quality contracts in `.github/workflows/verify.yml` (format, lint, terminology, build,
   dependency boundaries, and types) within the local scope above. Report
   tools that require broader checks rather than silently expanding verification. Documentation-only

@@ -24,7 +24,7 @@
     "sqlite"
   ],
   "engines": {
-    "node": ">=24.0.0"
+    "node": "^24.22.1 || >=26.12.1"
   },
   "scripts": {
     "prepack": "npm run build --prefix ../.."
