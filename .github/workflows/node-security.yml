@@ -1,7 +1,7 @@
 name: node.js security releases
 
-# Fails when .nvmrc misses a security release of its Node.js line or names an unsupported line.
-# engines.node findings are warnings; see tools/node-security.mjs. A security release can land on
+# Fails when .nvmrc misses a security release of its Node.js line or names an unsupported line,
+# or when engines.node admits such a release or line; see tools/node-security.mjs. A security release can land on
 # any day, so the check also runs on a schedule and keeps one open issue while it fails.
 
 on:
@@ -41,7 +41,7 @@ jobs:
         run: node --test tools/node-security.test.mjs
       - name: compare .nvmrc and engines with Node.js releases
         id: check
-        run: node tools/node-security.mjs 2>&1 | tee node-security.txt
+        run: node tools/node-security.mjs --strict-engines 2>&1 | tee node-security.txt
         shell: bash -o pipefail {0}
       - name: open or update the tracking issue
         if: failure() && steps.check.outcome == 'failure' && github.event_name == 'schedule'
@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           title='Node.js security check is failing'
-          body="$(printf 'The scheduled check failed on %s.\n\n```text\n%s\n```\n\nRun: %s\n\nMove `.nvmrc` to the version named above, or fix what the error names; see `tools/node-security.mjs`.' "$(date -u +%F)" "$(cat node-security.txt)" "$RUN_URL")"
+          body="$(printf 'The scheduled check failed on %s.\n\n```text\n%s\n```\n\nRun: %s\n\nMove `.nvmrc` to the version named above; an engines.node finding needs a release that raises the floor; see `tools/node-security.mjs`.' "$(date -u +%F)" "$(cat node-security.txt)" "$RUN_URL")"
           existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"

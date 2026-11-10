@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { assess, parseRange, parseVersion } from './node-security.mjs'
+import { assess, NODE_ENGINES, parseRange, parseVersion, readEngines } from './node-security.mjs'
 
 /** @param {string} version @param {string} date @param {boolean} [security] */
 const release = (version, date, security = false) => ({
@@ -122,4 +122,19 @@ test('ranges follow npm semantics for the supported comparators', () => {
   assert.equal(admits('24', '24.5.0'), true)
   assert.equal(admits('24.22', '24.22.9'), true)
   assert.equal(admits('24.22', '24.23.0'), false)
+})
+
+test('every manifest declares NODE_ENGINES, and it passes the strict check on this data', () => {
+  const declared = readEngines(new URL('../', import.meta.url).href)
+  assert.ok(Object.keys(declared).length >= 7)
+  for (const [manifest, range] of Object.entries(declared)) assert.equal(range, NODE_ENGINES, manifest)
+  const report = assess({
+    index,
+    schedule,
+    nvmrc: '26.13.0',
+    engines: { 'package.json': NODE_ENGINES },
+    today,
+    strictEngines: true,
+  })
+  assert.deepEqual(report.errors, [])
 })

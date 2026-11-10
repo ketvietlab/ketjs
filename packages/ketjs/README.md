@@ -12,7 +12,7 @@ Redirected or changed destinations keep their own URL and never inherit the orig
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js 24.22.1 or later on 24.x, or 26.12.1 or later
 - npm
 
 ## Create an application

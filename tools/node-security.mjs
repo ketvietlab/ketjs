@@ -5,9 +5,11 @@
 // and must not be older than that line's latest security release, so a security release
 // published after the last bump fails this check until `.nvmrc` moves.
 //
-// `engines.node` is the published install contract. It is reported, not enforced: raising its
-// floor changes what consumers may install and belongs to a release. `--strict-engines` turns
-// those findings into errors once the floor follows security releases by policy.
+// `engines.node` is the published install contract. Its floor follows security releases: it
+// must not admit a release that lacks a security release of a supported line, nor a line whose
+// support ended. The workflow passes `--strict-engines`, which makes those findings errors;
+// without it they are warnings. Raising the floor changes what consumers may install, so it
+// ships in a release: change NODE_ENGINES, every manifest and the documented requirement together.
 //
 // Usage:
 //   node tools/node-security.mjs [--strict-engines] [--index FILE] [--schedule FILE] [--today YYYY-MM-DD]
@@ -17,6 +19,9 @@
 
 import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+
+/** The `engines.node` every published package declares; `tools/release.mjs` refuses any other. */
+export const NODE_ENGINES = '^24.22.1 || >=26.12.1'
 
 export const INDEX_URL = 'https://nodejs.org/dist/index.json'
 export const SCHEDULE_URL = 'https://raw.githubusercontent.com/nodejs/Release/main/schedule.json'
