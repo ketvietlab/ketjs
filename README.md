@@ -124,7 +124,7 @@ clients live in the KetSuite source and consume KetJS from npm.
 
 ## Get started
 
-Requires **Node.js 24 or newer** and npm.
+Requires **Node.js 24.22.1 or later on 24.x, or 26.12.1 or later**, and npm.
 
 ### Fullstack application
 

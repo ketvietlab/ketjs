@@ -51,7 +51,7 @@ npm run preview
 
 ## Deploy the generated directory
 
-For Cloudflare static hosting, the artifact is `dist`. Run the build in an environment with Node 24+, then configure the host to serve that directory. The browser playground also works as static assets: compiling an example happens on the visitor's computer.
+For Cloudflare static hosting, the artifact is `dist`. Run the build in an environment with Node.js 24.22.1+ or 26.12.1+, then configure the host to serve that directory. The browser playground also works as static assets: compiling an example happens on the visitor's computer.
 
 Test the generated homepage, `/about/`, `/todo/`, and `/data/` directly. Inspect title/description, keyboard navigation, mobile overflow and a JavaScript-disabled view. The todo controls require JavaScript; the article and navigation should remain meaningful without it.
 
