@@ -59,8 +59,8 @@ checks and branch promotion gates before merging to `master`.
 
 Every build reports a `Workers Builds: ketjs-docs` check on the commit it built; to see what the site
 serves, look for that check rather than at a branch. The build uses root directory `packages/docs`,
-build command `npm ci --ignore-scripts && npm run build`, and serves `dist`. It needs Node.js 24 or
-newer (set `NODE_VERSION` when the build image's default is older). All dependencies are public; the
+build command `npm ci --ignore-scripts && npm run build`, and serves `dist`. It needs Node.js 24.22.1 or
+later on 24.x, or 26.12.1 or later (set `NODE_VERSION` when the build image's default is older). All dependencies are public; the
 site build needs no `NPM_TOKEN`. The Worker's settings are managed in Cloudflare. See
 [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/).
 

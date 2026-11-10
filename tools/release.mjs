@@ -9,6 +9,7 @@ import { basename, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { materializeVersion } from './version.mjs'
+import { NODE_ENGINES } from './node-security.mjs'
 import { stagePackage } from './release-files.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -78,7 +79,8 @@ const verifyMetadata = () => {
       fail(`${workspace.name} is ${manifest.version}; all public packages must be ${version}`)
     if (manifest.private === true) fail(`${workspace.name} is private`)
     if (manifest.license !== 'MIT') fail(`${workspace.name} does not declare the MIT license`)
-    if (manifest.engines?.node !== '>=24.0.0') fail(`${workspace.name} must retain the Node >=24 contract`)
+    if (manifest.engines?.node !== NODE_ENGINES)
+      fail(`${workspace.name} must declare engines.node "${NODE_ENGINES}"; see tools/node-security.mjs`)
     if (manifest.publishConfig?.access !== 'public') fail(`${workspace.name} is not configured public`)
     if (manifest.publishConfig?.provenance !== true) fail(`${workspace.name} does not require provenance`)
     if (manifest.publishConfig?.registry !== 'https://registry.npmjs.org/')

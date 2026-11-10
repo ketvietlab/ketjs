@@ -67,6 +67,16 @@ Server-rendered islands must be hydrated by the same ketjs-view version and JSX 
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
 
+## Changes in 0.8.1
+
+This patch raises the supported Node.js floor to releases that carry the current Node.js security
+fixes. Application code and data schemas are unchanged.
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| Node.js | Every package declares `engines.node` `^24.22.1 \|\| >=26.12.1`. Node.js 25, whose support ended on 2026-06-01, is no longer admitted, and neither are 24.x releases before 24.22.1 or 26.x releases before 26.12.1. | Run 24.22.1 or later on 24.x, or 26.12.1 or later, in development, CI and production images. npm warns about an unsupported Node.js version and refuses it with `engine-strict`. |
+| New projects | `create-view` writes the same `engines.node` into a new project. | Raise the floor in projects created earlier if they should refuse unpatched runtimes. |
+
 <span id="changes-after-0-6-0"></span>
 
 ## Changes in 0.6.1

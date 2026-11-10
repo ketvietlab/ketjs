@@ -11,7 +11,7 @@ not leave hydration comments. Only explicit islands retain markers and receive b
 
 ## Create a project
 
-Node.js 24 or later is required.
+Node.js 24.22.1 or later on 24.x, or 26.12.1 or later is required.
 
 ```bash
 # Run from: /path/to/projects

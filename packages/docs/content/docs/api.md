@@ -26,7 +26,7 @@ from documented package entrypoints; deep imports into `dist/` or `src/` are imp
 | `@ketvietlab/create-view` | Runnable static ketjs-view project generator. |
 | `@ketvietlab/ketjs-postgres` | Optional PostgreSQL adapter. |
 
-All packages require Node.js 24 or later for their supported server/tooling use. `@ketvietlab/ketjs-view` has no runtime
+All packages require Node.js 24.22.1 or later on 24.x, or 26.12.1 or later for their supported server/tooling use. `@ketvietlab/ketjs-view` has no runtime
 dependencies and its browser-facing entrypoint avoids Node APIs.
 
 ## `@ketvietlab/ketjs`
@@ -313,7 +313,7 @@ implements KetJS's public `Adapter` contract; core does not import a PostgreSQL 
 
 ## Compatibility policy
 
-- Use ESM and Node.js 24 or later.
+- Use ESM and Node.js 24.22.1 or later on 24.x, or 26.12.1 or later.
 - Depend on package entrypoints, not file layout.
 - Generate types from the exact composed app with `ket types`.
 - Pin versions while KetJS remains pre-release. `ket new` writes the exact release, and overrides the
