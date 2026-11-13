@@ -178,6 +178,10 @@ Build the generated site with `npm run build`; deploy the output in `dist/`.
 Website and framework guides: [ketjs.dev](https://ketjs.dev). The site source and local development
 instructions are in [packages/docs](packages/docs/README.md).
 
+Coding agents that write application code on KetJS can load the [`ketjs` skill](skills/ketjs/SKILL.md).
+It condenses the documented contracts into one way of writing functions, results and errors,
+transactions, scope, permissions, decimals, time, jobs and tests.
+
 ## Contributing
 
 Read [AGENTS.md](AGENTS.md) for repository boundaries, contribution rules, and local verification
