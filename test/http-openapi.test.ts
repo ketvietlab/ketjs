@@ -272,7 +272,7 @@ test('openapi: multipart metadata survives composition without changing JSON def
                 operationId: 'shop.upload',
                 auth: 'public',
                 request: {
-                  body,
+                  ...(hasBody ? { body } : {}),
                   ...(mediaType ? { mediaType } : {}),
                   ...(maxBodyBytes === undefined ? {} : { maxBodyBytes }),
                 },
