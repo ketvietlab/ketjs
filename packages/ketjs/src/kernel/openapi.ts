@@ -116,18 +116,18 @@ export function httpOpenApiDocument(manifest: Manifest, o: HttpOpenApiOptions): 
     ]
     const body = request.body
     if (
-      (request.mediaType !== undefined &&
-        request.mediaType !== 'application/json' &&
-        request.mediaType !== 'multipart/form-data') ||
+      (request.bodyMediaType !== undefined &&
+        request.bodyMediaType !== 'application/json' &&
+        request.bodyMediaType !== 'multipart/form-data') ||
       (request.maxBodyBytes !== undefined &&
         (!Number.isSafeInteger(request.maxBodyBytes) || request.maxBodyBytes <= 0)) ||
-      (!body && (request.mediaType !== undefined || request.maxBodyBytes !== undefined))
+      (!body && (request.bodyMediaType !== undefined || request.maxBodyBytes !== undefined))
     )
       throw new KetError({
         code: 'E_OPENAPI_REQUEST',
         module: 'openapi',
         message: `operation "${contract.operationId}" has invalid request body metadata`,
-        hint: 'declare a body schema, JSON or multipart mediaType, and a positive safe integer maxBodyBytes',
+        hint: 'declare a body schema, JSON or multipart bodyMediaType, and a positive safe integer maxBodyBytes',
       })
     const statuses = Object.keys(contract.responses).sort()
     paths[path] = {
@@ -139,7 +139,7 @@ export function httpOpenApiDocument(manifest: Manifest, o: HttpOpenApiOptions): 
           ? {
               requestBody: {
                 required: Array.isArray(body['required']) && body['required'].length > 0,
-                content: { [request.mediaType ?? 'application/json']: { schema: body } },
+                content: { [request.bodyMediaType ?? 'application/json']: { schema: body } },
                 ...(request.maxBodyBytes !== undefined ? { 'x-max-body-bytes': request.maxBodyBytes } : {}),
               },
             }

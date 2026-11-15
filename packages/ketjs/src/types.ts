@@ -119,7 +119,7 @@ export type HttpRouteContract = {
     headers?: JsonSchema
     body?: JsonSchema
     /** HTTP body representation; omitted means application/json. The body remains its schema. */
-    mediaType?: 'application/json' | 'multipart/form-data'
+    bodyMediaType?: 'application/json' | 'multipart/form-data'
     /** Positive safe integer ceiling for the entire encoded body, including multipart overhead.
      * The route's runtime must enforce it; publishing a contract alone does not install a parser.
      */

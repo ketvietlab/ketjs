@@ -255,7 +255,7 @@ test('openapi: multipart metadata survives composition without changing JSON def
     properties: { file: { type: 'string', format: 'binary' } },
   }
   const upload = (
-    mediaType?: 'application/json' | 'multipart/form-data',
+    bodyMediaType?: 'application/json' | 'multipart/form-data',
     maxBodyBytes?: number,
     hasBody = true,
   ) =>
@@ -273,7 +273,7 @@ test('openapi: multipart metadata survives composition without changing JSON def
                 auth: 'public',
                 request: {
                   ...(hasBody ? { body } : {}),
-                  ...(mediaType ? { mediaType } : {}),
+                  ...(bodyMediaType ? { bodyMediaType } : {}),
                   ...(maxBodyBytes === undefined ? {} : { maxBodyBytes }),
                 },
                 responses: { '200': { type: 'object' } },
@@ -294,7 +294,7 @@ test('openapi: multipart metadata survives composition without changing JSON def
   // The encoded request budget includes 64 KiB overhead in addition to a 5 MiB file.
   const maxBodyBytes = 5 * 1024 * 1024 + 64 * 1024
   const manifest = upload('multipart/form-data', maxBodyBytes)
-  assert.equal(httpContracts(manifest, options)[0]!.contract.request!.mediaType, 'multipart/form-data')
+  assert.equal(httpContracts(manifest, options)[0]!.contract.request!.bodyMediaType, 'multipart/form-data')
   assert.deepEqual(requestBody(manifest), {
     required: true,
     content: { 'multipart/form-data': { schema: body } },

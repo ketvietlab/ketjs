@@ -550,7 +550,7 @@ Customer API reference.
 
 ## Streaming request contracts
 
-A handwritten `HttpRouteContract.request` may declare `mediaType` as
+A handwritten `HttpRouteContract.request` may declare `bodyMediaType` as
 `application/json` or `multipart/form-data`. Omitting it preserves the JSON default;
 `body` remains the schema of the parsed content, not a media-type map. An optional
 `maxBodyBytes` must be a positive safe integer and describes the entire encoded HTTP
