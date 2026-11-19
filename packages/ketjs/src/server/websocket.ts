@@ -283,6 +283,7 @@ export function acceptWebSocket(
   }
 
   const deliver = (opcode: number, payload: Buffer): void => {
+    fragmentBytes = 0
     if (!session.message) return
     let message: WebSocketMessage
     if (opcode === 0x1) {
@@ -303,7 +304,6 @@ export function acceptWebSocket(
         if (fin) {
           const whole = Buffer.concat(fragments)
           fragments = null
-          fragmentBytes = 0
           deliver(fragmentOpcode, whole)
         }
         return

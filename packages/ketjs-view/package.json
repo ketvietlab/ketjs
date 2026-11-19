@@ -34,6 +34,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n.d.ts",
+      "default": "./dist/i18n.js"
+    },
     "./mirror": {
       "types": "./dist/mirror.d.ts",
       "default": "./dist/mirror.js"

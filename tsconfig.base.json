@@ -15,6 +15,7 @@
     "types": ["node"],
     "paths": {
       "@ketvietlab/ketjs-view": ["./packages/ketjs-view/src/index.ts"],
+      "@ketvietlab/ketjs-view/i18n": ["./packages/ketjs-view/src/i18n.ts"],
       "@ketvietlab/ketjs-view/mirror": ["./packages/ketjs-view/src/mirror.ts"],
       "@ketvietlab/ketjs-view/store": ["./packages/ketjs-view/src/store.ts"],
       "@ketvietlab/ketjs-view/jsx-runtime": ["./packages/ketjs-view/src/jsx-runtime.ts"],
