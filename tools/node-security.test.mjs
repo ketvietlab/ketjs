@@ -10,9 +10,10 @@ const release = (version, date, security = false) => ({
   lts: /** @type {false} */ (false),
 })
 
-// A trimmed copy of the real data as of 2026-11-10.
+// A trimmed copy of the real data as of 2026-11-11.
 const index = [
   release('v27.0.0-alpha.0.0.0', '2026-10-29'),
+  release('v26.13.1', '2026-11-11', true),
   release('v26.13.0', '2026-10-28'),
   release('v26.12.1', '2026-10-21', true),
   release('v26.12.0', '2026-10-14'),
@@ -22,6 +23,7 @@ const index = [
   release('v25.9.0', '2026-03-31'),
   release('v25.8.2', '2026-03-24', true),
   release('v25.0.0', '2025-10-15'),
+  release('v24.22.3', '2026-11-11', true),
   release('v24.22.2', '2026-10-27'),
   release('v24.22.1', '2026-10-20', true),
   release('v24.18.1', '2026-07-28', true),
@@ -33,21 +35,22 @@ const schedule = {
   v26: { start: '2026-05-05', end: '2029-04-30' },
   v27: { start: '2027-04-22', end: '2030-04-30' },
 }
-const today = '2026-11-10'
+const today = '2026-11-11'
 const engines = { 'package.json': '>=24.0.0' }
 
 test('a pinned version older than its line latest security release fails', () => {
-  const report = assess({ index, schedule, nvmrc: '26.7.0\n', engines, today })
+  const report = assess({ index, schedule, nvmrc: '26.13.0\n', engines, today })
   assert.equal(report.errors.length, 1)
   assert.match(
     report.errors[0],
-    /26\.7\.0 lacks security release\(s\) 26\.12\.1 \(2026-10-21\); move it to 26\.13\.0/,
+    /26\.13\.0 lacks security release\(s\) 26\.13\.1 \(2026-11-11\); move it to 26\.13\.1/,
   )
 })
 
 test('a pinned version with every security release passes, even when a newer non-security release exists', () => {
-  assert.deepEqual(assess({ index, schedule, nvmrc: '26.12.1', engines, today }).errors, [])
-  assert.deepEqual(assess({ index, schedule, nvmrc: 'v26.13.0', engines, today }).errors, [])
+  const newer = [release('v26.13.2', '2026-11-12'), ...index]
+  assert.deepEqual(assess({ index: newer, schedule, nvmrc: '26.13.1', engines, today }).errors, [])
+  assert.deepEqual(assess({ index: newer, schedule, nvmrc: 'v26.13.2', engines, today }).errors, [])
 })
 
 test('a pinned version on an unsupported line fails although it has its line security releases', () => {
@@ -61,19 +64,19 @@ test('a pinned range or alias is refused', () => {
 })
 
 test('an engines floor below security releases and an ended line are warnings by default', () => {
-  const report = assess({ index, schedule, nvmrc: '26.13.0', engines, today })
+  const report = assess({ index, schedule, nvmrc: '26.13.1', engines, today })
   assert.deepEqual(report.errors, [])
   assert.equal(report.warnings.length, 3)
   assert.match(
     report.warnings[0],
-    /admits 24\.0\.0, which lacks 2 security release\(s\) of 24\.x; the latest is 24\.22\.1/,
+    /admits 24\.0\.0, which lacks 3 security release\(s\) of 24\.x; the latest is 24\.22\.3/,
   )
   assert.match(report.warnings[1], /admits Node\.js 25, whose support ended on 2026-06-01/)
-  assert.match(report.warnings[2], /admits 26\.0\.0, which lacks 2 security release\(s\) of 26\.x/)
+  assert.match(report.warnings[2], /admits 26\.0\.0, which lacks 3 security release\(s\) of 26\.x/)
 })
 
 test('--strict-engines turns engines findings into errors', () => {
-  const report = assess({ index, schedule, nvmrc: '26.13.0', engines, today, strictEngines: true })
+  const report = assess({ index, schedule, nvmrc: '26.13.1', engines, today, strictEngines: true })
   assert.equal(report.errors.length, 3)
   assert.deepEqual(report.warnings, [])
 })
@@ -82,8 +85,8 @@ test('a floor that follows security releases and skips the ended line is clean',
   const report = assess({
     index,
     schedule,
-    nvmrc: '26.13.0',
-    engines: { 'package.json': '^24.22.1 || >=26.12.1' },
+    nvmrc: '26.13.1',
+    engines: { 'package.json': '^24.22.3 || >=26.13.1' },
     today,
     strictEngines: true,
   })
@@ -94,7 +97,7 @@ test('manifests sharing a range are reported once', () => {
   const report = assess({
     index,
     schedule,
-    nvmrc: '26.13.0',
+    nvmrc: '26.13.1',
     engines: { 'package.json': '>=24.0.0', 'packages/ketjs/package.json': '>=24.0.0' },
     today,
   })
@@ -103,7 +106,7 @@ test('manifests sharing a range are reported once', () => {
 })
 
 test('an unsupported engines comparator is an error, not a guess', () => {
-  const report = assess({ index, schedule, nvmrc: '26.13.0', engines: { 'package.json': '24.x' }, today })
+  const report = assess({ index, schedule, nvmrc: '26.13.1', engines: { 'package.json': '24.x' }, today })
   assert.match(report.errors[0], /unsupported engines comparator "24\.x"/)
 })
 
@@ -113,9 +116,11 @@ test('ranges follow npm semantics for the supported comparators', () => {
     parseRange(range)(/** @type {[number, number, number]} */ (parseVersion(version)))
   assert.equal(admits('>=24.0.0', '26.1.0'), true)
   assert.equal(admits('>=24.0.0', '22.9.0'), false)
-  assert.equal(admits('^24.22.1 || >=26.12.1', '24.22.1'), true)
-  assert.equal(admits('^24.22.1 || >=26.12.1', '25.9.0'), false)
-  assert.equal(admits('^24.22.1 || >=26.12.1', '26.12.0'), false)
+  assert.equal(admits(NODE_ENGINES, '24.22.2'), false)
+  assert.equal(admits(NODE_ENGINES, '24.22.3'), true)
+  assert.equal(admits(NODE_ENGINES, '25.9.0'), false)
+  assert.equal(admits(NODE_ENGINES, '26.13.0'), false)
+  assert.equal(admits(NODE_ENGINES, '26.13.1'), true)
   assert.equal(admits('>=24.22.1 <25', '24.30.0'), true)
   assert.equal(admits('>=24.22.1 <25', '25.0.0'), false)
   assert.equal(admits('~24.22.1', '24.23.0'), false)
@@ -126,12 +131,18 @@ test('ranges follow npm semantics for the supported comparators', () => {
 
 test('every manifest declares NODE_ENGINES, and it passes the strict check on this data', () => {
   const declared = readEngines(new URL('../', import.meta.url).href)
-  assert.ok(Object.keys(declared).length >= 7)
+  for (const manifest of [
+    'packages/docs/tutorials/api/package.json',
+    'packages/docs/tutorials/view/package.json',
+    'packages/create-view/src/templates/package.json.tmpl',
+    'packages/ketjs/src/scaffold/templates/package.json.tmpl',
+  ])
+    assert.equal(declared[manifest], NODE_ENGINES, manifest)
   for (const [manifest, range] of Object.entries(declared)) assert.equal(range, NODE_ENGINES, manifest)
   const report = assess({
     index,
     schedule,
-    nvmrc: '26.13.0',
+    nvmrc: '26.13.1',
     engines: { 'package.json': NODE_ENGINES },
     today,
     strictEngines: true,

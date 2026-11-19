@@ -21,7 +21,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /** The `engines.node` every published package declares; `tools/release.mjs` refuses any other. */
-export const NODE_ENGINES = '^24.22.1 || >=26.12.1'
+export const NODE_ENGINES = '^24.22.3 || >=26.13.1'
 
 export const INDEX_URL = 'https://nodejs.org/dist/index.json'
 export const SCHEDULE_URL = 'https://raw.githubusercontent.com/nodejs/Release/main/schedule.json'
@@ -132,7 +132,7 @@ export function assess({ index, schedule, nvmrc, engines, today, strictEngines =
 
   const pinned = parseVersion(nvmrc)
   if (!pinned) {
-    report.errors.push(`.nvmrc must name one exact version such as 26.13.0, not "${nvmrc.trim()}"`)
+    report.errors.push(`.nvmrc must name one exact version such as 26.13.1, not "${nvmrc.trim()}"`)
   } else {
     const line = byMajor.get(pinned[0])
     if (!supported(schedule, pinned[0], today)) {
@@ -206,8 +206,8 @@ async function fetchJson(url) {
 }
 
 /**
- * The root manifest and every `packages/*` manifest, including the private docs site, which is
- * not a workspace but builds on the same Node.js.
+ * Framework and docs manifests, standalone learning labs and scaffold templates.
+ * They share the repository's Node.js support floor.
  *
  * @param {string} root
  */
@@ -218,7 +218,14 @@ export function readEngines(root) {
     )
     .map((entry) => `packages/${entry.name}/package.json`)
     .sort()
-  const manifests = ['package.json', ...packages]
+  const manifests = [
+    'package.json',
+    ...packages,
+    'packages/docs/tutorials/api/package.json',
+    'packages/docs/tutorials/view/package.json',
+    'packages/create-view/src/templates/package.json.tmpl',
+    'packages/ketjs/src/scaffold/templates/package.json.tmpl',
+  ]
   /** @type {Record<string, string>} */
   const engines = {}
   for (const manifest of manifests) {
