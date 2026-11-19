@@ -18,7 +18,7 @@ function maskedFrame(opcode: number, payload: Buffer, fin = true): Buffer {
   return Buffer.concat([header, mask, masked])
 }
 
-function fixture(t: TestContext) {
+function fixture(t: TestContext, maxMessageBytes = limit) {
   const writes: Buffer[] = []
   const messages: WebSocketMessage[] = []
   const socket = new Duplex({
@@ -40,7 +40,7 @@ function fixture(t: TestContext) {
   })
   const peer = acceptWebSocket(request, socket, Buffer.alloc(0), {
     pingIntervalMs: 0,
-    maxMessageBytes: limit,
+    maxMessageBytes,
     message(_peer, value) {
       messages.push(value)
     },
@@ -68,6 +68,16 @@ test('websocket: each complete text or binary message has its own byte budget', 
 
   assert.equal(messages.length, 3)
   assert.deepEqual(messages, [text, Uint8Array.from(binary), text])
+  assert.deepEqual(writes, [])
+})
+
+test('websocket: a stream of small messages can exceed the per-message limit in total', (t) => {
+  const { receive, writes, messages } = fixture(t, 64 * 1024)
+  const expected = Array.from({ length: 100 }, (_, index) => String(index).padEnd(1024, 'x'))
+  for (const message of expected) receive(maskedFrame(0x1, Buffer.from(message)))
+
+  assert.equal(messages.length, 100)
+  assert.deepEqual(messages, expected)
   assert.deepEqual(writes, [])
 })
 
