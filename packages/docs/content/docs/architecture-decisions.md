@@ -25,6 +25,7 @@ the others:
 | Accepted, not built | D80 | The split is decided; `ket check --strict` exists, the rule pack and `ket lint` do not yet. |
 | Accepted, unreleased | D81 | `@ketvietlab/ketjs-view/mirror` is built and first ships in 0.8.0. |
 | Accepted, unreleased | D82 | `@ketvietlab/ketjs-view/store` is built and first ships in 0.8.0. |
+| Proposed | D83 | Under review; nothing is built. [Plan: calling functions from Mirror](/docs/view-functions-plan/) tracks the phases. |
 
 Numbers identify an entry and are not chronological. D40 and D55 were never recorded.
 
@@ -2789,3 +2790,45 @@ Each of these fails at least one of those tests when it is removed:
   afterwards fails with a `TypeError`.
 
 **Reversible:** yes until 1.0. The subpath is additive and nothing else in KetJS depends on it.
+
+## D83 — A function client for Mirror, generated from the manifest
+
+An island that loads through a KetJS function writes its own `fetch()` to `/_ket/fn`, its own parser and its
+own cache tags. The manifest already holds what those three need: the function's input and output fields,
+`returns`, `idempotent` and its declared effects. D81 left a KetJS-specific client for later so that Mirror
+could stay free of any transport.
+
+**Proposed:** two pieces that keep that separation. [Plan: calling functions from Mirror](/docs/view-functions-plan/)
+records the contracts and phases.
+
+- **`@ketvietlab/ketjs-view/fn`**, a browser-safe subpath. It turns a function descriptor into a transport
+  call, a parser built at runtime and the options of `mirror.read()` or `mirror.write()`. It does not depend on
+  `@ketvietlab/ketjs`, and Mirror does not import it.
+- **`ket client`**, which writes descriptors and types for an explicit list of functions from the composed
+  manifest, with `--check` for CI.
+
+**Rules that keep it inside KetJS's boundaries:**
+
+- **The server decides.** The client calls the generic transport with same-origin credentials and adds no
+  authority. Permissions, tenant scope, CSRF, exposure and identity-bound inputs stay server checks.
+- **Reads and writes are different kinds.** A function whose effects are all `read:` is a read; any other effect
+  makes it a write. Only reads can be cached, so a mutation cannot be deduplicated by mistake.
+- **Effects are the default tags.** `read:sales.Order` tags a reading `sales.Order`, and `write:sales.Order`
+  invalidates it after success. Applications add finer tags or turn the defaults off.
+- **The selection is explicit.** `allowFor` decides per request, so it cannot choose what a bundle contains.
+  A generated file is public and lists only the functions it is given.
+- **Contracts are not guessed.** A function without `returns`, an `internal` function and one with an
+  identity-bound input are refused by the generator.
+
+**Not chosen:**
+
+- **Importing server types, as tRPC does.** Functions are declared in a field DSL without type inference, the
+  browser package cannot see server code, and Mirror requires a runtime parser that types do not provide.
+- **A generic OpenAPI generator.** It knows nothing of kinds, effects or Mirror, and covers bindings rather than
+  the transport an island already uses.
+- **Making Mirror aware of KetJS.** D81 keeps Mirror usable with any backend.
+
+**Cost:** a generated file to keep in step with the manifest, coarse model-level reloads by default, and the
+names of the listed functions in a public bundle.
+
+**Reversible:** yes until 1.0. The subpath and the command are additive.
