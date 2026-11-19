@@ -205,6 +205,34 @@ const pseudo = translator(manifest, PSEUDO_LOCALE, { fallback: 'en' })
 The expanded output exposes fixed-width controls, truncation, and layouts tuned only to short source
 language text. Test both left-to-right expansion and your actual longest supported content.
 
+## Catalogues for static sites
+
+Static sites and browser islands can import `@ketvietlab/ketjs-view/i18n` directly and supply
+catalogues without a deployment manifest. Namespace flat keys yourself, using the same message,
+plural and placeholder formats used by composed modules.
+
+```ts
+// File: src/i18n.ts
+import { formatMissing, missingMessages, PSEUDO_LOCALE, translator } from '@ketvietlab/ketjs-view/i18n'
+import type { Messages } from '@ketvietlab/ketjs-view/i18n'
+
+const messages = {
+  en: { 'site.welcome': 'Hello, {name}!' },
+  vi: { 'site.welcome': 'Xin chào {name}!' },
+} satisfies Messages
+
+const gaps = missingMessages(messages, ['en', 'vi'])
+if (Object.keys(gaps).length) throw new Error(formatMissing(gaps))
+
+export const translate = (locale: string) => translator(messages, locale, { fallback: 'en' })
+export const preview = translate(PSEUDO_LOCALE)
+
+translate('vi')('site.welcome', { name: 'Duy' })
+```
+
+The view entry uses the fallback you supply. With no fallback, a missing message renders its key.
+The server entry `translator(manifest, locale)` continues to default to Vietnamese.
+
 ## Locale resolution
 
 Runtime defaults come from:
