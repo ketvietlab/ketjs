@@ -349,9 +349,11 @@ test('ket new: writes a deployment whose workspace composes', async () => {
   // A pre-release is pinned exactly, and the API reference tool renders with the
   // same ketjs-view the application installs instead of a second, older copy.
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+    engines: { node: string }
     dependencies: Record<string, string>
     overrides: Record<string, Record<string, string>>
   }
+  assert.equal(pkg.engines.node, '^24.22.3 || >=26.13.1')
   assert.match(pkg.dependencies['@ketvietlab/ketjs'] ?? '', /^\d+\.\d+\.\d+/)
   assert.equal(
     pkg.overrides['@ketvietlab/ketspec']?.['@ketvietlab/ketjs-view'],

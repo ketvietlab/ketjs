@@ -15,6 +15,11 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
+## Node.js requirements for current source
+
+Source builds now require Node.js 24.22.3 or later on 24.x, or 26.13.1 or later. Both scaffolds use
+this floor for projects generated from current source.
+
 ## What {{VERSION}} fixes
 
 - **Node.js security floor.** Every package declares `engines.node` `^24.22.1 || >=26.12.1`. These are the latest Node.js security releases of the supported lines (2026-10-20 and 2026-10-21); they fix four high-severity issues, including a Brotli decoder out-of-bounds write that `fetch()` reaches through automatic `br` decoding. Node.js 25, whose support ended on 2026-06-01, is no longer admitted. `create-view` writes the same floor into new projects. See [Upgrading KetJS](/docs/upgrading/).

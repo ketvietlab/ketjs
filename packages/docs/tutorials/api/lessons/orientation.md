@@ -29,7 +29,7 @@ A standalone static website does not need the server framework. The browser exer
 
 ## Prepare a workspace
 
-Install Node.js 24.22.1 or later on 24.x, or 26.12.1 or later. Check the Node version in the same terminal you will use for the labs:
+Install Node.js 24.22.3 or later on 24.x, or 26.13.1 or later. Check the Node version in the same terminal you will use for the labs:
 
 ```bash
 # Run from: your-projects
@@ -51,7 +51,7 @@ This course targets **KetJS 0.8.1 preview**. Pin that version while following th
 
 ## Checkpoint
 
-Explain which package builds static HTML and which package opens the backend database. Confirm your terminal runs Node.js 24.22.1+ or 26.12.1+.
+Explain which package builds static HTML and which package opens the backend database. Confirm your terminal runs Node.js 24.22.3+ or 26.13.1+.
 
 ## Practice on your own
 
