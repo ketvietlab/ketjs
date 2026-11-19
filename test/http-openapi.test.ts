@@ -103,7 +103,7 @@ const options = {
 type Operation = {
   operationId: string
   parameters?: Array<{ name: string; in: string; required: boolean }>
-  requestBody?: { required: boolean; content: Record<string, unknown> }
+  requestBody?: { required: boolean; content: Record<string, unknown>; 'x-max-body-bytes'?: number }
   responses: Record<string, { content?: Record<string, unknown> }>
   security: unknown[]
 }
@@ -246,4 +246,63 @@ test('openapi: every response declares the X-Request-Id header the binding sends
   assert.ok(responses.length > 4)
   for (const [status, response] of responses)
     assert.ok(response.headers?.['X-Request-Id'], `status ${status} declares X-Request-Id`)
+})
+
+test('openapi: multipart metadata survives composition without changing JSON defaults', () => {
+  const body = {
+    type: 'object',
+    required: ['file'],
+    properties: { file: { type: 'string', format: 'binary' } },
+  }
+  const upload = (
+    bodyMediaType?: 'application/json' | 'multipart/form-data',
+    maxBodyBytes?: number,
+    hasBody = true,
+  ) =>
+    compose(
+      [
+        defineModule({
+          name: 'uploads',
+          routes: {
+            '/upload': {
+              anonymous: true,
+              contract: {
+                profile: 'shop',
+                method: 'POST',
+                operationId: 'shop.upload',
+                auth: 'public',
+                request: {
+                  ...(hasBody ? { body } : {}),
+                  ...(bodyMediaType ? { bodyMediaType } : {}),
+                  ...(maxBodyBytes === undefined ? {} : { maxBodyBytes }),
+                },
+                responses: { '200': { type: 'object' } },
+              },
+              handler: () => () => json({}),
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+  const requestBody = (manifest: ReturnType<typeof compose>) =>
+    (httpOpenApiDocument(manifest, options).paths as Record<string, Record<string, Operation>>)['/upload']!
+      .post!.requestBody
+  const legacy = requestBody(upload())
+  assert.deepEqual(legacy, { required: true, content: { 'application/json': { schema: body } } })
+  assert.deepEqual(requestBody(upload('application/json')), legacy)
+  // The encoded request budget includes 64 KiB overhead in addition to a 5 MiB file.
+  const maxBodyBytes = 5 * 1024 * 1024 + 64 * 1024
+  const manifest = upload('multipart/form-data', maxBodyBytes)
+  assert.equal(httpContracts(manifest, options)[0]!.contract.request!.bodyMediaType, 'multipart/form-data')
+  assert.deepEqual(requestBody(manifest), {
+    required: true,
+    content: { 'multipart/form-data': { schema: body } },
+    'x-max-body-bytes': maxBodyBytes,
+  })
+  for (const limit of [0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(() => requestBody(upload('multipart/form-data', limit)), { code: 'E_OPENAPI_REQUEST' })
+  assert.equal(requestBody(upload('application/json', 1))!['x-max-body-bytes'], 1)
+  assert.throws(() => requestBody(upload('multipart/form-data', 1024, false)), { code: 'E_OPENAPI_REQUEST' })
+  assert.equal(requestBody(upload(undefined, undefined, false)), undefined)
 })

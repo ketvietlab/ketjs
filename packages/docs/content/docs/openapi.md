@@ -546,3 +546,25 @@ there.
 
 For a concrete implementation of a handwritten facade, see KetSuite's Channel API architecture and generated
 Customer API reference.
+
+
+## Streaming request contracts
+
+A handwritten `HttpRouteContract.request` may declare `bodyMediaType` as
+`application/json` or `multipart/form-data`. Omitting it preserves the JSON default;
+`body` remains the schema of the parsed content, not a media-type map. An optional
+`maxBodyBytes` must be a positive safe integer and describes the entire encoded HTTP
+body. OpenAPI publishes that ceiling as `requestBody.x-max-body-bytes`. Both fields
+require a body schema; invalid declarations fail document generation.
+
+These are contract declarations, not automatic runtime parsing. The route facade
+must enforce the same media type and byte ceiling, authenticate and authorize before
+reading the stream, validate parsed fields/files, and clean up partial uploads before
+returning an error. Existing JSON bindings and `/_ket/fn` do not gain multipart support.
+Use the existing streaming `multipart` parser with bounded bytes, parts and headers.
+
+Distinguish file size from the encoded request budget: a 5 MiB file allowance needs a
+separate bounded allowance for multipart boundaries, headers and scalar fields (for
+example 64 KiB). A total request ceiling of 5 MiB cannot promise a 5 MiB file. The
+consumer must enforce both limits and document its own overhead budget; the framework
+contract does not choose a file size or change any facade's existing JSON limit.

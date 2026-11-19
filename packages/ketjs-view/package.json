@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketjs-view",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "ketjs-view layer — signals, surgical DOM rendering, SSR, hydration and islands. Browser-safe, zero dependencies.",
   "type": "module",
   "license": "MIT",
@@ -23,7 +23,7 @@
     "typescript"
   ],
   "engines": {
-    "node": "^24.22.1 || >=26.12.1"
+    "node": "^24.22.3 || >=26.13.1"
   },
   "scripts": {
     "prepack": "npm run build --prefix ../..",
@@ -33,6 +33,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./i18n": {
+      "types": "./dist/i18n.d.ts",
+      "default": "./dist/i18n.js"
     },
     "./mirror": {
       "types": "./dist/mirror.d.ts",

@@ -50,7 +50,11 @@ try {
         ' preview\n\nCommands:\n  doctor                 Check Node, SQLite and local dependencies\n  list                   List lessons and their execution environment\n  lesson <slug>          Read a bundled lesson\n  check <api|isolation|jobs>  Build and run one behavioral checkpoint\n  status                 Show checkpoint results and detect changed source\n  serve                  Start the local development API at 127.0.0.1:3711\n  worker                 Run the learning queue against the same lab database\n\nRun with: npm run learn -- <command>\nLessons without an automated checkpoint have a manual acceptance checklist.\nThe dev identity is for local learning; this lab is not a production auth setup.',
     )
   } else if (command === 'doctor') {
-    if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Node 24 or newer is required.')
+    const [major, minor, patch] = process.versions.node.split('.').map(Number)
+    const supported24 = major === 24 && (minor > 22 || (minor === 22 && patch >= 3))
+    const supported26OrLater = major > 26 || (major === 26 && (minor > 13 || (minor === 13 && patch >= 1)))
+    if (!supported24 && !supported26OrLater)
+      throw new Error('Node.js 24.22.3 or later on 24.x, or 26.13.1 or later, is required.')
     for (const path of [ket, 'node_modules/typescript/bin/tsc'])
       if (!existsSync(join(root, path))) throw new Error('Run npm ci in the lab directory first.')
     const { DatabaseSync } = await import('node:sqlite')

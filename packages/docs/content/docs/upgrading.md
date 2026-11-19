@@ -14,9 +14,9 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The {{VERSION}} patch requires Node.js 24.22.1 or later on 24.x, or 26.12.1 or later, the releases with the
-current Node.js security fixes; Node.js 25 is no longer admitted. Update development, CI and production
-images before upgrading, and read [Changes in 0.8.1](#changes-in-0-8-1).
+KetJS `{{VERSION}}` requires Node.js 24.22.3 or later on 24.x, or 26.13.1 or later.
+Update development, CI and production images before upgrading. See [Changes in 0.8.2](#changes-in-0-8-2)
+for the affected contracts.
 
 The 0.8.0 release added opt-in Mirror and island stores without changing application data schemas.
 Use the dedicated `/mirror` and `/store` entry points. Mirror scope must follow the authenticated user
@@ -70,6 +70,15 @@ projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
+
+## Changes in 0.8.2
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| Node.js | The range is `^24.22.3 \|\| >=26.13.1`, including projects scaffolded by `ket new` and `create-view`. | Update Node.js in development, CI and production. For existing projects, mirror the range in your own manifest to surface incompatible runtimes. |
+| Catalogue translation | Static sites and islands can import `@ketvietlab/ketjs-view/i18n` with their own message catalogues. | Use the subpath for new browser-safe translation code. Existing server code can continue calling `translator(manifest, locale)`. |
+| WebSockets | An open connection applies its byte limit separately to each message. | Keep the configured per-message limits and deploy the updated server. |
+| OpenAPI | A handwritten route can declare multipart media and a request byte limit in its body contract. | When documenting uploads, regenerate OpenAPI after declaring the media type and limit that the route enforces. |
 
 ## Changes in 0.8.1
 

@@ -158,7 +158,7 @@ function Home({ page, content }: { page: ContentPage; content: ContentPage[] }) 
             <Button id="copy-command" label="Copy" size="compact" />
           </div>
           <p class="hero-meta">
-            Node.js 24+ <span>·</span> MIT licensed <span>·</span>{' '}
+            Node.js 24.22.3+ or 26.13.1+ <span>·</span> MIT licensed <span>·</span>{' '}
             <Badge label={`${frameworkVersion} preview`} tone="info" />
           </p>
           <p class="metadata">Preview for evaluation. APIs may change before 1.0.</p>
@@ -423,7 +423,7 @@ export function createPage(route: string, content: ContentPage[]) {
             <noscript>
               <div class="no-script">
                 The interactive editor needs JavaScript. Every lesson also includes a local project you can
-                run with Node 24.
+                run with Node.js 24.22.3+ or 26.13.1+.
               </div>
             </noscript>
           </>
