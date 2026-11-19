@@ -10,6 +10,9 @@ in the background. The browser holds a mirror of server state, never the truth. 
 of its own: every load and write is a function you pass in, so it works with any HTTP, GraphQL or SDK
 transport, whether or not the server is KetJS. It is available from ketjs-view 0.8.0.
 
+A client that builds these loads and writes from KetJS function declarations is planned, not built. See
+[Plan: calling functions from Mirror](/docs/view-functions-plan/).
+
 Use it where a browser runtime owns reads: a client-rendered app on an API, or an island that loads
 and changes data after hydration. A server-rendered page that reads its data on the server does not
 need it.

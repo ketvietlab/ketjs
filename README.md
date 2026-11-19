@@ -124,7 +124,7 @@ clients live in the KetSuite source and consume KetJS from npm.
 
 ## Get started
 
-Requires **Node.js 24.22.1 or later on 24.x, or 26.12.1 or later**, and npm.
+Requires **Node.js 24.22.3 or later on 24.x, or 26.13.1 or later**, and npm.
 
 ### Fullstack application
 
@@ -177,6 +177,10 @@ Build the generated site with `npm run build`; deploy the output in `dist/`.
 
 Website and framework guides: [ketjs.dev](https://ketjs.dev). The site source and local development
 instructions are in [packages/docs](packages/docs/README.md).
+
+Coding agents that write application code on KetJS can load the [`ketjs` skill](skills/ketjs/SKILL.md).
+It condenses the documented contracts into one way of writing functions, results and errors,
+transactions, scope, permissions, decimals, time, jobs and tests.
 
 ## Contributing
 

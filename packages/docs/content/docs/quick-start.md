@@ -15,7 +15,7 @@ deployment contracts may still change before 1.0.
 
 ## Requirements
 
-- Node.js 24.22.1 or later on 24.x, or 26.12.1 or later
+- Node.js 24.22.3 or later on 24.x, or 26.13.1 or later
 - npm bundled with Node.js
 
 ## Scaffold an application

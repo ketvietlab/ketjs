@@ -13,6 +13,8 @@ on:
       - .nvmrc
       - package.json
       - packages/*/package.json
+      - packages/docs/tutorials/*/package.json
+      - packages/*/src/**/package.json.tmpl
       - tools/node-security*.mjs
       - .github/workflows/node-security.yml
   workflow_dispatch:

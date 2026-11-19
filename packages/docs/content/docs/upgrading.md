@@ -14,9 +14,9 @@ moving the application lock.
 The current coordinated release is `{{VERSION}}`. Use the same exact version for the KetJS packages your
 application needs. KetSuite and its design system have their own release process.
 
-The {{VERSION}} patch requires Node.js 24.22.1 or later on 24.x, or 26.12.1 or later, the releases with the
-current Node.js security fixes; Node.js 25 is no longer admitted. Update development, CI and production
-images before upgrading, and read [Changes in 0.8.1](#changes-in-0-8-1).
+Builds from current KetJS source require Node.js 24.22.3 or later on 24.x, or 26.13.1 or later.
+Update development, CI and production images before upgrading. See [Changes in 0.8.1](#changes-in-0-8-1)
+for the requirements of the published patch.
 
 The 0.8.0 release added opt-in Mirror and island stores without changing application data schemas.
 Use the dedicated `/mirror` and `/store` entry points. Mirror scope must follow the authenticated user

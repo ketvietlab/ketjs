@@ -32,7 +32,7 @@ test('create-view scaffolds a complete static project without overwriting files'
     const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
     assert.equal(manifest.name, 'example-site')
     // The scaffold carries the security floor of the packages it installs (tools/node-security.mjs).
-    assert.equal(manifest.engines.node, '^24.22.1 || >=26.12.1')
+    assert.equal(manifest.engines.node, '^24.22.3 || >=26.13.1')
     assert.ok(existsSync(join(dir, 'src/pages/index.tsx')))
     assert.throws(() => scaffoldView('example-site', dir), /refusing to overwrite/)
     assert.throws(() => scaffoldView('Not Valid', join(dir, 'invalid')), /invalid project name/)
