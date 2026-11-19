@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: The coordinated KetJS {{VERSION}} patch raises the supported Node.js floor to releases with the current security fixes and checks it in CI.
+description: KetJS {{VERSION}} adds a browser-safe i18n entry, fixes WebSocket message accounting, and documents multipart request limits.
 group: Project evolution
 order: 1
 ---
@@ -15,19 +15,22 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## Node.js requirements for current source
-
-Source builds now require Node.js 24.22.3 or later on 24.x, or 26.13.1 or later. Both scaffolds use
-this floor for projects generated from current source.
-
 ## What {{VERSION}} fixes
 
-- **Node.js security floor.** Every package declares `engines.node` `^24.22.1 || >=26.12.1`. These are the latest Node.js security releases of the supported lines (2026-10-20 and 2026-10-21); they fix four high-severity issues, including a Brotli decoder out-of-bounds write that `fetch()` reaches through automatic `br` decoding. Node.js 25, whose support ended on 2026-06-01, is no longer admitted. `create-view` writes the same floor into new projects. See [Upgrading KetJS](/docs/upgrading/).
-- **The floor is checked.** A daily workflow compares `.nvmrc` and `engines.node` with the Node.js security releases and release schedule, and keeps one issue open while a newer security release is not adopted. The release checker refuses a package with any other floor.
-
-This patch changes no public API or application data schema. Run 24.22.1 or later on 24.x, or 26.12.1 or later, in development, CI and production images; npm warns about an older Node.js and refuses it with `engine-strict`.
+- **Catalogue translation for static sites and islands.** Import `translator`, `missingMessages` and the pseudo-locale from `@ketvietlab/ketjs-view/i18n`. It uses message catalogues directly and keeps the manifest-based server API available. See [Menus and localization](/docs/menus-i18n/#catalogues-for-static-sites). ([#709](https://github.com/ketvietlab/ketjs/pull/709))
+- **WebSocket message limits.** `maxMessageBytes` is enforced per message, including its fragments. Receiving one complete message resets the byte budget for the next. ([#708](https://github.com/ketvietlab/ketjs/pull/708))
+- **OpenAPI multipart contracts.** A handwritten route can declare `bodyMediaType: 'multipart/form-data'` and `maxBodyBytes` with its body schema. The generated OpenAPI document records the media type and size limit for clients and documentation. See [Streaming request contracts](/docs/openapi/#streaming-request-contracts). ([#707](https://github.com/ketvietlab/ketjs/pull/707))
+- **Node.js security floor.** Run Node.js 24.22.3 or later on 24.x, or 26.13.1 or later. Both project scaffolds declare this range and the repository pins 26.13.1. ([#711](https://github.com/ketvietlab/ketjs/pull/711))
 
 Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-8-1"></span>
+<span id="what-0-8-1-fixes"></span>
+
+## Previous release: 0.8.1
+
+- **Node.js security floor.** The release required Node.js 24.22.1 or later on 24.x, or 26.12.1 or later. `create-view` added the same requirement to newly scaffolded sites.
+- **Security floor verification.** The daily workflow began comparing the pinned Node.js version and package engine ranges with Node.js security releases and the support schedule.
 
 <span id="current-release-0-8-0"></span>
 <span id="what-0-8-0-adds"></span>
