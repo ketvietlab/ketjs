@@ -15,7 +15,7 @@ The current coordinated release is `{{VERSION}}`. Use the same exact version for
 application needs. KetSuite and its design system have their own release process.
 
 KetJS `{{VERSION}}` requires Node.js 24.22.3 or later on 24.x, or 26.13.1 or later.
-Update development, CI and production images before upgrading. See [Changes in 0.8.2](#changes-in-0-8-2)
+Update development, CI and production images before upgrading. See [Changes in {{VERSION}}](#changes-in-0-9-0)
 for the affected contracts.
 
 The 0.8.0 release added opt-in Mirror and island stores without changing application data schemas.
@@ -70,6 +70,16 @@ projection. Review [HTTP contracts and OpenAPI](/docs/openapi/) before exposing 
 Server-rendered islands must be hydrated by the same ketjs-view version and JSX build that rendered
 them, so deploy the server and client bundles of a view upgrade together. Read the remaining
 compatibility checks before upgrading an existing datastore.
+
+## Changes in {{VERSION}}
+
+| Area | What changes | What to do |
+| --- | --- | --- |
+| Development command | New projects use `ket dev --source` with project-local TypeScript and `tsx`. The artifact watcher remains available through `ket dev`. | Existing projects can opt into source development by updating their dev script. |
+| Browser islands | `ket.dev.json` declares entries and browser-only source paths. View Tools builds the affected entries and KetJS remounts changed browser-only islands. | Keep shared rendering sources outside `browserOnly`. Use `ket-view islands` to emit production bundles and deploy them with the server. |
+| Runtime startup | The HTTP and worker CLI commands reuse the selected workspace manifest. | Upgrade the server and worker packages together using normal deployment procedures. |
+
+See [Development islands](/ketjs/quick-start/#development-islands) for configuration and build commands.
 
 ## Changes in 0.8.2
 
