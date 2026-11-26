@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.8.2'
+const VERSION = '0.9.0'
 const SPEC_VERSION = '0.1.41'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
@@ -24,7 +24,6 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['ket.workspace.ts.tmpl', () => 'ket.workspace.ts'],
   ['tsconfig.json.tmpl', () => 'tsconfig.json'],
   ['biome.json.tmpl', () => 'biome.json'],
-  ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
   ['openapi.ts.tmpl', () => 'tools/openapi.ts'],
   ['deployment.test.ts.tmpl', () => 'test/deployment.test.ts'],
   ['gitignore.tmpl', () => '.gitignore'],

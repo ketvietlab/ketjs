@@ -28,6 +28,11 @@ npm run dev
 The generated project uses SQLite by default, contains a real module and integration test, and runs
 at `http://127.0.0.1:3000`.
 
+`npm run dev` uses `ket dev --source` with incremental TypeScript checks. Add
+`ket.dev.json` to declare browser island source entries. KetJS rebuilds the entries affected
+by an edit and refreshes mounted islands for changes scoped to `browserOnly` paths.
+Use this mode on a trusted development network.
+
 Application names use lowercase letters, digits, and underscores and must start with a letter. Use
 `--dir ./my-app` when the filesystem directory should have a different name.
 
@@ -100,6 +105,12 @@ npm install @ketvietlab/ketjs
 // File: notes/ket.workspace.ts
 import { defineDeployment, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
 ```
+
+## Start a deployment
+
+`ket serve` and `ket worker` each reuse the selected deployment's manifest from workspace
+validation when starting their runtime. Workspace validation still covers every deployment in
+the declared workspace, including configured job queues.
 
 ## Generate API contracts
 

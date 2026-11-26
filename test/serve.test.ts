@@ -324,11 +324,10 @@ test('ket new: writes a deployment whose workspace composes', async () => {
   assert.ok(existsSync(join(dir, 'modules/shop.ts')))
   assert.ok(existsSync(join(dir, 'tsconfig.json')))
   assert.ok(existsSync(join(dir, 'biome.json')))
-  assert.ok(existsSync(join(dir, 'tools/dev.mjs')))
   assert.ok(existsSync(join(dir, 'test/deployment.test.ts')))
   assert.match(
-    readFileSync(join(dir, 'tools/dev.mjs'), 'utf8'),
-    /node_modules\/@ketvietlab\/ketjs\/dist\/cli\.js/,
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    /"dev": "ket dev --source --workspace ket\.workspace\.ts"/,
   )
   assert.match(
     readFileSync(join(dir, 'package.json'), 'utf8'),

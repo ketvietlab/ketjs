@@ -93,8 +93,8 @@ therefore not a compilation boundary suitable for a framework.
 **Chosen:** `tsc` emits workspace JavaScript into `.build`, package JavaScript and
 declarations into `dist`, and rewrites relative TypeScript extensions. Every
 production serve, test, benchmark and audit command builds first and executes only
-`.js` artifacts. Development is the explicit exception: `tsx watch` transforms
-source modules in memory while `tsc --noEmit --watch` checks them independently.
+`.js` artifacts. Development is the explicit exception: `ket dev --source` runs
+the workspace through the project's `tsx` loader after an incremental TypeScript check.
 It writes neither `.build` nor `dist`, eliminating output races during editing. The
 CLI rejects a source workspace unless the dev orchestrator sets its private source
 mode. Artifact builds remain serialized and fingerprinted, so concurrent production
@@ -104,8 +104,9 @@ outputs.
 runtime still produces Ket's existing `TemplateResult`; there is no React or VDOM.
 The explicit build also makes published package contents identical to what was
 tested locally.
-Browser islands follow the same rule. Their typed TS or TSX source is compiled by a scoped esbuild step
-into ESM under the owning module's asset root; those generated `.mjs` files are not authoring sources.
+Browser islands follow the same rule. In source development KetJS keeps an esbuild graph per entry
+and serves changed browser bundles through its development asset endpoint. The production island
+build writes ESM under the owning module's asset root.
 The browser build keeps `@ketvietlab/ketjs-view` external and resolves it to the framework copy served at
 `/_ket/view/`, so islands share one renderer instead of bundling private copies.
 **Cost:** a compiler is a required development dependency and startup waits for an

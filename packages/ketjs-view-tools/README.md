@@ -68,6 +68,16 @@ file loaders cover WOFF/WOFF2, TTF/OTF, SVG, PNG, JPEG and WebP. `public/` files
 Escaped code samples that mention an island host do not require an island registry entry; live
 hosts do.
 
+## Full-stack KetJS island builds
+
+For a KetJS deployment, `ket dev --source` uses the compiler exported by
+`@ketvietlab/ketjs-view-tools/island-build`. The project's `ket.dev.json` maps
+island names to source entries and their production output paths. `ket-view islands`
+emits the production bundles. Each entry is bundled as one browser ESM module.
+The compiler keeps independent import graphs for incremental builds in development.
+Build adapters that already collect esbuild inputs can share the selection policy
+through `affectedIslandBuilds`.
+
 ## Compile JSX
 
 `defineConfig({ compileJsx: true })` compiles each static subtree of intrinsic JSX elements into one

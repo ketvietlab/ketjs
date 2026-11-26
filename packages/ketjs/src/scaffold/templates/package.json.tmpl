@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch --clear-screen=false tools/dev.mjs serve --workspace ket.workspace.ts",
+    "dev": "ket dev --source --workspace ket.workspace.ts",
     "start": "npm run build && ket serve --workspace dist/ket.workspace.js",
     "test": "npm run build && ket test dist/test",
     "test:watch": "ket test dist/test --watch",
@@ -19,9 +19,11 @@
     "lint": "biome lint ."
   },
   "dependencies": {
-    "@ketvietlab/ketjs": "__VERSION__"
+    "@ketvietlab/ketjs": "__VERSION__",
+    "@ketvietlab/ketjs-view": "__VERSION__"
   },
   "devDependencies": {
+    "@ketvietlab/ketjs-view-tools": "__VERSION__",
     "@ketvietlab/ketspec": "__SPEC_VERSION__",
     "@biomejs/biome": "2.5.9",
     "@types/node": "^26.2.0",

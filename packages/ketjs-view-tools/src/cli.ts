@@ -2,6 +2,8 @@
 
 import { buildProject, checkProject } from './project.ts'
 import { serveProject } from './server.ts'
+import { createIslandCompiler } from './island-build.ts'
+import { readFile } from 'node:fs/promises'
 
 const VERSION = '0.2.0'
 const HELP = `ketjs-view-tools ${VERSION}
@@ -11,12 +13,14 @@ Usage:
   ket-view build
   ket-view preview [--host HOST] [--port PORT]
   ket-view check
+  ket-view islands
 
 Commands:
   dev       build, watch and live-reload the static site
   build     write deployable HTML, CSS and JavaScript to dist
   preview   serve the current dist directory
-  check     validate routes, pages and browser bundles without writing dist`
+  check     validate routes, pages and browser bundles without writing dist
+  islands   build a KetJS deployment's browser islands from ket.dev.json`
 
 const args = process.argv.slice(2)
 const command = args[0]
@@ -43,6 +47,15 @@ try {
   } else if (command === 'check') {
     const result = await checkProject()
     console.log(`checked ${result.pages.length} page(s)`)
+  } else if (command === 'islands') {
+    const config = JSON.parse(await readFile('ket.dev.json', 'utf8'))
+    const compiler = await createIslandCompiler(process.cwd(), config, { production: true })
+    try {
+      const built = await compiler.build(new Set())
+      console.log(`built ${built.size} island bundle(s)`)
+    } finally {
+      await compiler.close()
+    }
   } else if (command === 'dev' || command === 'preview') {
     const running = await serveProject(process.cwd(), {
       dev: command === 'dev',

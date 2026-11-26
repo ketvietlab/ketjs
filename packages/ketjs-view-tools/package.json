@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/ketjs-view-tools",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Static-site development and build tools for ketjs-view.",
   "type": "module",
   "license": "MIT",
@@ -36,10 +36,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./island-build": {
+      "types": "./dist/island-build.d.ts",
+      "default": "./dist/island-build.js"
     }
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.8.2",
+    "@ketvietlab/ketjs-view": "0.9.0",
     "acorn": "8.19.0",
     "acorn-jsx": "5.3.2",
     "esbuild": "0.28.2"

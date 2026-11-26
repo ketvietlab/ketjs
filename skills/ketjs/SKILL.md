@@ -58,6 +58,10 @@ you read in the pull request description. A change whose author cannot name the 
 | Reference and evolution | `api.md`, `architecture-decisions.md`, `upgrading.md`, `release-notes.md`, `open-questions.md` |
 | Working on KetJS itself, not a consumer | `contributing.md`, `releasing.md`, `module-installation-plan.md` |
 
+For a scaffolded app's `npm run dev`, use the **Development islands** contract in
+`quick-start.md`. A `browserOnly` path is used exclusively by browser code; shared
+rendering sources follow the server restart path.
+
 ## 1. One helper per need, per consumer
 
 - A consumer keeps **one** shared helper for each recurring need: building a refusal result, rolling
