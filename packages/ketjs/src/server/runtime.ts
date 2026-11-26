@@ -22,22 +22,30 @@ export type BootedRuntime = {
   logger: Logger
 }
 
-export async function bootRuntime(
+type RuntimeOptions = {
+  env?: Record<string, string | undefined>
+  port?: number
+  /** Which process role this is. A low-cardinality field on every record. */
+  role?: LogProcess
+  /**
+   * Override the deployment's sink for this process.
+   *
+   * A host that boots a deployment it did not author — a test harness, an
+   * embedding process — can redirect records without editing the spec, the same
+   * way it already overrides the port.
+   */
+  openLog?: OpenLog
+}
+
+export function bootRuntime(spec: DeploymentSpec, options: RuntimeOptions = {}): Promise<BootedRuntime> {
+  return bootRuntimeFromSpec(spec, options)
+}
+
+/** Accept the live manifest from CLI workspace composition, with its handlers still bound. */
+export async function bootRuntimeFromSpec(
   spec: DeploymentSpec,
-  options: {
-    env?: Record<string, string | undefined>
-    port?: number
-    /** Which process role this is. A low-cardinality field on every record. */
-    role?: LogProcess
-    /**
-     * Override the deployment's sink for this process.
-     *
-     * A host that boots a deployment it did not author — a test harness, an
-     * embedding process — can redirect records without editing the spec, the same
-     * way it already overrides the port.
-     */
-    openLog?: OpenLog
-  } = {},
+  options: RuntimeOptions,
+  composed?: Manifest,
 ): Promise<BootedRuntime> {
   const config = readConfig(options.env ?? process.env, {
     sqliteFile: `.ket/${spec.name}.db`,
@@ -59,14 +67,16 @@ export async function bootRuntime(
   const logger = createLogger(log, { deployment: spec.name, process: options.role ?? 'http' })
 
   const modules = [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]
-  const manifest = compose(modules, {
-    requiredRegions: spec.requires ?? [],
-    headless: spec.headless ?? false,
-    companies: spec.companies === true,
-    requirePermissionCoverage: spec.permissions?.requireCoverage,
-    modulePermissionDeclarations: spec.permissions?.modules,
-    roleTemplates: spec.permissions?.roleTemplates,
-  })
+  const manifest =
+    composed ??
+    compose(modules, {
+      requiredRegions: spec.requires ?? [],
+      headless: spec.headless ?? false,
+      companies: spec.companies === true,
+      requirePermissionCoverage: spec.permissions?.requireCoverage,
+      modulePermissionDeclarations: spec.permissions?.modules,
+      roleTemplates: spec.permissions?.roleTemplates,
+    })
   // Asset URLs carry their file's digest from here on, so a browser and
   // anything in front of it may keep them until the bytes change.
   await fingerprintAssets(manifest)

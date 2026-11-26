@@ -4,6 +4,7 @@
 
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { serveSourceDev } from './dev.ts'
 import { delimiter, extname, join, normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
@@ -30,10 +31,10 @@ import { migrateOne, migrateFleet, formatFleet, verifyPhysicalSchema } from './d
 import type { PhysicalSchemaVerification } from './data/fleet.ts'
 import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
-import { bootDeployment, serveDeployment } from './server/boot.ts'
+import { bootDeployment, bootDeploymentFromSpec, serveBootedDeployment } from './server/boot.ts'
 import { bootRuntime } from './server/runtime.ts'
 import { callFn } from './server/fn.ts'
-import { bootWorker, serveWorker } from './server/worker.ts'
+import { bootWorker, bootWorkerFromSpec, serveBootedWorker } from './server/worker.ts'
 import { createDevelopmentCloser } from './server/development.ts'
 import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
@@ -231,6 +232,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket jobs cancel ID        cancel a pending or executing job
   ket jobs prune            apply the 7/30-day retention policy
   ket dev [--deployment X]         serve compiled output, restarting when an artifact changes
+    --source                run a TypeScript workspace and rebuild affected browser islands
     --all                   run HTTP and worker together under this one watcher
   ket new NAME [--dir D] [--auth session|none]  scaffold a deployment that runs
 
@@ -536,13 +538,14 @@ try {
   }
 
   if (cmd === 'dev') {
-    // This watches emitted JavaScript only. The project owns the compiler watcher;
-    // `ket new` wires both sides together without handing source files to Node.
     const childCommand = flag('all') ? 'all' : 'serve'
-    await watchCommand(
-      childCommand,
-      rest.filter((item) => item !== '--all'),
-    )
+    const args = rest.filter((item) => item !== '--all' && item !== '--source')
+    if (flag('source')) {
+      if (opt('workspace') === undefined) args.push('--workspace', 'ket.workspace.ts')
+      await serveSourceDev(new URL(import.meta.url), childCommand, args)
+      process.exit(process.exitCode ?? 0)
+    }
+    await watchCommand(childCommand, args)
   }
 
   if ((cmd === 'serve' || cmd === 'worker') && flag('watch')) await watchCommand(cmd, rest)
@@ -555,10 +558,17 @@ try {
     if (!spec.serve)
       throw new Error(`deployment "${spec.name}" declares no serve block, so there is nothing to run`)
     const port = opt('port')
-    await serveDeployment(spec, { env: process.env, ...(port ? { port: Number(port) } : {}) })
+    const deployment = await bootDeploymentFromSpec(
+      spec,
+      { env: process.env, ...(port ? { port: Number(port) } : {}) },
+      ws.deployments[spec.name],
+    )
+    await serveBootedDeployment(deployment)
   } else if (cmd === 'worker') {
     const spec = pickSpec(specs)
-    const worker = await serveWorker(spec, { env: process.env })
+    const worker = serveBootedWorker(
+      await bootWorkerFromSpec(spec, { env: process.env }, ws.deployments[spec.name]),
+    )
     console.log(`worker ${worker.workerId} is running (${Object.keys(spec.worker?.queues ?? {}).join(', ')})`)
   } else if (cmd === 'call') {
     const spec = pickSpec(specs)

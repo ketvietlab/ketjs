@@ -34,7 +34,7 @@ import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
 import { html, each, renderToString } from '@ketvietlab/ketjs-view'
 import { sqliteStore } from './config.ts'
-import { bootRuntime } from './runtime.ts'
+import { bootRuntimeFromSpec } from './runtime.ts'
 import { traceOf } from './log/index.ts'
 import type { RatePolicy } from './ratelimit.ts'
 import type { Logger, OpenLog } from './log/index.ts'
@@ -459,16 +459,24 @@ export type BootDeploymentOptions = {
  * Opens, migrates, and serves. Returns before listening is announced so a
  * caller can print its own banner, or a test can boot on port 0 and never print.
  */
-export async function bootDeployment(
+export function bootDeployment(
   spec: DeploymentSpec,
   o: BootDeploymentOptions = {},
+): Promise<BootedDeployment> {
+  return bootDeploymentFromSpec(spec, o)
+}
+
+export async function bootDeploymentFromSpec(
+  spec: DeploymentSpec,
+  o: BootDeploymentOptions,
+  composed?: Manifest,
 ): Promise<BootedDeployment> {
   const serve = spec.serve ?? {}
   const log = o.log ?? console.log
   // `o.log` above is the boot-progress printer this function has always taken;
   // `logSink` is the deployment's operational sink. Different things, and the
   // older name is public API, so the new one is the one that gets qualified.
-  const { config, modules, manifest, log: logSink, logger } = await bootRuntime(spec, o)
+  const { config, modules, manifest, log: logSink, logger } = await bootRuntimeFromSpec(spec, o, composed)
   // Off: one global scope. No request, session or development header carries a company.
   const byCompany = scopesByCompany(manifest)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
@@ -1653,7 +1661,10 @@ export async function serveDeployment(
   spec: DeploymentSpec,
   o: BootDeploymentOptions = {},
 ): Promise<BootedDeployment> {
-  const booted = await bootDeployment(spec, o)
+  return serveBootedDeployment(await bootDeployment(spec, o))
+}
+
+export async function serveBootedDeployment(booted: BootedDeployment): Promise<BootedDeployment> {
   console.log(await booted.banner())
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
