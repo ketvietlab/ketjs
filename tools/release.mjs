@@ -231,14 +231,12 @@ const smoke = (tarballs, version, parent) => {
       '--package-lock=false',
       '--no-save',
       tarball('@ketvietlab/ketjs-view'),
+      tarball('@ketvietlab/ketjs-view-tools'),
       tarball('@ketvietlab/ketjs'),
     ],
     { cwd: generated },
   )
-  // Execute the generated development entry directly. With no CLI command it
-  // exits after printing help, while still proving that its packaged CLI import
-  // resolves. This catches stale package paths before a scaffold is published.
-  run(node, ['tools/dev.mjs'], { cwd: generated })
+  run(npm, ['exec', '--', 'ket', 'help'], { cwd: generated })
   run(npm, ['run', 'check'], { cwd: generated })
   run(npm, ['test'], { cwd: generated })
   run(npm, ['run', 'api:docs'], { cwd: generated })

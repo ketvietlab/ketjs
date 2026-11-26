@@ -4,6 +4,7 @@
 
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { serveSourceDev } from './dev.ts'
 import { delimiter, extname, join, normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
@@ -231,6 +232,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket jobs cancel ID        cancel a pending or executing job
   ket jobs prune            apply the 7/30-day retention policy
   ket dev [--deployment X]         serve compiled output, restarting when an artifact changes
+    --source                run a TypeScript workspace and rebuild affected browser islands
     --all                   run HTTP and worker together under this one watcher
   ket new NAME [--dir D] [--auth session|none]  scaffold a deployment that runs
 
@@ -536,13 +538,14 @@ try {
   }
 
   if (cmd === 'dev') {
-    // This watches emitted JavaScript only. The project owns the compiler watcher;
-    // `ket new` wires both sides together without handing source files to Node.
     const childCommand = flag('all') ? 'all' : 'serve'
-    await watchCommand(
-      childCommand,
-      rest.filter((item) => item !== '--all'),
-    )
+    const args = rest.filter((item) => item !== '--all' && item !== '--source')
+    if (flag('source')) {
+      if (opt('workspace') === undefined) args.push('--workspace', 'ket.workspace.ts')
+      await serveSourceDev(new URL(import.meta.url), childCommand, args)
+      process.exit(process.exitCode ?? 0)
+    }
+    await watchCommand(childCommand, args)
   }
 
   if ((cmd === 'serve' || cmd === 'worker') && flag('watch')) await watchCommand(cmd, rest)
