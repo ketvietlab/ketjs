@@ -55,7 +55,6 @@ test('npm run dev in a scaffold rebuilds one browser island and keeps the server
   await mkdir(join(root, 'modules', 'assets'))
   const client = (text: string) => 'export default () => () => <div>' + text + '</div>'
   const counter = join(root, 'modules/browser/counter.tsx')
-  await writeFile(counter, client('initial counter'))
   await writeFile(join(root, 'modules/browser/note.tsx'), client('initial note'))
   await writeFile(
     join(root, 'ket.dev.json'),
@@ -118,7 +117,15 @@ test('npm run dev in a scaffold rebuilds one browser island and keeps the server
   const snapshot = async () => (await (await fetch(base + manifest)).json()) as Snapshot
   const runtime = async () => (await (await fetch(base + '/probe')).json()) as { pid: number; round: number }
   try {
-    const before = await wait(snapshot)
+    const cold = await wait(snapshot)
+    assert.deepEqual(cold.islands, {})
+    assert.match(logs, /Could not resolve/u)
+    assert.match(await (await fetch(base)).text(), /initial counter/u)
+    await writeFile(counter, client('initial counter'))
+    const before = await wait(async () => {
+      const value = await snapshot()
+      return value.islands.counter ? value : undefined
+    })
     const original = await runtime()
     assert.match(await (await fetch(base)).text(), /initial counter/u)
     assert.match(await (await fetch(base + '/_ket/islands.js')).text(), /refreshDevIslands/u)
@@ -138,6 +145,18 @@ test('npm run dev in a scaffold rebuilds one browser island and keeps the server
     const bundle = await fetch(base + '/_ket/dev/islands/' + after.islands.counter + '.mjs')
     assert.match(await bundle.text(), /updated counter/u)
     assert.equal((await fetch(base + '/_ket/dev/islands/not-a-bundle.mjs')).status, 404)
+
+    await mkdir(join(root, 'openapi'))
+    await writeFile(join(root, 'openapi/generated.json'), '{}')
+    await writeFile(join(root, 'README.md'), '# Editing documentation')
+    await writeFile(join(root, 'ket.workspace.ts.swp'), 'editor scratch')
+    const testFile = join(root, 'test/dev-typing.ts')
+    await writeFile(testFile, 'const bad: number = "invalid"; export { bad }')
+    await wait(async () => logs.includes('test/dev-typing.ts') || undefined)
+    await writeFile(testFile, 'export const good = 1')
+    await setTimeout(300)
+    assert.equal((await snapshot()).runtime, before.runtime)
+    assert.equal((await runtime()).pid, original.pid)
 
     const workspace = join(root, 'ket.workspace.ts')
     await writeFile(workspace, (await readFile(workspace, 'utf8')).replace('round: 1', 'round: 2'))

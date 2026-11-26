@@ -6,7 +6,10 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { once } from 'node:events'
+import { createServer } from 'node:net'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { materializeVersion } from './version.mjs'
 import { NODE_ENGINES } from './node-security.mjs'
@@ -173,8 +176,43 @@ const pack = (destination, version) => {
   return tarballs
 }
 
+/** @param {string} project */
+const smokeSourceDev = async (project) => {
+  const reservation = createServer().listen(0, '127.0.0.1')
+  await once(reservation, 'listening')
+  const address = reservation.address()
+  await new Promise((resolveClose) => reservation.close(resolveClose))
+  if (!address || typeof address === 'string') throw new Error('Could not reserve a source dev port')
+  const { port } = address
+  const cli = join(project, 'node_modules/@ketvietlab/ketjs/dist/cli.js')
+  const child = spawn(node, [cli, 'dev', '--source', '--port', String(port)], {
+    cwd: project,
+    stdio: 'inherit',
+    env: { ...process.env, HOST: '127.0.0.1', DATABASE_URL: undefined },
+  })
+  const exited = once(child, 'exit')
+  try {
+    const url = `http://127.0.0.1:${port}/_ket/dev/islands/manifest.json`
+    const deadline = Date.now() + 15_000
+    while (Date.now() < deadline && child.exitCode === null) {
+      const result = await fetch(url, { signal: AbortSignal.timeout(300) })
+        .then((response) => (response.ok ? response.json() : null))
+        .catch(() => null)
+      if (result?.islands?.counter) {
+        console.log('verified the generated source dev server and its packaged island compiler')
+        return
+      }
+      await delay(100)
+    }
+    throw new Error('The generated source dev server did not publish its test island')
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+    await exited
+  }
+}
+
 /** @param {Map<string, string>} tarballs @param {string} version @param {string} parent */
-const smoke = (tarballs, version, parent) => {
+const smoke = async (tarballs, version, parent) => {
   /** @param {string} name @returns {string} */
   const tarball = (name) => {
     return tarballs.get(name) ?? fail(`missing tarball for ${name}`)
@@ -236,7 +274,12 @@ const smoke = (tarballs, version, parent) => {
     ],
     { cwd: generated },
   )
-  run(npm, ['exec', '--', 'ket', 'help'], { cwd: generated })
+  writeFileSync(
+    join(generated, 'ket.dev.json'),
+    JSON.stringify({ islands: { counter: { entry: 'modules/counter.ts' } } }, null, 2) + '\n',
+  )
+  writeFileSync(join(generated, 'modules/counter.ts'), 'export default () => () => null\n')
+  await smokeSourceDev(generated)
   run(npm, ['run', 'check'], { cwd: generated })
   run(npm, ['test'], { cwd: generated })
   run(npm, ['run', 'api:docs'], { cwd: generated })
@@ -341,7 +384,7 @@ if (command === 'pack') {
 try {
   const tarballs = pack(destination, version)
   if (command === 'publish') publish(tarballs, version)
-  else smoke(tarballs, version, temporary)
+  else await smoke(tarballs, version, temporary)
   if (command === 'pack') console.log(`release tarballs are ready in ${destination}`)
 } finally {
   rmSync(temporary, { recursive: true, force: true })

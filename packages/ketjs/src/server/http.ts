@@ -387,7 +387,13 @@ const loadPlaced = async (root, requireKnown = false) => {
     const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
   }
-  await Promise.all(Array.from(names, loadFactory))
+  ${
+    devIslands
+      ? `for (const result of await Promise.allSettled(Array.from(names, loadFactory))) {
+    if (result.status === 'rejected') console.error('Could not load a developer island', result.reason)
+  }`
+      : 'await Promise.all(Array.from(names, loadFactory))'
+  }
 }
 
 ${devIslands ? devIslandClient + '\nawait refreshDevIslands().catch(console.error)\n' : ''}
