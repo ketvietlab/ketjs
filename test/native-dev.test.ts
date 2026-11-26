@@ -95,7 +95,8 @@ test('npm run dev in a scaffold rebuilds one browser island and keeps the server
   const dev = spawn('npm', ['run', 'dev', '--', '--port', String(address.port)], {
     cwd: root,
     detached: process.platform !== 'win32',
-    env: { ...process.env, HOST: '127.0.0.1' },
+    // The generated project uses SQLite, including when the suite itself runs against Postgres.
+    env: { ...process.env, DATABASE_URL: undefined, HOST: '127.0.0.1' },
   })
   let logs = ''
   for (const stream of [dev.stdout, dev.stderr])
