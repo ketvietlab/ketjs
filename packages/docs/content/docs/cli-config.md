@@ -121,6 +121,11 @@ selected roles; it does not turn the production process into a TypeScript loader
 shutdown stops accepting HTTP connections before draining the worker and is serialized across repeated file
 events. The next process can therefore bind the same port without racing the previous listener.
 
+`ket dev --source` uses the project's TypeScript configuration and `tsx` loader. It uses
+`ket.workspace.ts` by default and reads optional island entries from `ket.dev.json`. The
+generated `npm run dev` selects this mode. For the island build configuration and update
+rules, see [Development islands](/ketjs/quick-start/#development-islands).
+
 Operational commands include:
 
 ```bash

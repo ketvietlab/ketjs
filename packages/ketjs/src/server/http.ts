@@ -2,6 +2,7 @@
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
 import { isVersioned } from './assets.ts'
+import { devIslandAssets, devIslandClient, serveDevIslandAsset } from './dev-islands.ts'
 import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
@@ -343,6 +344,7 @@ const browserBootstrap = (
   islandNames: readonly string[],
   behaviors: ThemeRuntime['behaviors'],
   buildId: string,
+  devIslands: boolean,
 ): string => `import {
   createIslandManager,
   domHost,
@@ -385,12 +387,20 @@ const loadPlaced = async (root, requireKnown = false) => {
     const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
   }
-  await Promise.all(Array.from(names, loadFactory))
+  ${
+    devIslands
+      ? `for (const result of await Promise.allSettled(Array.from(names, loadFactory))) {
+    if (result.status === 'rejected') console.error('Could not load a developer island', result.reason)
+  }`
+      : 'await Promise.all(Array.from(names, loadFactory))'
+  }
 }
 
+${devIslands ? devIslandClient + '\nawait refreshDevIslands().catch(console.error)\n' : ''}
 await loadPlaced(document)
 const islands = createIslandManager(domHost(), registry, { strict: false })
 islands.hydrate(document)
+${devIslands ? 'setTimeout(watchDevIslands, 250)' : ''}
 // A client-rendered view (a record modal, say) places island hosts after the page
 // hydrated. It asks here rather than keeping a second registry of island clients.
 document.addEventListener('ket:islands-attach', (event) => {
@@ -942,6 +952,7 @@ export async function createKetServer(o: ServeOpts) {
   // a listener for 'upgrade' existed.
   // Open /_ket/stream responses: how to end each one, called by close().
   const liveStreams = new Set<() => void>()
+  const devIslands = devIslandAssets(process.env)
   const server = createServer({ shouldUpgradeCallback: isWebSocketUpgrade }, async (req, res) => {
     const started = Date.now()
     // Every response states its type and asks the browser not to guess another:
@@ -955,6 +966,10 @@ export async function createKetServer(o: ServeOpts) {
     let requestLog = o.log
     try {
       const url = requestUrl(req)
+      if (devIslands && (await serveDevIslandAsset(devIslands, url.pathname, req, res))) {
+        requestLog = undefined
+        return
+      }
       // Which tenant this request belongs to, for attribution only.
       //
       // Guarded, and the guard is the point: `resolveDatastore` throws
@@ -1076,7 +1091,7 @@ export async function createKetServer(o: ServeOpts) {
           'cache-control': 'no-cache',
           'x-ket-build': buildId,
         })
-        return res.end(browserBootstrap(clients, islandNames, behaviors, buildId))
+        return res.end(browserBootstrap(clients, islandNames, behaviors, buildId, Boolean(devIslands)))
       }
 
       // Resumable stream: the client reconnects with ?from=<cursor> and gets

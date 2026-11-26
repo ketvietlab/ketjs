@@ -56,7 +56,6 @@ notes/
 ├── test/
 │   └── deployment.test.ts
 ├── tools/
-│   ├── dev.mjs
 │   └── openapi.ts
 ├── package.json
 ├── tsconfig.json
@@ -64,10 +63,45 @@ notes/
 └── .gitignore
 ```
 
-
+The generated `npm run dev` runs `ket dev --source`. It watches the source workspace, checks
+TypeScript incrementally and keeps the last running process when a check or bundle build fails.
+If the initial island build fails after TypeScript passes, the server still starts and serves its HTML.
+Changes in test files run the type check without restarting a healthy server; Markdown,
+generated OpenAPI documents and editor swap files bypass the dev loop.
+For a project with browser islands, see [Development islands](#development-islands).
 
 Generate the OpenAPI contract with `npm run openapi`, or build its reference UI with `npm run api:docs`.
 See [Spec](/spec/) for the output directory, hosting and request console.
+
+## Development islands
+
+Add a `ket.dev.json` at the project root. Use the island names that the module declares in
+`defineModule({ islands })`. Keep the module's existing `client` path and export name. In this
+example, the module `notes` points its assets at `modules/notes/assets` and its island's
+`client` at `counter.mjs`.
+
+```jsonc
+// File: notes/ket.dev.json
+{
+  "islands": {
+    "note-counter": {
+      "entry": "modules/notes/browser/counter.tsx",
+      "output": "modules/notes/assets/counter.mjs"
+    }
+  },
+  "browserOnly": ["modules/notes/browser"]
+}
+```
+
+The dev server keeps one esbuild dependency graph per island. Editing an existing file rebuilds
+only the islands that import it. Adding or removing files, or changing configuration, rechecks
+resolution. List a file or directory in `browserOnly` when the server and worker never import it.
+An edit there updates mounted copies of that island in the open page and starts them from their
+server props. Shared and server changes restart the runtime and refresh an open page using islands.
+
+For production, run `npx ket-view islands` before `npm run build` to emit the configured `output`
+files. Those files are normal module assets. Each entry must bundle to a single JavaScript module.
+Projects that already use emitted JavaScript can still run `ket dev` to watch those artifacts.
 
 ## The module
 

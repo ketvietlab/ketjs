@@ -12,7 +12,7 @@ import { createQueue, JOB_CHANNEL } from './queue.ts'
 import { claimDue } from './schedule.ts'
 import { pruneRateSlots } from './ratelimit.ts'
 import { KetError } from '../kernel/errors.ts'
-import { bootRuntime } from './runtime.ts'
+import { bootRuntimeFromSpec } from './runtime.ts'
 import { traceOf } from './log/index.ts'
 import type { OpenLog } from './log/index.ts'
 import { effectStorage, namespacedStorage, storageFromConfig } from './storage/index.ts'
@@ -123,17 +123,24 @@ async function tenantSource(
   }
 }
 
-export async function bootWorker(
+type BootWorkerOptions = {
+  env?: Record<string, string | undefined>
+  workerId?: string
+  now?: () => Date
+  random?: () => number
+  log?: (entry: WorkerLog) => void
+  /** Redirect this worker's operational records, without editing the spec. */
+  openLog?: OpenLog
+}
+
+export function bootWorker(spec: DeploymentSpec, options: BootWorkerOptions = {}): Promise<BootedWorker> {
+  return bootWorkerFromSpec(spec, options)
+}
+
+export async function bootWorkerFromSpec(
   spec: DeploymentSpec,
-  options: {
-    env?: Record<string, string | undefined>
-    workerId?: string
-    now?: () => Date
-    random?: () => number
-    log?: (entry: WorkerLog) => void
-    /** Redirect this worker's operational records, without editing the spec. */
-    openLog?: OpenLog
-  } = {},
+  options: BootWorkerOptions,
+  composed?: Manifest,
 ): Promise<BootedWorker> {
   if (!spec.worker || !Object.keys(spec.worker.queues).length)
     throw new Error(`deployment "${spec.name}" declares no worker queues`)
@@ -144,11 +151,11 @@ export async function bootWorker(
     manifest,
     log: sink,
     logger,
-  } = await bootRuntime(spec, {
-    env,
-    role: 'worker',
-    ...(options.openLog ? { openLog: options.openLog } : {}),
-  })
+  } = await bootRuntimeFromSpec(
+    spec,
+    { env, role: 'worker', ...(options.openLog ? { openLog: options.openLog } : {}) },
+    composed,
+  )
   const baseStorage = await (spec.serve?.openStorage ?? storageFromConfig)(config)
   const baseTransport = await (spec.serve?.openTransport ?? unavailableTransport)(config)
   const storageFor = (tenant: string) => namespacedStorage(baseStorage, tenant || spec.name)
@@ -653,7 +660,10 @@ export async function serveWorker(
   spec: DeploymentSpec,
   options: Parameters<typeof bootWorker>[1] = {},
 ): Promise<BootedWorker> {
-  const worker = await bootWorker(spec, options)
+  return serveBootedWorker(await bootWorker(spec, options))
+}
+
+export function serveBootedWorker(worker: BootedWorker): BootedWorker {
   worker.start()
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.on(signal, () => void worker.close().then(() => process.exit(0)))

@@ -24,7 +24,6 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['ket.workspace.ts.tmpl', () => 'ket.workspace.ts'],
   ['tsconfig.json.tmpl', () => 'tsconfig.json'],
   ['biome.json.tmpl', () => 'biome.json'],
-  ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
   ['openapi.ts.tmpl', () => 'tools/openapi.ts'],
   ['deployment.test.ts.tmpl', () => 'test/deployment.test.ts'],
   ['gitignore.tmpl', () => '.gitignore'],
