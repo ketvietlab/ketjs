@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, watch } from 'node:fs'
+import type { Dirent } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -14,21 +15,40 @@ type Compiler = {
 type BrowserConfig = { islands: Record<string, unknown>; browserOnly?: string[] }
 
 const ignored = new Set(['.git', '.ket', '.build', 'dist', 'node_modules'])
-const isIgnored = (name: string) => name.split(/[\\/]/u).some((segment) => ignored.has(segment))
+const isIgnored = (name: string) => {
+  const parts = name.split(sep)
+  return (
+    parts[0] === 'openapi' ||
+    parts.some((part) => ignored.has(part)) ||
+    /(?:\.md|\.mdx|\.swp|~)$/iu.test(name) ||
+    /(?:^|[\\/])\.#/u.test(name)
+  )
+}
+const testSource = (name: string) =>
+  /^tests?(?:[\\/]|$)/u.test(name) || /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(name)
 const within = (path: string, root: string) => path === root || path.startsWith(root + sep)
 
-function sourceFiles(root: string): Set<string> {
+function sourceTree(root: string) {
   const files = new Set<string>()
+  const directories = new Set<string>()
   const visit = (directory: string) => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (ignored.has(entry.name)) continue
+    let entries: Dirent[]
+    try {
+      entries = readdirSync(directory, { withFileTypes: true })
+    } catch (error) {
+      if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) return
+      throw error
+    }
+    directories.add(directory)
+    for (const entry of entries) {
       const path = join(directory, entry.name)
+      if (isIgnored(relative(root, path))) continue
       if (entry.isDirectory()) visit(path)
       else files.add(path)
     }
   }
   visit(root)
-  return files
+  return { files, directories }
 }
 
 function waitForChild(child: ChildProcess): Promise<number | null> {
@@ -46,7 +66,6 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
   const tsc = resolve(dirname(typescript), (require(typescript) as { bin: { tsc: string } }).bin.tsc)
   const tsx = pathToFileURL(require.resolve('tsx')).href
   const configFile = join(root, 'ket.dev.json')
-  const knownFiles = sourceFiles(root)
   const scratchRoot = join(root, '.ket')
   await mkdir(scratchRoot, { recursive: true })
   const browserDir = await mkdtemp(join(scratchRoot, 'islands-'))
@@ -64,7 +83,8 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
   let structural = true
   let task: Promise<void> | undefined
   let timer: NodeJS.Timeout | undefined
-  let watcher: ReturnType<typeof watch> | undefined
+  let knownFiles = new Set<string>()
+  const watchers = new Map<string, ReturnType<typeof watch>>()
   let finish: () => void = () => {}
 
   const stop = async () => {
@@ -90,21 +110,34 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
     })
     running = { child, exited }
   }
+  const isRunning = () => running && running.child.exitCode === null && running.child.signalCode === null
+  const publish = async (islands: Record<string, string>) => {
+    await writeFile(join(browserDir, 'manifest.next'), JSON.stringify({ runtime, islands }))
+    await rename(join(browserDir, 'manifest.next'), join(browserDir, 'manifest.json'))
+  }
 
   const rebuild = async () => {
+    let rescan = false
     for (const path of queued) {
-      dirty.add(path)
       if (path === root) {
+        dirty.add(path)
         structural = true
+        rescan = true
         continue
       }
       const stat = lstatSync(path, { throwIfNoEntry: false })
       const isFile = Boolean(stat && !stat.isDirectory())
-      if (isFile !== knownFiles.has(path) || stat?.isDirectory() || stat?.isSymbolicLink()) structural = true
+      const isDirectory = Boolean(stat?.isDirectory() || watchers.has(path))
+      if (isDirectory) rescan = true
+      if (!testSource(relative(root, path))) {
+        dirty.add(path)
+        if (isFile !== knownFiles.has(path) || isDirectory || stat?.isSymbolicLink()) structural = true
+      }
       if (isFile) knownFiles.add(path)
       else knownFiles.delete(path)
     }
     queued = new Set()
+    if (rescan) refreshWatchers()
 
     checking = spawn(
       process.execPath,
@@ -122,6 +155,7 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
     const status = await waitForChild(checking)
     checking = undefined
     if (status !== 0 || closing) return
+    if (configured && dirty.size === 0 && isRunning()) return
 
     const reloadConfig = !configured || dirty.has(configFile) || dirty.has(root)
     let candidate = compiler
@@ -160,15 +194,13 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
         !reloadConfig &&
         Boolean(candidate) &&
         [...dirty].every((path) => browserOnly.some((directory) => within(path, directory)))
-      const restart =
-        !browserEdit || !running || running.child.exitCode !== null || running.child.signalCode !== null
+      const restart = !browserEdit || !isRunning()
       if (restart) {
         await stop()
         runtime = randomUUID()
       }
       if (closing) return
-      await writeFile(join(browserDir, 'manifest.next'), JSON.stringify({ runtime, islands: next }))
-      await rename(join(browserDir, 'manifest.next'), join(browserDir, 'manifest.json'))
+      await publish(next)
       revisions = next
       if (reloadConfig) {
         await compiler?.close()
@@ -181,6 +213,13 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
       if (restart && !closing) start()
       dirty = new Set()
       structural = false
+    } catch (error) {
+      if (!closing && !isRunning()) {
+        await stop()
+        await publish(revisions)
+        if (!closing) start()
+      }
+      throw error
     } finally {
       if (candidate && candidate !== compiler) await candidate.close()
     }
@@ -203,26 +242,41 @@ export async function serveSourceDev(cli: URL, command: string, args: string[]):
     closing = true
     finish()
   }
+  function refreshWatchers() {
+    const { files, directories } = sourceTree(root)
+    knownFiles = files
+    for (const [path, watcher] of watchers) {
+      if (directories.has(path)) continue
+      watcher.close()
+      watchers.delete(path)
+    }
+    for (const path of directories) {
+      if (closing || watchers.has(path)) continue
+      const watcher = watch(path, (_event, name) => {
+        const changed = name ? resolve(path, name) : root
+        if (isIgnored(relative(root, changed))) return
+        queued.add(changed)
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(schedule, 60)
+      })
+      watcher.once('error', (error) => {
+        console.error(error.message)
+        process.exitCode = 1
+        shutdown()
+      })
+      watchers.set(path, watcher)
+    }
+  }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
   try {
-    watcher = watch(root, { recursive: true }, (_event, name) => {
-      if (name && isIgnored(name)) return
-      queued.add(name ? resolve(root, name) : root)
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(schedule, 60)
-    })
-    watcher.once('error', (error) => {
-      console.error(error.message)
-      process.exitCode = 1
-      shutdown()
-    })
+    refreshWatchers()
     schedule()
     await closed
   } finally {
     closing = true
     if (timer) clearTimeout(timer)
-    watcher?.close()
+    for (const watcher of watchers.values()) watcher.close()
     process.off('SIGINT', shutdown)
     process.off('SIGTERM', shutdown)
     checking?.kill('SIGTERM')

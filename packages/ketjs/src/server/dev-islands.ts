@@ -40,6 +40,7 @@ export async function serveDevIslandAsset(
 
 export const devIslandClient = `
 let devRuntime
+const failedIslandVersions = new Map()
 const refreshDevIslands = async (manager) => {
   const response = await fetch('${prefix}manifest.json', { cache: 'no-store' })
   if (!response.ok) return
@@ -53,25 +54,31 @@ const refreshDevIslands = async (manager) => {
     if (!Object.hasOwn(definitions, name)) continue
     const definition = definitions[name]
     const src = '${prefix}' + hash + '.mjs'
-    if (definition.src === src) continue
-    if (!manager || (!registry[name] && !loading.has(name))) {
-      definition.src = src
-      continue
-    }
-    // Finish any original hydration import before replacing its registry entry.
-    await loading.get(name)
-    const factory = (await import(src))[definition.export]
-    if (typeof factory !== 'function') throw new TypeError('Invalid developer island export: ' + name)
-    registry[name] = factory
-    definition.src = src
+    if (definition.src === src || failedIslandVersions.get(name) === hash) continue
     const placed = [...document.querySelectorAll(ISLAND_SELECTOR)].filter(
       (element) => element.getAttribute('data-island') === name,
     )
-    for (const host of placed) {
-      if (!host.isConnected) continue
-      manager.dispose(host)
-      host.replaceChildren()
-      manager.mount(host)
+    if (!manager || (placed.length === 0 && !registry[name] && !loading.has(name))) {
+      definition.src = src
+      continue
+    }
+    try {
+      // Finish any original hydration import before replacing its registry entry.
+      await loading.get(name)?.catch(() => {})
+      const factory = (await import(src))[definition.export]
+      if (typeof factory !== 'function') throw new TypeError('Invalid developer island export: ' + name)
+      registry[name] = factory
+      for (const host of placed) {
+        if (!host.isConnected) continue
+        manager.dispose(host)
+        host.replaceChildren()
+        manager.mount(host)
+      }
+      definition.src = src
+      failedIslandVersions.delete(name)
+    } catch (error) {
+      failedIslandVersions.set(name, hash)
+      console.error('Could not refresh developer island ' + name, error)
     }
   }
 }

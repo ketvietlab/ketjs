@@ -65,6 +65,9 @@ notes/
 
 The generated `npm run dev` runs `ket dev --source`. It watches the source workspace, checks
 TypeScript incrementally and keeps the last running process when a check or bundle build fails.
+If the initial island build fails after TypeScript passes, the server still starts and serves its HTML.
+Changes in test files run the type check without restarting a healthy server; Markdown,
+generated OpenAPI documents and editor swap files bypass the dev loop.
 For a project with browser islands, see [Development islands](#development-islands).
 
 Generate the OpenAPI contract with `npm run openapi`, or build its reference UI with `npm run api:docs`.
