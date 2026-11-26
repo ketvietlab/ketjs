@@ -14,7 +14,7 @@ order: 2
 | `ket.workspace.ts` | Application composition and selected deployments. |
 | `modules/` | Module declarations: models, functions, routes and other owned contracts. |
 | `test/` | Deployment behavior exercised through the public testing API. |
-| `tools/dev.mjs` | Development process and rebuild lifecycle. |
+| `ket.dev.json` | Optional full-stack island entries and browser-only paths for `ket dev --source`. |
 | `tools/openapi.ts` | Writes the OpenAPI document of the composed HTTP operations (`npm run openapi`). |
 | `openapi/` | The generated, committed OpenAPI document; Biome leaves it as generated. |
 | `package.json` | Released dependencies and application commands. |
