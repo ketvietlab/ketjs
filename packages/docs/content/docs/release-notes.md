@@ -1,6 +1,6 @@
 ---
 title: Release notes
-description: KetJS {{VERSION}} adds a browser-safe i18n entry, fixes WebSocket message accounting, and documents multipart request limits.
+description: KetJS {{VERSION}} adds source development with selective island builds and reuses the composed manifest at runtime startup.
 group: Project evolution
 order: 1
 ---
@@ -15,14 +15,23 @@ KetJS releases five packages together: View, View Tools, Create View, the core f
 
 KetSuite, its design system, Flow and website clients are maintained and released from the KetSuite source. They are consumers of the framework rather than packages built in this repository.
 
-## What {{VERSION}} fixes
+## What {{VERSION}} adds
+
+- **Source development from KetJS.** The generated `npm run dev` runs `ket dev --source`, checks TypeScript incrementally, and keeps the running server on a failed check or island build. A cold island build error still permits the server to render HTML. See [Development islands](/ketjs/quick-start/#development-islands). ([#717](https://github.com/ketvietlab/ketjs/pull/717), [#720](https://github.com/ketvietlab/ketjs/pull/720))
+- **Selective island builds.** View Tools reads `ket.dev.json` and keeps a separate dependency graph per island. An edit rebuilds the affected entries. Browser-only edits remount affected islands in place; server and shared-source edits restart the runtime. `ket-view islands` writes the production bundles. ([#717](https://github.com/ketvietlab/ketjs/pull/717))
+- **Runtime startup.** `ket serve` and `ket worker` reuse the composed deployment manifest from workspace validation. ([#716](https://github.com/ketvietlab/ketjs/pull/716))
+
+Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
+
+<span id="current-release-0-8-2"></span>
+<span id="what-0-8-2-fixes"></span>
+
+## Previous release: 0.8.2
 
 - **Catalogue translation for static sites and islands.** Import `translator`, `missingMessages` and the pseudo-locale from `@ketvietlab/ketjs-view/i18n`. It uses message catalogues directly and keeps the manifest-based server API available. See [Menus and localization](/docs/menus-i18n/#catalogues-for-static-sites). ([#709](https://github.com/ketvietlab/ketjs/pull/709))
 - **WebSocket message limits.** `maxMessageBytes` is enforced per message, including its fragments. Receiving one complete message resets the byte budget for the next. ([#708](https://github.com/ketvietlab/ketjs/pull/708))
 - **OpenAPI multipart contracts.** A handwritten route can declare `bodyMediaType: 'multipart/form-data'` and `maxBodyBytes` with its body schema. The generated OpenAPI document records the media type and size limit for clients and documentation. See [Streaming request contracts](/docs/openapi/#streaming-request-contracts). ([#707](https://github.com/ketvietlab/ketjs/pull/707))
 - **Node.js security floor.** Run Node.js 24.22.3 or later on 24.x, or 26.13.1 or later. Both project scaffolds declare this range and the repository pins 26.13.1. ([#711](https://github.com/ketvietlab/ketjs/pull/711))
-
-Use [npm](https://www.npmjs.com/package/@ketvietlab/ketjs) and the [{{VERSION}} GitHub release](https://github.com/ketvietlab/ketjs/releases/tag/v{{VERSION}}) for the coordinated packages and release status.
 
 <span id="current-release-0-8-1"></span>
 <span id="what-0-8-1-fixes"></span>
