@@ -101,6 +101,12 @@ npm install @ketvietlab/ketjs
 import { defineDeployment, defineModule, defineWorkspace } from '@ketvietlab/ketjs'
 ```
 
+## Start a deployment
+
+`ket serve` and `ket worker` each reuse the selected deployment's manifest from workspace
+validation when starting their runtime. Workspace validation still covers every deployment in
+the declared workspace, including configured job queues.
+
 ## Generate API contracts
 
 `ket openapi --deployment NAME --out openapi/NAME.json` generates an OpenAPI 3.1 document from the compiled
